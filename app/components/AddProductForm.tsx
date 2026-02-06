@@ -39,7 +39,7 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
         try {
             // 1. Upload de l'image principale
-            const mainName = `${Date.now()}-main`
+            const mainName = `${sellerId}/${Date.now()}-main`
             const { data: mainData, error: mainError } = await supabase.storage.from('products').upload(mainName, mainImage)
             if (mainError) throw mainError
             const mainUrl = supabase.storage.from('products').getPublicUrl(mainName).data.publicUrl

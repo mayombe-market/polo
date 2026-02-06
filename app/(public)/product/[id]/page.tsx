@@ -1,11 +1,14 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import WhatsAppOrderAction from '@/app/components/WhatsAppOrderAction'
+import WhatsAppOrderAction from '../../../components/WhatsAppOrderAction'
 
 export default async function ProductDetailPage({ params }: { params: { id: string } }) {
     const cookieStore = await cookies()
     const { id } = await params
+   
+    
+    
 
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

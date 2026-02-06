@@ -8,7 +8,7 @@ interface AuthModalProps {
     onClose: () => void
 }
 
-export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
+function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [mode, setMode] = useState<'login' | 'signup'>('login')
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
@@ -219,3 +219,4 @@ export default function AuthModal({ isOpen, onClose }: AuthModalProps) {
 }
 
 
+export default AuthModal;

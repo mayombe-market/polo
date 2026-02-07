@@ -113,13 +113,16 @@ export default async function ProductDetailPage({ params }: { params: { id: stri
                         <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 text-slate-900 dark:text-white leading-tight">{product.name}</h1>
 
                         {/* SECTION NÉGOCIATION (Remplace le prix fixe) */}
+                        {/* SECTION NÉGOCIATION (Remplace le prix fixe) */}
                         <div className="mb-8">
+                            {/* On passe une copie "propre" de l'objet pour éviter les erreurs de proxy React */}
                             <NegotiationAction
-                                initialPrice={product.price}
-                                product={product}
-                                user={user}
-                                shop={shop}
-                            />                        </div>
+                                initialPrice={Number(product.price)}
+                                product={JSON.parse(JSON.stringify(product))}
+                                user={user ? JSON.parse(JSON.stringify(user)) : null}
+                                shop={shop ? JSON.parse(JSON.stringify(shop)) : null}
+                            />
+                        </div>
 
                         <div className="mb-12">
                             <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Description du vendeur</h3>

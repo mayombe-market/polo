@@ -1,14 +1,9 @@
 'use client'
 
-export const dynamic = 'force-dynamic';
-export const fetchCache = 'force-no-store';
-
 import { useEffect, useState } from 'react'
-// ... le reste de tes imports
 import { createBrowserClient } from '@supabase/ssr'
 
-// Utilise une constante avec une flèche pour l'export, c'est plus robuste pour le Build
-const SellerNegotiations = () => {
+export default function SellerNegotiations() {
     const [negotiations, setNegotiations] = useState<any[]>([])
 
     const supabase = createBrowserClient(
@@ -16,7 +11,6 @@ const SellerNegotiations = () => {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    // ... reste de ton code (useEffect, handleAction, etc.) ...
     useEffect(() => {
         const fetchNegotiations = async () => {
             const { data: { user } } = await supabase.auth.getUser()
@@ -24,7 +18,7 @@ const SellerNegotiations = () => {
 
             const { data } = await supabase
                 .from('negotiations')
-                .select('*, products(name)') // Assure-toi que la table s'appelle 'products'
+                .select('*, products(name)')
                 .eq('seller_id', user.id)
                 .order('created_at', { ascending: false })
 

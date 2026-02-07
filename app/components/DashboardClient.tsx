@@ -1,17 +1,25 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import dynamic from 'next/dynamic'
 
-// Remplace ton ancien bloc 'const AddProductForm = dynamic...' par ceci :
+// Chargement dynamique du formulaire pour éviter les erreurs SSR
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire Mayombe...</div>,
     ssr: false
 })
 
-function DashboardClient({ products, profile, user, productCount }: any) {
+export default function DashboardClient({ products, profile, user, productCount }: any) {
     const [showAddForm, setShowAddForm] = useState(false)
+
+    // --- CORRECTION HYDRATATION ---
+    const [isMounted, setIsMounted] = useState(false)
+
+    useEffect(() => {
+        setIsMounted(true)
+    }, [])
+    // ------------------------------
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
@@ -84,14 +92,17 @@ function DashboardClient({ products, profile, user, productCount }: any) {
                                 <div key={p.id} className="group bg-slate-50 dark:bg-slate-900 p-4 rounded-[2rem] border-2 border-transparent hover:border-green-500 transition-all">
                                     <div className="relative aspect-square mb-4 overflow-hidden rounded-[1.5rem] bg-white">
                                         <img
-                                            src={p.image_url || p.img}
+                                            src={p.img || p.image_url}
                                             className="w-full h-full object-cover group-hover:scale-110 transition duration-500"
                                             alt={p.name}
                                         />
                                     </div>
                                     <h4 className="font-bold dark:text-white truncate mb-1">{p.name}</h4>
                                     <div className="flex justify-between items-center">
-                                        <span className="text-green-600 font-black text-lg">{p.price?.toLocaleString()} <small className="text-[10px]">FCFA</small></span>
+                                        <span className="text-green-600 font-black text-lg">
+                                            {isMounted ? p.price?.toLocaleString() : p.price}
+                                            <small className="text-[10px]"> FCFA</small>
+                                        </span>
                                         <span className="text-[10px] font-bold bg-white dark:bg-slate-800 px-3 py-1 rounded-full border dark:border-slate-700 shadow-sm">
                                             👁️ {p.views_count || 0}
                                         </span>
@@ -107,7 +118,7 @@ function DashboardClient({ products, profile, user, productCount }: any) {
                 </div>
             </div>
 
-            {/* --- MODAL D'AJOUT (ANIMÉ) --- */}
+            {/* --- MODAL D'AJOUT --- */}
             {showAddForm && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-slate-900/60 backdrop-blur-md p-4">
                     <div className="relative w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-white dark:bg-slate-900 rounded-[3rem] shadow-2xl">
@@ -126,5 +137,3 @@ function DashboardClient({ products, profile, user, productCount }: any) {
         </div>
     )
 }
-
-export default DashboardClient

@@ -64,7 +64,7 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                 description: formData.get('description'),
                 category: selectedCategory,      // Utilise l'état sélectionné
                 subcategory: selectedSubcategory, // Utilise l'état sélectionné
-                image_url: mainUrl,
+                img: mainUrl,
                 images_gallery: galleryUrls,
                 seller_id: sellerId,
                 views_count: 0

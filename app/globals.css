@@ -1,3 +1,5 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* Vide le reste pour laisser le script CDN gérer le design sans erreur de build */
+body {
+    margin: 0;
+    padding: 0;
+}

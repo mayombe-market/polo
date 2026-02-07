@@ -1,9 +1,10 @@
 'use client'
 
-export const dynamic = 'force-dynamic' // Force Next.js à ne pas pré-générer la page
-export const fetchCache = 'force-no-store'
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
 
 import { useEffect, useState } from 'react'
+// ... le reste de tes imports
 import { createBrowserClient } from '@supabase/ssr'
 
 // Utilise une constante avec une flèche pour l'export, c'est plus robuste pour le Build

@@ -1,7 +1,10 @@
 'use client'
 
-import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+export const dynamic = 'force-dynamic';
+export const fetchCache = 'force-no-store';
+
+import { useEffect, useState } from 'react'
+// ... le reste de tes imports
 
 const NegotiationAction = ({ product, initialPrice, user, shop }: {
     product: any,

@@ -6,6 +6,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Phone, Check, MessageCircle, Info, Loader2, Filter, Package, MapPin, Wallet } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 
 export default function OrdersListClient({ initialOrders, currentVendorId }: { initialOrders: any[], currentVendorId: string }) {
     const [orders, setOrders] = useState(initialOrders)
@@ -85,20 +86,17 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
     const updateStatus = async (orderId: string, newStatus: string) => {
         setUpdating(orderId)
         try {
+            const result = await serverUpdateStatus(orderId, newStatus)
+            if (result.error) throw new Error(result.error)
+
             const updateData: any = { status: newStatus }
             if (newStatus === 'delivered') {
                 updateData.delivered_at = new Date().toISOString()
             }
-            const { error } = await supabase
-                .from('orders')
-                .update(updateData)
-                .eq('id', orderId)
-
-            if (error) throw error
             setOrders(orders.map(o => o.id === orderId ? { ...o, ...updateData } : o))
-        } catch (err) {
+        } catch (err: any) {
             console.error('Erreur mise à jour:', err)
-            alert('Impossible de mettre à jour le statut.')
+            alert(err.message || 'Impossible de mettre à jour le statut.')
         } finally {
             setUpdating(null)
         }

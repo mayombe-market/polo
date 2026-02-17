@@ -1,11 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OrdersListClient from '@/app/components/OrdersListClient'
 import { Loader2 } from 'lucide-react'
+import { getVendorOrders } from '@/app/actions/orders'
 
 export default function VendorOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -13,37 +13,18 @@ export default function VendorOrders() {
     const [vendorId, setVendorId] = useState<string | null>(null)
     const router = useRouter()
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
-                if (!user) {
+                const result = await getVendorOrders()
+
+                if (!result.vendorId) {
                     router.push('/')
                     return
                 }
 
-                setVendorId(user.id)
-
-                const { data: allOrders, error } = await supabase
-                    .from('orders')
-                    .select('*')
-                    .order('created_at', { ascending: false })
-
-                if (error) {
-                    console.error('Erreur chargement commandes vendeur:', error)
-                }
-
-                // Filtrer côté client : garder seulement les commandes confirmées+ avec nos produits
-                const vendorOrders = (allOrders || []).filter(order =>
-                    order.status !== 'pending' &&
-                    order.items?.some((item: any) => item.seller_id === user.id)
-                )
-                setOrders(vendorOrders)
+                setVendorId(result.vendorId)
+                setOrders(result.orders)
             } catch (err) {
                 console.error('Erreur:', err)
             } finally {
@@ -51,7 +32,7 @@ export default function VendorOrders() {
             }
         }
         fetchOrders()
-    }, [supabase, router])
+    }, [router])
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">

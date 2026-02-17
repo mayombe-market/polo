@@ -9,6 +9,7 @@ import {
     Filter, Wallet, DollarSign, Clock, Truck, Ban, MessageCircle
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { adminConfirmPayment, adminReleaseFunds } from '@/app/actions/orders'
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -60,22 +61,13 @@ export default function AdminOrders() {
         return () => { supabase.removeChannel(channel) }
     }, [supabase])
 
-    // VERROU 1 : Confirmer le paiement (pending → confirmed)
+    // VERROU 1 : Confirmer le paiement (pending → confirmed) — via Server Action
     const confirmPayment = async (orderId: string) => {
         setUpdating(orderId)
         try {
-            const { data, error } = await supabase
-                .from('orders')
-                .update({ status: 'confirmed' })
-                .eq('id', orderId)
-                .select()
-
-            if (error) {
-                toast.error(`Erreur: ${error.message}`)
-                return
-            }
-            if (!data || data.length === 0) {
-                toast.error('Aucune ligne mise à jour — vérifiez les politiques RLS')
+            const result = await adminConfirmPayment(orderId)
+            if (result.error) {
+                toast.error(`Erreur: ${result.error}`)
                 return
             }
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o))
@@ -88,16 +80,15 @@ export default function AdminOrders() {
         }
     }
 
-    // VERROU 2 : Libérer les fonds (payout_status: pending → paid)
+    // VERROU 2 : Libérer les fonds (payout_status: pending → paid) — via Server Action
     const releaseFunds = async (orderId: string) => {
         setUpdating(orderId)
         try {
-            const { error } = await supabase
-                .from('orders')
-                .update({ payout_status: 'paid' })
-                .eq('id', orderId)
-
-            if (error) throw error
+            const result = await adminReleaseFunds(orderId)
+            if (result.error) {
+                toast.error(`Erreur: ${result.error}`)
+                return
+            }
             setOrders(orders.map(o => o.id === orderId ? { ...o, payout_status: 'paid' } : o))
             toast.success('Fonds libérés — le vendeur a été payé')
         } catch (err) {

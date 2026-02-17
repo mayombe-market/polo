@@ -32,7 +32,14 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
 
     const handleNegotiate = async () => {
         const proposedPrice = parseInt(suggestion);
-        if (!proposedPrice) return;
+        if (!proposedPrice || proposedPrice < 100) {
+            alert("Le prix proposé doit être d'au moins 100 FCFA.");
+            return;
+        }
+        if (proposedPrice >= initialPrice) {
+            alert("Votre offre doit être inférieure au prix actuel.");
+            return;
+        }
 
         if (!user) {
             alert("Vous devez être connecté pour proposer un prix.");

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import NextImage from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
 import { Trash2, Plus, X, Image as ImageIcon, Check, Loader2 } from 'lucide-react'
+import { deleteProduct } from '@/app/actions/orders'
 
 export default function AdminProducts() {
     const [products, setProducts] = useState<any[]>([])
@@ -87,7 +88,11 @@ export default function AdminProducts() {
 
     const handleDelete = async (id: string) => {
         if (confirm("Supprimer ce produit ?")) {
-            await supabase.from('products').delete().eq('id', id)
+            const result = await deleteProduct(id)
+            if (result.error) {
+                alert('Erreur: ' + result.error)
+                return
+            }
             fetchProducts()
         }
     }

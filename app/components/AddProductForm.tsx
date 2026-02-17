@@ -37,6 +37,27 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
             return
         }
 
+        // Validation des fichiers images (taille max 5MB, type image uniquement)
+        const MAX_SIZE = 5 * 1024 * 1024
+        const allFiles = [mainImage, ...gallery.filter(Boolean)] as File[]
+        for (const file of allFiles) {
+            if (file.size > MAX_SIZE) {
+                alert(`L'image "${file.name}" dépasse 5 Mo. Réduisez sa taille.`)
+                return
+            }
+            if (!file.type.startsWith('image/')) {
+                alert(`Le fichier "${file.name}" n'est pas une image valide.`)
+                return
+            }
+        }
+
+        // Validation du prix
+        const price = parseInt(formData.get('price') as string)
+        if (!price || price < 100 || price > 100000000) {
+            alert("Le prix doit être entre 100 et 100 000 000 FCFA.")
+            return
+        }
+
         setLoading(true)
         try {
             // 1. Upload Images (Logique identique à ton code)

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Image from 'next/image'
 
 export default function ProductGallery({ images, productName }: { images: string[], productName: string }) {
     // Sécurité : Initialisation de l'image principale
@@ -25,17 +26,12 @@ export default function ProductGallery({ images, productName }: { images: string
         <div className="space-y-6">
             {/* Image Principale - CORRECTION QUALITÉ OPTIMISÉE */}
             <div className="aspect-square rounded-[2.5rem] overflow-hidden bg-white border border-slate-100 shadow-sm group relative">
-                <img
+                <Image
                     src={mainImg || images[0]}
                     alt={productName}
-                    // On réduit le scale à 1.05 pour préserver la netteté des pixels
-                    className="w-full h-full object-cover transition-all duration-700 ease-in-out group-hover:scale-105"
-                    style={{
-                        imageRendering: 'auto',
-                        transform: 'translateZ(0)', // Force le rendu propre
-                        backfaceVisibility: 'hidden', // Évite le flou post-animation
-                        WebkitFontSmoothing: 'antialiased'
-                    }}
+                    fill
+                    sizes="(max-width: 768px) 100vw, 50vw"
+                    className="object-cover transition-all duration-700 ease-in-out group-hover:scale-105"
                 />
 
                 {/* Overlay discret au survol */}
@@ -54,16 +50,17 @@ export default function ProductGallery({ images, productName }: { images: string
                             key={i}
                             onClick={() => setMainImg(img)}
                             onMouseEnter={() => setMainImg(img)}
-                            className={`aspect-square rounded-2xl overflow-hidden border-2 transition-all duration-300 cursor-pointer ${mainImg === img
+                            className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all duration-300 cursor-pointer ${mainImg === img
                                     ? 'border-green-600 scale-90 shadow-md rotate-2'
                                     : 'border-transparent hover:border-green-300 opacity-60 hover:opacity-100 hover:scale-105'
                                 }`}
                         >
-                            <img
+                            <Image
                                 src={img}
-                                className="w-full h-full object-cover"
+                                fill
+                                sizes="10vw"
+                                className="object-cover"
                                 alt={`miniature-${i}`}
-                                style={{ transform: 'translateZ(0)' }}
                             />
                         </div>
                     ))}

@@ -1,169 +1,253 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
+import Image from 'next/image'
 import Link from 'next/link'
+import { useParams } from 'next/navigation'
 import WhatsAppOrderAction from '../../../components/WhatsAppOrderAction'
 import ProductGallery from '../../../components/ProductGallery'
 import NegotiationAction from '../../../components/NegotiationAction'
+import AddToCartButton from '../../../components/AddToCartButton'
+import FollowButton from '../../../components/FollowButton'
+import StarRating from '../../../components/StarRating'
+import ReviewForm from '../../../components/ReviewForm'
 
-export default async function ProductDetailPage({ params }: { params: { id: string } }) {
-    const cookieStore = await cookies()
-    const { id } = await params
+const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { cookies: { get(name) { return cookieStore.get(name)?.value } } }
-    )
+export default function ProductDetailPage() {
+    const { id } = useParams()
+    const [product, setProduct] = useState<any>(null)
+    const [shop, setShop] = useState<any>(null)
+    const [user, setUser] = useState<any>(null)
+    const [reviews, setReviews] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
 
-    const { data: { user } } = await supabase.auth.getUser()
-    const { data: product, error } = await supabase.from('products').select('*').eq('id', id).single()
+    const [selectedSize, setSelectedSize] = useState<string>("")
+    const [selectedColor, setSelectedColor] = useState<string>("")
+    const [followerCount, setFollowerCount] = useState<number>(0)
 
-    if (error || !product) {
-        return <div className="p-20 text-center"><p className="font-bold">Produit introuvable</p></div>
-    }
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const { data: { user } } = await supabase.auth.getUser()
+                setUser(user)
 
-    const [shopRes, reviewsRes] = await Promise.all([
-        supabase.from('shops').select('*').eq('id', product.seller_id).single(),
-        supabase.from('reviews').select('*').eq('product_id', id).order('created_at', { ascending: false })
-    ])
+                const { data: prod, error: prodError } = await supabase.from('products').select('*').eq('id', id).single()
 
-    const shop = shopRes.data
-    const reviews = reviewsRes.data || []
-    const averageRating = reviews.length > 0
-        ? (reviews.reduce((acc, rev) => acc + rev.rating, 0) / reviews.length).toFixed(1)
-        : "0"
+                if (prodError) return
 
-    const allImages = [
-        product.img || product.image_url,
-        ...(product.images_gallery || [])
-    ].filter(Boolean);
+                if (prod) {
+                    setProduct(prod)
+                    const shopRes = await supabase
+                        .from('profiles')
+                        .select('full_name, avatar_url, followers_count, id')
+                        .eq('id', prod.seller_id)
+                        .maybeSingle()
+
+                    setShop(shopRes.data)
+                    setFollowerCount(shopRes.data?.followers_count || 0)
+
+                    const reviewsRes = await supabase
+                        .from('reviews')
+                        .select('*')
+                        .eq('product_id', id)
+                        .order('created_at', { ascending: false })
+                    setReviews(reviewsRes.data || [])
+                }
+            } catch (err) {
+                console.error('Erreur page produit:', err)
+            } finally {
+                setLoading(false)
+            }
+        }
+        fetchData()
+    }, [id])
+
+    if (loading) return <div className="p-20 text-center animate-pulse font-black uppercase tracking-widest">Chargement...</div>
+    if (!product) return <div className="p-20 text-center"><p className="font-bold">Produit introuvable</p></div>
+
+    const avgRatingNumber = reviews.length > 0
+        ? reviews.reduce((acc, rev) => acc + rev.rating, 0) / reviews.length
+        : 0
+
+    const allImages = [product.img || product.image_url, ...(product.images_gallery || [])].filter(Boolean)
 
     return (
-        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col">
+        <div className="min-h-screen bg-gray-50 dark:bg-slate-900 flex flex-col transition-colors">
             <div className="max-w-7xl mx-auto px-4 py-10 flex-grow w-full">
-                <Link href="/" className="text-sm text-slate-500 mb-6 inline-block font-bold hover:text-green-600 transition-colors">
+                <Link href="/" className="text-sm text-slate-500 mb-6 inline-block font-bold hover:text-green-600 transition-colors text-slate-400">
                     ← Retour au marché
                 </Link>
 
-                {/* GRILLE PRINCIPALE */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-12">
-
-                    {/* COLONNE GAUCHE : IMAGES + COMMENTAIRES */}
                     <div className="space-y-12">
                         <ProductGallery images={allImages} productName={product.name} />
 
-                        {/* ESPACE COMMENTAIRES DYNAMIQUE */}
-                        <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border shadow-sm">
+                        {/* SECTION AVIS CLIENTS */}
+                        <div className="bg-white dark:bg-slate-800 rounded-3xl p-8 border border-slate-100 dark:border-slate-700 shadow-sm">
                             <div className="flex items-center justify-between mb-8">
                                 <h3 className="text-xl font-black uppercase tracking-tighter">Avis Clients ({reviews.length})</h3>
-                                <div className="flex items-center gap-2 bg-green-50 dark:bg-green-900/30 px-3 py-1 rounded-full">
-                                    <span className="text-green-600 font-black">{averageRating}</span>
-                                    <span className="text-yellow-400">★</span>
+                                <div className="flex items-center gap-3 bg-slate-50 dark:bg-slate-900/50 px-4 py-2 rounded-2xl">
+                                    <StarRating rating={avgRatingNumber} size={18} />
                                 </div>
                             </div>
 
-                            <div className="space-y-8">
-                                {reviews.length > 0 ? (
-                                    reviews.map((rev) => (
-                                        <div key={rev.id} className="flex gap-4 border-b border-slate-50 dark:border-slate-700 pb-6 last:border-0">
-                                            <div className="w-12 h-12 rounded-full overflow-hidden border bg-slate-100 flex-shrink-0">
-                                                <img src={rev.user_avatar || `https://ui-avatars.com/api/?name=${rev.user_name}&background=random`} alt="Avatar" />
-                                            </div>
-                                            <div className="flex-1">
-                                                <div className="flex items-center justify-between mb-1">
-                                                    <p className="font-bold text-sm text-slate-900 dark:text-white">{rev.user_name}</p>
-                                                    <div className="flex text-yellow-400 text-[10px]">
-                                                        {[...Array(5)].map((_, i) => (
-                                                            <span key={i}>{i < rev.rating ? '★' : '☆'}</span>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                                <p className="text-slate-500 dark:text-slate-400 text-sm italic leading-relaxed">"{rev.content}"</p>
-                                                <p className="text-[9px] text-slate-300 mt-2 font-bold uppercase tracking-widest">
-                                                    {new Date(rev.created_at).toLocaleDateString('fr-FR')}
-                                                </p>
-                                            </div>
+                            <ReviewForm
+                                productId={id as string}
+                                user={user}
+                                onReviewSubmit={() => window.location.reload()}
+                            />
+
+                            <div className="space-y-8 mt-10">
+                                {reviews.length > 0 ? reviews.map((rev) => (
+                                    <div key={rev.id} className="flex gap-4 border-b border-slate-50 dark:border-slate-700 pb-6 last:border-0">
+                                        <div className="relative w-12 h-12 rounded-full overflow-hidden border bg-slate-100 flex-shrink-0">
+                                            <Image src={rev.user_avatar || `https://ui-avatars.com/api/?name=${rev.user_name}&background=random`} alt="Avatar" fill className="object-cover" unoptimized />
                                         </div>
-                                    ))
-                                ) : (
-                                    <div className="text-center py-10 italic text-slate-400 text-sm">Aucun avis pour le moment.</div>
-                                )}
+                                        <div className="flex-1">
+                                            <div className="flex items-center justify-between mb-1">
+                                                <p className="font-bold text-sm text-slate-900 dark:text-white">{rev.user_name}</p>
+                                                <StarRating rating={rev.rating} size={12} />
+                                            </div>
+                                            <p className="text-slate-600 dark:text-slate-400 text-sm italic">"{rev.comment || rev.content}"</p>
+
+                                            {/* --- ÉTAPE 3 : AFFICHAGE DES PHOTOS DE L'AVIS --- */}
+                                            {rev.images && rev.images.length > 0 && (
+                                                <div className="flex gap-2 mt-4 overflow-x-auto pb-2 scrollbar-hide">
+                                                    {rev.images.map((imgUrl: string, idx: number) => (
+                                                        <div key={idx} className="relative w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100 dark:border-slate-700 shadow-sm cursor-pointer" onClick={() => window.open(imgUrl, '_blank')}>
+                                                            <Image
+                                                                src={imgUrl}
+                                                                alt="Photo avis"
+                                                                fill
+                                                                className="object-cover hover:scale-110 transition-transform"
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                )) : <div className="text-center py-10 italic text-slate-400 text-sm">Aucun avis pour le moment.</div>}
                             </div>
                         </div>
                     </div>
 
-                    {/* COLONNE DROITE : INFOS PRODUIT & BOUTIQUE */}
                     <div className="flex flex-col bg-white dark:bg-slate-800 rounded-[2.5rem] p-8 shadow-lg border border-slate-100 dark:border-slate-700 h-fit sticky top-10">
-
-                        {/* BLOC BOUTIQUE */}
                         <div className="flex items-center justify-end mb-6 gap-4">
-                            <div className="text-right">
-                                <p className="font-black text-sm text-slate-900 dark:text-white uppercase leading-none">{shop?.name || "Boutique Officielle"}</p>
-                                <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest mt-1">{shop?.followers_count || "0"} abonnés</p>
+                            <div className="flex flex-col items-end gap-2">
+                                <div className="text-right">
+                                    <p className="font-black text-sm uppercase leading-none">
+                                        {shop?.full_name || "Boutique Officielle"}
+                                    </p>
+                                    <p className="text-[10px] text-green-600 font-bold uppercase tracking-widest mt-1">
+                                        {followerCount} abonnés
+                                    </p>
+                                </div>
+                                {product.seller_id && (
+                                    <FollowButton
+                                        sellerId={product.seller_id}
+                                        onFollowChange={(delta) => setFollowerCount(prev => Math.max(0, prev + delta))}
+                                    />
+                                )}
                             </div>
-                            <div className="w-14 h-14 rounded-full border-2 border-green-600 p-0.5 overflow-hidden shadow-sm">
-                                <img src={shop?.logo_url || `https://ui-avatars.com/api/?name=${shop?.name || 'S'}&background=0D9488&color=fff`} className="w-full h-full rounded-full object-cover" alt="Logo" />
+                            <div className="relative w-14 h-14 rounded-full border-2 border-green-600 p-0.5 overflow-hidden flex-shrink-0">
+                                <Image
+                                    src={shop?.avatar_url || `https://ui-avatars.com/api/?name=${shop?.full_name || 'S'}&background=0D9488&color=fff`}
+                                    alt="Logo"
+                                    fill
+                                    className="rounded-full object-cover"
+                                    unoptimized
+                                />
                             </div>
                         </div>
 
-                        <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-1 rounded-full font-bold w-fit mb-4 uppercase tracking-widest">
+                        <span className="text-[10px] bg-slate-100 dark:bg-slate-700 text-slate-500 dark:text-slate-300 px-3 py-1 rounded-full font-bold w-fit mb-2 uppercase tracking-widest">
                             {product.subcategory || "Article"}
                         </span>
 
-                        <h1 className="text-4xl font-black uppercase tracking-tighter mb-4 text-slate-900 dark:text-white leading-tight">{product.name}</h1>
+                        <h1 className="text-4xl font-black uppercase tracking-tighter mb-2 leading-tight">{product.name}</h1>
 
-                        {/* SECTION NÉGOCIATION (Remplace le prix fixe) */}
-                        {/* SECTION NÉGOCIATION (Remplace le prix fixe) */}
+                        <div className="flex items-center gap-3 mb-6">
+                            <StarRating rating={avgRatingNumber} size={20} />
+                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                                {reviews.length} avis
+                            </span>
+                        </div>
+
                         <div className="mb-8">
-                            {/* On passe une copie "propre" de l'objet pour éviter les erreurs de proxy React */}
                             <NegotiationAction
                                 initialPrice={Number(product.price)}
-                                product={JSON.parse(JSON.stringify(product))}
-                                user={user ? JSON.parse(JSON.stringify(user)) : null}
-                                shop={shop ? JSON.parse(JSON.stringify(shop)) : null}
+                                product={product}
+                                user={user}
+                                shop={shop}
                             />
                         </div>
 
-                        <div className="mb-12">
-                            <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Description du vendeur</h3>
-                            <p className="text-slate-600 dark:text-slate-300 leading-relaxed text-lg italic border-l-4 border-green-500 pl-4">{product.description}</p>
+                        {product.has_stock && (
+                            <div className="mb-6 flex items-center gap-2 bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl w-fit">
+                                <div className={`w-2 h-2 rounded-full ${product.stock_quantity > 0 ? 'bg-green-500' : 'bg-red-500 animate-pulse'}`}></div>
+                                <span className="text-[10px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                                    {product.stock_quantity > 0 ? `${product.stock_quantity} disponibles en stock` : "Victime de son succès (Rupture)"}
+                                </span>
+                            </div>
+                        )}
+
+                        <div className="space-y-6 mb-10 text-slate-600">
+                            {product.has_variants && product.sizes?.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sélectionner la Taille</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {product.sizes.map((size: string) => (
+                                            <button
+                                                key={size}
+                                                onClick={() => setSelectedSize(size)}
+                                                className={`h-12 min-w-[3rem] px-4 rounded-xl border-2 font-black transition-all text-xs ${selectedSize === size ? 'border-green-600 bg-green-600 text-white' : 'border-slate-100 dark:border-slate-700 text-slate-500 hover:border-green-300'}`}
+                                            >
+                                                {size}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {product.has_variants && product.colors?.length > 0 && (
+                                <div className="space-y-3">
+                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sélectionner la Couleur</p>
+                                    <div className="flex flex-wrap gap-2">
+                                        {product.colors.map((color: string) => (
+                                            <button
+                                                key={color}
+                                                onClick={() => setSelectedColor(color)}
+                                                className={`px-5 py-2.5 rounded-full border-2 font-black transition-all text-[10px] uppercase ${selectedColor === color ? 'border-orange-500 bg-orange-500 text-white' : 'border-slate-100 dark:border-slate-700 text-slate-500 hover:border-orange-300'}`}
+                                            >
+                                                {color}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* ACTIONS DE COMMANDE */}
+                        <div className="mb-10">
+                            <h3 className="text-xs font-black uppercase text-slate-400 mb-4 tracking-widest">Description</h3>
+                            <p className="text-slate-600 dark:text-slate-300 leading-relaxed italic border-l-4 border-green-500 pl-4">{product.description}</p>
+                        </div>
+
                         <div className="space-y-4">
+                            <AddToCartButton
+                                product={product}
+                                selectedVariant={{ size: selectedSize, color: selectedColor }}
+                            />
                             <WhatsAppOrderAction product={product} shop={shop} user={user} />
-                            <div className="grid grid-cols-2 gap-3">
-                                <button className="py-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">⭐ Favoris</button>
-                                <button className="py-4 rounded-2xl border border-slate-200 dark:border-slate-700 text-[10px] font-black uppercase tracking-widest hover:bg-slate-50 transition-all">🔗 Partager</button>
-                            </div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            {/* FOOTER */}
-            <footer className="bg-white dark:bg-slate-800 border-t py-16 px-4 mt-20">
-                <div className="max-w-7xl mx-auto">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-12 border-b border-slate-100 dark:border-slate-700 pb-12">
-                        <div className="space-y-4">
-                            <h3 className="font-black text-3xl uppercase tracking-tighter italic text-slate-900 dark:text-white">Mayombe<span className="text-green-600">Market</span></h3>
-                            <p className="text-sm text-slate-500">La référence du commerce local au Congo.</p>
-                        </div>
-                        <div>
-                            <h4 className="font-black mb-6 uppercase text-xs tracking-widest">Navigation</h4>
-                            <ul className="text-sm space-y-3 text-slate-500 font-bold">
-                                <li><Link href="/" className="hover:text-green-600">Accueil</Link></li>
-                                <li><Link href="/seller/login" className="hover:text-green-600">Vendre</Link></li>
-                            </ul>
-                        </div>
-                        <div className="bg-green-50 dark:bg-green-900/10 p-8 rounded-[2rem]">
-                            <h4 className="font-black mb-2 uppercase text-xs tracking-widest text-green-700">Service Client</h4>
-                            <p className="text-green-600 font-black text-lg">WhatsApp : Mayombe Support</p>
-                        </div>
-                    </div>
-                    <p className="pt-10 text-center text-[10px] text-slate-400 font-black uppercase tracking-[0.5em]">© 2026 Mayombe Market</p>
-                </div>
-            </footer>
         </div>
     )
 }

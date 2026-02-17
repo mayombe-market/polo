@@ -1,21 +1,15 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import Image from 'next/image'
+
+export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
 
 export default async function SubCategoryPage({ params }: { params: { id: string } }) {
-    const cookieStore = await cookies()
     const { id } = await params
 
-    const supabase = createServerClient(
+    const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                get(name: string) {
-                    return cookieStore.get(name)?.value
-                },
-            },
-        }
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
     const { data: subCategory } = await supabase
@@ -48,11 +42,13 @@ export default async function SubCategoryPage({ params }: { params: { id: string
                             key={product.id}
                             className="group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block"
                         >
-                            <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-slate-900">
-                                <img
-                                    src={product.img || 'https://images.unsplash.com/photo-1542838132-92c53300491e?q=80&w=500'}
+                            <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
+                                <Image
+                                    src={product.img || '/placeholder-image.jpg'}
                                     alt={product.name}
-                                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                                    fill
+                                    sizes="(max-width: 768px) 50vw, 25vw"
+                                    className="object-cover group-hover:scale-110 transition-transform duration-500"
                                 />
                             </div>
                             <div className="p-4">

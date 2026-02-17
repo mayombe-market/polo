@@ -24,7 +24,8 @@ function ProfileClient({ profile, user }: any) {
             .eq('id', user.id)
 
         if (error) {
-            alert("Erreur lors de l'enregistrement")
+            console.error('Erreur update vendeur:', error)
+            alert("Erreur : " + error.message)
         } else {
             alert("Profil mis à jour ! Tes clients peuvent maintenant te contacter.")
         }

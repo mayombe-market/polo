@@ -1,12 +1,18 @@
+import Header from '@/app/components/Header'
+import { Toaster } from 'sonner'
+
 export default function VendorLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
     return (
-        <div className="vendor-area">
-            {/* Ici, on n'affiche pas le même header que le public */}
-            {children}
-        </div>
+        <>
+            <Header />
+            <Toaster position="top-right" richColors closeButton />
+            <div className="vendor-area">
+                {children}
+            </div>
+        </>
     )
 }

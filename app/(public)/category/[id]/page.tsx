@@ -1,21 +1,21 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import Image from 'next/image'
+
+export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
 
 export default async function CategoryPage(props: any) {
     // 1. Gestion ultra-sécurisée des params
     const params = await props.params;
     const searchParams = await props.searchParams;
-    const cookieStore = await cookies()
 
     const rawId = params.id;
     const categoryName = decodeURIComponent(rawId).replace(/%26/g, '&');
     const selectedSub = searchParams.sub ? decodeURIComponent(searchParams.sub).replace(/%26/g, '&') : null;
 
-    const supabase = createServerClient(
+    const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        { cookies: { get(name: string) { return cookieStore.get(name)?.value } } }
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
     let category: any = null;
@@ -92,17 +92,19 @@ export default async function CategoryPage(props: any) {
                     {products && products.length > 0 ? (
                         products.map((p) => (
                             <Link href={`/product/${p.id}`} key={p.id} className="group border border-slate-100 dark:border-slate-800 rounded-[2rem] overflow-hidden hover:shadow-2xl transition-all bg-white dark:bg-slate-800/50">
-                                <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden">
-                                    <img
-                                        src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || 'https://via.placeholder.com/400'}
-                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                                <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
+                                    <Image
+                                        src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.jpg'}
                                         alt={p.name}
+                                        fill
+                                        sizes="(max-width: 768px) 50vw, 25vw"
+                                        className="object-cover group-hover:scale-105 transition-transform duration-700"
                                     />
                                 </div>
                                 <div className="p-5">
                                     <p className="text-[10px] text-green-600 font-black uppercase mb-1 tracking-widest">{p.subcategory || category.name}</p>
                                     <h3 className="font-bold truncate text-sm text-slate-800 dark:text-slate-100 mb-2">{p.name}</h3>
-                                    <p className="text-green-600 font-black text-lg">{p.price?.toLocaleString()} FCFA</p>
+                                    <p className="text-green-600 font-black text-lg">{p.price?.toLocaleString('fr-FR')} FCFA</p>
                                 </div>
                             </Link>
                         ))
@@ -116,29 +118,6 @@ export default async function CategoryPage(props: any) {
             </div>
 
             {/* --- FOOTER RENDU CONCRET ET ROBUSTE --- */}
-            <footer className="mt-auto border-t border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 p-12">
-                <div className="max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-12 text-center md:text-left">
-                    <div className="space-y-4">
-                        <h3 className="text-2xl font-black text-slate-900 dark:text-white uppercase tracking-tighter italic">Mayombe<span className="text-green-600">Market</span></h3>
-                        <p className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed">Le premier marché digital en direct du Mayombe. Qualité et confiance garanties.</p>
-                    </div>
-                    <div>
-                        <h4 className="font-black text-slate-900 dark:text-white mb-6 uppercase text-xs tracking-[0.2em]">Explorez</h4>
-                        <ul className="text-slate-500 dark:text-slate-400 text-sm space-y-3 font-medium">
-                            <li><Link href="/" className="hover:text-green-600 transition-colors underline decoration-slate-200 underline-offset-4">Retour au Marché</Link></li>
-                            <li><Link href="/seller/login" className="hover:text-green-600 transition-colors underline decoration-slate-200 underline-offset-4">Espace Vendeur</Link></li>
-                        </ul>
-                    </div>
-                    <div className="bg-white dark:bg-slate-800 p-6 rounded-3xl border border-slate-100 dark:border-slate-700 shadow-sm">
-                        <h4 className="font-black text-slate-900 dark:text-white mb-2 uppercase text-xs tracking-widest">Assistance 24/7</h4>
-                        <p className="text-slate-500 dark:text-slate-400 text-xs mb-4">Besoin d'aide pour une commande ?</p>
-                        <p className="text-green-600 font-black text-sm">WhatsApp : +242 XXX XX XX</p>
-                    </div>
-                </div>
-                <div className="max-w-7xl mx-auto pt-10 mt-10 border-t border-slate-200/50 dark:border-slate-800/50 text-center">
-                    <p className="text-[10px] text-slate-400 dark:text-slate-600 font-bold uppercase tracking-[0.3em]">© 2026 Mayombe Market — Brazzaville / Pointe-Noire</p>
-                </div>
-            </footer>
         </div>
     )
 }

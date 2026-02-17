@@ -10,13 +10,15 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
     shop: any
 }) => {
     // 1. PROTECTION : Si pas de produit, on n'affiche rien pour éviter le crash
-    if (!product) return null;
+
 
     const [isOpen, setIsOpen] = useState(false)
     const [isSent, setIsSent] = useState(false)
     const [currentPrice, setCurrentPrice] = useState(initialPrice || 0)
     const [suggestion, setSuggestion] = useState("")
     const [isAccepted, setIsAccepted] = useState(false)
+
+    if (!product) return null;
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -67,7 +69,7 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prix actuel</span>
                 <div className="flex items-center gap-3">
                     <p className={`text-3xl font-black transition-all ${isAccepted ? 'text-orange-500 scale-110' : 'text-green-600'}`}>
-                        {(currentPrice || 0).toLocaleString()} FCFA
+                        {(currentPrice || 0).toLocaleString('fr-FR')} FCFA
                     </p>
                     {isAccepted && (
                         <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-1 rounded-full uppercase animate-bounce">

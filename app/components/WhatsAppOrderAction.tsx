@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import AuthModal from './AuthModal'
 
 interface WhatsAppOrderActionProps {
@@ -13,6 +14,12 @@ function WhatsAppOrderAction({ product, shop, user }: WhatsAppOrderActionProps) 
     const [isAuthOpen, setIsAuthOpen] = useState(false)
     const [showLocation, setShowLocation] = useState(false)
     const [city, setCity] = useState('')
+    const [saving, setSaving] = useState(false)
+
+    const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
 
     const locations: Record<string, string[]> = {
         "Pointe-Noire": ["Loandjili", "Lumumba", "Von-Von", "Thystère", "Vindoulou", "Tié-Tié"],
@@ -29,12 +36,80 @@ function WhatsAppOrderAction({ product, shop, user }: WhatsAppOrderActionProps) 
         }
     }
 
-    const confirmWhatsApp = (neighborhood: string) => {
-        const message = `Bonjour ${shop?.name || 'Vendeur'}, je souhaite commander : *${product.name}* (Prix: ${product.price} FCFA). Lieu de retrait : ${city} - ${neighborhood}`
-        const phone = shop?.whatsapp_number || "242060000000"
+    const confirmWhatsApp = async (neighborhood: string) => {
+        setSaving(true)
 
-        // Ouvrir WhatsApp
-        window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+        try {
+            // 1. Enregistrer la commande dans Supabase
+            const commissionRate = 0.10
+            const commissionAmount = Math.round(product.price * commissionRate)
+            const vendorPayout = product.price - commissionAmount
+
+            const { data: orderData, error: orderError } = await supabase.from('orders').insert([{
+                user_id: user?.id || null,
+                customer_name: user?.email || 'Client WhatsApp',
+                phone: '',
+                city: city,
+                district: neighborhood,
+                status: 'pending',
+                total_amount: product.price,
+                payment_method: 'whatsapp',
+                items: [{
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: 1,
+                    img: product.img || product.image_url || '',
+                    seller_id: product.seller_id
+                }],
+                commission_rate: commissionRate,
+                commission_amount: commissionAmount,
+                vendor_payout: vendorPayout,
+                payout_status: 'pending'
+            }]).select().single()
+
+            if (orderError) {
+                console.error('Erreur insert commande:', orderError)
+                alert('Erreur commande: ' + orderError.message)
+                setSaving(false)
+                return
+            }
+
+            // --- DÉCRÉMENTATION DU STOCK (fire-and-forget) ---
+            try {
+                const { data: prod } = await supabase
+                    .from('products')
+                    .select('has_stock, stock_quantity')
+                    .eq('id', product.id)
+                    .single()
+
+                if (prod?.has_stock && prod.stock_quantity > 0) {
+                    await supabase
+                        .from('products')
+                        .update({ stock_quantity: Math.max(0, prod.stock_quantity - 1) })
+                        .eq('id', product.id)
+                }
+            } catch (stockErr) {
+                console.error('Erreur decrement stock WhatsApp:', stockErr)
+            }
+
+            // 2. Ouvrir WhatsApp seulement si la commande est bien enregistrée
+            const d = new Date()
+            const orderRef = `MM-${String(d.getFullYear()).slice(2)}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}-${String(orderData?.order_number || 0).padStart(4, '0')}`
+            const message = `Bonjour ${shop?.full_name || 'Vendeur'}, commande *${orderRef}* : *${product.name}* (${product.price} FCFA). Retrait : ${city} - ${neighborhood}`
+            const phone = shop?.whatsapp_number || shop?.phone || "242069387169"
+            window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank')
+
+        } catch (err: any) {
+            console.error('Erreur enregistrement commande:', err)
+            alert('Erreur: ' + (err?.message || 'Impossible de créer la commande'))
+        } finally {
+            setSaving(false)
+        }
+
+        // 3. Reset le formulaire
+        setShowLocation(false)
+        setCity('')
     }
 
     return (
@@ -80,10 +155,11 @@ function WhatsAppOrderAction({ product, shop, user }: WhatsAppOrderActionProps) 
                                 {locations[city].map((neighborhood: string) => (
                                     <button
                                         key={neighborhood}
+                                        disabled={saving}
                                         onClick={() => confirmWhatsApp(neighborhood)}
-                                        className="bg-white dark:bg-slate-800 hover:bg-green-100 dark:hover:bg-green-900/30 p-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 border border-green-100 dark:border-green-800 transition-all hover:shadow-md"
+                                        className="bg-white dark:bg-slate-800 hover:bg-green-100 dark:hover:bg-green-900/30 p-2 rounded-lg text-xs font-medium text-slate-700 dark:text-slate-300 border border-green-100 dark:border-green-800 transition-all hover:shadow-md disabled:opacity-50"
                                     >
-                                        {neighborhood}
+                                        {saving ? '...' : neighborhood}
                                     </button>
                                 ))}
                             </div>

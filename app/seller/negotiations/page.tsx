@@ -52,8 +52,8 @@ export default function SellerNegotiations() {
                             <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Produit</span>
                             <p className="font-bold text-lg leading-tight">{n.products?.name || "Produit supprimé"}</p>
                             <div className="flex gap-4 mt-2 items-center">
-                                <p className="text-sm line-through text-slate-300 font-bold">{n.initial_price?.toLocaleString()} FCFA</p>
-                                <p className="text-lg font-black text-orange-500">{n.proposed_price?.toLocaleString()} FCFA</p>
+                                <p className="text-sm line-through text-slate-300 font-bold">{n.initial_price?.toLocaleString('fr-FR')} FCFA</p>
+                                <p className="text-lg font-black text-orange-500">{n.proposed_price?.toLocaleString('fr-FR')} FCFA</p>
                             </div>
                         </div>
 

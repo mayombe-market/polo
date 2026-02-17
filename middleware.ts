@@ -56,8 +56,25 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/complete-profile', request.url))
         }
 
-        if (profile.role !== 'vendor') {
-            // Pas vendeur → rediriger vers accueil
+        if (profile.role !== 'vendor' && profile.role !== 'admin') {
+            // Ni vendeur ni admin → rediriger vers accueil
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+    }
+
+    // Protection des routes admin
+    if (pathname.startsWith('/admin')) {
+        if (!user) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        const { data: adminProfile } = await supabase
+            .from('profiles')
+            .select('role')
+            .eq('id', user.id)
+            .single()
+
+        if (adminProfile?.role !== 'admin') {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
@@ -75,7 +92,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
     matcher: [
         '/vendor/:path*',
+        '/admin/:path*',
         '/complete-profile',
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 }

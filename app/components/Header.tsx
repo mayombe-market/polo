@@ -131,7 +131,7 @@ export default function Header() {
                         <div className="w-9 h-9 border-2 border-gray-300 dark:border-slate-600 rounded-full flex items-center justify-center font-bold text-gray-500 dark:text-gray-400 group-hover:border-green-600 group-hover:text-green-600 transition-all">?</div>
                         <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 overflow-hidden text-left">
                             <Link href="/faq" className="block px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-slate-700">🙋‍♂️ FAQ</Link>
-                            <Link href="/guide" className="block px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-slate-700">📖 Guide Vendeur</Link>
+                            <Link href="/guide-vendeur" className="block px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-slate-700">📖 Guide Vendeur</Link>
                             <Link href="/orders" className="block px-4 py-3 text-sm text-green-600 font-bold hover:bg-green-50 dark:hover:bg-slate-700">📦 Mes Commandes</Link>
                         </div>
                     </div>
@@ -208,7 +208,7 @@ export default function Header() {
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">FAQ</span>
                         </Link>
 
-                        <Link href="/guide" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors no-underline">
+                        <Link href="/guide-vendeur" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors no-underline">
                             <span className="text-lg">📖</span>
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Guide Vendeur</span>
                         </Link>

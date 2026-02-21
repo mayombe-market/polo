@@ -361,3 +361,36 @@ export async function deleteProduct(productId: string) {
     if (error) return { error: error.message }
     return { success: true }
 }
+
+// Créer un produit (server-side pour contourner les problèmes RLS côté client)
+export async function createProduct(input: {
+    name: string
+    price: number
+    description: string
+    category: string
+    subcategory: string
+    img: string
+    images_gallery: string[]
+    has_stock: boolean
+    stock_quantity: number
+    has_variants: boolean
+    sizes: string[]
+    colors: string[]
+}) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    const { data: product, error } = await supabase
+        .from('products')
+        .insert({
+            ...input,
+            seller_id: user.id,
+        })
+        .select()
+        .single()
+
+    if (error) return { error: error.message }
+    return { product: JSON.parse(JSON.stringify(product)) }
+}

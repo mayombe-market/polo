@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { revalidateProducts } from '../actions/revalidate'
+import { createProduct as serverCreateProduct } from '../actions/orders'
 import {
     ChevronRight, ChevronLeft, Upload, X, Check,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
@@ -146,21 +147,22 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
             // Upload main image
             const mainName = `${sellerId}/${Date.now()}-main`
             const { error: mainError } = await supabase.storage.from('products').upload(mainName, mainImage!)
-            if (mainError) throw mainError
+            if (mainError) throw new Error(`Image principale : ${mainError.message}`)
             const mainUrl = supabase.storage.from('products').getPublicUrl(mainName).data.publicUrl
 
-            // Upload gallery
+            // Upload gallery (avec vérification d'erreur)
             const galleryUrls = []
             for (let i = 0; i < gallery.length; i++) {
                 if (gallery[i]) {
                     const fileName = `${sellerId}/${Date.now()}-gallery-${i}`
-                    await supabase.storage.from('products').upload(fileName, gallery[i]!)
+                    const { error: galError } = await supabase.storage.from('products').upload(fileName, gallery[i]!)
+                    if (galError) throw new Error(`Image galerie ${i + 1} : ${galError.message}`)
                     galleryUrls.push(supabase.storage.from('products').getPublicUrl(fileName).data.publicUrl)
                 }
             }
 
-            // Insert product
-            const { error: insertError } = await supabase.from('products').insert({
+            // Insert product via server action (évite les problèmes RLS côté client)
+            const result = await serverCreateProduct({
                 name,
                 price: parseInt(price),
                 description,
@@ -168,7 +170,6 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                 subcategory: selectedSubcategory,
                 img: mainUrl,
                 images_gallery: galleryUrls,
-                seller_id: sellerId,
                 has_stock: hasStock,
                 stock_quantity: hasStock ? parseInt(stockQuantity) : 0,
                 has_variants: hasVariants,
@@ -176,13 +177,13 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                 colors: hasVariants ? selectedColors : [],
             })
 
-            if (insertError) throw insertError
+            if (result.error) throw new Error(result.error)
 
             await revalidateProducts()
             alert("Produit mis en ligne !")
             window.location.reload()
         } catch (err: any) {
-            alert("Erreur : " + err.message)
+            alert("Erreur : " + (err.message || 'Impossible de publier le produit.'))
         } finally { setLoading(false) }
     }
 

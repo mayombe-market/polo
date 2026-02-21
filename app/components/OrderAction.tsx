@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
-import { createBrowserClient } from '@supabase/ssr'
+import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { ArrowRight } from 'lucide-react'
 import AuthModal from './AuthModal'
 import StepIndicator from './checkout/StepIndicator'
@@ -33,11 +33,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     const [orderId, setOrderId] = useState('')
     const [orderData, setOrderData] = useState<any>(null)
     const [saving, setSaving] = useState(false)
-
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const [orderError, setOrderError] = useState('')
 
     // Step indicator index
     const getStepIndex = () => {
@@ -85,73 +81,40 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
         }
     }
 
-    // Créer la commande dans Supabase
-    const createOrder = async (extraData: Record<string, any> = {}) => {
-        const commissionRate = 0.10
-        const commissionAmount = Math.round(product.price * commissionRate)
-        const vendorPayout = product.price - commissionAmount
-
-        const { data: order, error } = await supabase.from('orders').insert([{
-            user_id: user?.id || null,
-            customer_name: extraData.customer_name || user?.email || 'Client',
-            phone: extraData.phone || '',
-            city,
-            district,
-            status: 'pending',
-            total_amount: product.price,
-            payment_method: paymentMethod,
-            items: [{
-                id: product.id,
-                name: product.name,
-                price: product.price,
-                quantity: 1,
-                img: product.img || product.image_url || '',
-                seller_id: product.seller_id,
-            }],
-            commission_rate: commissionRate,
-            commission_amount: commissionAmount,
-            vendor_payout: vendorPayout,
-            payout_status: 'pending',
-            transaction_id: extraData.transaction_id || null,
-            landmark: extraData.address || null,
-        }]).select().single()
-
-        if (error) throw error
-
-        // Décrémentation du stock (fire-and-forget)
-        try {
-            const { data: prod } = await supabase
-                .from('products')
-                .select('has_stock, stock_quantity')
-                .eq('id', product.id)
-                .single()
-
-            if (prod?.has_stock && prod.stock_quantity > 0) {
-                await supabase
-                    .from('products')
-                    .update({ stock_quantity: Math.max(0, prod.stock_quantity - 1) })
-                    .eq('id', product.id)
-            }
-        } catch (stockErr) {
-            console.error('Erreur decrement stock:', stockErr)
-        }
-
-        return order
-    }
-
     // Soumission du transaction ID (Mobile Money / Airtel)
     const handleTransactionIdSubmit = async (id: string) => {
         setTransactionId(id)
         setSaving(true)
+        setOrderError('')
 
         try {
-            const order = await createOrder({ transaction_id: id })
-            setOrderId(order.id)
-            setOrderData(order)
+            const result = await createOrderAction({
+                items: [{
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: 1,
+                    img: product.img || product.image_url || '',
+                    seller_id: product.seller_id || '',
+                }],
+                city,
+                district,
+                payment_method: paymentMethod,
+                total_amount: product.price,
+                transaction_id: id,
+            })
+
+            if (result.error) {
+                setOrderError(result.error)
+                return
+            }
+
+            setOrderId(result.order.id)
+            setOrderData(result.order)
             setStep('waiting')
         } catch (err: any) {
             console.error('Erreur commande:', err)
-            alert('Erreur: ' + (err?.message || 'Impossible de créer la commande'))
+            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
         } finally {
             setSaving(false)
         }
@@ -160,19 +123,38 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     // Soumission du formulaire Cash
     const handleCashConfirm = async (deliveryInfo: { name: string; phone: string; quarter: string; address: string }) => {
         setSaving(true)
+        setOrderError('')
 
         try {
-            const order = await createOrder({
+            const result = await createOrderAction({
+                items: [{
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    quantity: 1,
+                    img: product.img || product.image_url || '',
+                    seller_id: product.seller_id || '',
+                }],
+                city,
+                district,
+                payment_method: paymentMethod,
+                total_amount: product.price,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
-                address: deliveryInfo.address,
+                landmark: deliveryInfo.address,
             })
-            setOrderId(order.id)
-            setOrderData(order)
+
+            if (result.error) {
+                setOrderError(result.error)
+                return
+            }
+
+            setOrderId(result.order.id)
+            setOrderData(result.order)
             setStep('confirmed')
         } catch (err: any) {
             console.error('Erreur commande:', err)
-            alert('Erreur: ' + (err?.message || 'Impossible de créer la commande'))
+            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
         } finally {
             setSaving(false)
         }
@@ -257,8 +239,9 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                         {step === 'enter_id' && (
                             <EnterTransactionIdStep
                                 onSubmit={handleTransactionIdSubmit}
-                                onBack={() => setStep('transfer_info')}
+                                onBack={() => { setOrderError(''); setStep('transfer_info') }}
                                 loading={saving}
+                                serverError={orderError}
                             />
                         )}
 
@@ -276,8 +259,9 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                             <CashDeliveryStep
                                 total={product.price}
                                 onConfirm={handleCashConfirm}
-                                onBack={() => setStep('payment_method')}
+                                onBack={() => { setOrderError(''); setStep('payment_method') }}
                                 loading={saving}
+                                serverError={orderError}
                             />
                         )}
 

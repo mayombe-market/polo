@@ -6,9 +6,10 @@ interface EnterTransactionIdStepProps {
     onSubmit: (id: string) => void
     onBack: () => void
     loading?: boolean
+    serverError?: string
 }
 
-export default function EnterTransactionIdStep({ onSubmit, onBack, loading }: EnterTransactionIdStepProps) {
+export default function EnterTransactionIdStep({ onSubmit, onBack, loading, serverError }: EnterTransactionIdStepProps) {
     const [code, setCode] = useState('')
     const [error, setError] = useState('')
     const inputRef = useRef<HTMLInputElement>(null)
@@ -84,6 +85,14 @@ export default function EnterTransactionIdStep({ onSubmit, onBack, loading }: En
                     </span>
                 </div>
             </div>
+
+            {serverError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                    <p className="text-red-600 dark:text-red-400 text-[11px] font-bold">
+                        ⚠ {serverError}
+                    </p>
+                </div>
+            )}
 
             <button
                 onClick={handleSubmit}

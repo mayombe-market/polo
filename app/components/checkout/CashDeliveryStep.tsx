@@ -14,9 +14,10 @@ interface CashDeliveryStepProps {
     onConfirm: (info: { name: string; phone: string; quarter: string; address: string }) => void
     onBack: () => void
     loading?: boolean
+    serverError?: string
 }
 
-export default function CashDeliveryStep({ total, onConfirm, onBack, loading }: CashDeliveryStepProps) {
+export default function CashDeliveryStep({ total, onConfirm, onBack, loading, serverError }: CashDeliveryStepProps) {
     const [form, setForm] = useState({ name: '', phone: '', quarter: '', address: '' })
 
     const isReady = FIELDS.every(f => form[f.key as keyof typeof form].trim())
@@ -66,6 +67,14 @@ export default function CashDeliveryStep({ total, onConfirm, onBack, loading }: 
                     </div>
                 </div>
             </div>
+
+            {serverError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                    <p className="text-red-600 dark:text-red-400 text-[11px] font-bold">
+                        ⚠ {serverError}
+                    </p>
+                </div>
+            )}
 
             <button
                 onClick={handleSubmit}

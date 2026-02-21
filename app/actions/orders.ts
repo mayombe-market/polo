@@ -252,6 +252,81 @@ export async function adminReleaseFunds(orderId: string) {
     return { success: true }
 }
 
+// Créer une commande (appelé côté client via server action)
+export async function createOrder(input: {
+    items: Array<{
+        id: string
+        name: string
+        price: number
+        quantity: number
+        img: string
+        seller_id: string
+        selectedSize?: string
+        selectedColor?: string
+    }>
+    city: string
+    district: string
+    payment_method: string
+    total_amount: number
+    transaction_id?: string
+    customer_name?: string
+    phone?: string
+    landmark?: string
+}) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    const commissionRate = 0.10
+    const commissionAmount = Math.round(input.total_amount * commissionRate)
+    const vendorPayout = input.total_amount - commissionAmount
+
+    const { data: order, error } = await supabase.from('orders').insert([{
+        user_id: user.id,
+        customer_name: input.customer_name || user.email || 'Client',
+        customer_email: user.email || null,
+        phone: input.phone || '',
+        city: input.city,
+        district: input.district,
+        status: 'pending',
+        total_amount: input.total_amount,
+        payment_method: input.payment_method,
+        items: input.items,
+        commission_rate: commissionRate,
+        commission_amount: commissionAmount,
+        vendor_payout: vendorPayout,
+        payout_status: 'pending',
+        transaction_id: input.transaction_id || null,
+        landmark: input.landmark || null,
+    }]).select().single()
+
+    if (error) return { error: error.message }
+    if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
+
+    // Décrémentation du stock (fire-and-forget, ne bloque pas la réponse)
+    for (const item of input.items) {
+        try {
+            const { data: prod } = await supabase
+                .from('products')
+                .select('has_stock, stock_quantity')
+                .eq('id', item.id)
+                .single()
+
+            if (prod?.has_stock && prod.stock_quantity > 0) {
+                await supabase
+                    .from('products')
+                    .update({ stock_quantity: Math.max(0, prod.stock_quantity - item.quantity) })
+                    .eq('id', item.id)
+            }
+        } catch (stockErr) {
+            console.error('Erreur decrement stock:', stockErr)
+        }
+    }
+
+    return { order: JSON.parse(JSON.stringify(order)) }
+}
+
 // Supprimer un produit (vérifie que l'utilisateur est propriétaire ou admin)
 export async function deleteProduct(productId: string) {
     const supabase = await getSupabase()

@@ -15,14 +15,13 @@ export async function GET(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
-                get(name: string) {
-                    return cookieStore.get(name)?.value
+                getAll() {
+                    return cookieStore.getAll()
                 },
-                set(name: string, value: string, options: any) {
-                    cookieStore.set({ name, value, ...options })
-                },
-                remove(name: string, options: any) {
-                    cookieStore.set({ name, value: '', ...options })
+                setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value, options }) =>
+                        cookieStore.set(name, value, options)
+                    )
                 },
             },
         }
@@ -44,7 +43,6 @@ export async function GET(request: NextRequest) {
         })
         if (!error) {
             if (type === 'recovery') {
-                // Réinitialisation de mot de passe → page dédiée (ou accueil pour l'instant)
                 return NextResponse.redirect(new URL('/', request.url))
             }
             return NextResponse.redirect(new URL('/complete-profile', request.url))

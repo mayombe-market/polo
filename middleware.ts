@@ -30,7 +30,6 @@ export async function middleware(request: NextRequest) {
     )
 
     // IMPORTANT : getUser() rafraîchit le token auth automatiquement
-    // Cela doit tourner sur TOUTES les routes pour éviter les déconnexions
     const { data: { user } } = await supabase.auth.getUser()
     const pathname = request.nextUrl.pathname
 
@@ -40,13 +39,18 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        const { data: profile } = await supabase
+        const { data: profile, error } = await supabase
             .from('profiles')
             .select('role, first_name')
             .eq('id', user.id)
             .single()
 
-        if (!profile?.first_name) {
+        // Si la requête profil échoue, ne pas bloquer — laisser passer
+        if (error || !profile) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!profile.first_name) {
             return NextResponse.redirect(new URL('/complete-profile', request.url))
         }
 
@@ -61,13 +65,14 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        const { data: adminProfile } = await supabase
+        const { data: adminProfile, error } = await supabase
             .from('profiles')
             .select('role')
             .eq('id', user.id)
             .single()
 
-        if (adminProfile?.role !== 'admin') {
+        // Si la requête échoue, ne pas crasher — rediriger
+        if (error || !adminProfile || adminProfile.role !== 'admin') {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }

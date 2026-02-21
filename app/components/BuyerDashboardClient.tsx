@@ -501,7 +501,7 @@ function BuyerOrders({ orders }: { orders: any[] }) {
                                             {fmt(order.total_amount)} <small className="text-[10px]">FCFA</small>
                                         </p>
                                         <div className="flex gap-3 mt-1 text-[10px] text-slate-400 font-bold">
-                                            <span>{new Date(order.created_at).toLocaleDateString('fr-FR')}</span>
+                                            <span>{new Date(order.created_at).toLocaleDateString('fr-FR')} à {new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                                             <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${order.payment_method === 'mobile_money' ? 'bg-yellow-100 text-yellow-600' : order.payment_method === 'airtel_money' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
                                                 {order.payment_method === 'mobile_money' ? 'MoMo' : order.payment_method === 'airtel_money' ? 'Airtel' : 'Cash'}
                                             </span>
@@ -766,7 +766,7 @@ function NotificationsPage({ orders }: { orders: any[] }) {
             Icon: info.icon,
             title: info.title,
             desc: `${firstItem?.name || 'Article'} - ${fmt(order.total_amount)} FCFA`,
-            time: new Date(order.updated_at || order.created_at).toLocaleDateString('fr-FR'),
+            time: `${new Date(order.updated_at || order.created_at).toLocaleDateString('fr-FR')} à ${new Date(order.updated_at || order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
             color: info.color,
             isRecent: Date.now() - new Date(order.updated_at || order.created_at).getTime() < 86400000 * 3,
         }

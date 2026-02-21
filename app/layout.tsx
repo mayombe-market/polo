@@ -10,11 +10,11 @@ export const metadata = {
     template: '%s | Mayombe Market',
   },
   description: 'Marketplace congolaise : mode, beauté, accessoires et lifestyle. Achetez local, soutenez les entrepreneurs du Congo-Brazzaville.',
-  metadataBase: new URL('https://mayombemarket.com'),
+  metadataBase: new URL('https://mayombe-market.com'),
   openGraph: {
     type: 'website',
     locale: 'fr_CG',
-    url: 'https://mayombemarket.com',
+    url: 'https://mayombe-market.com',
     siteName: 'Mayombe Market',
     title: 'Mayombe Market — Mode, Beauté & Lifestyle au Congo',
     description: 'Marketplace congolaise : mode, beauté, accessoires et lifestyle. Achetez local, soutenez les entrepreneurs du Congo-Brazzaville.',
@@ -45,7 +45,7 @@ export const metadata = {
     },
   },
   alternates: {
-    canonical: 'https://mayombemarket.com',
+    canonical: 'https://mayombe-market.com',
   },
   icons: {
     icon: '/favicon.ico',
@@ -56,18 +56,7 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <head>
-        <script src="https://cdn.tailwindcss.com"></script>
-        <script dangerouslySetInnerHTML={{
-          __html: `
-            tailwind.config = {
-              darkMode: 'class'
-            }
-          `
-        }} />
-      </head>
-
-      <body className="m-0 p-0">
+      <body className={`${inter.className} m-0 p-0`}>
         {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
         <header className="w-full h-4 sticky top-0 z-50 shadow-sm">
           <div className="w-full h-full" style={{

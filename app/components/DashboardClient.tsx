@@ -16,6 +16,7 @@ import {
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
+import { playNewOrderSound } from '@/lib/notificationSound'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct } from '@/app/actions/orders'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
@@ -142,6 +143,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 if (vendorItems.length > 0 && newOrder.status !== 'pending') {
                     setOrders(prev => [newOrder, ...prev])
                     const desc = `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
+                    playNewOrderSound()
                     toast.success('Nouvelle commande !', { description: desc })
                     sendNotification('Nouvelle commande !', desc)
                 }
@@ -155,6 +157,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
                         if (updated.status !== 'pending') {
                             const desc = `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
+                            playNewOrderSound()
                             toast.success('Nouvelle commande confirmée !', { description: desc })
                             sendNotification('Commande confirmée !', desc)
                             return [updated, ...prev]

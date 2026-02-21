@@ -11,6 +11,7 @@ import {
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder } from '@/app/actions/orders'
+import { playNewOrderSound } from '@/lib/notificationSound'
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -90,6 +91,7 @@ export default function AdminOrders() {
                 const order = payload.new as any
                 setOrders(prev => [order, ...prev])
                 const desc = `${order.customer_name} - ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+                playNewOrderSound()
                 toast.success('Nouvelle commande !', { description: desc, duration: 8000 })
                 sendNotification('Nouvelle commande !', desc)
             })

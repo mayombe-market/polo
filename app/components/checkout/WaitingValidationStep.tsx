@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { playSuccessSound } from '@/lib/notificationSound'
 
 interface WaitingValidationStepProps {
     orderId: string
@@ -45,6 +46,7 @@ export default function WaitingValidationStep({ orderId, orderData, transactionI
             }, (payload) => {
                 const newStatus = (payload.new as any).status
                 if (newStatus === 'confirmed') {
+                    playSuccessSound()
                     onValidated()
                 } else if (newStatus === 'rejected') {
                     onRejected()

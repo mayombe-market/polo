@@ -10,6 +10,10 @@ export async function GET(request: NextRequest) {
     const type = requestUrl.searchParams.get('type')
 
     const cookieStore = await cookies()
+
+    // On stocke les cookies à transférer sur la réponse redirect
+    const pendingCookies: { name: string; value: string; options: any }[] = []
+
     const supabase = createServerClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -19,36 +23,41 @@ export async function GET(request: NextRequest) {
                     return cookieStore.getAll()
                 },
                 setAll(cookiesToSet) {
-                    cookiesToSet.forEach(({ name, value, options }) =>
+                    cookiesToSet.forEach(({ name, value, options }) => {
                         cookieStore.set(name, value, options)
-                    )
+                        pendingCookies.push({ name, value, options })
+                    })
                 },
             },
         }
     )
 
+    let redirectTo = '/?error=confirmation_failed'
+
     // Flow PKCE (code dans l'URL)
     if (code) {
         const { error } = await supabase.auth.exchangeCodeForSession(code)
         if (!error) {
-            return NextResponse.redirect(new URL('/complete-profile', request.url))
+            redirectTo = '/complete-profile'
         }
     }
 
     // Flow par token (confirmation email / reset password)
-    if (token_hash && type) {
+    if (!code && token_hash && type) {
         const { error } = await supabase.auth.verifyOtp({
             token_hash,
             type: type as any,
         })
         if (!error) {
-            if (type === 'recovery') {
-                return NextResponse.redirect(new URL('/', request.url))
-            }
-            return NextResponse.redirect(new URL('/complete-profile', request.url))
+            redirectTo = type === 'recovery' ? '/' : '/complete-profile'
         }
     }
 
-    // En cas d'erreur, rediriger vers la page d'accueil
-    return NextResponse.redirect(new URL('/?error=confirmation_failed', request.url))
+    // Créer la réponse redirect et y attacher les cookies de session
+    const response = NextResponse.redirect(new URL(redirectTo, request.url))
+    pendingCookies.forEach(({ name, value, options }) => {
+        response.cookies.set(name, value, options)
+    })
+
+    return response
 }

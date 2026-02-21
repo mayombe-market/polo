@@ -67,31 +67,31 @@ export default function AddToCartButton({ product, selectedVariant }: Props) {
         <button
             onClick={handleAdd}
             disabled={isOutOfStock || status === 'added'}
-            className={`w-full py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] transition-all flex items-center justify-center gap-3 ${status === 'added'
-                ? 'bg-green-600 text-white shadow-lg shadow-green-200'
+            className={`w-full py-4 rounded-[1.2rem] font-black uppercase text-[11px] tracking-wider transition-all flex items-center justify-center gap-2 ${status === 'added'
+                ? 'bg-green-600 text-white shadow-lg shadow-green-500/20'
                 : status === 'error'
                     ? 'bg-red-500 text-white animate-bounce'
                     : isOutOfStock
                         ? 'bg-slate-200 text-slate-400 cursor-not-allowed'
-                        : 'bg-orange-500 text-white shadow-lg shadow-orange-200 hover:bg-black'
+                        : 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600'
                 }`}
         >
             {isOutOfStock ? (
-                "Rupture de stock"
+                "Rupture"
             ) : status === 'added' ? (
                 <>
-                    <Check size={18} />
+                    <Check size={16} />
                     Ajouté !
                 </>
             ) : status === 'error' ? (
                 <>
-                    <AlertCircle size={18} />
-                    Options manquantes
+                    <AlertCircle size={16} />
+                    Options
                 </>
             ) : (
                 <>
-                    <ShoppingCart size={18} />
-                    Ajouter au panier
+                    <ShoppingCart size={16} />
+                    Panier
                 </>
             )}
         </button>

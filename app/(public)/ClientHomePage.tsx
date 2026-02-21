@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import AuthModal from '@/app/components/AuthModal'
 import ProductCard from '@/app/components/ProductCard'
-import { Truck, Store, ArrowRight, Star } from 'lucide-react'
+import { Truck, Store, ArrowRight } from 'lucide-react'
 
 interface ClientHomePageProps {
     ads: any[]
@@ -13,10 +13,9 @@ interface ClientHomePageProps {
     categories: any[]
     newProducts: any[]
     popularProducts: any[]
-    topSellers: any[]
 }
 
-export default function ClientHomePage({ ads, topProducts, categories, newProducts, popularProducts, topSellers }: ClientHomePageProps) {
+export default function ClientHomePage({ ads, topProducts, categories, newProducts, popularProducts }: ClientHomePageProps) {
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -137,44 +136,6 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                         {popularProducts.map((product) => (
                             <ProductCard key={product.id} product={product} />
-                        ))}
-                    </div>
-                </section>
-            )}
-
-            {/* ===================== VENDEURS VEDETTES ===================== */}
-            {topSellers.length > 0 && (
-                <section className="max-w-7xl mx-auto px-4">
-                    <div className="text-center mb-10">
-                        <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Vendeurs vedettes</h2>
-                        <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-2">Les boutiques les plus actives</p>
-                    </div>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {topSellers.map((seller) => (
-                            <Link
-                                key={seller.id}
-                                href={`/seller/${seller.id}`}
-                                className="bg-white dark:bg-slate-900 rounded-[2rem] p-6 border border-slate-100 dark:border-slate-800 hover:border-green-500/30 hover:shadow-lg transition-all text-center group block"
-                            >
-                                <div className="relative w-20 h-20 mx-auto mb-4 rounded-full overflow-hidden bg-green-100 dark:bg-green-500/10">
-                                    {seller.avatar_url ? (
-                                        <Image src={seller.avatar_url} alt={seller.full_name || ''} fill sizes="80px" className="object-cover" />
-                                    ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-green-600 font-black text-2xl italic">
-                                            {seller.full_name?.[0]?.toUpperCase() || 'V'}
-                                        </div>
-                                    )}
-                                </div>
-                                <h3 className="font-black uppercase italic text-sm tracking-tighter dark:text-white group-hover:text-green-600 transition-colors">
-                                    {seller.full_name || 'Vendeur'}
-                                </h3>
-                                <p className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mt-1 flex items-center justify-center gap-1">
-                                    <Star size={10} className="text-orange-500" /> {seller.product_count} produit{seller.product_count > 1 ? 's' : ''}
-                                </p>
-                                <div className="mt-4 bg-green-50 dark:bg-green-500/10 text-green-600 text-[9px] font-black uppercase italic py-2 px-4 rounded-xl group-hover:bg-green-600 group-hover:text-white transition-all">
-                                    Voir la boutique
-                                </div>
-                            </Link>
                         ))}
                     </div>
                 </section>

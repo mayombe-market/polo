@@ -1,26 +1,66 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
 import {
-    ShieldCheck, Package, MapPin, Phone, Check, Loader2,
-    Filter, Wallet, DollarSign, Clock, Truck, Ban, MessageCircle
+    ShieldCheck, Package, MapPin, Phone, Loader2,
+    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { adminConfirmPayment, adminReleaseFunds } from '@/app/actions/orders'
+import { generateInvoice } from '@/lib/generateInvoice'
+import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder } from '@/app/actions/orders'
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [updating, setUpdating] = useState<string | null>(null)
     const [activeFilter, setActiveFilter] = useState('all')
+    const [adminInputs, setAdminInputs] = useState<Record<string, string>>({})
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
+
+    // ===== NOTIFICATION SOUND + BROWSER PUSH =====
+    const audioCtxRef = useRef<AudioContext | null>(null)
+
+    useEffect(() => {
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission()
+        }
+    }, [])
+
+    const playNotificationSound = useCallback(() => {
+        try {
+            if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+            const ctx = audioCtxRef.current
+            const now = ctx.currentTime
+            // Triple note pour l'admin (plus urgent)
+            const notes = [880, 1100, 1320]
+            notes.forEach((freq, i) => {
+                const osc = ctx.createOscillator()
+                const gain = ctx.createGain()
+                osc.type = 'sine'
+                const start = now + i * 0.12
+                osc.frequency.setValueAtTime(freq, start)
+                gain.gain.setValueAtTime(0.35, start)
+                gain.gain.exponentialRampToValueAtTime(0.01, start + 0.12)
+                osc.connect(gain).connect(ctx.destination)
+                osc.start(start)
+                osc.stop(start + 0.12)
+            })
+        } catch {}
+    }, [])
+
+    const sendNotification = useCallback((title: string, body: string) => {
+        playNotificationSound()
+        if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(title, { body, icon: '/favicon.ico' })
+        }
+    }, [playNotificationSound])
 
     useEffect(() => {
         const fetchOrders = async () => {
@@ -47,11 +87,11 @@ export default function AdminOrders() {
         const channel = supabase
             .channel('admin-orders')
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-                setOrders(prev => [payload.new as any, ...prev])
-                toast.success('Nouvelle commande !', {
-                    description: `${(payload.new as any).customer_name} - ${(payload.new as any).total_amount?.toLocaleString('fr-FR')} FCFA`,
-                    duration: 8000,
-                })
+                const order = payload.new as any
+                setOrders(prev => [order, ...prev])
+                const desc = `${order.customer_name} - ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+                toast.success('Nouvelle commande !', { description: desc, duration: 8000 })
+                sendNotification('Nouvelle commande !', desc)
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
                 setOrders(prev => prev.map(o => o.id === (payload.new as any).id ? { ...o, ...payload.new } : o))
@@ -65,16 +105,38 @@ export default function AdminOrders() {
     const confirmPayment = async (orderId: string) => {
         setUpdating(orderId)
         try {
-            const result = await adminConfirmPayment(orderId)
+            const adminId = adminInputs[orderId] || undefined
+            const result = await adminConfirmPayment(orderId, adminId)
             if (result.error) {
                 toast.error(`Erreur: ${result.error}`)
                 return
             }
-            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed' } : o))
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'confirmed', tracking_number: result.tracking_number } : o))
             const order = orders.find(o => o.id === orderId)
-            toast.success(`${formatOrderNumber(order)} — Paiement confirmé`)
+            toast.success(`${formatOrderNumber(order)} — Paiement confirmé`, {
+                description: `Numéro de suivi : ${result.tracking_number}`,
+                duration: 8000
+            })
         } catch (err: any) {
             toast.error('Erreur: ' + (err?.message || 'Impossible de confirmer'))
+        } finally {
+            setUpdating(null)
+        }
+    }
+
+    // Rejeter une commande
+    const rejectOrder = async (orderId: string) => {
+        setUpdating(orderId)
+        try {
+            const result = await adminRejectOrder(orderId)
+            if (result.error) {
+                toast.error(`Erreur: ${result.error}`)
+                return
+            }
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'rejected' } : o))
+            toast.success('Commande rejetée')
+        } catch (err: any) {
+            toast.error('Erreur: ' + (err?.message || 'Impossible de rejeter'))
         } finally {
             setUpdating(null)
         }
@@ -119,15 +181,17 @@ export default function AdminOrders() {
             case 'delivered': return { label: 'Livrée', style: 'bg-green-100 text-green-700' }
             case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
             case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
+            case 'rejected': return { label: 'Rejetée', style: 'bg-red-100 text-red-700' }
             default: return { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' }
         }
     }
 
     const getPaymentBadge = (method: string) => {
         switch (method) {
-            case 'mobile_money': return { label: 'MoMo', style: 'bg-green-100 text-green-700' }
-            case 'whatsapp': return { label: 'WhatsApp', style: 'bg-emerald-100 text-emerald-700' }
-            default: return { label: 'Cash', style: 'bg-slate-100 text-slate-600' }
+            case 'mobile_money': return { label: 'MTN MoMo', style: 'bg-yellow-100 text-yellow-700' }
+            case 'airtel_money': return { label: 'Airtel Money', style: 'bg-red-100 text-red-700' }
+            case 'cash': return { label: 'Cash', style: 'bg-green-100 text-green-700' }
+            default: return { label: method || 'Autre', style: 'bg-slate-100 text-slate-600' }
         }
     }
 
@@ -231,6 +295,11 @@ export default function AdminOrders() {
                                             <span className={`px-3 py-1 text-[8px] font-black uppercase italic rounded-full ${payBadge.style}`}>
                                                 {payBadge.label}
                                             </span>
+                                            {order.tracking_number && (
+                                                <span className="flex items-center gap-1.5 px-3 py-1 text-[8px] font-black font-mono uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                    <Truck size={10} /> {order.tracking_number}
+                                                </span>
+                                            )}
                                             {order.payout_status === 'paid' && (
                                                 <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-green-100 text-green-700">
                                                     Fonds libérés
@@ -296,18 +365,72 @@ export default function AdminOrders() {
                                         </div>
                                     </div>
 
+                                    {/* VÉRIFICATION TRANSACTION ID (Mobile Money / Airtel) */}
+                                    {order.status === 'pending' && order.transaction_id && (
+                                        <div className="mb-6 bg-amber-50/50 dark:bg-amber-500/5 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-800/30">
+                                            <p className="text-[8px] font-black uppercase text-amber-600 mb-3 tracking-[0.2em]">🔐 Vérification Transaction</p>
+
+                                            <div className="mb-3">
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">ID saisi par le client</p>
+                                                <p className="text-base font-black font-mono tracking-wider text-amber-600">
+                                                    {order.transaction_id.replace(/(\d{3})(?=\d)/g, '$1 ')}
+                                                </p>
+                                            </div>
+
+                                            <div className="mb-3">
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Entrez l'ID reçu par SMS</p>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    maxLength={19}
+                                                    value={adminInputs[order.id] || ''}
+                                                    onChange={e => {
+                                                        const clean = e.target.value.replace(/\D/g, '').slice(0, 15)
+                                                        setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
+                                                    }}
+                                                    placeholder="ID du SMS (15 chiffres)"
+                                                    className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                />
+                                            </div>
+
+                                            {/* Indicateur de correspondance */}
+                                            {adminInputs[order.id]?.length === 15 && (
+                                                <div className="mt-2">
+                                                    {adminInputs[order.id] === order.transaction_id ? (
+                                                        <p className="text-green-600 text-[10px] font-black uppercase">
+                                                            ✓ Les ID correspondent — vous pouvez valider
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-red-500 text-[10px] font-black uppercase">
+                                                            ✗ Les ID ne correspondent PAS — vérifiez le numéro
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {/* ACTIONS ADMIN */}
                                     <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-100 dark:border-slate-800">
                                         {/* VERROU 1 : Confirmer le paiement */}
                                         {order.status === 'pending' && (
-                                            <button
-                                                onClick={() => confirmPayment(order.id)}
-                                                disabled={updating === order.id}
-                                                className="flex-1 bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
-                                            >
-                                                {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                                                Confirmer le paiement
-                                            </button>
+                                            <>
+                                                <button
+                                                    onClick={() => confirmPayment(order.id)}
+                                                    disabled={updating === order.id}
+                                                    className="flex-1 bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                                                >
+                                                    {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                                                    Confirmer le paiement
+                                                </button>
+                                                <button
+                                                    onClick={() => rejectOrder(order.id)}
+                                                    disabled={updating === order.id}
+                                                    className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
+                                                >
+                                                    <Ban size={14} /> Rejeter
+                                                </button>
+                                            </>
                                         )}
 
                                         {/* VERROU 2 : Libérer les fonds */}
@@ -331,14 +454,23 @@ export default function AdminOrders() {
                                             )
                                         )}
 
+                                        {/* Reçu PDF */}
+                                        {order.status !== 'pending' && (
+                                            <button
+                                                onClick={() => generateInvoice(order)}
+                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all"
+                                            >
+                                                <Download size={14} /> Reçu PDF
+                                            </button>
+                                        )}
+
                                         {/* Contacter le client */}
                                         {order.phone && (
                                             <a
-                                                href={`https://wa.me/${order.phone}`}
-                                                target="_blank"
-                                                className="bg-green-500 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 shadow-lg shadow-green-500/10 transition-transform active:scale-95"
+                                                href={`tel:${order.phone}`}
+                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95"
                                             >
-                                                <MessageCircle size={14} /> WhatsApp
+                                                <Phone size={14} /> Appeler
                                             </a>
                                         )}
                                     </div>

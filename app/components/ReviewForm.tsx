@@ -60,27 +60,35 @@ export default function ReviewForm({ productId, user, onReviewSubmit }: { produc
             }
 
             // 2. Envoi de l'avis avec les URLs des photos
-            const { error } = await supabase.from('reviews').insert({
+            const reviewData: Record<string, any> = {
                 product_id: productId,
                 user_id: user.id,
                 rating,
-                comment,
-                images: uploadedUrls, // Tableau de liens
+                content: comment,
                 user_name: user.user_metadata?.full_name || user.email?.split('@')[0],
                 user_avatar: user.user_metadata?.avatar_url || '',
-                status: 'approved'
-            })
+            }
 
-            if (error) throw error
+            // Ajouter les images seulement s'il y en a
+            if (uploadedUrls.length > 0) {
+                reviewData.images = uploadedUrls
+            }
+
+            const { error } = await supabase.from('reviews').insert(reviewData)
+
+            if (error) {
+                console.error('Erreur insert review:', error.message, error.details, error.hint, error.code)
+                throw new Error(error.message || 'Erreur lors de l\'envoi de l\'avis')
+            }
 
             alert("Avis publié avec succès !")
             setComment('')
             setImages([])
             setPreviews([])
             onReviewSubmit()
-        } catch (err) {
-            console.error(err)
-            alert("Erreur lors de l'envoi")
+        } catch (err: any) {
+            console.error('Review error:', err?.message || err)
+            alert(err?.message || "Erreur lors de l'envoi")
         } finally {
             setSubmitting(false)
         }

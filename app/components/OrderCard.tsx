@@ -1,7 +1,7 @@
-import { Clock, CheckCircle2, Truck, Package, MessageSquare } from 'lucide-react'
+import { Clock, CheckCircle2, Truck, Package, Download } from 'lucide-react'
 import Image from 'next/image'
-import Link from 'next/link'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { generateInvoice } from '@/lib/generateInvoice'
 
 export function OrderCard({ order }: { order: any }) {
     // 1. On définit la liste des étapes possibles
@@ -21,25 +21,46 @@ export function OrderCard({ order }: { order: any }) {
             {/* EN-TÊTE : ID et Prix */}
             <div className="flex justify-between items-start mb-8">
                 <div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">
                             {formatOrderNumber(order)}
                         </span>
-                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${order.payment_method === 'mobile_money' ? 'bg-green-100 text-green-600' : order.payment_method === 'whatsapp' ? 'bg-emerald-100 text-emerald-600' : 'bg-orange-100 text-orange-600'}`}>
-                            {order.payment_method === 'mobile_money' ? 'MoMo' : order.payment_method === 'whatsapp' ? 'WhatsApp' : 'Cash'}
+                        <span className={`text-[8px] font-black uppercase px-2 py-0.5 rounded-full ${order.payment_method === 'mobile_money' ? 'bg-yellow-100 text-yellow-600' : order.payment_method === 'airtel_money' ? 'bg-red-100 text-red-600' : 'bg-green-100 text-green-600'}`}>
+                            {order.payment_method === 'mobile_money' ? 'MoMo' : order.payment_method === 'airtel_money' ? 'Airtel' : 'Cash'}
                         </span>
                     </div>
                     <h3 className="font-black italic uppercase text-2xl tracking-tighter mt-1">
                         {order.total_amount.toLocaleString('fr-FR')} <small className="text-[10px] tracking-normal">FCFA</small>
                     </h3>
+                    {order.tracking_number && (
+                        <div className="flex items-center gap-2 mt-2">
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Suivi :</span>
+                            <span className="text-[10px] font-black font-mono tracking-wider text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/20 px-2.5 py-1 rounded-lg">
+                                {order.tracking_number}
+                            </span>
+                        </div>
+                    )}
                 </div>
-                <Link
-                    href={`https://wa.me/242069387169?text=Bonjour, je souhaite un suivi pour ma commande ${formatOrderNumber(order)}`}
-                    target="_blank"
-                    className="bg-green-500/10 text-green-600 p-3 rounded-2xl flex items-center gap-2 font-black uppercase text-[9px] hover:bg-green-500 hover:text-white transition-all"
-                >
-                    <MessageSquare size={14} /> Aide WhatsApp
-                </Link>
+                <div className="flex flex-col items-end gap-2">
+                    <div className={`px-3 py-1.5 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                        order.status === 'delivered' ? 'bg-green-100 text-green-600' :
+                        order.status === 'rejected' ? 'bg-red-100 text-red-600' :
+                        'bg-orange-100 text-orange-600'
+                    }`}>
+                        {order.status === 'delivered' ? 'Livrée' :
+                         order.status === 'rejected' ? 'Rejetée' :
+                         order.status === 'shipped' ? 'En route' :
+                         order.status === 'confirmed' ? 'Confirmée' : 'En attente'}
+                    </div>
+                    {order.status !== 'pending' && (
+                        <button
+                            onClick={() => generateInvoice(order)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-orange-500 transition-colors text-[9px] font-black uppercase"
+                        >
+                            <Download size={12} /> Reçu PDF
+                        </button>
+                    )}
+                </div>
             </div>
 
             {/* BARRE DE PROGRESSION (TIMELINE) */}

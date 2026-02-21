@@ -28,7 +28,7 @@ function SuccessContent() {
                 <div className="space-y-2">
                     <h1 className="text-3xl font-black uppercase italic tracking-tighter">Commande envoyée !</h1>
                     <p className="text-slate-500 font-bold text-xs uppercase tracking-widest leading-relaxed">
-                        Votre commande a été enregistrée. Le vendeur vous contactera sur WhatsApp.
+                        Votre commande a été enregistrée. Vous serez notifié dès sa confirmation.
                     </p>
                 </div>
 

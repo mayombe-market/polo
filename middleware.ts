@@ -2,10 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-    let response = NextResponse.next({
-        request: {
-            headers: request.headers,
-        },
+    let supabaseResponse = NextResponse.next({
+        request,
     })
 
     const supabase = createServerClient(
@@ -13,38 +11,35 @@ export async function middleware(request: NextRequest) {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
         {
             cookies: {
-                get(name: string) {
-                    return request.cookies.get(name)?.value
+                getAll() {
+                    return request.cookies.getAll()
                 },
-                set(name: string, value: string, options: any) {
-                    response.cookies.set({
-                        name,
-                        value,
-                        ...options,
+                setAll(cookiesToSet) {
+                    cookiesToSet.forEach(({ name, value }) =>
+                        request.cookies.set(name, value)
+                    )
+                    supabaseResponse = NextResponse.next({
+                        request,
                     })
-                },
-                remove(name: string, options: any) {
-                    response.cookies.set({
-                        name,
-                        value: '',
-                        ...options,
-                    })
+                    cookiesToSet.forEach(({ name, value, options }) =>
+                        supabaseResponse.cookies.set(name, value, options)
+                    )
                 },
             },
         }
     )
 
+    // IMPORTANT : getUser() rafraîchit le token auth automatiquement
+    // Cela doit tourner sur TOUTES les routes pour éviter les déconnexions
     const { data: { user } } = await supabase.auth.getUser()
     const pathname = request.nextUrl.pathname
 
     // Protection des routes vendor
     if (pathname.startsWith('/vendor')) {
         if (!user) {
-            // Non connecté → rediriger vers la page d'accueil
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        // Vérifier le rôle
         const { data: profile } = await supabase
             .from('profiles')
             .select('role, first_name')
@@ -52,12 +47,10 @@ export async function middleware(request: NextRequest) {
             .single()
 
         if (!profile?.first_name) {
-            // Profil non complété → rediriger vers complétion
             return NextResponse.redirect(new URL('/complete-profile', request.url))
         }
 
         if (profile.role !== 'vendor' && profile.role !== 'admin') {
-            // Ni vendeur ni admin → rediriger vers accueil
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
@@ -79,20 +72,25 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // Protection de la page complete-profile (seulement accessible si connecté)
+    // Protection des routes account
+    if (pathname.startsWith('/account')) {
+        if (!user) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+    }
+
+    // Protection de la page complete-profile
     if (pathname === '/complete-profile') {
         if (!user) {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
 
-    return response
+    return supabaseResponse
 }
 
 export const config = {
     matcher: [
-        '/vendor/:path*',
-        '/admin/:path*',
-        '/complete-profile',
+        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 }

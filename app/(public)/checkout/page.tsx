@@ -9,10 +9,12 @@ import { createBrowserClient } from '@supabase/ssr'
 import { CheckoutSchema, CheckoutType } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight } from 'lucide-react'
+import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 
 export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
-    const [loadingProfile, setLoadingProfile] = useState(true) // État ajouté
+    const [loadingProfile, setLoadingProfile] = useState(true)
+    const [userEmail, setUserEmail] = useState('')
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
 
@@ -40,7 +42,6 @@ export default function CheckoutPage() {
                     .single()
 
                 if (profile) {
-                    // On utilise reset() pour injecter les valeurs dans React Hook Form
                     reset({
                         full_name: profile.full_name || '',
                         phone: profile.whatsapp_number || '',
@@ -50,6 +51,7 @@ export default function CheckoutPage() {
                         payment_method: 'cod'
                     })
                 }
+                setUserEmail(user.email || '')
             }
             setLoadingProfile(false)
         }
@@ -68,7 +70,7 @@ export default function CheckoutPage() {
                 name: item.name,
                 price: item.price,
                 quantity: item.quantity || 1,
-                img: item.img, // Ajouté pour l'historique
+                img: item.img,
                 seller_id: item.seller_id
             }))
 
@@ -76,10 +78,11 @@ export default function CheckoutPage() {
             const commissionAmount = Math.round(total * commissionRate)
             const vendorPayout = total - commissionAmount
 
-            const { data: order, error } = await supabase
+            const { error } = await supabase
                 .from('orders')
                 .insert([{
                     user_id: user?.id || null,
+                    customer_email: userEmail || null,
                     customer_name: formData.full_name,
                     phone: formData.phone,
                     city: formData.city,
@@ -87,7 +90,7 @@ export default function CheckoutPage() {
                     landmark: formData.landmark,
                     status: 'pending',
                     total_amount: total,
-                    payment_method: formData.payment_method,
+                    payment_method: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
                     items: orderItems,
                     commission_rate: commissionRate,
                     commission_amount: commissionAmount,
@@ -99,7 +102,7 @@ export default function CheckoutPage() {
 
             if (error) throw error
 
-            // --- DÉCRÉMENTATION DU STOCK (fire-and-forget) ---
+            // Décrémentation du stock (fire-and-forget)
             Promise.all(
                 orderItems.map(async (item) => {
                     try {
@@ -121,41 +124,21 @@ export default function CheckoutPage() {
                 })
             ).catch(err => console.error('Erreur globale decrement stock:', err))
 
-            // Récupérer le numéro WhatsApp du vendeur principal
-            const mainSellerId = cart.find(item => item.seller_id)?.seller_id
-            let vendorPhone = "242069387169" // fallback Mayombe
-
-            if (mainSellerId) {
-                const { data: vendorProfile } = await supabase
-                    .from('profiles')
-                    .select('whatsapp_number')
-                    .eq('id', mainSellerId)
-                    .maybeSingle()
-                if (vendorProfile?.whatsapp_number) {
-                    vendorPhone = vendorProfile.whatsapp_number.replace(/\s+/g, '')
-                }
+            // Envoi de l'email de confirmation (sans bloquer la navigation)
+            if (userEmail) {
+                sendOrderConfirmationEmail({
+                    customerName: formData.full_name,
+                    customerEmail: userEmail,
+                    orderId: '',
+                    items: orderItems,
+                    total,
+                    paymentMethod: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
+                    city: formData.city,
+                    district: formData.district,
+                }).catch(err => console.error('Erreur email:', err))
             }
 
-            const paymentLabel = formData.payment_method === 'mobile_money' ? 'Mobile Money' : 'Cash à la livraison'
-            const itemsList = cart.map(item => `- ${item.name} (x${item.quantity || 1})`).join('%0A')
-
-            const orderRef = `MM-${String(new Date().getFullYear()).slice(2)}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${String(order.order_number || 0).padStart(4, '0')}`
-
-            const whatsappText = `*NOUVELLE COMMANDE MAYOMBE*%0A` +
-                `--------------------------%0A` +
-                `🆔 *Commande:* ${orderRef}%0A` +
-                `👤 *Client:* ${formData.full_name}%0A` +
-                `📞 *Tel:* ${formData.phone}%0A` +
-                `📍 *Lieu:* ${formData.city}, ${formData.district}%0A` +
-                `🏠 *Repère:* ${formData.landmark || 'N/A'}%0A` +
-                `--------------------------%0A` +
-                `📦 *Articles:*%0A${itemsList}%0A` +
-                `--------------------------%0A` +
-                `💰 *TOTAL:* *${total.toLocaleString('fr-FR')} FCFA*%0A` +
-                `💳 *Paiement:* ${paymentLabel}`;
-
             clearCart()
-            window.open(`https://wa.me/${vendorPhone}?text=${whatsappText}`, '_blank')
             router.push(`/checkout/success?method=${formData.payment_method}&total=${total}`)
 
         } catch (err) {
@@ -209,7 +192,7 @@ export default function CheckoutPage() {
                             <div className="space-y-1">
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input {...register('phone')} placeholder="Numéro WhatsApp" className="w-full bg-slate-50 dark:bg-slate-800 p-4 pl-12 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                                    <input {...register('phone')} placeholder="Numéro de téléphone" className="w-full bg-slate-50 dark:bg-slate-800 p-4 pl-12 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
                                 </div>
                                 {errors.phone && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.phone.message}</p>}
                             </div>

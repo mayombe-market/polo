@@ -2,6 +2,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { sendOrderStatusEmail } from '@/app/actions/emails'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -90,17 +91,39 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
         .eq('id', orderId)
 
     if (error) return { error: error.message }
+
+    // Envoyer un email au client
+    const { data: orderData } = await supabase
+        .from('orders')
+        .select('customer_name, customer_email, tracking_number')
+        .eq('id', orderId)
+        .single()
+
+    if (orderData?.customer_email) {
+        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, newStatus, orderData.tracking_number).catch(() => {})
+    }
+
     return { success: true }
 }
 
-// Actions admin : confirmer paiement
-export async function adminConfirmPayment(orderId: string) {
+// Générer un numéro de suivi unique
+function generateTrackingNumber(): string {
+    const prefix = 'MM'
+    const date = new Date()
+    const yy = String(date.getFullYear()).slice(2)
+    const mm = String(date.getMonth() + 1).padStart(2, '0')
+    const dd = String(date.getDate()).padStart(2, '0')
+    const rand = Math.random().toString(36).substring(2, 8).toUpperCase()
+    return `${prefix}${yy}${mm}${dd}${rand}`
+}
+
+// Actions admin : confirmer paiement (avec vérification optionnelle du transaction_id)
+export async function adminConfirmPayment(orderId: string, adminTransactionId?: string) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { error: 'Non connecté' }
 
-    // Vérifier le rôle admin
     const { data: profile } = await supabase
         .from('profiles')
         .select('role')
@@ -109,12 +132,79 @@ export async function adminConfirmPayment(orderId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const { data: order } = await supabase
+        .from('orders')
+        .select('transaction_id, payment_method')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+
+    if (order.transaction_id && adminTransactionId) {
+        const clientId = order.transaction_id.replace(/\s/g, '')
+        const adminId = adminTransactionId.replace(/\s/g, '')
+        if (clientId !== adminId) {
+            return { error: 'Les ID de transaction ne correspondent pas' }
+        }
+    }
+
+    // Générer un numéro de suivi à la confirmation
+    const tracking_number = generateTrackingNumber()
+
     const { error } = await supabase
         .from('orders')
-        .update({ status: 'confirmed' })
+        .update({ status: 'confirmed', tracking_number })
         .eq('id', orderId)
 
     if (error) return { error: error.message }
+
+    // Envoyer un email au client
+    const { data: fullOrder } = await supabase
+        .from('orders')
+        .select('customer_name, customer_email')
+        .eq('id', orderId)
+        .single()
+
+    if (fullOrder?.customer_email) {
+        sendOrderStatusEmail(fullOrder.customer_email, fullOrder.customer_name, orderId, 'confirmed', tracking_number).catch(() => {})
+    }
+
+    return { success: true, tracking_number }
+}
+
+// Actions admin : rejeter une commande
+export async function adminRejectOrder(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    // Récupérer les infos du client avant la mise à jour
+    const { data: orderData } = await supabase
+        .from('orders')
+        .select('customer_name, customer_email')
+        .eq('id', orderId)
+        .single()
+
+    const { error } = await supabase
+        .from('orders')
+        .update({ status: 'rejected' })
+        .eq('id', orderId)
+
+    if (error) return { error: error.message }
+
+    if (orderData?.customer_email) {
+        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, 'rejected').catch(() => {})
+    }
+
     return { success: true }
 }
 

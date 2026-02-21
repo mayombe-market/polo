@@ -3,9 +3,10 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
-import { Phone, Check, MessageCircle, Info, Loader2, Filter, Package, MapPin, Wallet } from 'lucide-react'
+import { Phone, Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { generateInvoice } from '@/lib/generateInvoice'
 import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 
 export default function OrdersListClient({ initialOrders, currentVendorId }: { initialOrders: any[], currentVendorId: string }) {
@@ -120,10 +121,17 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                         ? 'bg-amber-100 text-amber-800 border border-amber-300 animate-pulse'
                         : 'bg-green-100 text-green-700'
                 }
-            case 'whatsapp':
-                return { label: 'WhatsApp', style: 'bg-emerald-100 text-emerald-700' }
+            case 'airtel_money':
+                return {
+                    label: status === 'pending' ? 'Airtel - En attente' : 'Airtel',
+                    style: status === 'pending'
+                        ? 'bg-red-100 text-red-800 border border-red-300 animate-pulse'
+                        : 'bg-red-100 text-red-700'
+                }
+            case 'cash':
+                return { label: 'Cash livraison', style: 'bg-green-100 text-green-700' }
             default:
-                return { label: 'Cash livraison', style: 'bg-slate-100 text-slate-600' }
+                return { label: method || 'Autre', style: 'bg-slate-100 text-slate-600' }
         }
     }
 
@@ -183,6 +191,11 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                         <span className={`px-3 py-1 text-[8px] font-black uppercase italic rounded-full ${payBadge.style}`}>
                                             {payBadge.label}
                                         </span>
+                                        {order.tracking_number && (
+                                            <span className="flex items-center gap-1.5 px-3 py-1 text-[8px] font-black font-mono uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                <Truck size={10} /> {order.tracking_number}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -234,7 +247,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                             <span className="text-[8px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Versé</span>
                                         )}
                                     </div>
-                                    <div className="flex gap-2 w-full sm:w-auto">
+                                    <div className="flex gap-2 w-full sm:w-auto flex-wrap">
                                         {order.status !== 'delivered' && (
                                             <button
                                                 onClick={() => {
@@ -248,9 +261,17 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                                 {order.status === 'confirmed' ? 'Expédier' : order.status === 'shipped' ? 'Marquer livrée' : 'Confirmer'}
                                             </button>
                                         )}
-                                        <a href={`https://wa.me/${order.phone}`} target="_blank" className="flex-1 sm:flex-none bg-green-500 text-white px-6 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 shadow-xl shadow-green-500/10 transition-transform active:scale-95">
-                                            <MessageCircle size={14} /> WhatsApp
-                                        </a>
+                                        <button
+                                            onClick={() => generateInvoice(order)}
+                                            className="flex-1 sm:flex-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-5 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all"
+                                        >
+                                            <Download size={14} /> Reçu PDF
+                                        </button>
+                                        {order.phone && (
+                                            <a href={`tel:${order.phone}`} className="flex-1 sm:flex-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-6 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95">
+                                                <Phone size={14} /> Appeler
+                                            </a>
+                                        )}
                                     </div>
                                 </div>
                             </div>

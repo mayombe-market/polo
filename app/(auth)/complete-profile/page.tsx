@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
+import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -23,6 +24,11 @@ export default function CompleteProfilePage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [user, setUser] = useState<any>(null)
+
+    // ═══ Étape abonnement ═══
+    const [profileStep, setProfileStep] = useState<'form' | 'subscription' | 'checkout'>('form')
+    const [billing, setBilling] = useState('monthly')
+    const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
     const router = useRouter()
     const supabase = createBrowserClient(
@@ -105,11 +111,18 @@ export default function CompleteProfilePage() {
                     phone: fullPhone,
                     country: selectedCountry.code,
                     role,
-                    ...(role === 'vendor' ? { shop_name: shopName.trim() } : {}),
+                    ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
                     updated_at: new Date().toISOString(),
                 })
 
             if (profileError) throw profileError
+
+            // Si vendeur → passer à l'étape abonnement
+            if (role === 'vendor') {
+                setLoading(false)
+                setProfileStep('subscription')
+                return
+            }
 
             router.push('/')
 
@@ -120,6 +133,15 @@ export default function CompleteProfilePage() {
         }
     }
 
+    // ═══ Sauvegarde du plan choisi ═══
+    const saveSubscriptionPlan = async (planId: string) => {
+        if (!user) return
+        await supabase
+            .from('profiles')
+            .update({ subscription_plan: planId, updated_at: new Date().toISOString() })
+            .eq('id', user.id)
+    }
+
     if (!user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
@@ -128,6 +150,83 @@ export default function CompleteProfilePage() {
         )
     }
 
+    // ═══════════════════════════════════════
+    // ÉTAPE 2 : CHECKOUT ABONNEMENT
+    // ═══════════════════════════════════════
+    if (profileStep === 'checkout' && selectedPlan) {
+        return (
+            <div style={{
+                minHeight: "100vh",
+                background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
+                fontFamily: "'DM Sans', -apple-system, sans-serif",
+                padding: "24px 16px",
+                maxWidth: 560, margin: "0 auto",
+            }}>
+                <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+                <SubscriptionCheckout
+                    plan={selectedPlan}
+                    billing={billing}
+                    onBack={() => setProfileStep('subscription')}
+                    onComplete={async () => {
+                        await saveSubscriptionPlan(selectedPlan.id)
+                        router.push('/')
+                    }}
+                />
+            </div>
+        )
+    }
+
+    // ═══════════════════════════════════════
+    // ÉTAPE 2 : CHOIX D'ABONNEMENT (après formulaire vendeur)
+    // ═══════════════════════════════════════
+    if (profileStep === 'subscription') {
+        return (
+            <div style={{
+                minHeight: "100vh",
+                background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
+                fontFamily: "'DM Sans', -apple-system, sans-serif",
+                padding: "24px 16px",
+                maxWidth: 560, margin: "0 auto",
+            }}>
+                <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+
+                {/* Header */}
+                <div style={{ textAlign: "center", marginBottom: 20 }}>
+                    <div style={{
+                        width: 64, height: 64, borderRadius: 20,
+                        background: "linear-gradient(135deg, #3B82F6, #2563EB)",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        fontSize: 32, margin: "0 auto 16px",
+                        boxShadow: "0 8px 24px rgba(59,130,246,0.3)",
+                    }}>🏪</div>
+                    <h1 style={{ color: "#F0ECE2", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>
+                        Bienvenue, {firstName} !
+                    </h1>
+                    <p style={{ color: "#888", fontSize: 13, margin: 0 }}>
+                        Choisissez votre plan pour commencer à vendre sur Mayombe Market
+                    </p>
+                </div>
+
+                <PricingSection
+                    currentPlan="free"
+                    billing={billing}
+                    setBilling={setBilling}
+                    onSelectPlan={(plan: any) => {
+                        setSelectedPlan(plan)
+                        setProfileStep('checkout')
+                    }}
+                    onSkip={async () => {
+                        await saveSubscriptionPlan('free')
+                        router.push('/')
+                    }}
+                />
+            </div>
+        )
+    }
+
+    // ═══════════════════════════════════════
+    // ÉTAPE 1 : FORMULAIRE PROFIL
+    // ═══════════════════════════════════════
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-4">
             <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
@@ -279,12 +378,12 @@ export default function CompleteProfilePage() {
                                 </p>
                             </button>
 
-                            {/* VENDEUR */}
+                            {/* VENDEUR — bordure bleue */}
                             <button
                                 type="button"
                                 onClick={() => setRole('vendor')}
                                 className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'vendor'
-                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
+                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                         : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
                                     }`}
                             >
@@ -299,23 +398,23 @@ export default function CompleteProfilePage() {
                         </div>
                     </div>
 
-                    {/* SECTION VENDEUR — apparaît uniquement si vendeur est sélectionné */}
+                    {/* SECTION VENDEUR — bordure bleue pour marquer la différence */}
                     {role === 'vendor' && (
-                        <div className="p-6 bg-orange-50 dark:bg-orange-900/10 border-2 border-orange-200 dark:border-orange-800/30 rounded-2xl space-y-4 animate-in fade-in">
+                        <div className="p-6 bg-blue-50 dark:bg-blue-900/10 border-2 border-blue-200 dark:border-blue-800/30 rounded-2xl space-y-4 animate-in fade-in">
                             <div className="flex items-start gap-3">
-                                <span className="text-2xl">⚠️</span>
+                                <span className="text-2xl">ℹ️</span>
                                 <div>
-                                    <p className="font-bold text-orange-800 dark:text-orange-300 text-sm">
+                                    <p className="font-bold text-blue-800 dark:text-blue-300 text-sm">
                                         Devenir vendeur est un engagement
                                     </p>
-                                    <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
-                                        En tant que vendeur, vous vous engagez à respecter nos conditions de vente, à livrer vos commandes dans les délais et à maintenir un service de qualité.
+                                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                                        En tant que vendeur, vous vous engagez à respecter nos conditions de vente, à livrer vos commandes dans les délais et à maintenir un service de qualité. Votre compte vendeur sera validé par un administrateur.
                                     </p>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-bold text-orange-800 dark:text-orange-300 mb-2">
+                                <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
                                     Nom de votre boutique *
                                 </label>
                                 <input
@@ -323,7 +422,7 @@ export default function CompleteProfilePage() {
                                     value={shopName}
                                     onChange={(e) => setShopName(e.target.value)}
                                     placeholder="Ex: Boutique Élégance, Tech Store..."
-                                    className="w-full p-3 border-2 border-orange-200 dark:border-orange-800/30 rounded-xl outline-none focus:ring-2 focus:ring-orange-500 bg-white dark:bg-slate-800 dark:text-white"
+                                    className="w-full p-3 border-2 border-blue-200 dark:border-blue-800/30 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 dark:text-white"
                                     required={role === 'vendor'}
                                 />
                             </div>
@@ -333,10 +432,10 @@ export default function CompleteProfilePage() {
                                     type="checkbox"
                                     checked={vendorConfirmed}
                                     onChange={(e) => setVendorConfirmed(e.target.checked)}
-                                    className="w-5 h-5 accent-orange-500 rounded"
+                                    className="w-5 h-5 accent-blue-500 rounded"
                                 />
-                                <span className="text-sm font-medium text-orange-800 dark:text-orange-300">
-                                    Je confirme vouloir être vendeur et j'accepte les conditions
+                                <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+                                    Je confirme vouloir être vendeur et j&apos;accepte les conditions
                                 </span>
                             </label>
                         </div>
@@ -360,6 +459,8 @@ export default function CompleteProfilePage() {
                                 <span className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                                 Enregistrement...
                             </span>
+                        ) : role === 'vendor' ? (
+                            'Continuer — Choisir mon abonnement'
                         ) : (
                             'Valider mon profil'
                         )}

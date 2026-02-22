@@ -362,6 +362,59 @@ export async function deleteProduct(productId: string) {
     return { success: true }
 }
 
+// ═══ Limites par plan d'abonnement ═══
+function getPlanMaxProducts(plan: string): number {
+    switch (plan) {
+        case 'starter': return 30
+        case 'pro': return 100
+        case 'premium': return -1 // illimité
+        default: return 5 // free
+    }
+}
+
+// Récupérer les infos du plan vendeur (utilisé côté client pour afficher les limites)
+export async function getSellerPlanInfo() {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { plan: 'free', productCount: 0, maxProducts: 5 }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('subscription_plan')
+        .eq('id', user.id)
+        .single()
+
+    const plan = profile?.subscription_plan || 'free'
+    const maxProducts = getPlanMaxProducts(plan)
+
+    const { count } = await supabase
+        .from('products')
+        .select('*', { count: 'exact', head: true })
+        .eq('seller_id', user.id)
+
+    return { plan, productCount: count || 0, maxProducts }
+}
+
+// Mettre à jour le plan d'abonnement d'un vendeur
+export async function updateSellerPlan(planId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const validPlans = ['free', 'starter', 'pro', 'premium']
+    if (!validPlans.includes(planId)) return { error: 'Plan invalide' }
+
+    const { error } = await supabase
+        .from('profiles')
+        .update({ subscription_plan: planId, updated_at: new Date().toISOString() })
+        .eq('id', user.id)
+
+    if (error) return { error: error.message }
+    return { success: true }
+}
+
 // Créer un produit (server-side pour contourner les problèmes RLS côté client)
 export async function createProduct(input: {
     name: string
@@ -381,6 +434,28 @@ export async function createProduct(input: {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    // ═══ Vérification de la limite de produits selon le plan ═══
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('subscription_plan')
+        .eq('id', user.id)
+        .single()
+
+    const plan = profile?.subscription_plan || 'free'
+    const maxProducts = getPlanMaxProducts(plan)
+
+    if (maxProducts !== -1) { // -1 = illimité (premium)
+        const { count } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true })
+            .eq('seller_id', user.id)
+
+        if ((count || 0) >= maxProducts) {
+            const planName = plan === 'free' ? 'Gratuit' : plan.charAt(0).toUpperCase() + plan.slice(1)
+            return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} produits. Passez au niveau supérieur pour continuer à publier.` }
+        }
+    }
 
     const { data: product, error } = await supabase
         .from('products')

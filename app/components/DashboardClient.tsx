@@ -17,7 +17,8 @@ import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { playNewOrderSound } from '@/lib/notificationSound'
-import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct } from '@/app/actions/orders'
+import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, updateSellerPlan } from '@/app/actions/orders'
+import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -49,6 +50,19 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [updating, setUpdating] = useState<string | null>(null)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [orderFilter, setOrderFilter] = useState('all')
+
+    // ═══ Système d'abonnement & limites ═══
+    const currentPlan = profile?.subscription_plan || 'free'
+    const maxProducts = getPlanMaxProducts(currentPlan)
+    const currentProductCount = products?.length || productCount || 0
+    const isAtLimit = maxProducts !== -1 && currentProductCount >= maxProducts
+    const isApproachingLimit = maxProducts !== -1 && currentProductCount >= maxProducts * 0.7
+
+    const [showLimitWarning, setShowLimitWarning] = useState(false)
+    const [showUpgradePricing, setShowUpgradePricing] = useState(false)
+    const [showUpgradeCheckout, setShowUpgradeCheckout] = useState(false)
+    const [upgradeBilling, setUpgradeBilling] = useState('monthly')
+    const [upgradeSelectedPlan, setUpgradeSelectedPlan] = useState<any>(null)
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -304,27 +318,103 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         productCount={productCount}
                         copied={copied}
                         onCopyLink={copyLink}
-                        onNavigate={setActivePage}
+                        onNavigate={(page: Page) => {
+                            if (page === 'add' && isAtLimit) {
+                                setShowLimitWarning(true)
+                                return
+                            }
+                            setActivePage(page)
+                        }}
                         getStatusDetails={getStatusDetails}
+                        currentPlan={currentPlan}
+                        maxProducts={maxProducts}
+                        isApproachingLimit={isApproachingLimit}
+                        isAtLimit={isAtLimit}
+                        onUpgrade={() => setShowUpgradePricing(true)}
                     />
                 )}
 
                 {activePage === 'products' && (
                     <ProductsList
                         products={products}
-                        onAdd={() => setActivePage('add')}
+                        onAdd={() => {
+                            if (isAtLimit) {
+                                setShowLimitWarning(true)
+                            } else {
+                                setActivePage('add')
+                            }
+                        }}
                         onDelete={handleDeleteProduct}
                         deleting={deleting}
+                        isAtLimit={isAtLimit}
+                        currentPlan={currentPlan}
+                        maxProducts={maxProducts}
+                        currentProductCount={currentProductCount}
+                        onUpgrade={() => setShowUpgradePricing(true)}
                     />
                 )}
 
                 {activePage === 'add' && (
                     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-                        <div className="mb-6">
-                            <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Nouveau Produit</h2>
-                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1">Remplissez les informations</p>
-                        </div>
-                        <AddProductForm sellerId={user?.id} />
+                        {/* Barre de limite de produits */}
+                        {maxProducts !== -1 && (
+                            <div className={`mb-6 p-4 rounded-2xl border ${
+                                isAtLimit
+                                    ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30'
+                                    : isApproachingLimit
+                                        ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30'
+                                        : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                            }`}>
+                                <div className="flex items-center justify-between mb-2">
+                                    <span className="text-xs font-black uppercase text-slate-500">
+                                        📦 Produits : {currentProductCount} / {maxProducts} (Plan {getPlanName(currentPlan)})
+                                    </span>
+                                    {isApproachingLimit && (
+                                        <button
+                                            onClick={() => setShowUpgradePricing(true)}
+                                            className="text-[10px] font-black uppercase text-orange-500 hover:underline"
+                                        >
+                                            ⚡ Upgrader
+                                        </button>
+                                    )}
+                                </div>
+                                <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                    <div
+                                        className={`h-full rounded-full transition-all duration-500 ${
+                                            isAtLimit ? 'bg-red-500' : isApproachingLimit ? 'bg-orange-500' : 'bg-green-500'
+                                        }`}
+                                        style={{ width: `${Math.min((currentProductCount / maxProducts) * 100, 100)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {isAtLimit ? (
+                            /* Si limite atteinte → message + bouton upgrade */
+                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-red-200 dark:border-red-800/30">
+                                <div className="text-6xl mb-4">🔒</div>
+                                <h2 className="text-xl font-black uppercase italic text-red-500 mb-2">Limite de produits atteinte</h2>
+                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                                    Votre plan {getPlanName(currentPlan)} est limité à {maxProducts} produits.
+                                    Passez au niveau supérieur pour continuer à publier.
+                                </p>
+                                <button
+                                    onClick={() => setShowUpgradePricing(true)}
+                                    className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-orange-500/20"
+                                >
+                                    🚀 Voir les plans supérieurs
+                                </button>
+                            </div>
+                        ) : (
+                            /* Sinon → formulaire normal */
+                            <>
+                                <div className="mb-6">
+                                    <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Nouveau Produit</h2>
+                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1">Remplissez les informations</p>
+                                </div>
+                                <AddProductForm sellerId={user?.id} />
+                            </>
+                        )}
                     </div>
                 )}
 
@@ -370,6 +460,83 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <SettingsPage profile={profile} user={user} supabase={supabase} />
                 )}
             </main>
+
+            {/* ═══ MODAL : Limite atteinte ═══ */}
+            {showLimitWarning && maxProducts !== -1 && (
+                <LimitWarning
+                    currentProducts={currentProductCount}
+                    maxProducts={maxProducts}
+                    currentPlan={getPlanName(currentPlan)}
+                    onUpgrade={() => { setShowLimitWarning(false); setShowUpgradePricing(true) }}
+                    onClose={() => setShowLimitWarning(false)}
+                />
+            )}
+
+            {/* ═══ OVERLAY : Pricing upgrade ═══ */}
+            {showUpgradePricing && (
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 1000,
+                    background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
+                    overflowY: "auto",
+                }}>
+                    <div style={{
+                        maxWidth: 560, margin: "0 auto", padding: "24px 16px",
+                        minHeight: "100vh",
+                        background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
+                        fontFamily: "'DM Sans', -apple-system, sans-serif",
+                    }}>
+                        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+                        <button
+                            onClick={() => setShowUpgradePricing(false)}
+                            style={{
+                                display: "flex", alignItems: "center", gap: 6,
+                                background: "none", border: "none", color: "#888",
+                                fontSize: 13, cursor: "pointer", marginBottom: 12, padding: 0,
+                            }}
+                        >
+                            ← Retour au dashboard
+                        </button>
+                        <PricingSection
+                            currentPlan={currentPlan}
+                            billing={upgradeBilling}
+                            setBilling={setUpgradeBilling}
+                            onSelectPlan={(plan: any) => {
+                                setUpgradeSelectedPlan(plan)
+                                setShowUpgradePricing(false)
+                                setShowUpgradeCheckout(true)
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
+
+            {/* ═══ OVERLAY : Checkout upgrade ═══ */}
+            {showUpgradeCheckout && upgradeSelectedPlan && (
+                <div style={{
+                    position: "fixed", inset: 0, zIndex: 1000,
+                    background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
+                    overflowY: "auto",
+                }}>
+                    <div style={{
+                        maxWidth: 560, margin: "0 auto", padding: "24px 16px",
+                        minHeight: "100vh",
+                        background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
+                        fontFamily: "'DM Sans', -apple-system, sans-serif",
+                    }}>
+                        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+                        <SubscriptionCheckout
+                            plan={upgradeSelectedPlan}
+                            billing={upgradeBilling}
+                            onBack={() => { setShowUpgradeCheckout(false); setShowUpgradePricing(true) }}
+                            onComplete={async () => {
+                                await updateSellerPlan(upgradeSelectedPlan.id)
+                                setShowUpgradeCheckout(false)
+                                window.location.reload()
+                            }}
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }
@@ -377,11 +544,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
 // =====================================================================
 // DASHBOARD HOME
 // =====================================================================
-function DashboardHome({ user, profile, orders, followerCount, totalRevenue, totalViews, totalOrders, productCount, copied, onCopyLink, onNavigate, getStatusDetails }: any) {
+function DashboardHome({ user, profile, orders, followerCount, totalRevenue, totalViews, totalOrders, productCount, copied, onCopyLink, onNavigate, getStatusDetails, currentPlan, maxProducts, isApproachingLimit, isAtLimit, onUpgrade }: any) {
     const stats = [
         { label: 'Revenus', value: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { label: 'Commandes', value: totalOrders, icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Produits', value: productCount || 0, icon: Package, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
+        { label: 'Produits', value: maxProducts === -1 ? `${productCount || 0} ∞` : `${productCount || 0} / ${maxProducts}`, icon: Package, color: isAtLimit ? 'text-red-500' : 'text-orange-500', bg: isAtLimit ? 'bg-red-50 dark:bg-red-900/20' : 'bg-orange-50 dark:bg-orange-900/20' },
         { label: 'Vues', value: totalViews, icon: Eye, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
         { label: 'Abonnés', value: followerCount, icon: Users, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-900/20' },
     ]
@@ -395,8 +562,45 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
                 <h1 className="text-2xl md:text-3xl font-black uppercase italic tracking-tighter dark:text-white">
                     Bonjour, {profile?.store_name || profile?.shop_name || 'Vendeur'} 👋
                 </h1>
-                <p className="text-sm text-slate-400 font-bold mt-1">Voici un résumé de votre activité.</p>
+                <div className="flex items-center gap-3 mt-1">
+                    <p className="text-sm text-slate-400 font-bold">Voici un résumé de votre activité.</p>
+                    <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${
+                        currentPlan === 'premium' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : currentPlan === 'pro' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                        : currentPlan === 'starter' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
+                    }`}>
+                        Plan {getPlanName(currentPlan)}
+                    </span>
+                </div>
             </div>
+
+            {/* Upgrade banner — visible quand on approche de la limite */}
+            {isApproachingLimit && (
+                <div className={`rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 ${
+                    isAtLimit
+                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
+                        : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
+                }`}>
+                    <div>
+                        <h3 className="font-black uppercase text-sm">
+                            {isAtLimit ? '🔒 Limite de produits atteinte' : '⚡ Vous approchez de la limite'}
+                        </h3>
+                        <p className="text-white/80 text-xs font-bold mt-1">
+                            {isAtLimit
+                                ? `Votre plan ${getPlanName(currentPlan)} est limité à ${maxProducts} produits.`
+                                : `${productCount || 0} / ${maxProducts} produits — Passez au niveau supérieur.`
+                            }
+                        </p>
+                    </div>
+                    <button
+                        onClick={onUpgrade}
+                        className="flex items-center gap-2 bg-white text-orange-600 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
+                    >
+                        🚀 Upgrader mon plan
+                    </button>
+                </div>
+            )}
 
             {/* Share banner */}
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4">
@@ -431,10 +635,16 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
 
             {/* Quick actions */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <button onClick={() => onNavigate('add')} className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 transition-all text-left group">
-                    <Plus size={24} className="text-orange-500 mb-2 group-hover:rotate-90 transition-transform" />
-                    <h3 className="font-black text-sm dark:text-white uppercase">Ajouter produit</h3>
-                    <p className="text-[10px] text-slate-400 font-bold mt-1">Mettre en vente un article</p>
+                <button onClick={() => onNavigate('add')} className={`bg-white dark:bg-slate-900 p-5 rounded-3xl border transition-all text-left group ${
+                    isAtLimit ? 'border-red-200 dark:border-red-800/30 hover:border-red-300' : 'border-slate-100 dark:border-slate-800 hover:border-orange-300'
+                }`}>
+                    <Plus size={24} className={`mb-2 group-hover:rotate-90 transition-transform ${isAtLimit ? 'text-red-400' : 'text-orange-500'}`} />
+                    <h3 className="font-black text-sm dark:text-white uppercase">
+                        {isAtLimit ? '🔒 Limite atteinte' : 'Ajouter produit'}
+                    </h3>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1">
+                        {isAtLimit ? 'Upgradez votre plan' : 'Mettre en vente un article'}
+                    </p>
                 </button>
                 <button onClick={() => onNavigate('orders')} className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-blue-300 transition-all text-left group">
                     <ShoppingCart size={24} className="text-blue-500 mb-2 group-hover:scale-110 transition-transform" />
@@ -493,21 +703,51 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
 // =====================================================================
 // PRODUCTS LIST
 // =====================================================================
-function ProductsList({ products, onAdd, onDelete, deleting }: any) {
+function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentPlan, maxProducts, currentProductCount, onUpgrade }: any) {
     return (
         <div className="p-4 md:p-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
                 <div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Mes Produits</h2>
                     <p className="text-sm text-slate-400 font-bold mt-1">{products?.length || 0} article{(products?.length || 0) !== 1 ? 's' : ''} en vente</p>
                 </div>
                 <button
                     onClick={onAdd}
-                    className="flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
+                    className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-black uppercase text-xs transition-all shadow-lg ${
+                        isAtLimit
+                            ? 'bg-slate-300 dark:bg-slate-700 text-slate-500 shadow-none cursor-pointer'
+                            : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20'
+                    }`}
                 >
-                    <Plus size={16} /> Nouveau produit
+                    <Plus size={16} /> {isAtLimit ? '🔒 Limite atteinte' : 'Nouveau produit'}
                 </button>
             </div>
+
+            {/* Barre de progression plan */}
+            {maxProducts !== -1 && (
+                <div className={`mb-8 p-4 rounded-2xl border ${
+                    isAtLimit
+                        ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/30'
+                        : 'bg-slate-50 dark:bg-slate-800 border-slate-100 dark:border-slate-700'
+                }`}>
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-[10px] font-black uppercase text-slate-500">
+                            Plan {getPlanName(currentPlan)} — {currentProductCount} / {maxProducts} produits
+                        </span>
+                        {isAtLimit && (
+                            <button onClick={onUpgrade} className="text-[10px] font-black uppercase text-orange-500 hover:underline">
+                                ⚡ Upgrader
+                            </button>
+                        )}
+                    </div>
+                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                        <div
+                            className={`h-full rounded-full transition-all duration-500 ${isAtLimit ? 'bg-red-500' : 'bg-green-500'}`}
+                            style={{ width: `${Math.min((currentProductCount / maxProducts) * 100, 100)}%` }}
+                        />
+                    </div>
+                </div>
+            )}
 
             {products && products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">

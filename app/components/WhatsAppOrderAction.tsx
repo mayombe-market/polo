@@ -40,8 +40,9 @@ function WhatsAppOrderAction({ product, shop, user }: WhatsAppOrderActionProps) 
         setSaving(true)
 
         try {
-            // 1. Enregistrer la commande dans Supabase
-            const commissionRate = 0.10
+            // 1. Commission dynamique selon le plan du vendeur
+            const planCommissions: Record<string, number> = { pro: 0.07, premium: 0.04 }
+            const commissionRate = planCommissions[shop?.subscription_plan] || 0.10
             const commissionAmount = Math.round(product.price * commissionRate)
             const vendorPayout = product.price - commissionAmount
 

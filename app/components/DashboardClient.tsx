@@ -457,7 +457,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 )}
 
                 {activePage === 'settings' && (
-                    <SettingsPage profile={profile} user={user} supabase={supabase} />
+                    <SettingsPage profile={profile} user={user} supabase={supabase} currentPlan={currentPlan} />
                 )}
             </main>
 
@@ -1030,7 +1030,7 @@ function StatsPage({ orders, products, followerCount }: { orders: any[]; product
                 <div className="flex items-center justify-between mb-6">
                     <div>
                         <h3 className="font-black uppercase text-sm dark:text-white">Revenus mensuels</h3>
-                        <p className="text-[10px] text-slate-400 font-bold mt-1">6 derniers mois (part vendeur 90%)</p>
+                        <p className="text-[10px] text-slate-400 font-bold mt-1">6 derniers mois (part vendeur)</p>
                     </div>
                     <DollarSign size={20} className="text-green-500" />
                 </div>
@@ -1203,7 +1203,7 @@ function WalletPage({ orders, currentVendorId }: { orders: any[]; currentVendorI
                     {[
                         { step: '1', title: 'Commande confirmée', desc: 'L\'admin confirme le paiement du client', icon: Shield },
                         { step: '2', title: 'Livraison + 48h', desc: 'Délai de sécurité après la livraison', icon: Clock },
-                        { step: '3', title: 'Fonds libérés', desc: 'Vous recevez 90% du montant', icon: Wallet },
+                        { step: '3', title: 'Fonds libérés', desc: 'Vous recevez votre part du montant', icon: Wallet },
                     ].map((s, i) => {
                         const Icon = s.icon
                         return (
@@ -1268,7 +1268,7 @@ function WalletPage({ orders, currentVendorId }: { orders: any[]; currentVendorI
 // =====================================================================
 // SETTINGS PAGE
 // =====================================================================
-function SettingsPage({ profile, user, supabase }: { profile: any; user: any; supabase: any }) {
+function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; user: any; supabase: any; currentPlan: string }) {
     const [saving, setSaving] = useState(false)
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
@@ -1461,10 +1461,12 @@ function SettingsPage({ profile, user, supabase }: { profile: any; user: any; su
                 <div className="flex items-start gap-4 p-4 bg-orange-50 dark:bg-orange-900/20 rounded-2xl">
                     <AlertTriangle size={20} className="text-orange-500 flex-shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-xs font-black dark:text-white">Commission de 10% par vente</p>
+                        <p className="text-xs font-black dark:text-white">
+                            Commission de {currentPlan === 'premium' ? '4' : currentPlan === 'pro' ? '7' : '10'}% par vente
+                        </p>
                         <p className="text-[10px] text-slate-400 font-bold mt-1">
-                            Mayombe Market prélève 10% du montant de chaque commande.
-                            Vous recevez 90% du total une fois la commande livrée et validée (délai 48h de sécurité).
+                            Mayombe Market prélève {currentPlan === 'premium' ? '4' : currentPlan === 'pro' ? '7' : '10'}% du montant de chaque commande.
+                            Vous recevez {currentPlan === 'premium' ? '96' : currentPlan === 'pro' ? '93' : '90'}% du total une fois la commande livrée et validée (délai 48h de sécurité).
                         </p>
                     </div>
                 </div>

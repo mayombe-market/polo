@@ -289,7 +289,17 @@ export async function createOrder(input: {
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
 
-    const commissionRate = 0.10
+    // Commission dynamique selon le plan du vendeur
+    const sellerId = input.items[0]?.seller_id
+    let commissionRate = 0.10
+    if (sellerId) {
+        const { data: sellerProfile } = await supabase
+            .from('profiles')
+            .select('subscription_plan')
+            .eq('id', sellerId)
+            .single()
+        commissionRate = getPlanCommissionRate(sellerProfile?.subscription_plan || 'free')
+    }
     const commissionAmount = Math.round(input.total_amount * commissionRate)
     const vendorPayout = input.total_amount - commissionAmount
 
@@ -371,6 +381,15 @@ export async function deleteProduct(productId: string) {
 
     if (error) return { error: error.message }
     return { success: true }
+}
+
+// ═══ Commission par plan d'abonnement ═══
+function getPlanCommissionRate(plan: string): number {
+    switch (plan) {
+        case 'pro': return 0.07
+        case 'premium': return 0.04
+        default: return 0.10 // free & starter
+    }
 }
 
 // ═══ Limites par plan d'abonnement ═══

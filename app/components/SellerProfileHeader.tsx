@@ -76,9 +76,21 @@ export default function SellerProfileHeader({
 
             {/* NOM + FOLLOW */}
             <div className="text-center mt-4 px-4">
-                <h1 className="text-3xl font-black uppercase italic tracking-tighter dark:text-white">
-                    {storeName}
-                </h1>
+                <div className="flex items-center justify-center gap-2">
+                    <h1 className="text-3xl font-black uppercase italic tracking-tighter dark:text-white">
+                        {storeName}
+                    </h1>
+                    {profile?.subscription_plan === 'premium' && (
+                        <span className="px-3 py-1 text-[10px] font-black uppercase rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/20">
+                            Premium
+                        </span>
+                    )}
+                    {profile?.subscription_plan === 'pro' && (
+                        <span className="px-3 py-1 text-[10px] font-black uppercase rounded-full bg-gradient-to-r from-amber-500 to-orange-500 text-white shadow-lg shadow-amber-500/20">
+                            Certifié
+                        </span>
+                    )}
+                </div>
 
                 {/* Bio */}
                 {profile?.bio && (

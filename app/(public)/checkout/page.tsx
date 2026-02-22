@@ -74,7 +74,18 @@ export default function CheckoutPage() {
                 seller_id: item.seller_id
             }))
 
-            const commissionRate = 0.10
+            // Commission dynamique selon le plan du vendeur
+            const sellerId = orderItems[0]?.seller_id
+            let commissionRate = 0.10
+            if (sellerId) {
+                const { data: sellerProfile } = await supabase
+                    .from('profiles')
+                    .select('subscription_plan')
+                    .eq('id', sellerId)
+                    .single()
+                const planRates: Record<string, number> = { pro: 0.07, premium: 0.04 }
+                commissionRate = planRates[sellerProfile?.subscription_plan] || 0.10
+            }
             const commissionAmount = Math.round(total * commissionRate)
             const vendorPayout = total - commissionAmount
 

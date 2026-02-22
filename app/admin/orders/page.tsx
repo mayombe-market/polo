@@ -385,11 +385,11 @@ export default function AdminOrders() {
                                                             <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
                                                         </div>
                                                         <div className="flex justify-between text-[10px] font-bold">
-                                                            <span className="text-orange-500">Commission (10%)</span>
+                                                            <span className="text-orange-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%)</span>
                                                             <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
                                                         </div>
                                                         <div className="flex justify-between text-[10px] font-bold border-t border-orange-200 dark:border-orange-800 pt-2">
-                                                            <span className="text-slate-600">Part vendeur (90%)</span>
+                                                            <span className="text-slate-600">Part vendeur ({Math.round((1 - (order.commission_rate || 0.10)) * 100)}%)</span>
                                                             <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
                                                         </div>
                                                     </div>

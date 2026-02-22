@@ -167,8 +167,7 @@ export default function CompleteProfilePage() {
                     plan={selectedPlan}
                     billing={billing}
                     onBack={() => setProfileStep('subscription')}
-                    onComplete={async () => {
-                        await saveSubscriptionPlan(selectedPlan.id)
+                    onComplete={() => {
                         router.push('/')
                     }}
                 />

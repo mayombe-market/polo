@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect } from "react"
+import { createBrowserClient } from '@supabase/ssr'
+import { createSubscriptionOrder } from '@/app/actions/orders'
 
 const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n)
 
@@ -446,7 +448,7 @@ export function PricingSection({ currentPlan, onSelectPlan, billing, setBilling,
                   <button
                     onClick={() => onSelectPlan(plan)}
                     style={{
-                      width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
+                      width: "100%", padding: "15px 0", borderRadius: 14,
                       background: plan.popular ? plan.gradient : "rgba(255,255,255,0.04)",
                       color: plan.popular ? "#fff" : plan.color,
                       fontSize: 14, fontWeight: 700, cursor: "pointer",
@@ -516,7 +518,7 @@ export function PricingSection({ currentPlan, onSelectPlan, billing, setBilling,
 }
 
 // ═══════════════════════════════════════
-// CHECKOUT (integrated with existing system)
+// CHECKOUT — Même flux que le checkout client (MTN/Airtel → numéro → transaction ID → admin valide)
 // ═══════════════════════════════════════
 export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
   plan: any
@@ -524,110 +526,212 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
   onBack: () => void
   onComplete: () => void
 }) {
-  const [method, setMethod] = useState<string | null>(null)
-  const [phone, setPhone] = useState("")
-  const [step, setStep] = useState("method") // method | confirm | processing | success
+  const [step, setStep] = useState<'method' | 'transfer' | 'txid' | 'waiting' | 'success' | 'rejected'>('method')
+  const [method, setMethod] = useState('')
+  const [txCode, setTxCode] = useState('')
+  const [txError, setTxError] = useState('')
+  const [orderId, setOrderId] = useState('')
+  const [orderData, setOrderData] = useState<any>(null)
+  const [loading, setLoading] = useState(false)
+  const [serverError, setServerError] = useState('')
+  const [dots, setDots] = useState('')
+  const [elapsed, setElapsed] = useState(0)
 
-  const price = billing === "monthly" ? plan.price : plan.yearlyPrice
-  const billingLabel = billing === "monthly" ? "/ mois" : "/ an"
+  const price = billing === 'monthly' ? plan.price : plan.yearlyPrice
+  const billingLabel = billing === 'monthly' ? '/ mois' : '/ an'
 
-  const methods = [
-    { id: "momo", icon: "📱", name: "MTN Mobile Money", color: "#FBBF24", desc: "Paiement via MoMo" },
-    { id: "airtel", icon: "📱", name: "Airtel Money", color: "#EF4444", desc: "Paiement via Airtel" },
-    { id: "card", icon: "💳", name: "Carte bancaire", color: "#3B82F6", desc: "Visa / Mastercard" },
+  const METHODS = [
+    { id: 'mobile_money', name: 'MTN Mobile Money', sub: 'Paiement via MoMo', icon: '📱', number: '06 938 71 69', color: '#FBBF24', btnBg: '#FBBF24', btnColor: '#000' },
+    { id: 'airtel_money', name: 'Airtel Money', sub: 'Paiement via Airtel', icon: '📲', number: '05 XXX XX XX', color: '#EF4444', btnBg: '#EF4444', btnColor: '#fff' },
   ]
+  const selectedMethod = METHODS.find(m => m.id === method)
 
-  const handleConfirm = () => {
-    setStep("processing")
-    setTimeout(() => setStep("success"), 3000)
+  // Dots animation
+  useEffect(() => {
+    if (step !== 'waiting') return
+    const i = setInterval(() => setDots(d => d.length >= 3 ? '' : d + '.'), 500)
+    return () => clearInterval(i)
+  }, [step])
+
+  // Timer
+  useEffect(() => {
+    if (step !== 'waiting') return
+    const i = setInterval(() => setElapsed(e => e + 1), 1000)
+    return () => clearInterval(i)
+  }, [step])
+
+  // Supabase Realtime — écouter la validation admin
+  useEffect(() => {
+    if (step !== 'waiting' || !orderId) return
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    const channel = supabase
+      .channel(`sub-${orderId}`)
+      .on('postgres_changes', {
+        event: 'UPDATE', schema: 'public', table: 'orders',
+        filter: `id=eq.${orderId}`,
+      }, (payload) => {
+        const s = (payload.new as any).status
+        if (s === 'confirmed') {
+          try {
+            const ctx = new AudioContext(); const now = ctx.currentTime
+            ;[523, 659, 784].forEach((f, i) => {
+              const o = ctx.createOscillator(); const g = ctx.createGain()
+              o.type = 'sine'; const t = now + i * 0.15
+              o.frequency.setValueAtTime(f, t)
+              g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2)
+              o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.2)
+            })
+          } catch {}
+          setStep('success')
+        } else if (s === 'rejected') setStep('rejected')
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [step, orderId])
+
+  const digits = txCode.replace(/\D/g, '')
+  const isTxComplete = digits.length === 15
+  const formatTx = (v: string) => v.replace(/\D/g, '').slice(0, 15).replace(/(\d{3})(?=\d)/g, '$1 ')
+
+  const submitTransaction = async () => {
+    if (!isTxComplete) { setTxError('Le code doit contenir exactement 15 chiffres'); return }
+    setTxError(''); setLoading(true); setServerError('')
+    try {
+      const res = await createSubscriptionOrder({
+        planId: plan.id, planName: plan.name, price, billing,
+        payment_method: method, transaction_id: digits,
+      })
+      if (res.error) { setServerError(res.error); setLoading(false); return }
+      setOrderId(res.order.id); setOrderData(res.order)
+      setLoading(false); setStep('waiting')
+    } catch (err: any) {
+      setServerError(err.message || 'Erreur'); setLoading(false)
+    }
   }
 
-  if (step === "success") {
+  // ── Résumé commande (affiché en haut de chaque étape) ──
+  const SummaryHeader = () => (
+    <div style={{
+      padding: "16px 18px", borderRadius: 20,
+      background: `${plan.color}08`, border: `1.5px solid ${plan.color}20`,
+      marginBottom: 24, display: "flex", alignItems: "center", gap: 14,
+    }}>
+      <div style={{
+        width: 48, height: 48, borderRadius: 16, background: plan.gradient,
+        display: "flex", alignItems: "center", justifyContent: "center",
+        fontSize: 24, boxShadow: `0 4px 12px ${plan.shadowColor}`,
+      }}>{plan.emoji}</div>
+      <div style={{ flex: 1 }}>
+        <h4 style={{ color: "#F0ECE2", fontSize: 15, fontWeight: 700, margin: 0 }}>
+          Plan {plan.name} {plan.icon}
+        </h4>
+        <p style={{ color: "#888", fontSize: 11, margin: "2px 0 0" }}>
+          Abonnement {billing === "monthly" ? "mensuel" : "annuel"}
+        </p>
+      </div>
+      <div style={{ textAlign: "right" }}>
+        <span style={{ color: plan.color, fontSize: 20, fontWeight: 800 }}>{fmt(price)} F</span>
+        <div style={{ color: "#666", fontSize: 10 }}>{billingLabel}</div>
+      </div>
+    </div>
+  )
+
+  // ═══ REJETÉ ═══
+  if (step === 'rejected') {
     return (
       <div style={{ textAlign: "center", padding: "40px 0" }}>
         <div style={{
-          width: 100, height: 100, borderRadius: 30,
-          background: plan.gradient,
+          width: 80, height: 80, borderRadius: 24,
+          background: "rgba(239,68,68,0.1)", border: "2px solid rgba(239,68,68,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 40, margin: "0 auto 20px",
+        }}>❌</div>
+        <h2 style={{ color: "#F87171", fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>
+          Paiement rejeté
+        </h2>
+        <p style={{ color: "#888", fontSize: 14, margin: "0 0 24px", lineHeight: 1.6 }}>
+          Votre paiement n&apos;a pas pu être vérifié. Veuillez réessayer ou contacter le support.
+        </p>
+        <button onClick={onBack} style={{
+          width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+          background: plan.gradient, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+        }}>
+          Réessayer
+        </button>
+      </div>
+    )
+  }
+
+  // ═══ SUCCÈS — Admin a confirmé, plan activé ═══
+  if (step === 'success') {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 0" }}>
+        <div style={{
+          width: 100, height: 100, borderRadius: 30, background: plan.gradient,
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 50, margin: "0 auto 24px",
           boxShadow: `0 12px 40px ${plan.shadowColor}`,
           animation: "bounceIn 0.6s cubic-bezier(0.16, 1, 0.3, 1)",
         }}>{plan.emoji}</div>
 
-        <h2 style={{ color: "#F0ECE2", fontSize: 26, fontWeight: 800, margin: "0 0 6px" }}>
-          Bienvenue en {plan.name} ! 🎉
+        <h2 style={{ color: "#F0ECE2", fontSize: 24, fontWeight: 800, margin: "0 0 6px" }}>
+          Paiement confirmé ! 🎉
         </h2>
         <p style={{ color: "#888", fontSize: 14, margin: "0 0 28px" }}>
-          Votre abonnement est maintenant actif
+          Votre plan <strong style={{ color: plan.color }}>{plan.name}</strong> est maintenant actif
         </p>
 
-        {/* 🎁 SURPRISE 2: Welcome gift */}
+        {/* Avantages du plan */}
         <div style={{
           padding: "20px", borderRadius: 20,
-          background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(168,85,247,0.05))",
-          border: "1px solid rgba(232,168,56,0.15)",
-          marginBottom: 20,
+          background: `${plan.color}08`, border: `1.5px solid ${plan.color}20`,
+          marginBottom: 20, textAlign: "left",
         }}>
-          <span style={{ fontSize: 28 }}>🎊</span>
-          <h4 style={{ color: "#E8A838", fontSize: 15, fontWeight: 700, margin: "8px 0 6px" }}>
-            Cadeau de bienvenue !
+          <h4 style={{ color: plan.color, fontSize: 13, fontWeight: 800, margin: "0 0 12px", letterSpacing: 0.5 }}>
+            VOS NOUVEAUX AVANTAGES
           </h4>
-          <p style={{ color: "#999", fontSize: 12, lineHeight: 1.6 }}>
-            Pour fêter votre passage au plan {plan.name}, vous recevez :
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 12 }}>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 14px", borderRadius: 12,
-              background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.1)",
-            }}>
-              <span style={{ fontSize: 18 }}>🏷️</span>
-              <span style={{ color: "#4ADE80", fontSize: 13, fontWeight: 600 }}>
-                1 placement sponsorisé offert (valeur 3 000 F)
-              </span>
-            </div>
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "10px 14px", borderRadius: 12,
-              background: "rgba(59,130,246,0.06)", border: "1px solid rgba(59,130,246,0.1)",
-            }}>
-              <span style={{ fontSize: 18 }}>📊</span>
-              <span style={{ color: "#60A5FA", fontSize: 13, fontWeight: 600 }}>
-                Rapport analytics de votre boutique (envoyé sous 24h)
-              </span>
-            </div>
-            {plan.id === "premium" && (
-              <div style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "10px 14px", borderRadius: 12,
-                background: "rgba(168,85,247,0.06)", border: "1px solid rgba(168,85,247,0.1)",
-              }}>
-                <span style={{ fontSize: 18 }}>👑</span>
-                <span style={{ color: "#C084FC", fontSize: 13, fontWeight: 600 }}>
-                  Session stratégie 1-to-1 avec notre équipe (30 min)
-                </span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {plan.features.filter((f: any) => f.included).slice(0, 6).map((f: any, i: number) => (
+              <div key={i} style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{
+                  width: 20, height: 20, borderRadius: 6,
+                  background: `${plan.color}15`, color: plan.color,
+                  display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10,
+                }}>✓</span>
+                <span style={{ color: "#ccc", fontSize: 12 }}>{f.text}</span>
               </div>
-            )}
+            ))}
           </div>
         </div>
 
-        {/* 🎁 SURPRISE 3: Achievement badge */}
+        {/* Cadeau bienvenue */}
+        <div style={{
+          padding: "16px", borderRadius: 16,
+          background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.12)",
+          marginBottom: 20,
+        }}>
+          <span style={{ fontSize: 22 }}>🎁</span>
+          <p style={{ color: "#4ADE80", fontSize: 13, fontWeight: 600, margin: "6px 0 0" }}>
+            Cadeau de bienvenue : 1 placement sponsorisé offert !
+          </p>
+        </div>
+
+        {/* Badge débloqué */}
         <div style={{
           padding: "18px", borderRadius: 18,
-          background: "rgba(255,255,255,0.02)",
-          border: "1px solid rgba(255,255,255,0.04)",
-          marginBottom: 20,
-          display: "flex", alignItems: "center", gap: 14,
+          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)",
+          marginBottom: 20, display: "flex", alignItems: "center", gap: 14,
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: 18,
-            background: `${plan.color}12`,
-            border: `2px solid ${plan.color}30`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 28,
+            background: `${plan.color}12`, border: `2px solid ${plan.color}30`,
+            display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28,
           }}>🏆</div>
           <div style={{ textAlign: "left" }}>
-            <p style={{ color: plan.color, fontSize: 10, fontWeight: 700, margin: "0 0 2px", textTransform: "uppercase", letterSpacing: 1 }}>
+            <p style={{ color: plan.color, fontSize: 10, fontWeight: 700, margin: "0 0 2px", textTransform: "uppercase" as const, letterSpacing: 1 }}>
               Nouveau badge débloqué
             </p>
             <p style={{ color: "#F0ECE2", fontSize: 16, fontWeight: 800, margin: "0 0 2px" }}>
@@ -639,243 +743,311 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
           </div>
         </div>
 
-        <button
-          onClick={onComplete}
-          style={{
-            width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
-            background: plan.gradient,
-            color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
-            boxShadow: `0 8px 24px ${plan.shadowColor}`,
-          }}
-        >
+        <button onClick={onComplete} style={{
+          width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+          background: plan.gradient, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+          boxShadow: `0 8px 24px ${plan.shadowColor}`,
+        }}>
           Retour à ma boutique →
         </button>
 
         <style>{`
-          @keyframes bounceIn {
-            0% { transform: scale(0); opacity: 0; }
-            60% { transform: scale(1.1); }
-            100% { transform: scale(1); opacity: 1; }
-          }
+          @keyframes bounceIn { 0% { transform: scale(0); opacity: 0; } 60% { transform: scale(1.1); } 100% { transform: scale(1); opacity: 1; } }
         `}</style>
       </div>
     )
   }
 
-  if (step === "processing") {
+  // ═══ EN ATTENTE DE VALIDATION ADMIN ═══
+  if (step === 'waiting') {
     return (
-      <div style={{ textAlign: "center", padding: "60px 0" }}>
-        <div style={{
-          width: 80, height: 80, borderRadius: 24,
-          background: `${plan.color}10`,
-          display: "flex", alignItems: "center", justifyContent: "center",
-          margin: "0 auto 24px", position: "relative",
-        }}>
+      <div style={{ textAlign: "center", padding: "20px 0" }}>
+        <SummaryHeader />
+
+        {/* Spinner */}
+        <div style={{ width: 80, height: 80, margin: "0 auto 24px", position: "relative" }}>
+          <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: `2px solid ${plan.color}15` }} />
           <div style={{
-            width: 60, height: 60, borderRadius: "50%",
-            border: `3px solid ${plan.color}22`,
-            borderTopColor: plan.color,
+            position: "absolute", inset: -6, borderRadius: "50%",
+            border: "2px solid transparent", borderTopColor: plan.color,
             animation: "spin 1s linear infinite",
           }} />
-          <span style={{ position: "absolute", fontSize: 24 }}>{plan.emoji}</span>
+          <div style={{
+            position: "absolute", inset: 0, borderRadius: "50%",
+            background: `${plan.color}08`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 30, animation: "pulse 2s infinite",
+          }}>⏳</div>
         </div>
-        <h3 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>
-          Traitement en cours...
-        </h3>
-        <p style={{ color: "#888", fontSize: 13 }}>
-          {method === "momo" || method === "airtel"
-            ? "Confirmez le paiement sur votre téléphone"
-            : "Vérification de votre carte..."}
+
+        <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 8px" }}>
+          Vérification en cours{dots}
+        </h2>
+        <p style={{ color: "#888", fontSize: 11, margin: "0 0 24px", lineHeight: 1.7 }}>
+          Notre équipe vérifie votre transaction.<br />
+          Cela prend généralement 1-3 minutes.
         </p>
 
-        {/* Fake progress */}
+        {/* Info commande */}
         <div style={{
-          maxWidth: 300, margin: "24px auto", height: 6, borderRadius: 3,
-          background: "rgba(255,255,255,0.06)", overflow: "hidden",
+          padding: "16px 20px", borderRadius: 16,
+          background: "rgba(255,255,255,0.02)", border: `1px solid ${plan.color}15`,
+          textAlign: "left", marginBottom: 16,
         }}>
+          {orderData && (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8, fontSize: 11 }}>
+              <span style={{ color: "#888" }}>N° commande</span>
+              <span style={{ color: "#F0ECE2", fontWeight: 800 }}>#{orderData.order_number || orderId.slice(0, 8)}</span>
+            </div>
+          )}
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+            <span style={{ color: "#888" }}>Votre ID transaction</span>
+            <span style={{ color: plan.color, fontWeight: 800, fontFamily: "monospace", letterSpacing: 2 }}>
+              {formatTx(digits)}
+            </span>
+          </div>
           <div style={{
-            height: "100%", borderRadius: 3,
-            background: plan.gradient,
-            animation: "progress 2.5s ease-in-out forwards",
-          }} />
+            marginTop: 12, paddingTop: 12, borderTop: "1px solid rgba(255,255,255,0.04)",
+            textAlign: "center",
+          }}>
+            <span style={{ color: "#888", fontSize: 11 }}>
+              Temps écoulé : {Math.floor(elapsed / 60)}:{(elapsed % 60).toString().padStart(2, '0')}
+            </span>
+          </div>
         </div>
+
+        <p style={{ color: "#666", fontSize: 11 }}>
+          Ne fermez pas cette fenêtre. Vous serez notifié automatiquement.
+        </p>
 
         <style>{`
           @keyframes spin { to { transform: rotate(360deg); } }
-          @keyframes progress { from { width: 5%; } to { width: 95%; } }
+          @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         `}</style>
       </div>
     )
   }
 
+  // ═══ SAISIE DU CODE TRANSACTION (15 chiffres) ═══
+  if (step === 'txid') {
+    return (
+      <div>
+        <button onClick={() => setStep('transfer')} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", color: "#888",
+          fontSize: 13, cursor: "pointer", marginBottom: 20, padding: 0,
+        }}>← Retour</button>
+
+        <SummaryHeader />
+
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: "50%",
+            background: `${plan.color}10`, border: `2px solid ${plan.color}20`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 30, margin: "0 auto 16px",
+          }}>🔐</div>
+          <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>
+            Code de transaction
+          </h2>
+          <p style={{ color: "#888", fontSize: 11 }}>
+            Entrez l&apos;ID à 15 chiffres reçu par SMS
+          </p>
+        </div>
+
+        {/* Input 15 chiffres */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            borderRadius: 16, padding: 4,
+            border: `2px solid ${txError ? 'rgba(239,68,68,0.5)' : isTxComplete ? 'rgba(34,197,94,0.4)' : 'rgba(255,255,255,0.08)'}`,
+            transition: "border-color 0.2s",
+          }}>
+            <input
+              type="text" inputMode="numeric"
+              value={formatTx(txCode)}
+              onChange={e => { setTxCode(e.target.value); setTxError('') }}
+              onKeyDown={e => e.key === 'Enter' && submitTransaction()}
+              placeholder="000 000 000 000 000"
+              maxLength={19}
+              autoFocus
+              style={{
+                width: "100%", padding: "16px 20px",
+                background: "transparent", border: "none", outline: "none",
+                color: "#F0ECE2", fontSize: 20, fontFamily: "monospace",
+                letterSpacing: 3, textAlign: "center",
+              }}
+            />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, padding: "0 4px" }}>
+            {txError
+              ? <span style={{ color: "#F87171", fontSize: 10, fontWeight: 700 }}>⚠ {txError}</span>
+              : <span style={{ color: "#888", fontSize: 10 }}>Format: 15 chiffres</span>
+            }
+            <span style={{ color: isTxComplete ? "#4ADE80" : "#888", fontSize: 10, fontWeight: 800 }}>
+              {digits.length}/15
+            </span>
+          </div>
+        </div>
+
+        {serverError && (
+          <div style={{
+            marginBottom: 16, padding: 12, borderRadius: 12,
+            background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)",
+          }}>
+            <p style={{ color: "#F87171", fontSize: 11, fontWeight: 700, margin: 0 }}>⚠ {serverError}</p>
+          </div>
+        )}
+
+        <button
+          onClick={submitTransaction}
+          disabled={!isTxComplete || loading}
+          style={{
+            width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+            background: isTxComplete && !loading ? plan.gradient : "rgba(255,255,255,0.06)",
+            color: isTxComplete && !loading ? "#fff" : "#444",
+            fontSize: 15, fontWeight: 700,
+            cursor: isTxComplete && !loading ? "pointer" : "not-allowed",
+            boxShadow: isTxComplete && !loading ? `0 6px 20px ${plan.shadowColor}` : "none",
+          }}
+        >
+          {loading ? '⏳ Envoi en cours...' : '🔐 Valider le paiement'}
+        </button>
+      </div>
+    )
+  }
+
+  // ═══ INFOS DE TRANSFERT (numéro + montant) ═══
+  if (step === 'transfer' && selectedMethod) {
+    return (
+      <div>
+        <button onClick={() => { setMethod(''); setStep('method') }} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", color: "#888",
+          fontSize: 13, cursor: "pointer", marginBottom: 20, padding: 0,
+        }}>← Retour</button>
+
+        <SummaryHeader />
+
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>{selectedMethod.icon}</div>
+          <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>
+            {selectedMethod.name}
+          </h2>
+          <p style={{ color: "#888", fontSize: 11 }}>
+            Envoyez le montant exact au numéro ci-dessous
+          </p>
+        </div>
+
+        {/* Numéro */}
+        <div style={{
+          padding: "20px", borderRadius: 16, textAlign: "center", marginBottom: 12,
+          background: "rgba(255,255,255,0.03)", border: `1.5px solid ${selectedMethod.color}30`,
+        }}>
+          <p style={{ color: "#888", fontSize: 9, fontWeight: 800, letterSpacing: 2, marginBottom: 8 }}>
+            NUMÉRO DE TRANSFERT
+          </p>
+          <p style={{ color: selectedMethod.color, fontSize: 28, fontWeight: 800, fontFamily: "monospace", letterSpacing: 3 }}>
+            {selectedMethod.number}
+          </p>
+        </div>
+
+        {/* Montant */}
+        <div style={{
+          padding: "16px", borderRadius: 16, textAlign: "center", marginBottom: 16,
+          background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)",
+        }}>
+          <p style={{ color: "#888", fontSize: 9, fontWeight: 800, letterSpacing: 2, marginBottom: 4 }}>
+            MONTANT À ENVOYER
+          </p>
+          <p style={{ color: plan.color, fontSize: 24, fontWeight: 800 }}>
+            {fmt(price)} FCFA
+          </p>
+        </div>
+
+        {/* Avertissement */}
+        <div style={{
+          padding: "14px 16px", borderRadius: 14, marginBottom: 20,
+          background: "rgba(232,168,56,0.04)", border: "1px solid rgba(232,168,56,0.12)",
+          display: "flex", gap: 10, alignItems: "flex-start",
+        }}>
+          <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
+          <p style={{ color: "#E8A838", fontSize: 11, fontWeight: 600, lineHeight: 1.6, margin: 0 }}>
+            Effectuez le transfert <strong>avant</strong> de cliquer sur le bouton ci-dessous.
+            Vous aurez besoin du code de transaction (ID) de <strong>15 chiffres</strong> reçu par SMS.
+          </p>
+        </div>
+
+        <button onClick={() => setStep('txid')} style={{
+          width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+          background: selectedMethod.btnBg, color: selectedMethod.btnColor,
+          fontSize: 14, fontWeight: 800, cursor: "pointer",
+          boxShadow: `0 6px 20px ${selectedMethod.color}30`,
+        }}>
+          J&apos;ai effectué le transfert ✓
+        </button>
+      </div>
+    )
+  }
+
+  // ═══ CHOIX DU MODE DE PAIEMENT (MTN / Airtel) ═══
   return (
     <div>
       <button onClick={onBack} style={{
         display: "flex", alignItems: "center", gap: 6,
         background: "none", border: "none", color: "#888",
         fontSize: 13, cursor: "pointer", marginBottom: 20, padding: 0,
-      }}>
-        ← Retour aux plans
-      </button>
+      }}>← Retour aux plans</button>
 
-      {/* Order summary */}
-      <div style={{
-        padding: "20px", borderRadius: 20,
-        background: `${plan.color}06`,
-        border: `1.5px solid ${plan.color}20`,
-        marginBottom: 24,
-      }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-          <div style={{
-            width: 48, height: 48, borderRadius: 16,
-            background: plan.gradient,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 24, boxShadow: `0 4px 12px ${plan.shadowColor}`,
-          }}>{plan.emoji}</div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#F0ECE2", fontSize: 16, fontWeight: 700, margin: 0 }}>
-              Plan {plan.name} {plan.icon}
-            </h4>
-            <p style={{ color: "#888", fontSize: 12, margin: "2px 0 0" }}>
-              Abonnement {billing === "monthly" ? "mensuel" : "annuel"}
-            </p>
-          </div>
-          <div style={{ textAlign: "right" }}>
-            <span style={{ color: plan.color, fontSize: 22, fontWeight: 800 }}>{fmt(price)} F</span>
-            <div style={{ color: "#666", fontSize: 11 }}>{billingLabel}</div>
-          </div>
-        </div>
+      <SummaryHeader />
 
-        {/* 🎁 SURPRISE 4: Trial period */}
-        <div style={{
-          padding: "10px 14px", borderRadius: 12,
-          background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.1)",
-          display: "flex", alignItems: "center", gap: 8,
-        }}>
-          <span style={{ fontSize: 16 }}>🎉</span>
-          <span style={{ color: "#4ADE80", fontSize: 12, fontWeight: 600 }}>
-            7 jours d&apos;essai gratuit inclus — annulez sans frais pendant cette période
-          </span>
-        </div>
+      <div style={{ textAlign: "center", marginBottom: 20 }}>
+        <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>
+          Mode de paiement
+        </h2>
+        <p style={{ color: "#888", fontSize: 11 }}>
+          Choisissez comment régler votre abonnement
+        </p>
       </div>
 
-      {/* Payment method */}
-      {step === "method" && (
-        <div>
-          <h4 style={{ color: "#F0ECE2", fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>
-            💳 Choisissez votre mode de paiement
-          </h4>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
-            {methods.map(m => (
-              <button
-                key={m.id}
-                onClick={() => { setMethod(m.id); setStep("confirm"); }}
-                style={{
-                  display: "flex", alignItems: "center", gap: 14,
-                  padding: "16px 18px", borderRadius: 16,
-                  border: `1.5px solid ${method === m.id ? m.color + "44" : "rgba(255,255,255,0.06)"}`,
-                  background: method === m.id ? `${m.color}08` : "rgba(255,255,255,0.02)",
-                  cursor: "pointer", transition: "all 0.2s ease",
-                  textAlign: "left",
-                }}
-              >
-                <span style={{ fontSize: 28 }}>{m.icon}</span>
-                <div>
-                  <p style={{ color: "#F0ECE2", fontSize: 14, fontWeight: 600, margin: "0 0 2px" }}>{m.name}</p>
-                  <p style={{ color: "#666", fontSize: 11, margin: 0 }}>{m.desc}</p>
-                </div>
-                <div style={{
-                  marginLeft: "auto",
-                  width: 22, height: 22, borderRadius: "50%",
-                  border: `2px solid ${method === m.id ? m.color : "rgba(255,255,255,0.1)"}`,
-                  background: method === m.id ? m.color : "transparent",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                }}>
-                  {method === m.id && <span style={{ color: "#fff", fontSize: 10 }}>✓</span>}
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Confirm step */}
-      {step === "confirm" && (
-        <div>
-          <h4 style={{ color: "#F0ECE2", fontSize: 14, fontWeight: 700, margin: "0 0 12px" }}>
-            📱 Entrez votre numéro
-          </h4>
-          <div style={{
-            display: "flex", alignItems: "center", gap: 0,
-            borderRadius: 14, overflow: "hidden",
-            border: "1.5px solid rgba(255,255,255,0.08)",
-            marginBottom: 16,
-          }}>
-            <span style={{
-              padding: "14px 14px", background: "rgba(255,255,255,0.04)",
-              color: "#888", fontSize: 14, fontWeight: 600,
-              borderRight: "1px solid rgba(255,255,255,0.06)",
-            }}>🇨🇬 +242</span>
-            <input
-              type="tel"
-              value={phone}
-              onChange={(e: any) => setPhone(e.target.value)}
-              placeholder="06 XXX XX XX"
-              style={{
-                flex: 1, padding: "14px", border: "none",
-                background: "transparent", color: "#F0ECE2",
-                fontSize: 16, fontWeight: 600, outline: "none",
-              }}
-            />
-          </div>
-
-          {/* Summary */}
-          <div style={{
-            padding: "14px 16px", borderRadius: 14,
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.04)",
-            marginBottom: 16,
-          }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, color: "#888", fontSize: 13 }}>
-              <span>Plan {plan.name} ({billing === "monthly" ? "mensuel" : "annuel"})</span>
-              <span>{fmt(price)} F</span>
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, color: "#4ADE80", fontSize: 12 }}>
-              <span>🎉 Essai gratuit 7 jours</span>
-              <span>- {fmt(price)} F</span>
-            </div>
-            <div style={{ height: 1, background: "rgba(255,255,255,0.06)", margin: "8px 0" }} />
-            <div style={{ display: "flex", justifyContent: "space-between", color: "#F0ECE2", fontSize: 16, fontWeight: 800 }}>
-              <span>À payer aujourd&apos;hui</span>
-              <span style={{ color: "#4ADE80" }}>0 F</span>
-            </div>
-            <p style={{ color: "#666", fontSize: 10, margin: "6px 0 0", textAlign: "right" }}>
-              Puis {fmt(price)} F {billingLabel} après l&apos;essai
-            </p>
-          </div>
-
+      <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 20 }}>
+        {METHODS.map(m => (
           <button
-            onClick={handleConfirm}
-            disabled={phone.length < 6}
+            key={m.id}
+            onClick={() => { setMethod(m.id); setStep('transfer') }}
             style={{
-              width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
-              background: phone.length >= 6 ? plan.gradient : "rgba(255,255,255,0.06)",
-              color: phone.length >= 6 ? "#fff" : "#444",
-              fontSize: 15, fontWeight: 700,
-              cursor: phone.length >= 6 ? "pointer" : "not-allowed",
-              boxShadow: phone.length >= 6 ? `0 6px 20px ${plan.shadowColor}` : "none",
-              transition: "all 0.3s ease",
+              display: "flex", alignItems: "center", gap: 14,
+              padding: "18px 20px", borderRadius: 16,
+              border: "2px solid rgba(255,255,255,0.06)",
+              background: "rgba(255,255,255,0.02)",
+              cursor: "pointer", textAlign: "left",
             }}
           >
-            🔐 Activer mon essai gratuit
+            <div style={{
+              width: 48, height: 48, borderRadius: 14,
+              background: "rgba(255,255,255,0.04)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 24, flexShrink: 0,
+            }}>{m.icon}</div>
+            <div style={{ flex: 1 }}>
+              <p style={{ color: "#F0ECE2", fontSize: 14, fontWeight: 800, margin: "0 0 2px" }}>{m.name}</p>
+              <p style={{ color: "#666", fontSize: 11, margin: 0 }}>{m.sub}</p>
+            </div>
+            <span style={{ color: "#444", fontSize: 18 }}>›</span>
           </button>
+        ))}
+      </div>
 
-          <p style={{ color: "#555", fontSize: 10, textAlign: "center", marginTop: 10, lineHeight: 1.6 }}>
-            En confirmant, vous acceptez nos conditions d&apos;abonnement.
-            Vous pouvez annuler à tout moment pendant les 7 jours d&apos;essai sans être débité.
-          </p>
-        </div>
-      )}
+      {/* Essai gratuit */}
+      <div style={{
+        padding: "12px 16px", borderRadius: 14,
+        background: "rgba(34,197,94,0.04)", border: "1px solid rgba(34,197,94,0.1)",
+        display: "flex", alignItems: "center", gap: 8,
+      }}>
+        <span style={{ fontSize: 16 }}>🎉</span>
+        <span style={{ color: "#4ADE80", fontSize: 12, fontWeight: 600 }}>
+          7 jours d&apos;essai gratuit inclus — annulez sans frais pendant cette période
+        </span>
+      </div>
     </div>
   )
 }
@@ -975,7 +1147,7 @@ export default function SellerUpgradeSystem() {
           <button
             onClick={handlePublish}
             style={{
-              width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+              width: "100%", padding: "16px 0", borderRadius: 16,
               background: productCount >= maxProducts
                 ? "rgba(239,68,68,0.1)"
                 : "linear-gradient(135deg, #22C55E, #16A34A)",

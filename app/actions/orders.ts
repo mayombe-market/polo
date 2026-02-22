@@ -137,7 +137,7 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
     const { data: order } = await supabase
         .from('orders')
-        .select('transaction_id, payment_method')
+        .select('transaction_id, payment_method, order_type, subscription_plan_id, user_id')
         .eq('id', orderId)
         .single()
 
@@ -160,6 +160,17 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
         .eq('id', orderId)
 
     if (error) return { error: error.message }
+
+    // Si c'est un abonnement → activer le plan vendeur automatiquement
+    if (order.order_type === 'subscription' && order.subscription_plan_id) {
+        await supabase
+            .from('profiles')
+            .update({
+                subscription_plan: order.subscription_plan_id,
+                updated_at: new Date().toISOString()
+            })
+            .eq('id', order.user_id)
+    }
 
     // Envoyer un email au client
     const { data: fullOrder } = await supabase
@@ -413,6 +424,59 @@ export async function updateSellerPlan(planId: string) {
 
     if (error) return { error: error.message }
     return { success: true }
+}
+
+// Créer une commande d'abonnement vendeur
+export async function createSubscriptionOrder(input: {
+    planId: string
+    planName: string
+    price: number
+    billing: string
+    payment_method: string
+    transaction_id: string
+}) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('full_name, phone')
+        .eq('id', user.id)
+        .single()
+
+    const { data: order, error } = await supabase.from('orders').insert([{
+        user_id: user.id,
+        customer_name: profile?.full_name || user.email || 'Vendeur',
+        customer_email: user.email || null,
+        phone: profile?.phone || '',
+        city: 'Abonnement',
+        district: 'Mayombe Market',
+        status: 'pending',
+        total_amount: input.price,
+        payment_method: input.payment_method,
+        items: [{
+            id: `subscription_${input.planId}`,
+            name: `Abonnement ${input.planName} (${input.billing === 'monthly' ? 'Mensuel' : 'Annuel'})`,
+            price: input.price,
+            quantity: 1,
+            img: '',
+            seller_id: user.id,
+        }],
+        commission_rate: 0,
+        commission_amount: 0,
+        vendor_payout: 0,
+        payout_status: 'paid',
+        transaction_id: input.transaction_id,
+        order_type: 'subscription',
+        subscription_plan_id: input.planId,
+    }]).select().single()
+
+    if (error) return { error: error.message }
+    if (!order) return { error: 'Impossible de créer la commande. Réessayez.' }
+
+    return { order: JSON.parse(JSON.stringify(order)) }
 }
 
 // Créer un produit (server-side pour contourner les problèmes RLS côté client)

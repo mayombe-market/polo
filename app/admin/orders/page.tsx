@@ -276,9 +276,14 @@ export default function AdminOrders() {
                             const payBadge = getPaymentBadge(order.payment_method)
                             const commission = order.commission_amount || Math.round((order.total_amount || 0) * 0.10)
                             const vendorPayout = order.vendor_payout || Math.round((order.total_amount || 0) * 0.90)
+                            const isSubscription = order.order_type === 'subscription'
 
                             return (
-                                <div key={order.id} className="bg-white dark:bg-slate-900 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 p-6 md:p-8 transition-all hover:shadow-md">
+                                <div key={order.id} className={`bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 transition-all hover:shadow-md ${
+                                    isSubscription
+                                        ? 'border-2 border-blue-300 dark:border-blue-700'
+                                        : 'border-2 border-amber-200 dark:border-amber-700'
+                                }`}>
                                     {/* EN-TÊTE */}
                                     <div className="flex justify-between items-start mb-6">
                                         <div className="flex items-center gap-3">
@@ -291,6 +296,11 @@ export default function AdminOrders() {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1.5">
+                                            {isSubscription && (
+                                                <span className="px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                                    🔷 Abonnement {order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : ''}
+                                                </span>
+                                            )}
                                             <span className={`px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest ${statusInfo.style}`}>
                                                 {statusInfo.label}
                                             </span>
@@ -347,23 +357,44 @@ export default function AdminOrders() {
                                             </div>
 
                                             {/* Répartition financière */}
-                                            <div className="bg-orange-50/50 dark:bg-orange-500/5 p-5 rounded-[2rem] border border-orange-100 dark:border-orange-900/20">
-                                                <p className="text-[8px] font-black uppercase text-orange-500 mb-3 tracking-[0.2em]">Répartition</p>
-                                                <div className="space-y-2">
-                                                    <div className="flex justify-between text-[10px] font-bold">
-                                                        <span className="text-slate-500">Total commande</span>
-                                                        <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                            {isSubscription ? (
+                                                <div className="bg-blue-50/50 dark:bg-blue-500/5 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/20">
+                                                    <p className="text-[8px] font-black uppercase text-blue-500 mb-3 tracking-[0.2em]">Abonnement vendeur</p>
+                                                    <div className="space-y-2">
+                                                        <div className="flex justify-between text-[10px] font-bold">
+                                                            <span className="text-slate-500">Plan</span>
+                                                            <span className="font-black text-blue-600">{order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : 'N/A'}</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] font-bold border-t border-blue-200 dark:border-blue-800 pt-2">
+                                                            <span className="text-slate-600">Montant abonnement</span>
+                                                            <span className="font-black text-blue-600">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                                        </div>
                                                     </div>
-                                                    <div className="flex justify-between text-[10px] font-bold">
-                                                        <span className="text-orange-500">Commission (10%)</span>
-                                                        <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
-                                                    </div>
-                                                    <div className="flex justify-between text-[10px] font-bold border-t border-orange-200 dark:border-orange-800 pt-2">
-                                                        <span className="text-slate-600">Part vendeur (90%)</span>
-                                                        <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
+                                                    {order.status === 'confirmed' && (
+                                                        <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                                                            <p className="text-[10px] font-black text-green-600">✓ Plan activé automatiquement</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <div className="bg-orange-50/50 dark:bg-orange-500/5 p-5 rounded-[2rem] border border-orange-100 dark:border-orange-900/20">
+                                                    <p className="text-[8px] font-black uppercase text-orange-500 mb-3 tracking-[0.2em]">Répartition</p>
+                                                    <div className="space-y-2">
+                                                        <div className="flex justify-between text-[10px] font-bold">
+                                                            <span className="text-slate-500">Total commande</span>
+                                                            <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] font-bold">
+                                                            <span className="text-orange-500">Commission (10%)</span>
+                                                            <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
+                                                        </div>
+                                                        <div className="flex justify-between text-[10px] font-bold border-t border-orange-200 dark:border-orange-800 pt-2">
+                                                            <span className="text-slate-600">Part vendeur (90%)</span>
+                                                            <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                            </div>
+                                            )}
                                         </div>
                                     </div>
 

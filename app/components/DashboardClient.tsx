@@ -17,7 +17,7 @@ import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { playNewOrderSound } from '@/lib/notificationSound'
-import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, updateSellerPlan } from '@/app/actions/orders'
+import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct } from '@/app/actions/orders'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
@@ -528,8 +528,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             plan={upgradeSelectedPlan}
                             billing={upgradeBilling}
                             onBack={() => { setShowUpgradeCheckout(false); setShowUpgradePricing(true) }}
-                            onComplete={async () => {
-                                await updateSellerPlan(upgradeSelectedPlan.id)
+                            onComplete={() => {
                                 setShowUpgradeCheckout(false)
                                 window.location.reload()
                             }}

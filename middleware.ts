@@ -5,9 +5,10 @@ export async function middleware(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
     // ===== MODE MAINTENANCE =====
-    // Activer : mettre NEXT_PUBLIC_MAINTENANCE_MODE=true dans Vercel → Environment Variables
-    // Désactiver : supprimer ou mettre à false, puis redéployer
-    if (process.env.NEXT_PUBLIC_MAINTENANCE_MODE === 'true') {
+    // Pour activer : mettre MAINTENANCE_ENABLED = true, puis git push
+    // Pour désactiver : mettre MAINTENANCE_ENABLED = false, puis git push
+    const MAINTENANCE_ENABLED = true
+    if (MAINTENANCE_ENABLED) {
         // Laisser passer la page maintenance elle-même et les assets
         if (pathname === '/maintenance') {
             return NextResponse.next({ request })

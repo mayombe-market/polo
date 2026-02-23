@@ -53,6 +53,26 @@ export async function GET(request: NextRequest) {
         }
     }
 
+    // Redirection selon le rôle (si profil complété)
+    if (redirectTo === '/complete-profile') {
+        const { data: { user } } = await supabase.auth.getUser()
+        if (user) {
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('role, first_name')
+                .eq('id', user.id)
+                .single()
+
+            if (profile?.first_name) {
+                // Profil déjà complété → rediriger selon le rôle
+                if (profile.role === 'logistician') redirectTo = '/logistician/dashboard'
+                else if (profile.role === 'vendor') redirectTo = '/vendor/dashboard'
+                else if (profile.role === 'admin') redirectTo = '/admin/orders'
+                else redirectTo = '/account/dashboard'
+            }
+        }
+    }
+
     // Créer la réponse redirect et y attacher les cookies de session
     const response = NextResponse.redirect(new URL(redirectTo, request.url))
     pendingCookies.forEach(({ name, value, options }) => {

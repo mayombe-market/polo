@@ -102,10 +102,23 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // Protection des routes account
+    // Protection des routes account + redirection logisticien
     if (pathname.startsWith('/account')) {
         if (!user) {
             return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        // Si logisticien → rediriger vers son dashboard
+        if (pathname === '/account/dashboard') {
+            const { data: accProfile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', user.id)
+                .single()
+
+            if (accProfile?.role === 'logistician') {
+                return NextResponse.redirect(new URL('/logistician/dashboard', request.url))
+            }
         }
     }
 

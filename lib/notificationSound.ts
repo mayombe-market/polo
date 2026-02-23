@@ -50,6 +50,71 @@ export function playSuccessSound() {
     }
 }
 
+/** Son de négociation (chime doux triangle wave) */
+export function playNegotiationSound() {
+    try {
+        const ctx = getAudioContext()
+        const now = ctx.currentTime
+
+        // Chime doux : triangle wave 660Hz → 880Hz
+        const osc1 = ctx.createOscillator()
+        const gain1 = ctx.createGain()
+        osc1.type = 'triangle'
+        osc1.frequency.setValueAtTime(660, now)
+        osc1.frequency.linearRampToValueAtTime(880, now + 0.25)
+        gain1.gain.setValueAtTime(0.2, now)
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.4)
+        osc1.connect(gain1).connect(ctx.destination)
+        osc1.start(now)
+        osc1.stop(now + 0.4)
+
+        // Note 2 : triangle 1100Hz (résolution)
+        const osc2 = ctx.createOscillator()
+        const gain2 = ctx.createGain()
+        osc2.type = 'triangle'
+        osc2.frequency.value = 1100
+        gain2.gain.setValueAtTime(0.15, now + 0.3)
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.6)
+        osc2.connect(gain2).connect(ctx.destination)
+        osc2.start(now + 0.3)
+        osc2.stop(now + 0.6)
+    } catch (e) {
+        // Audio non supporte, on ignore silencieusement
+    }
+}
+
+/** Son de livraison (notification logisticien — double bip grave) */
+export function playDeliverySound() {
+    try {
+        const ctx = getAudioContext()
+        const now = ctx.currentTime
+
+        // Bip grave 1 : 440Hz
+        const osc1 = ctx.createOscillator()
+        const gain1 = ctx.createGain()
+        osc1.type = 'square'
+        osc1.frequency.value = 440
+        gain1.gain.setValueAtTime(0.15, now)
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
+        osc1.connect(gain1).connect(ctx.destination)
+        osc1.start(now)
+        osc1.stop(now + 0.15)
+
+        // Bip grave 2 : 550Hz (plus haut)
+        const osc2 = ctx.createOscillator()
+        const gain2 = ctx.createGain()
+        osc2.type = 'square'
+        osc2.frequency.value = 550
+        gain2.gain.setValueAtTime(0.15, now + 0.2)
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.4)
+        osc2.connect(gain2).connect(ctx.destination)
+        osc2.start(now + 0.2)
+        osc2.stop(now + 0.4)
+    } catch (e) {
+        // Audio non supporte, on ignore silencieusement
+    }
+}
+
 /** Son de nouvelle commande (notification vendeur) */
 export function playNewOrderSound() {
     try {

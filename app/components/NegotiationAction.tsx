@@ -1,29 +1,52 @@
 'use client'
 
-import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { useState, useEffect } from 'react'
+import { sendNegotiationOffer, getAcceptedNegotiation } from '@/app/actions/negotiations'
+import { Loader2, Clock } from 'lucide-react'
 
-const NegotiationAction = ({ product, initialPrice, user, shop }: {
+const NegotiationAction = ({ product, initialPrice, user, shop, onNegotiatedPrice }: {
     product: any,
     initialPrice: number,
     user: any,
-    shop: any
+    shop: any,
+    onNegotiatedPrice?: (price: number) => void
 }) => {
-    // 1. PROTECTION : Si pas de produit, on n'affiche rien pour éviter le crash
-
-
     const [isOpen, setIsOpen] = useState(false)
     const [isSent, setIsSent] = useState(false)
+    const [sending, setSending] = useState(false)
     const [currentPrice, setCurrentPrice] = useState(initialPrice || 0)
     const [suggestion, setSuggestion] = useState("")
     const [isAccepted, setIsAccepted] = useState(false)
+    const [hasPending, setHasPending] = useState(false)
+    const [checkingStatus, setCheckingStatus] = useState(true)
 
-    if (!product) return null;
+    if (!product) return null
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    // Vérifier si l'utilisateur a déjà une négociation acceptée ou en attente
+    useEffect(() => {
+        if (!user?.id || !product?.id) {
+            setCheckingStatus(false)
+            return
+        }
+
+        const checkNegotiation = async () => {
+            try {
+                const result = await getAcceptedNegotiation(product.id)
+                if (result.negotiation) {
+                    setIsAccepted(true)
+                    setCurrentPrice(result.negotiation.proposed_price)
+                    onNegotiatedPrice?.(result.negotiation.proposed_price)
+                }
+            } catch (err) {
+                console.error('Erreur vérification négociation:', err)
+            } finally {
+                setCheckingStatus(false)
+            }
+        }
+        checkNegotiation()
+    }, [user?.id, product?.id])
+
+    const isOwnProduct = user?.id === product?.seller_id
 
     const applyDiscount = (percent: number) => {
         const discounted = Math.round((initialPrice || 0) * (1 - percent / 100))
@@ -31,50 +54,54 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
     }
 
     const handleNegotiate = async () => {
-        const proposedPrice = parseInt(suggestion);
+        const proposedPrice = parseInt(suggestion)
         if (!proposedPrice || proposedPrice < 100) {
-            alert("Le prix proposé doit être d'au moins 100 FCFA.");
-            return;
+            alert("Le prix proposé doit être d'au moins 100 FCFA.")
+            return
         }
         if (proposedPrice >= initialPrice) {
-            alert("Votre offre doit être inférieure au prix actuel.");
-            return;
+            alert("Votre offre doit être inférieure au prix actuel.")
+            return
         }
-
         if (!user) {
-            alert("Vous devez être connecté pour proposer un prix.");
-            return;
+            alert("Vous devez être connecté pour proposer un prix.")
+            return
         }
 
-        const { error } = await supabase
-            .from('negotiations')
-            .insert([{
-                product_id: product?.id, // Utilisation du ? de sécurité
-                seller_id: product?.seller_id, // Utilisation du ? de sécurité
-                buyer_id: user?.id, // Utilisation du ? de sécurité
-                initial_price: initialPrice || 0,
-                proposed_price: proposedPrice,
-                status: 'en_attente'
-            }]);
+        setSending(true)
+        const result = await sendNegotiationOffer({
+            productId: product.id,
+            sellerId: product.seller_id,
+            initialPrice: initialPrice || 0,
+            proposedPrice,
+        })
 
-        if (error) {
-            console.error("Erreur Supabase:", error.message);
-            return alert("Erreur : " + error.message);
+        if (result.error) {
+            alert(result.error)
+            setSending(false)
+            return
         }
 
-        setIsSent(true);
+        setIsSent(true)
+        setHasPending(true)
+        setSending(false)
 
         setTimeout(() => {
-            setIsOpen(false);
-            setIsSent(false);
-        }, 4000);
-    };
+            setIsOpen(false)
+            setIsSent(false)
+        }, 4000)
+    }
 
     return (
         <div className="w-full space-y-4">
             <div className="flex flex-col">
                 <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prix actuel</span>
                 <div className="flex items-center gap-3">
+                    {isAccepted && (
+                        <p className="text-lg font-bold text-slate-400 line-through">
+                            {(initialPrice || 0).toLocaleString('fr-FR')} FCFA
+                        </p>
+                    )}
                     <p className={`text-3xl font-black transition-all ${isAccepted ? 'text-orange-500 scale-110' : 'text-green-600'}`}>
                         {(currentPrice || 0).toLocaleString('fr-FR')} FCFA
                     </p>
@@ -86,13 +113,20 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
                 </div>
             </div>
 
-            {!isAccepted && (
-                <button
-                    onClick={() => setIsOpen(true)}
-                    className="w-full py-4 rounded-2xl border-2 border-orange-400 text-orange-500 font-black uppercase tracking-widest text-xs hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
-                >
-                    🤝 Débattre le prix
-                </button>
+            {/* Bouton : états différents selon le contexte */}
+            {!isAccepted && !isOwnProduct && !checkingStatus && (
+                hasPending ? (
+                    <div className="w-full py-4 rounded-2xl border-2 border-yellow-400 bg-yellow-50 dark:bg-yellow-900/10 text-yellow-600 font-black uppercase tracking-widest text-xs text-center flex items-center justify-center gap-2">
+                        <Clock size={16} /> Offre en attente de réponse
+                    </div>
+                ) : (
+                    <button
+                        onClick={() => setIsOpen(true)}
+                        className="w-full py-4 rounded-2xl border-2 border-orange-400 text-orange-500 font-black uppercase tracking-widest text-xs hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
+                    >
+                        Débattre le prix
+                    </button>
+                )
             )}
 
             {isOpen && (
@@ -127,9 +161,10 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
                                     </div>
                                     <button
                                         onClick={handleNegotiate}
-                                        className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-[0.2em] shadow-lg shadow-orange-200 hover:bg-orange-600 transition-all"
+                                        disabled={sending}
+                                        className="w-full bg-orange-500 text-white font-black py-4 rounded-2xl uppercase text-xs tracking-[0.2em] shadow-lg shadow-orange-200 hover:bg-orange-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                                     >
-                                        Envoyer l'offre
+                                        {sending ? <Loader2 size={16} className="animate-spin" /> : "Envoyer l'offre"}
                                     </button>
                                 </div>
                             </>
@@ -152,4 +187,4 @@ const NegotiationAction = ({ product, initialPrice, user, shop }: {
     )
 }
 
-export default NegotiationAction;
+export default NegotiationAction

@@ -59,6 +59,31 @@ export async function middleware(request: NextRequest) {
         }
     }
 
+    // Protection des routes logisticien
+    if (pathname.startsWith('/logistician')) {
+        if (!user) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        const { data: logProfile, error } = await supabase
+            .from('profiles')
+            .select('role, first_name')
+            .eq('id', user.id)
+            .single()
+
+        if (error || !logProfile) {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!logProfile.first_name) {
+            return NextResponse.redirect(new URL('/complete-profile', request.url))
+        }
+
+        if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') {
+            return NextResponse.redirect(new URL('/', request.url))
+        }
+    }
+
     // Protection des routes admin
     if (pathname.startsWith('/admin')) {
         if (!user) {

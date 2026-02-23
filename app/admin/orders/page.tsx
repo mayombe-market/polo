@@ -11,6 +11,7 @@ import {
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder } from '@/app/actions/orders'
+import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 
 export default function AdminOrders() {
@@ -19,6 +20,8 @@ export default function AdminOrders() {
     const [updating, setUpdating] = useState<string | null>(null)
     const [activeFilter, setActiveFilter] = useState('all')
     const [adminInputs, setAdminInputs] = useState<Record<string, string>>({})
+    const [logisticians, setLogisticians] = useState<any[]>([])
+    const [assigningOrder, setAssigningOrder] = useState<string | null>(null)
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -83,6 +86,9 @@ export default function AdminOrders() {
             }
         }
         fetchOrders()
+
+        // Charger les logisticiens disponibles
+        getAvailableLogisticians().then(({ logisticians: logs }) => setLogisticians(logs))
 
         // Real-time : écouter nouvelles commandes et mises à jour
         const channel = supabase
@@ -178,9 +184,28 @@ export default function AdminOrders() {
         return Math.max(0, Math.ceil(remaining))
     }
 
+    // Assigner un logisticien à une commande
+    const handleAssignLogistician = async (orderId: string, logisticianId: string) => {
+        setAssigningOrder(orderId)
+        try {
+            const result = await assignLogistician(orderId, logisticianId)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                setOrders(prev => prev.map(o => o.id === orderId ? { ...o, logistician_id: logisticianId } : o))
+                toast.success(`Livreur assigné : ${result.logisticianName}`)
+            }
+        } catch {
+            toast.error('Erreur lors de l\'assignation')
+        } finally {
+            setAssigningOrder(null)
+        }
+    }
+
     const getStatusDetails = (status: string) => {
         switch (status) {
             case 'delivered': return { label: 'Livrée', style: 'bg-green-100 text-green-700' }
+            case 'picked_up': return { label: 'Récupérée', style: 'bg-violet-100 text-violet-700' }
             case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
             case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
             case 'rejected': return { label: 'Rejetée', style: 'bg-red-100 text-red-700' }
@@ -253,6 +278,7 @@ export default function AdminOrders() {
                         { id: 'pending', label: 'En attente' },
                         { id: 'confirmed', label: 'Confirmées' },
                         { id: 'shipped', label: 'Expédiées' },
+                        { id: 'picked_up', label: 'Récupérées' },
                         { id: 'delivered', label: 'Livrées' },
                     ].map((f) => (
                         <button
@@ -437,6 +463,43 @@ export default function AdminOrders() {
                                                         <p className="text-red-500 text-[10px] font-black uppercase">
                                                             ✗ Les ID ne correspondent PAS — vérifiez le numéro
                                                         </p>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* ASSIGNATION LOGISTICIEN */}
+                                    {(order.status === 'confirmed' || order.status === 'shipped' || order.status === 'picked_up') && !isSubscription && (
+                                        <div className="mb-6 bg-violet-50/50 dark:bg-violet-500/5 p-5 rounded-[2rem] border border-violet-200 dark:border-violet-800/30">
+                                            <p className="text-[8px] font-black uppercase text-violet-600 mb-3 tracking-[0.2em]">🏍️ Livreur assigné</p>
+                                            {order.logistician_id ? (
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                                                        <Truck size={14} className="text-violet-600" />
+                                                    </div>
+                                                    <span className="text-sm font-black text-violet-700 dark:text-violet-400">
+                                                        {logisticians.find(l => l.id === order.logistician_id)?.full_name || 'Livreur assigné'}
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div>
+                                                    {logisticians.length > 0 ? (
+                                                        <select
+                                                            onChange={(e) => {
+                                                                if (e.target.value) handleAssignLogistician(order.id, e.target.value)
+                                                            }}
+                                                            disabled={assigningOrder === order.id}
+                                                            className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors"
+                                                            defaultValue=""
+                                                        >
+                                                            <option value="" disabled>Choisir un livreur...</option>
+                                                            {logisticians.map(l => (
+                                                                <option key={l.id} value={l.id}>{l.full_name} — {l.phone}</option>
+                                                            ))}
+                                                        </select>
+                                                    ) : (
+                                                        <p className="text-[10px] text-slate-400">Aucun livreur disponible. Ajoutez-en dans Admin → Logisticiens.</p>
                                                     )}
                                                 </div>
                                             )}

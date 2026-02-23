@@ -79,14 +79,12 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
     const hasVendorItems = order.items?.some((item: any) => item.seller_id === user.id)
     if (!hasVendorItems) return { error: 'Non autorisé' }
 
-    // Valider le statut
-    const validStatuses = ['confirmed', 'shipped', 'delivered']
-    if (!validStatuses.includes(newStatus)) return { error: 'Statut invalide' }
+    // Valider le statut — le vendeur ne peut que confirmer et expédier
+    // Le logisticien gère picked_up et delivered via deliveries.ts
+    const validStatuses = ['confirmed', 'shipped']
+    if (!validStatuses.includes(newStatus)) return { error: 'Statut invalide — utilisez le dashboard logisticien pour les livraisons' }
 
     const updateData: any = { status: newStatus }
-    if (newStatus === 'delivered') {
-        updateData.delivered_at = new Date().toISOString()
-    }
 
     const { error } = await supabase
         .from('orders')

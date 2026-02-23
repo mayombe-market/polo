@@ -11,13 +11,14 @@ import {
     TrendingUp, Eye, Users, Copy, Check, Trash2,
     ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
-    Bell, Upload, X as XIcon
+    Bell, Upload, X as XIcon, MessageSquare
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { playNewOrderSound } from '@/lib/notificationSound'
+import { playNewOrderSound, playNegotiationSound } from '@/lib/notificationSound'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct } from '@/app/actions/orders'
+import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
@@ -25,13 +26,14 @@ const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.
     ssr: false
 })
 
-type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'stats' | 'wallet' | 'shop' | 'settings'
+type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'stats' | 'wallet' | 'shop' | 'settings'
 
 const menuItems: { id: Page; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'products', label: 'Produits', icon: Package },
     { id: 'add', label: 'Ajouter', icon: Plus },
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
+    { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
     { id: 'stats', label: 'Statistiques', icon: BarChart3 },
     { id: 'wallet', label: 'Portefeuille', icon: Wallet },
     { id: 'shop', label: 'Boutique', icon: Store },
@@ -50,6 +52,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [updating, setUpdating] = useState<string | null>(null)
     const [deleting, setDeleting] = useState<string | null>(null)
     const [orderFilter, setOrderFilter] = useState('all')
+    const [negotiations, setNegotiations] = useState<any[]>([])
+    const [negotiationsLoading, setNegotiationsLoading] = useState(true)
 
     // ═══ Système d'abonnement & limites ═══
     const currentPlan = profile?.subscription_plan || 'free'
@@ -142,6 +146,12 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 setOrders(result.orders || [])
             } catch (err) { console.error("Erreur commandes:", err) }
             finally { setOrdersLoading(false) }
+
+            try {
+                const result = await getSellerNegotiations()
+                setNegotiations(result.negotiations || [])
+            } catch (err) { console.error("Erreur négociations:", err) }
+            finally { setNegotiationsLoading(false) }
         }
         fetchData()
     }, [user?.id])
@@ -184,6 +194,27 @@ export default function DashboardClient({ products: initialProducts, profile, us
         return () => { supabase.removeChannel(channel) }
     }, [user?.id])
 
+    // Real-time negotiations
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('vendor-dashboard-negotiations')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${user.id}` }, (payload) => {
+                const newNeg = payload.new as any
+                setNegotiations(prev => [newNeg, ...prev])
+                const desc = `${newNeg.buyer_name || 'Client'} propose ${newNeg.proposed_price?.toLocaleString('fr-FR')} FCFA`
+                playNegotiationSound()
+                toast.success('Nouvelle offre de négociation !', { description: desc })
+                sendNotification('Nouvelle offre !', desc)
+            })
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${user.id}` }, (payload) => {
+                const updated = payload.new as any
+                setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
     const copyLink = () => {
         const url = `${window.location.origin}/seller/${user?.id}`
         navigator.clipboard.writeText(url)
@@ -220,6 +251,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     const totalViews = products?.reduce((acc: number, p: any) => acc + (p.views_count || 0), 0) || 0
     const totalOrders = orders.length
+    const pendingNegotiationsCount = negotiations.filter(n => n.status === 'en_attente').length
 
     const getStatusDetails = (status: string) => {
         switch (status) {
@@ -255,17 +287,23 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     {menuItems.map(item => {
                         const Icon = item.icon
                         const isActive = activePage === item.id
+                        const badge = item.id === 'negotiations' && pendingNegotiationsCount > 0 ? pendingNegotiationsCount : null
                         return (
                             <button
                                 key={item.id}
                                 onClick={() => setActivePage(item.id)}
-                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all ${isActive
+                                className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative ${isActive
                                     ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
                                     : 'text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                                     }`}
                             >
                                 <Icon size={20} />
                                 {sidebarOpen && <span>{item.label}</span>}
+                                {badge && (
+                                    <span className={`${sidebarOpen ? 'ml-auto' : 'absolute -top-1 -right-1'} min-w-[20px] h-5 px-1.5 rounded-full text-[10px] font-black flex items-center justify-center ${isActive ? 'bg-white text-orange-500' : 'bg-red-500 text-white'}`}>
+                                        {badge}
+                                    </span>
+                                )}
                             </button>
                         )
                     })}
@@ -429,6 +467,22 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         updateStatus={updateStatus}
                         getStatusDetails={getStatusDetails}
                         currentVendorId={user?.id}
+                    />
+                )}
+
+                {activePage === 'negotiations' && (
+                    <NegotiationsPage
+                        negotiations={negotiations}
+                        negotiationsLoading={negotiationsLoading}
+                        onRespond={async (negotiationId: string, response: 'accepte' | 'refuse') => {
+                            const result = await respondToNegotiation({ negotiationId, response })
+                            if (result.error) {
+                                toast.error(result.error)
+                            } else {
+                                setNegotiations(prev => prev.map(n => n.id === negotiationId ? { ...n, status: response } : n))
+                                toast.success(response === 'accepte' ? 'Offre acceptée !' : 'Offre refusée')
+                            }
+                        }}
                     />
                 )}
 
@@ -1481,6 +1535,165 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
                 {saving ? 'Enregistrement...' : 'Enregistrer les paramètres'}
             </button>
+        </div>
+    )
+}
+
+// =====================================================================
+// NEGOTIATIONS PAGE
+// =====================================================================
+function NegotiationsPage({ negotiations, negotiationsLoading, onRespond }: {
+    negotiations: any[]
+    negotiationsLoading: boolean
+    onRespond: (negotiationId: string, response: 'accepte' | 'refuse') => Promise<void>
+}) {
+    const [filter, setFilter] = useState('all')
+    const [responding, setResponding] = useState<string | null>(null)
+
+    const filtered = filter === 'all' ? negotiations
+        : negotiations.filter(n => n.status === filter)
+
+    const counts = {
+        all: negotiations.length,
+        en_attente: negotiations.filter(n => n.status === 'en_attente').length,
+        accepte: negotiations.filter(n => n.status === 'accepte').length,
+        refuse: negotiations.filter(n => n.status === 'refuse').length,
+    }
+
+    const handleRespond = async (id: string, response: 'accepte' | 'refuse') => {
+        setResponding(id)
+        await onRespond(id, response)
+        setResponding(null)
+    }
+
+    const getStatusStyle = (status: string) => {
+        switch (status) {
+            case 'accepte': return 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+            case 'refuse': return 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+            default: return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400'
+        }
+    }
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case 'accepte': return 'Acceptée'
+            case 'refuse': return 'Refusée'
+            default: return 'En attente'
+        }
+    }
+
+    return (
+        <div className="p-4 md:p-8">
+            <div className="mb-8">
+                <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Négociations</h2>
+                <p className="text-sm text-slate-400 font-bold mt-1">
+                    {counts.en_attente > 0 ? `${counts.en_attente} offre${counts.en_attente > 1 ? 's' : ''} en attente` : 'Gérez les offres de vos clients'}
+                </p>
+            </div>
+
+            {/* Filters */}
+            <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
+                {[
+                    { id: 'all', label: 'Toutes' },
+                    { id: 'en_attente', label: 'En attente' },
+                    { id: 'accepte', label: 'Acceptées' },
+                    { id: 'refuse', label: 'Refusées' },
+                ].map(f => (
+                    <button
+                        key={f.id}
+                        onClick={() => setFilter(f.id)}
+                        className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase whitespace-nowrap transition-all border flex items-center gap-2 ${filter === f.id
+                            ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                            }`}
+                    >
+                        {f.label}
+                        <span className={`px-1.5 py-0.5 rounded-md text-[9px] ${filter === f.id ? 'bg-white/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                            {counts[f.id as keyof typeof counts]}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            {negotiationsLoading ? (
+                <div className="py-20 text-center">
+                    <Loader2 size={32} className="mx-auto animate-spin text-orange-500 mb-3" />
+                    <p className="text-xs font-black uppercase text-slate-400">Chargement des négociations...</p>
+                </div>
+            ) : filtered.length > 0 ? (
+                <div className="space-y-4">
+                    {filtered.map((neg: any) => {
+                        const productImg = neg.products?.img || neg.products?.image_url || '/placeholder-image.jpg'
+                        const productName = neg.products?.name || 'Produit'
+                        const discount = Math.round((1 - neg.proposed_price / neg.initial_price) * 100)
+
+                        return (
+                            <div key={neg.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 hover:shadow-md transition-all">
+                                <div className="flex items-start gap-4">
+                                    {/* Product image */}
+                                    <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
+                                        <Image src={productImg} alt={productName} width={64} height={64} className="w-full h-full object-cover" />
+                                    </div>
+
+                                    <div className="flex-1 min-w-0">
+                                        {/* Product name + status */}
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div>
+                                                <p className="text-sm font-black uppercase italic dark:text-white truncate">{productName}</p>
+                                                <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                                    De {neg.buyer_name || 'Client'} — {new Date(neg.created_at).toLocaleDateString('fr-FR')}
+                                                </p>
+                                            </div>
+                                            <span className={`px-3 py-1 text-[9px] font-black uppercase rounded-full flex-shrink-0 ${getStatusStyle(neg.status)}`}>
+                                                {getStatusLabel(neg.status)}
+                                            </span>
+                                        </div>
+
+                                        {/* Price comparison */}
+                                        <div className="flex items-center gap-4 mb-3">
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase text-slate-400">Prix initial</p>
+                                                <p className="text-sm font-black text-slate-500 line-through">{neg.initial_price?.toLocaleString('fr-FR')} F</p>
+                                            </div>
+                                            <div className="text-orange-500 font-black text-lg">→</div>
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase text-orange-500">Offre (-{discount}%)</p>
+                                                <p className="text-lg font-black text-orange-500">{neg.proposed_price?.toLocaleString('fr-FR')} F</p>
+                                            </div>
+                                        </div>
+
+                                        {/* Action buttons */}
+                                        {neg.status === 'en_attente' && (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => handleRespond(neg.id, 'accepte')}
+                                                    disabled={responding === neg.id}
+                                                    className="flex items-center gap-2 bg-green-500 text-white px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] hover:bg-green-600 transition-all disabled:opacity-50"
+                                                >
+                                                    {responding === neg.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
+                                                    Accepter
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRespond(neg.id, 'refuse')}
+                                                    disabled={responding === neg.id}
+                                                    className="flex items-center gap-2 bg-white dark:bg-slate-800 text-red-500 border border-red-200 dark:border-red-800 px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-50 dark:hover:bg-red-950/20 transition-all disabled:opacity-50"
+                                                >
+                                                    Refuser
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            ) : (
+                <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <MessageSquare size={48} className="mx-auto text-slate-200 dark:text-slate-600 mb-4" />
+                    <p className="text-xs font-black uppercase italic text-slate-400">Aucune négociation dans cette catégorie</p>
+                </div>
+            )}
         </div>
     )
 }

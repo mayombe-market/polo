@@ -16,6 +16,10 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { playNegotiationSound, playDeliverySound } from '@/lib/notificationSound'
+import { getBuyerNegotiations } from '@/app/actions/negotiations'
+import { getLoyaltyPoints } from '@/app/actions/ratings'
+import TripleRatingModal from '@/app/components/TripleRatingModal'
 import { useRouter } from 'next/navigation'
 
 type Page = 'home' | 'orders' | 'wishlist' | 'cart' | 'following' | 'notifs' | 'addresses' | 'profile' | 'settings'
@@ -46,6 +50,9 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     const [profile, setProfile] = useState(initialProfile || {})
     const [address, setAddress] = useState({ city: '', district: '', landmark: '' })
     const [dataLoading, setDataLoading] = useState(true)
+    const [negotiations, setNegotiations] = useState<any[]>([])
+    const [loyaltyPoints, setLoyaltyPoints] = useState(0)
+    const [ratingOrder, setRatingOrder] = useState<any | null>(null)
 
     // Cart hook
     const { cart, total, itemCount, updateQuantity, removeFromCart } = useCart()
@@ -114,10 +121,12 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 
     // Badges
     const activeOrdersCount = orders.filter(o => ['confirmed', 'shipped'].includes(o.status)).length
+    const recentNegotiations = negotiations.filter(n => n.status === 'accepte' || n.status === 'refuse').filter(n => Date.now() - new Date(n.updated_at || n.created_at).getTime() < 86400000 * 3)
     const getBadge = (id: Page): number | null => {
         if (id === 'orders' && activeOrdersCount > 0) return activeOrdersCount
         if (id === 'wishlist' && favorites.length > 0) return favorites.length
         if (id === 'cart' && itemCount > 0) return itemCount
+        if (id === 'notifs' && recentNegotiations.length > 0) return recentNegotiations.length
         return null
     }
 
@@ -153,14 +162,23 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 if (data) setFollowedShops(data.map((f: any) => f.profiles).filter(Boolean))
             } catch (err) { console.error('Erreur boutiques:', err) }
 
-            // Address
+            // Negotiations
+            try {
+                const result = await getBuyerNegotiations()
+                setNegotiations(result.negotiations || [])
+            } catch (err) { console.error('Erreur négociations:', err) }
+
+            // Address + loyalty points
             try {
                 const { data } = await supabase
                     .from('profiles')
-                    .select('city, district, landmark')
+                    .select('city, district, landmark, loyalty_points')
                     .eq('id', user.id)
                     .single()
-                if (data) setAddress({ city: data.city || '', district: data.district || '', landmark: data.landmark || '' })
+                if (data) {
+                    setAddress({ city: data.city || '', district: data.district || '', landmark: data.landmark || '' })
+                    setLoyaltyPoints(data.loyalty_points || 0)
+                }
             } catch (err) { console.error('Erreur adresse:', err) }
 
             setDataLoading(false)
@@ -179,14 +197,40 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
             }, (payload) => {
                 const updated = payload.new as any
                 setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
-                const labels: Record<string, string> = { confirmed: 'Confirmée', shipped: 'Expédiée', delivered: 'Livrée' }
+                const labels: Record<string, string> = { confirmed: 'Confirmée', shipped: 'Expédiée', picked_up: 'En livraison 🏍️', delivered: 'Livrée ✅' }
                 const label = labels[updated.status]
                 if (label) {
+                    if (updated.status === 'picked_up' || updated.status === 'delivered') {
+                        playDeliverySound()
+                    }
                     toast.success(formatOrderNumber(updated), { description: `Statut : ${label}` })
                     sendNotification(
                         `Commande ${formatOrderNumber(updated)}`,
                         `Votre commande est maintenant : ${label}`
                     )
+                }
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
+    // Real-time negotiations (quand le vendeur répond)
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('buyer-negotiations')
+            .on('postgres_changes', {
+                event: 'UPDATE', schema: 'public', table: 'negotiations',
+                filter: `buyer_id=eq.${user.id}`,
+            }, (payload) => {
+                const updated = payload.new as any
+                setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
+                if (updated.status === 'accepte') {
+                    playNegotiationSound()
+                    toast.success('Offre acceptée !', { description: 'Votre prix négocié a été accepté par le vendeur.' })
+                    sendNotification('Offre acceptée !', 'Votre prix négocié a été accepté.')
+                } else if (updated.status === 'refuse') {
+                    toast.info('Offre refusée', { description: 'Le vendeur a refusé votre offre de négociation.' })
                 }
             })
             .subscribe()
@@ -288,16 +332,36 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 pb-24 md:pb-0 overflow-y-auto">
-                {activePage === 'home' && <BuyerHome user={user} profile={profile} orders={orders} favorites={favorites} followedShops={followedShops} cartCount={itemCount} onNavigate={setActivePage} dataLoading={dataLoading} />}
-                {activePage === 'orders' && <BuyerOrders orders={orders} />}
+                {activePage === 'home' && <BuyerHome user={user} profile={profile} orders={orders} favorites={favorites} followedShops={followedShops} cartCount={itemCount} onNavigate={setActivePage} dataLoading={dataLoading} loyaltyPoints={loyaltyPoints} onConfirmReception={(order: any) => setRatingOrder(order)} />}
+                {activePage === 'orders' && <BuyerOrders orders={orders} onConfirmReception={(order) => setRatingOrder(order)} />}
                 {activePage === 'wishlist' && <BuyerWishlist favorites={favorites} setFavorites={setFavorites} userId={user?.id} />}
                 {activePage === 'cart' && <BuyerCart cart={cart} total={total} itemCount={itemCount} updateQuantity={updateQuantity} removeFromCart={removeFromCart} />}
                 {activePage === 'following' && <FollowingPage shops={followedShops} />}
-                {activePage === 'notifs' && <NotificationsPage orders={orders} />}
+                {activePage === 'notifs' && <NotificationsPage orders={orders} negotiations={negotiations} />}
                 {activePage === 'addresses' && <AddressesPage address={address} setAddress={setAddress} userId={user?.id} />}
                 {activePage === 'profile' && <ProfilePage profile={profile} setProfile={setProfile} userId={user?.id} />}
                 {activePage === 'settings' && <SettingsPage />}
             </main>
+
+            {/* TRIPLE RATING MODAL */}
+            {ratingOrder && (
+                <TripleRatingModal
+                    order={ratingOrder}
+                    onClose={() => setRatingOrder(null)}
+                    onComplete={async () => {
+                        // Refresh orders to reflect client_confirmed
+                        const { data } = await supabase
+                            .from('orders')
+                            .select('*')
+                            .eq('user_id', user.id)
+                            .order('created_at', { ascending: false })
+                        if (data) setOrders(data)
+                        // Refresh loyalty points
+                        const pts = await getLoyaltyPoints()
+                        setLoyaltyPoints(pts.points || 0)
+                    }}
+                />
+            )}
         </div>
     )
 }
@@ -305,9 +369,9 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 // =====================================================================
 // BUYER HOME
 // =====================================================================
-function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount, onNavigate, dataLoading }: any) {
-    const activeOrders = orders.filter((o: any) => ['confirmed', 'shipped'].includes(o.status))
-    const deliveredOrders = orders.filter((o: any) => o.status === 'delivered')
+function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount, onNavigate, dataLoading, loyaltyPoints = 0, onConfirmReception }: any) {
+    const activeOrders = orders.filter((o: any) => ['confirmed', 'shipped', 'picked_up'].includes(o.status))
+    const needsConfirmation = orders.filter((o: any) => o.status === 'delivered' && !o.client_confirmed)
 
     const quickStats = [
         { icon: Package, label: 'Commandes', value: orders.length, sub: `${activeOrders.length} en cours`, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20', page: 'orders' as Page },
@@ -320,16 +384,18 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
 
     const statusMap: Record<string, { label: string; color: string }> = {
         confirmed: { label: 'Confirmée', color: 'text-blue-600 bg-blue-50' },
-        shipped: { label: 'En livraison', color: 'text-orange-600 bg-orange-50' },
+        shipped: { label: 'Expédiée', color: 'text-purple-600 bg-purple-50' },
+        picked_up: { label: 'En livraison 🏍️', color: 'text-violet-600 bg-violet-50' },
         delivered: { label: 'Livrée', color: 'text-green-600 bg-green-50' },
         pending: { label: 'En attente', color: 'text-yellow-600 bg-yellow-50' },
     }
 
     const getProgress = (status: string) => {
         switch (status) {
-            case 'pending': return 15
-            case 'confirmed': return 40
-            case 'shipped': return 75
+            case 'pending': return 10
+            case 'confirmed': return 30
+            case 'shipped': return 55
+            case 'picked_up': return 80
             case 'delivered': return 100
             default: return 0
         }
@@ -343,6 +409,51 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                 </h1>
                 <p className="text-sm text-slate-400 font-bold mt-1">Voici votre espace personnel</p>
             </div>
+
+            {/* Loyalty points banner */}
+            {loyaltyPoints > 0 && (
+                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 rounded-3xl border border-amber-200/50 dark:border-amber-800/30">
+                    <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-2xl flex-shrink-0">🎁</div>
+                    <div className="flex-1">
+                        <p className="text-sm font-black dark:text-white">{fmt(loyaltyPoints)} <span className="text-amber-600">points de fidélité</span></p>
+                        <p className="text-[10px] text-slate-400 font-bold">
+                            {loyaltyPoints >= 1000
+                                ? `Vous avez ${fmt(Math.floor(loyaltyPoints / 1000) * 2000)} F de réduction disponible !`
+                                : `Encore ${fmt(1000 - (loyaltyPoints % 1000))} points pour débloquer 2 000 F de réduction`}
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {/* Orders needing confirmation */}
+            {needsConfirmation.length > 0 && (
+                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-3xl p-5">
+                    <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-xl">📦</div>
+                        <div>
+                            <p className="text-sm font-black dark:text-white">{needsConfirmation.length} commande{needsConfirmation.length > 1 ? 's' : ''} à confirmer</p>
+                            <p className="text-[10px] text-slate-400 font-bold">Confirmez la réception et gagnez +500 points !</p>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        {needsConfirmation.slice(0, 2).map((order: any) => (
+                            <button key={order.id} onClick={() => onConfirmReception(order)}
+                                className="w-full flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-green-200/50 dark:border-green-800/30 hover:border-green-400 transition-all text-left">
+                                {order.items?.[0]?.img && (
+                                    <Image src={order.items[0].img} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                                )}
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-black dark:text-white truncate">{order.items?.[0]?.name || 'Commande'}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold">{fmt(order.total_amount)} F</p>
+                                </div>
+                                <span className="text-[9px] font-black uppercase text-green-600 bg-green-100 dark:bg-green-900/30 px-3 py-1.5 rounded-xl whitespace-nowrap">
+                                    Confirmer
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Stats grid */}
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -400,9 +511,10 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                                             <div className="h-full bg-orange-500 rounded-full transition-all duration-700" style={{ width: `${progress}%` }} />
                                         </div>
                                         <div className="flex justify-between mt-2 text-[8px] font-bold">
-                                            <span className={progress >= 15 ? 'text-green-500' : 'text-slate-300'}>Commandé</span>
-                                            <span className={progress >= 40 ? 'text-green-500' : 'text-slate-300'}>Confirmé</span>
-                                            <span className={progress >= 75 ? 'text-orange-500' : 'text-slate-300'}>En route</span>
+                                            <span className={progress >= 10 ? 'text-green-500' : 'text-slate-300'}>Commandé</span>
+                                            <span className={progress >= 30 ? 'text-green-500' : 'text-slate-300'}>Confirmé</span>
+                                            <span className={progress >= 55 ? 'text-purple-500' : 'text-slate-300'}>Expédié</span>
+                                            <span className={progress >= 80 ? 'text-orange-500' : 'text-slate-300'}>En route</span>
                                             <span className={progress >= 100 ? 'text-green-500' : 'text-slate-300'}>Livré</span>
                                         </div>
                                     </div>
@@ -438,23 +550,26 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
 // =====================================================================
 // ORDERS PAGE
 // =====================================================================
-function BuyerOrders({ orders }: { orders: any[] }) {
+function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmReception: (order: any) => void }) {
     const [tab, setTab] = useState('all')
+
+    const needsConfirmation = orders.filter(o => o.status === 'delivered' && !o.client_confirmed)
 
     const tabs = [
         { id: 'all', label: 'Toutes', count: orders.length },
-        { id: 'active', label: 'En cours', count: orders.filter(o => ['pending', 'confirmed', 'shipped'].includes(o.status)).length },
+        { id: 'active', label: 'En cours', count: orders.filter(o => ['pending', 'confirmed', 'shipped', 'picked_up'].includes(o.status)).length },
         { id: 'delivered', label: 'Livrées', count: orders.filter(o => o.status === 'delivered').length },
     ]
 
     const filtered = tab === 'all' ? orders
-        : tab === 'active' ? orders.filter(o => ['pending', 'confirmed', 'shipped'].includes(o.status))
+        : tab === 'active' ? orders.filter(o => ['pending', 'confirmed', 'shipped', 'picked_up'].includes(o.status))
             : orders.filter(o => o.status === tab)
 
     const statusMap: Record<string, { label: string; style: string }> = {
         pending: { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' },
         confirmed: { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' },
-        shipped: { label: 'En livraison', style: 'bg-orange-100 text-orange-700' },
+        shipped: { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' },
+        picked_up: { label: 'En livraison 🏍️', style: 'bg-violet-100 text-violet-700' },
         delivered: { label: 'Livrée', style: 'bg-green-100 text-green-700' },
         rejected: { label: 'Rejetée', style: 'bg-red-100 text-red-700' },
     }
@@ -462,7 +577,8 @@ function BuyerOrders({ orders }: { orders: any[] }) {
     const steps = [
         { id: 'pending', label: 'En attente', icon: Clock },
         { id: 'confirmed', label: 'Confirmé', icon: CheckCircle2 },
-        { id: 'shipped', label: 'En route', icon: Truck },
+        { id: 'shipped', label: 'Expédié', icon: Truck },
+        { id: 'picked_up', label: 'En route', icon: TruckIcon },
         { id: 'delivered', label: 'Livré', icon: Package },
     ]
 
@@ -542,6 +658,23 @@ function BuyerOrders({ orders }: { orders: any[] }) {
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Bouton confirmer réception */}
+                                {order.status === 'delivered' && !order.client_confirmed && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <button
+                                            onClick={() => onConfirmReception(order)}
+                                            className="w-full bg-green-600 text-white px-6 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20"
+                                        >
+                                            📦 Confirmer la réception & noter
+                                        </button>
+                                    </div>
+                                )}
+                                {order.status === 'delivered' && order.client_confirmed && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <p className="text-[10px] font-black uppercase text-green-600 text-center">✅ Réception confirmée</p>
+                                    </div>
+                                )}
                             </div>
                         )
                     })}
@@ -751,8 +884,9 @@ function FollowingPage({ shops }: { shops: any[] }) {
 // =====================================================================
 // NOTIFICATIONS (based on order activity)
 // =====================================================================
-function NotificationsPage({ orders }: { orders: any[] }) {
-    const notifs = orders.slice(0, 10).map((order: any) => {
+function NotificationsPage({ orders, negotiations = [] }: { orders: any[]; negotiations?: any[] }) {
+    // Notifications commandes
+    const orderNotifs = orders.slice(0, 10).map((order: any) => {
         const statusInfo: Record<string, { icon: any; title: string; color: string }> = {
             pending: { icon: Clock, title: 'Commande en attente', color: 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' },
             confirmed: { icon: CheckCircle2, title: 'Commande confirmée', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
@@ -763,26 +897,55 @@ function NotificationsPage({ orders }: { orders: any[] }) {
         const firstItem = order.items?.[0]
         return {
             id: order.id,
+            type: 'order' as const,
             Icon: info.icon,
             title: info.title,
             desc: `${firstItem?.name || 'Article'} - ${fmt(order.total_amount)} FCFA`,
-            time: `${new Date(order.updated_at || order.created_at).toLocaleDateString('fr-FR')} à ${new Date(order.updated_at || order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+            time: new Date(order.updated_at || order.created_at).getTime(),
+            timeLabel: `${new Date(order.updated_at || order.created_at).toLocaleDateString('fr-FR')} à ${new Date(order.updated_at || order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
             color: info.color,
             isRecent: Date.now() - new Date(order.updated_at || order.created_at).getTime() < 86400000 * 3,
         }
     })
 
+    // Notifications négociations
+    const negNotifs = negotiations.map((neg: any) => {
+        const productName = neg.products?.name || 'Produit'
+        const statusMap: Record<string, { icon: any; title: string; color: string }> = {
+            en_attente: { icon: Clock, title: 'Offre envoyée', color: 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' },
+            accepte: { icon: CheckCircle2, title: 'Offre acceptée !', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+            refuse: { icon: AlertCircle, title: 'Offre refusée', color: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
+        }
+        const info = statusMap[neg.status] || statusMap.en_attente
+        return {
+            id: `neg-${neg.id}`,
+            type: 'negotiation' as const,
+            Icon: info.icon,
+            title: info.title,
+            desc: `${productName} — ${neg.proposed_price?.toLocaleString('fr-FR')} FCFA${neg.status === 'accepte' ? ' (rendez-vous sur le produit pour acheter)' : ''}`,
+            time: new Date(neg.updated_at || neg.created_at).getTime(),
+            timeLabel: `${new Date(neg.updated_at || neg.created_at).toLocaleDateString('fr-FR')} à ${new Date(neg.updated_at || neg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
+            color: info.color,
+            isRecent: Date.now() - new Date(neg.updated_at || neg.created_at).getTime() < 86400000 * 3,
+            productId: neg.product_id,
+        }
+    })
+
+    // Fusionner et trier par date décroissante
+    const allNotifs = [...orderNotifs, ...negNotifs].sort((a, b) => b.time - a.time)
+
     return (
         <div className="p-4 md:p-8">
             <div className="mb-6">
                 <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Notifications</h2>
-                <p className="text-sm text-slate-400 font-bold mt-1">{notifs.filter(n => n.isRecent).length} récentes</p>
+                <p className="text-sm text-slate-400 font-bold mt-1">{allNotifs.filter(n => n.isRecent).length} récentes</p>
             </div>
 
-            {notifs.length > 0 ? (
+            {allNotifs.length > 0 ? (
                 <div className="space-y-2">
-                    {notifs.map(n => {
+                    {allNotifs.map(n => {
                         const Icon = n.Icon
+                        const isNeg = n.type === 'negotiation'
                         return (
                             <div key={n.id} className={`flex items-start gap-4 p-4 rounded-2xl border transition-all ${n.isRecent ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'border-transparent'}`}>
                                 <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${n.color}`}>
@@ -791,10 +954,16 @@ function NotificationsPage({ orders }: { orders: any[] }) {
                                 <div className="flex-1">
                                     <div className="flex items-center gap-2">
                                         <p className={`text-sm font-bold ${n.isRecent ? 'dark:text-white' : 'text-slate-500'}`}>{n.title}</p>
+                                        {isNeg && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">Négociation</span>}
                                         {n.isRecent && <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
                                     </div>
                                     <p className="text-xs text-slate-400 mt-0.5">{n.desc}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">{n.time}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">{n.timeLabel}</p>
+                                    {isNeg && 'productId' in n && n.productId && (
+                                        <Link href={`/product/${n.productId}`} className="inline-block mt-2 text-[10px] font-black uppercase text-orange-500 hover:underline">
+                                            Voir le produit →
+                                        </Link>
+                                    )}
                                 </div>
                             </div>
                         )

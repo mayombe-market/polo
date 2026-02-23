@@ -109,6 +109,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
     const getStatusDetails = (status: string) => {
         switch (status) {
             case 'delivered': return { label: 'Livrée', style: 'bg-green-100 text-green-700' }
+            case 'picked_up': return { label: 'En livraison', style: 'bg-violet-100 text-violet-700' }
             case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
             case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
             default: return { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' }
@@ -152,6 +153,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                     { id: 'all', label: 'Toutes' },
                     { id: 'confirmed', label: 'Confirmées' },
                     { id: 'shipped', label: 'Expédiées' },
+                    { id: 'picked_up', label: 'En livraison' },
                     { id: 'delivered', label: 'Livrées' }
                 ].map((f) => (
                     <button
@@ -251,18 +253,30 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                         )}
                                     </div>
                                     <div className="flex gap-2 w-full sm:w-auto flex-wrap">
-                                        {order.status !== 'delivered' && (
+                                        {/* Vendeur peut seulement marquer "shipped" — le logisticien gère la suite */}
+                                        {order.status === 'confirmed' && (
                                             <button
-                                                onClick={() => {
-                                                    const nextStatus = order.status === 'confirmed' ? 'shipped' : order.status === 'shipped' ? 'delivered' : 'confirmed'
-                                                    updateStatus(order.id, nextStatus)
-                                                }}
+                                                onClick={() => updateStatus(order.id, 'shipped')}
                                                 disabled={updating === order.id}
                                                 className="flex-1 sm:flex-none bg-black dark:bg-white text-white dark:text-black px-6 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-600 hover:text-white transition-all shadow-xl"
                                             >
                                                 {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
-                                                {order.status === 'confirmed' ? 'Expédier' : order.status === 'shipped' ? 'Marquer livrée' : 'Confirmer'}
+                                                Marquer expédiée
                                             </button>
+                                        )}
+                                        {order.status === 'shipped' && (
+                                            <div className="flex-1 sm:flex-none bg-violet-50 dark:bg-violet-900/20 border border-violet-200 dark:border-violet-800 px-5 py-3.5 rounded-2xl text-center">
+                                                <span className="text-[10px] font-black uppercase italic text-violet-600 dark:text-violet-400">
+                                                    🏍️ En attente du livreur
+                                                </span>
+                                            </div>
+                                        )}
+                                        {(order.status === 'picked_up') && (
+                                            <div className="flex-1 sm:flex-none bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 px-5 py-3.5 rounded-2xl text-center">
+                                                <span className="text-[10px] font-black uppercase italic text-blue-600 dark:text-blue-400">
+                                                    🏍️ En cours de livraison
+                                                </span>
+                                            </div>
                                         )}
                                         <button
                                             onClick={() => generateInvoice(order)}

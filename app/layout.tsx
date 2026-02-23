@@ -1,6 +1,7 @@
 import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind directives
 import { Inter } from 'next/font/google'
 import { CartProvider } from '@/hooks/userCart'
+import Script from 'next/script'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -56,6 +57,22 @@ export const metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
+      {process.env.NEXT_PUBLIC_GA_ID && (
+        <>
+          <Script
+            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
+            strategy="afterInteractive"
+          />
+          <Script id="google-analytics" strategy="afterInteractive">
+            {`
+              window.dataLayer = window.dataLayer || [];
+              function gtag(){dataLayer.push(arguments);}
+              gtag('js', new Date());
+              gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');
+            `}
+          </Script>
+        </>
+      )}
       <body className={`${inter.className} m-0 p-0`}>
         {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
         <header className="w-full h-4 sticky top-0 z-50 shadow-sm">

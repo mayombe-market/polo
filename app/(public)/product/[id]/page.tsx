@@ -35,6 +35,7 @@ export default function ProductDetailPage() {
     const [qty, setQty] = useState(1)
     const [activeTab, setActiveTab] = useState<'desc' | 'details' | 'reviews'>('desc')
     const [liked, setLiked] = useState(false)
+    const [negotiatedPrice, setNegotiatedPrice] = useState<number | null>(null)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -91,7 +92,8 @@ export default function ProductDetailPage() {
 
     const allImages = [product.img || product.image_url, ...(product.images_gallery || [])].filter(Boolean)
     const shopName = shop?.store_name || shop?.shop_name || shop?.full_name || 'Boutique'
-    const total = product.price * qty
+    const effectivePrice = negotiatedPrice ?? product.price
+    const total = effectivePrice * qty
 
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
         const count = reviews.filter((r: any) => r.rating === stars).length
@@ -201,6 +203,7 @@ export default function ProductDetailPage() {
                             product={product}
                             user={user}
                             shop={shop}
+                            onNegotiatedPrice={(price) => setNegotiatedPrice(price)}
                         />
                     </div>
 
@@ -493,14 +496,14 @@ export default function ProductDetailPage() {
                 {/* Add to cart */}
                 <div className="flex-1 min-w-0">
                     <AddToCartButton
-                        product={product}
+                        product={{ ...product, price: effectivePrice }}
                         selectedVariant={{ size: selectedSize, color: selectedColor }}
                     />
                 </div>
 
                 {/* Order */}
                 <div className="flex-1 min-w-0">
-                    <OrderAction product={product} shop={shop} user={user} />
+                    <OrderAction product={{ ...product, price: effectivePrice }} shop={shop} user={user} />
                 </div>
             </div>
         </div>

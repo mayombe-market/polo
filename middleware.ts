@@ -2,6 +2,25 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
+    const pathname = request.nextUrl.pathname
+
+    // ===== MODE MAINTENANCE =====
+    // Activer : mettre MAINTENANCE_MODE=true dans les variables d'env (Vercel)
+    // Désactiver : supprimer ou mettre à false
+    if (process.env.MAINTENANCE_MODE === 'true') {
+        // Laisser passer la page maintenance elle-même et les assets
+        if (pathname === '/maintenance') {
+            return NextResponse.next({ request })
+        }
+        // Laisser passer l'admin pour qu'il puisse vérifier
+        // (on ne peut pas checker le rôle sans Supabase, donc on laisse /admin passer)
+        if (pathname.startsWith('/admin')) {
+            // On continue le flow normal pour vérifier l'auth admin
+        } else {
+            return NextResponse.rewrite(new URL('/maintenance', request.url))
+        }
+    }
+
     let supabaseResponse = NextResponse.next({
         request,
     })
@@ -31,7 +50,6 @@ export async function middleware(request: NextRequest) {
 
     // IMPORTANT : getUser() rafraîchit le token auth automatiquement
     const { data: { user } } = await supabase.auth.getUser()
-    const pathname = request.nextUrl.pathname
 
     // Protection des routes vendor
     if (pathname.startsWith('/vendor')) {

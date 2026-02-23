@@ -31,7 +31,6 @@ export default function AdminLogisticians() {
     }
 
     const handleSearch = async () => {
-        if (!searchQuery.trim()) return
         setSearching(true)
         const { users } = await searchUserByEmail(searchQuery.trim())
         // Exclure les logisticiens déjà existants
@@ -92,7 +91,17 @@ export default function AdminLogisticians() {
             <div className="max-w-4xl mx-auto px-4 py-8 space-y-6">
                 {/* Bouton ajouter */}
                 <button
-                    onClick={() => setShowSearch(!showSearch)}
+                    onClick={() => {
+                        setShowSearch(!showSearch)
+                        if (!showSearch) {
+                            // Charger tous les utilisateurs au clic
+                            setSearching(true)
+                            searchUserByEmail('').then(({ users }) => {
+                                setSearchResults(users.filter((u: any) => u.role !== 'logistician'))
+                                setSearching(false)
+                            })
+                        }
+                    }}
                     className="flex items-center gap-2 bg-violet-600 text-white px-6 py-3 rounded-2xl font-black uppercase italic text-[10px] hover:bg-violet-700 transition-all shadow-lg shadow-violet-600/20"
                 >
                     <UserPlus size={14} /> Ajouter un livreur
@@ -113,7 +122,7 @@ export default function AdminLogisticians() {
                                 value={searchQuery}
                                 onChange={e => setSearchQuery(e.target.value)}
                                 onKeyDown={e => e.key === 'Enter' && handleSearch()}
-                                placeholder="Rechercher par nom..."
+                                placeholder="Filtrer par nom ou téléphone..."
                                 className="flex-1 py-3 px-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm outline-none focus:border-violet-500/40"
                             />
                             <button onClick={handleSearch} disabled={searching}
@@ -142,8 +151,8 @@ export default function AdminLogisticians() {
                                 ))}
                             </div>
                         )}
-                        {searchResults.length === 0 && searchQuery && !searching && (
-                            <p className="text-xs text-slate-400 mt-3 text-center">Aucun résultat</p>
+                        {searchResults.length === 0 && !searching && (
+                            <p className="text-xs text-slate-400 mt-3 text-center">Aucun utilisateur trouvé</p>
                         )}
                     </div>
                 )}

@@ -267,8 +267,8 @@ export async function demoteLogistician(userId: string) {
     return { success: true }
 }
 
-// Admin : rechercher un utilisateur par email pour le promouvoir
-export async function searchUserByEmail(email: string) {
+// Admin : rechercher un utilisateur pour le promouvoir
+export async function searchUserByEmail(query: string) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
@@ -282,11 +282,22 @@ export async function searchUserByEmail(email: string) {
 
     if (profile?.role !== 'admin') return { users: [] }
 
+    // Si la recherche est vide ou très courte, lister tous les buyers
+    if (query.length < 2) {
+        const { data: users } = await supabase
+            .from('profiles')
+            .select('id, full_name, first_name, phone, role')
+            .in('role', ['buyer', 'vendor'])
+            .limit(20)
+        return { users: JSON.parse(JSON.stringify(users || [])) }
+    }
+
+    // Recherche par nom, prénom ou téléphone
     const { data: users } = await supabase
         .from('profiles')
         .select('id, full_name, first_name, phone, role')
-        .or(`full_name.ilike.%${email}%,first_name.ilike.%${email}%`)
-        .limit(10)
+        .or(`full_name.ilike.%${query}%,first_name.ilike.%${query}%,phone.ilike.%${query}%`)
+        .limit(20)
 
     return { users: JSON.parse(JSON.stringify(users || [])) }
 }

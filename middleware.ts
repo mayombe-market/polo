@@ -7,7 +7,7 @@ export async function middleware(request: NextRequest) {
     // ===== MODE MAINTENANCE =====
     // Pour activer : mettre MAINTENANCE_ENABLED = true, puis git push
     // Pour désactiver : mettre MAINTENANCE_ENABLED = false, puis git push
-    const MAINTENANCE_ENABLED = true
+    const MAINTENANCE_ENABLED = false
     if (MAINTENANCE_ENABLED) {
         // Laisser passer la page maintenance elle-même et les assets
         if (pathname === '/maintenance') {

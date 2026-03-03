@@ -2,7 +2,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { sendPickupNotificationEmail, sendDeliveryConfirmationRequestEmail } from '@/app/actions/emails'
+import { sendPickupNotificationEmail, sendDeliveryConfirmationRequestEmail, sendVendorDeliveryNotificationEmail } from '@/app/actions/emails'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -127,7 +127,7 @@ export async function markDelivered(orderId: string) {
 
     const { data: order } = await supabase
         .from('orders')
-        .select('logistician_id, status, customer_name, customer_email, items')
+        .select('logistician_id, status, customer_name, customer_email, items, vendor_payout, city')
         .eq('id', orderId)
         .single()
 
@@ -146,14 +146,34 @@ export async function markDelivered(orderId: string) {
     if (error) return { error: error.message }
 
     // Notifier le client pour confirmer la réception
+    const productName = order.items?.[0]?.name || 'votre commande'
     if (order.customer_email) {
-        const productName = order.items?.[0]?.name || 'votre commande'
         sendDeliveryConfirmationRequestEmail(
             order.customer_email,
             order.customer_name,
             orderId,
             productName
         ).catch(() => {})
+    }
+
+    // Notifier le vendeur que sa commande a été livrée
+    const sellerId = order.items?.[0]?.seller_id
+    if (sellerId) {
+        const { data: sellerProfile } = await supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', sellerId)
+            .single()
+
+        if (sellerProfile?.email) {
+            sendVendorDeliveryNotificationEmail(
+                sellerProfile.email,
+                sellerProfile.full_name || 'Vendeur',
+                productName,
+                order.vendor_payout || 0,
+                order.city || ''
+            ).catch(() => {})
+        }
     }
 
     return { success: true }

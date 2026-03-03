@@ -14,6 +14,8 @@ const mesChoix: Record<string, string[]> = {
     "Pharmacie & Santé": ["Matériel Médical", "Médicaments & Soins", "Boissons"],
     "Électroménager": ["Cuisinières", "Réfrigérateurs", "Micro-ondes", "Lave-linge"],
     "Maison & Déco": ["Salons & Canapés", "Salle de bain", "Décoration", "Meubles"],
+    "Pâtisserie": ["Gâteaux", "Viennoiseries", "Pâtisseries traditionnelles", "Sur commande"],
+    "Immobilier": ["Appartements", "Maisons", "Terrains", "Locaux commerciaux"],
 }
 
 const STEPS = [

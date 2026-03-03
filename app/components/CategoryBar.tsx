@@ -2,7 +2,7 @@
 
 import { useSearchParams, useRouter } from 'next/navigation'
 
-const categories = ['Tout', 'Perruques', 'Téléphones', 'Beauté', 'Accessoires']
+const categories = ['Tout', 'Perruques', 'Téléphones', 'Beauté', 'Accessoires', 'Pharmacie', 'Pâtisserie', 'Immobilier']
 
 export default function CategoryBar() {
     const searchParams = useSearchParams()

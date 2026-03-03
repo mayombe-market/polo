@@ -335,6 +335,52 @@ export async function sendDeliveryConfirmationRequestEmail(
     }
 }
 
+// Email de notification au vendeur quand commande livrée
+export async function sendVendorDeliveryNotificationEmail(
+    vendorEmail: string,
+    vendorName: string,
+    productName: string,
+    vendorPayout: number,
+    customerCity: string
+) {
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: vendorEmail,
+            subject: `Commande livrée avec succès ! — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+
+                    <div style="padding: 30px; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: #22c55e20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 28px;">✅</span>
+                        </div>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${vendorName}</h2>
+                        <p style="color: #64748b; font-size: 14px;">Votre produit "<strong>${productName}</strong>" a été livré avec succès au client à ${customerCity} !</p>
+
+                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; margin: 24px 0;">
+                            <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; margin: 0 0 8px 0;">Votre revenu</p>
+                            <p style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 0;">${vendorPayout.toLocaleString('fr-FR')} FCFA</p>
+                            <p style="font-size: 11px; color: #64748b; margin: 8px 0 0 0;">Les fonds seront libérés sous 48h.</p>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email vendeur livraison:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de réponse à une négociation (envoyé à l'acheteur)
 export async function sendNegotiationResponseEmail(
     buyerEmail: string,

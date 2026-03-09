@@ -46,14 +46,15 @@ export default function ProductCard({ product }: { product: Product }) {
                 </div>
 
                 {/* BADGES */}
-                <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
+                <div className="absolute top-0 left-0 flex flex-col items-start gap-1.5 z-10">
                     {hasPromo && (
-                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg animate-pulse">
-                            -{product.promo_percentage}%
+                        <div className="bg-red-600 text-white font-black uppercase shadow-lg rounded-tl-[1.5rem] rounded-br-2xl px-4 py-2.5 flex items-center gap-1.5">
+                            <span className="text-[10px] md:text-xs tracking-wide">🔥 PROMO</span>
+                            <span className="text-sm md:text-base font-black">-{product.promo_percentage}%</span>
                         </div>
                     )}
                     {isOutOfStock && (
-                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg">
+                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg ml-4 mt-2">
                             Épuisé
                         </div>
                     )}

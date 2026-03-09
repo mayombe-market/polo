@@ -5,7 +5,8 @@ import Link from 'next/link'
 import Image from 'next/image'
 import AuthModal from '@/app/components/AuthModal'
 import ProductCard from '@/app/components/ProductCard'
-import { Truck, Store, ArrowRight } from 'lucide-react'
+import { Truck, Store, ArrowRight, Flame } from 'lucide-react'
+import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 interface ClientHomePageProps {
     ads: any[]
@@ -13,9 +14,10 @@ interface ClientHomePageProps {
     categories: any[]
     newProducts: any[]
     popularProducts: any[]
+    promoProducts: any[]
 }
 
-export default function ClientHomePage({ ads, topProducts, categories, newProducts, popularProducts }: ClientHomePageProps) {
+export default function ClientHomePage({ ads, topProducts, categories, newProducts, popularProducts, promoProducts }: ClientHomePageProps) {
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
@@ -55,23 +57,40 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
             <section className="max-w-7xl mx-auto px-4">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">🔥 Top 5 de la semaine</h2>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {topProducts?.map((product) => (
-                        <Link
-                            href={`/product/${product.id}`}
-                            key={product.id}
-                            className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
-                        >
-                            <div className="relative overflow-hidden aspect-square">
-                                <Image src={product.img || product.image_url || '/placeholder-image.svg'} alt={product.name} fill sizes="(max-width: 768px) 50vw, 20vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
-                            </div>
-                            <div className="p-3">
-                                <h3 className="font-semibold text-sm dark:text-gray-200 truncate">{product.name}</h3>
-                                <p className="text-green-600 font-bold text-sm">
-                                    {product.price?.toLocaleString('fr-FR')} FCFA
-                                </p>
-                            </div>
-                        </Link>
-                    ))}
+                    {topProducts?.map((product) => {
+                        const hasPromo = isPromoActive(product)
+                        const promoPrice = hasPromo ? getPromoPrice(product) : product.price
+                        return (
+                            <Link
+                                href={`/product/${product.id}`}
+                                key={product.id}
+                                className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
+                            >
+                                <div className="relative overflow-hidden aspect-square">
+                                    <Image src={product.img || product.image_url || '/placeholder-image.svg'} alt={product.name} fill sizes="(max-width: 768px) 50vw, 20vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                    {hasPromo && (
+                                        <div className="absolute top-0 left-0 bg-red-600 text-white font-black uppercase rounded-br-xl px-2.5 py-1.5 flex items-center gap-1 z-10">
+                                            <span className="text-[8px]">🔥</span>
+                                            <span className="text-[9px]">-{product.promo_percentage}%</span>
+                                        </div>
+                                    )}
+                                </div>
+                                <div className="p-3">
+                                    <h3 className="font-semibold text-sm dark:text-gray-200 truncate">{product.name}</h3>
+                                    {hasPromo ? (
+                                        <div>
+                                            <p className="text-slate-400 text-xs line-through">{product.price?.toLocaleString('fr-FR')} F</p>
+                                            <p className="text-red-500 font-bold text-sm">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
+                                        </div>
+                                    ) : (
+                                        <p className="text-green-600 font-bold text-sm">
+                                            {product.price?.toLocaleString('fr-FR')} FCFA
+                                        </p>
+                                    )}
+                                </div>
+                            </Link>
+                        )
+                    })}
                 </div>
             </section>
 
@@ -100,6 +119,31 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                     </Link>
                 </div>
             </section>
+
+            {/* ===================== PROMOTIONS ===================== */}
+            {promoProducts.length > 0 && (
+                <section className="max-w-7xl mx-auto px-4">
+                    <div className="flex items-center justify-between mb-8">
+                        <div>
+                            <div className="flex items-center gap-2">
+                                <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Promotions</h2>
+                                <span className="bg-red-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full animate-pulse">
+                                    🔥 En cours
+                                </span>
+                            </div>
+                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">Les meilleures offres du moment</p>
+                        </div>
+                        <Link href="/search" className="bg-red-50 dark:bg-red-500/10 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center gap-2">
+                            Voir tout <ArrowRight size={12} />
+                        </Link>
+                    </div>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {promoProducts.map((product: any) => (
+                            <ProductCard key={product.id} product={product} />
+                        ))}
+                    </div>
+                </section>
+            )}
 
             {/* ===================== NOUVEAUTÉS ===================== */}
             {newProducts.length > 0 && (

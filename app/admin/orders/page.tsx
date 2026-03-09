@@ -96,10 +96,17 @@ export default function AdminOrders() {
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
                 const order = payload.new as any
                 setOrders(prev => [order, ...prev])
-                const desc = `${order.customer_name} - ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
-                playNewOrderSound()
-                toast.success('Nouvelle commande !', { description: desc, duration: 8000 })
-                sendNotification('Nouvelle commande !', desc)
+                if (order.order_type === 'subscription') {
+                    toast.info('Nouvel abonnement vendeur', {
+                        description: `${order.customer_name} — ${order.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                        duration: 5000
+                    })
+                } else {
+                    const desc = `${order.customer_name} - ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+                    playNewOrderSound()
+                    toast.success('Nouvelle commande !', { description: desc, duration: 8000 })
+                    sendNotification('Nouvelle commande !', desc)
+                }
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
                 setOrders(prev => prev.map(o => o.id === (payload.new as any).id ? { ...o, ...payload.new } : o))
@@ -222,17 +229,23 @@ export default function AdminOrders() {
         }
     }
 
-    // Statistiques
-    const confirmedOrders = orders.filter(o => o.status !== 'pending')
+    // Séparer commandes produit et abonnements
+    const productOrders = orders.filter(o => o.order_type !== 'subscription')
+    const subscriptionOrders = orders.filter(o => o.order_type === 'subscription')
+
+    // Statistiques (commandes produit uniquement)
+    const confirmedOrders = productOrders.filter(o => o.status !== 'pending')
     const totalRevenue = confirmedOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0)
     const totalCommissions = confirmedOrders.reduce((sum, o) => sum + (o.commission_amount || Math.round((o.total_amount || 0) * 0.10)), 0)
-    const pendingPayouts = orders.filter(o => o.status === 'delivered' && o.payout_status === 'pending').length
+    const pendingPayouts = productOrders.filter(o => o.status === 'delivered' && o.payout_status === 'pending').length
 
     // Filtrage
-    const filteredOrders = orders.filter(order => {
-        if (activeFilter === 'all') return true
-        return order.status === activeFilter
-    })
+    const filteredOrders = (() => {
+        if (activeFilter === 'subscriptions') return subscriptionOrders
+        const base = productOrders
+        if (activeFilter === 'all') return base
+        return base.filter(order => order.status === activeFilter)
+    })()
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">
@@ -258,7 +271,7 @@ export default function AdminOrders() {
                 {/* STATS */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Commandes', val: orders.length, icon: <Package size={18} />, color: 'text-slate-600' },
+                        { label: 'Commandes', val: productOrders.length, icon: <Package size={18} />, color: 'text-slate-600' },
                         { label: 'CA Total', val: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: <DollarSign size={18} />, color: 'text-green-600' },
                         { label: 'Commissions', val: `${totalCommissions.toLocaleString('fr-FR')} F`, icon: <Wallet size={18} />, color: 'text-orange-600' },
                         { label: 'Versements en attente', val: pendingPayouts, icon: <Clock size={18} />, color: 'text-amber-600' },
@@ -280,18 +293,28 @@ export default function AdminOrders() {
                         { id: 'shipped', label: 'Expédiées' },
                         { id: 'picked_up', label: 'Récupérées' },
                         { id: 'delivered', label: 'Livrées' },
-                    ].map((f) => (
+                        { id: 'subscriptions', label: '🔷 Abonnements' },
+                    ].map((f) => {
+                        const count = f.id === 'all'
+                            ? productOrders.length
+                            : f.id === 'subscriptions'
+                            ? subscriptionOrders.length
+                            : productOrders.filter(o => o.status === f.id).length
+                        return (
                         <button
                             key={f.id}
                             onClick={() => setActiveFilter(f.id)}
                             className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic whitespace-nowrap transition-all border ${activeFilter === f.id
-                                ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20 scale-105'
+                                ? f.id === 'subscriptions'
+                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105'
+                                    : 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20 scale-105'
                                 : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
                                 }`}
                         >
-                            {f.label} ({orders.filter(o => f.id === 'all' ? true : o.status === f.id).length})
+                            {f.label} ({count})
                         </button>
-                    ))}
+                        )
+                    })}
                 </div>
 
                 {/* LISTE DES COMMANDES */}

@@ -2,7 +2,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { sendOrderStatusEmail } from '@/app/actions/emails'
+import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail } from '@/app/actions/emails'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -45,9 +45,10 @@ export async function getVendorOrders() {
         .select('*')
         .order('created_at', { ascending: false })
 
-    // Filtrage côté SERVEUR — le client ne reçoit que ses commandes
+    // Filtrage côté SERVEUR — le client ne reçoit que ses commandes produit (pas les abonnements)
     const vendorOrders = (allOrders || []).filter(order =>
         order.status !== 'pending' &&
+        order.order_type !== 'subscription' &&
         order.items?.some((item: any) => item.seller_id === user.id)
     )
 
@@ -173,12 +174,30 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
     // Envoyer un email au client
     const { data: fullOrder } = await supabase
         .from('orders')
-        .select('customer_name, customer_email')
+        .select('customer_name, customer_email, total_amount')
         .eq('id', orderId)
         .single()
 
     if (fullOrder?.customer_email) {
-        sendOrderStatusEmail(fullOrder.customer_email, fullOrder.customer_name, orderId, 'confirmed', tracking_number).catch(() => {})
+        if (order.order_type === 'subscription' && order.subscription_plan_id) {
+            // Email spécifique abonnement avec les avantages du plan
+            const planFeatures: Record<string, string[]> = {
+                starter: ['30 produits maximum', 'Commission 10% par vente', 'Statistiques basiques', 'Support par email', '1 code promo / mois'],
+                pro: ['100 produits maximum', 'Commission 7% par vente', 'Badge vérifié', 'Priorité dans le feed', 'Stats avancées & export', 'Support WhatsApp'],
+                premium: ['Produits illimités', 'Commission 4% par vente', 'Badge vérifié', 'Priorité maximale', 'Stats avancées & export', 'Manager dédié', 'Produits sponsorisés'],
+            }
+            const planNames: Record<string, string> = { starter: 'Starter', pro: 'Pro', premium: 'Premium' }
+            const planId = order.subscription_plan_id
+            sendSubscriptionConfirmationEmail(
+                fullOrder.customer_email,
+                fullOrder.customer_name,
+                planNames[planId] || planId,
+                fullOrder.total_amount || 0,
+                planFeatures[planId] || []
+            ).catch(() => {})
+        } else {
+            sendOrderStatusEmail(fullOrder.customer_email, fullOrder.customer_name, orderId, 'confirmed', tracking_number).catch(() => {})
+        }
     }
 
     return { success: true, tracking_number }

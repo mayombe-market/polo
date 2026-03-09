@@ -335,6 +335,61 @@ export async function sendDeliveryConfirmationRequestEmail(
     }
 }
 
+// Email de confirmation d'abonnement vendeur
+export async function sendSubscriptionConfirmationEmail(
+    vendorEmail: string,
+    vendorName: string,
+    planName: string,
+    planPrice: number,
+    features: string[]
+) {
+    const featuresHtml = features
+        .map(f => `<div style="display: flex; align-items: center; gap: 10px; padding: 8px 0;">
+            <span style="width: 22px; height: 22px; border-radius: 8px; background: rgba(34,197,94,0.15); color: #22C55E; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;">✓</span>
+            <span style="color: #64748b; font-size: 13px;">${f}</span>
+        </div>`)
+        .join('')
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: vendorEmail,
+            subject: `Plan ${planName} activé ! — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+
+                    <div style="padding: 30px; text-align: center;">
+                        <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #f97316, #ea580c); border-radius: 22px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 36px;">🚀</span>
+                        </div>
+                        <h2 style="color: #0f172a; margin-bottom: 8px; font-size: 22px;">Félicitations ${vendorName} !</h2>
+                        <p style="color: #64748b; font-size: 15px; margin-bottom: 4px;">Votre plan <strong style="color: #f97316;">${planName}</strong> est maintenant actif.</p>
+                        <p style="color: #94a3b8; font-size: 13px;">Paiement de ${planPrice.toLocaleString('fr-FR')} FCFA confirmé.</p>
+
+                        <div style="background: #f8fafc; padding: 24px; border-radius: 16px; margin: 28px 0; text-align: left;">
+                            <p style="font-size: 11px; color: #f97316; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 16px 0;">Vos avantages</p>
+                            ${featuresHtml}
+                        </div>
+
+                        <p style="color: #64748b; font-size: 13px; margin-top: 20px;">Connectez-vous à votre dashboard pour profiter de vos nouveaux avantages.</p>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email confirmation abonnement:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de notification au vendeur quand commande livrée
 export async function sendVendorDeliveryNotificationEmail(
     vendorEmail: string,

@@ -10,7 +10,7 @@ import {
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder } from '@/app/actions/orders'
+import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription } from '@/app/actions/orders'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 
@@ -206,6 +206,25 @@ export default function AdminOrders() {
             toast.error('Erreur lors de l\'assignation')
         } finally {
             setAssigningOrder(null)
+        }
+    }
+
+    // Annuler un abonnement vendeur
+    const cancelSubscription = async (orderId: string) => {
+        if (!confirm('Annuler cet abonnement ? Le vendeur repassera en plan gratuit.')) return
+        setUpdating(orderId)
+        try {
+            const result = await adminCancelSubscription(orderId)
+            if (result.error) {
+                toast.error(`Erreur: ${result.error}`)
+                return
+            }
+            setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: 'rejected' } : o))
+            toast.success('Abonnement annulé — vendeur repassé en plan gratuit')
+        } catch (err: any) {
+            toast.error('Erreur: ' + (err?.message || 'Impossible d\'annuler'))
+        } finally {
+            setUpdating(null)
         }
     }
 
@@ -571,6 +590,18 @@ export default function AdminOrders() {
                                                     </span>
                                                 </div>
                                             )
+                                        )}
+
+                                        {/* Annuler abonnement */}
+                                        {isSubscription && order.status === 'confirmed' && (
+                                            <button
+                                                onClick={() => cancelSubscription(order.id)}
+                                                disabled={updating === order.id}
+                                                className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
+                                            >
+                                                {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                                                Annuler l'abonnement
+                                            </button>
                                         )}
 
                                         {/* Reçu PDF */}

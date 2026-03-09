@@ -741,3 +741,59 @@ export async function createProduct(input: {
     if (error) return { error: error.message }
     return { product: JSON.parse(JSON.stringify(product)) }
 }
+
+// Admin : annuler l'abonnement d'un vendeur
+export async function adminCancelSubscription(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    // Récupérer la commande d'abonnement
+    const { data: order } = await supabase
+        .from('orders')
+        .select('user_id, order_type, subscription_plan_id')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+    if (order.order_type !== 'subscription') return { error: 'Cette commande n\'est pas un abonnement' }
+
+    // Remettre le profil vendeur en plan gratuit
+    const { error: profileError } = await supabase
+        .from('profiles')
+        .update({
+            subscription_plan: null,
+            subscription_start_date: null,
+            subscription_end_date: null,
+            subscription_billing: null,
+        })
+        .eq('id', order.user_id)
+
+    if (profileError) return { error: profileError.message }
+
+    // Marquer la commande comme rejetée
+    await supabase
+        .from('orders')
+        .update({ status: 'rejected' })
+        .eq('id', orderId)
+
+    // Notifier le vendeur
+    createNotification(
+        order.user_id,
+        'subscription_cancelled',
+        'Abonnement annulé',
+        'Votre abonnement a été annulé par l\'administrateur. Vous êtes repassé en plan gratuit.',
+        '/account/dashboard?tab=subscription'
+    ).catch(() => {})
+
+    return { success: true }
+}

@@ -34,105 +34,105 @@ INSERT INTO category (name, img) VALUES
 
 -- 4. Insérer les sous-catégories
 -- Mode & Beauté
-INSERT INTO sub_category (name, category_id) SELECT 'Perruques & Mèches', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Vêtements Femme', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Vêtements Homme', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Chaussures', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Sacs & Pochettes', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Bijoux & Montres', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Cosmétiques & Maquillage', id FROM category WHERE name = 'Mode & Beauté';
-INSERT INTO sub_category (name, category_id) SELECT 'Parfums', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Perruques & Mèches', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vêtements Femme', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vêtements Homme', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Chaussures', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Sacs & Pochettes', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Bijoux & Montres', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Cosmétiques & Maquillage', id FROM category WHERE name = 'Mode & Beauté';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Parfums', id FROM category WHERE name = 'Mode & Beauté';
 
 -- High-Tech
-INSERT INTO sub_category (name, category_id) SELECT 'Smartphones & Tablettes', id FROM category WHERE name = 'High-Tech';
-INSERT INTO sub_category (name, category_id) SELECT 'Ordinateurs & Laptops', id FROM category WHERE name = 'High-Tech';
-INSERT INTO sub_category (name, category_id) SELECT 'Accessoires Tech', id FROM category WHERE name = 'High-Tech';
-INSERT INTO sub_category (name, category_id) SELECT 'Audio & Casques', id FROM category WHERE name = 'High-Tech';
-INSERT INTO sub_category (name, category_id) SELECT 'TV & Écrans', id FROM category WHERE name = 'High-Tech';
-INSERT INTO sub_category (name, category_id) SELECT 'Consoles & Jeux vidéo', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Smartphones & Tablettes', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Ordinateurs & Laptops', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Accessoires Tech', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Audio & Casques', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'TV & Écrans', id FROM category WHERE name = 'High-Tech';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Consoles & Jeux vidéo', id FROM category WHERE name = 'High-Tech';
 
 -- Pharmacie & Santé
-INSERT INTO sub_category (name, category_id) SELECT 'Matériel Médical', id FROM category WHERE name = 'Pharmacie & Santé';
-INSERT INTO sub_category (name, category_id) SELECT 'Médicaments & Soins', id FROM category WHERE name = 'Pharmacie & Santé';
-INSERT INTO sub_category (name, category_id) SELECT 'Compléments alimentaires', id FROM category WHERE name = 'Pharmacie & Santé';
-INSERT INTO sub_category (name, category_id) SELECT 'Hygiène & Bien-être', id FROM category WHERE name = 'Pharmacie & Santé';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Matériel Médical', id FROM category WHERE name = 'Pharmacie & Santé';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Médicaments & Soins', id FROM category WHERE name = 'Pharmacie & Santé';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Compléments alimentaires', id FROM category WHERE name = 'Pharmacie & Santé';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Hygiène & Bien-être', id FROM category WHERE name = 'Pharmacie & Santé';
 
 -- Électroménager
-INSERT INTO sub_category (name, category_id) SELECT 'Cuisinières & Fours', id FROM category WHERE name = 'Électroménager';
-INSERT INTO sub_category (name, category_id) SELECT 'Réfrigérateurs & Congélateurs', id FROM category WHERE name = 'Électroménager';
-INSERT INTO sub_category (name, category_id) SELECT 'Micro-ondes', id FROM category WHERE name = 'Électroménager';
-INSERT INTO sub_category (name, category_id) SELECT 'Lave-linge', id FROM category WHERE name = 'Électroménager';
-INSERT INTO sub_category (name, category_id) SELECT 'Climatiseurs & Ventilateurs', id FROM category WHERE name = 'Électroménager';
-INSERT INTO sub_category (name, category_id) SELECT 'Petit électroménager', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Cuisinières & Fours', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Réfrigérateurs & Congélateurs', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Micro-ondes', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Lave-linge', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Climatiseurs & Ventilateurs', id FROM category WHERE name = 'Électroménager';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Petit électroménager', id FROM category WHERE name = 'Électroménager';
 
 -- Maison & Déco
-INSERT INTO sub_category (name, category_id) SELECT 'Salons & Canapés', id FROM category WHERE name = 'Maison & Déco';
-INSERT INTO sub_category (name, category_id) SELECT 'Lits & Matelas', id FROM category WHERE name = 'Maison & Déco';
-INSERT INTO sub_category (name, category_id) SELECT 'Meubles', id FROM category WHERE name = 'Maison & Déco';
-INSERT INTO sub_category (name, category_id) SELECT 'Décoration', id FROM category WHERE name = 'Maison & Déco';
-INSERT INTO sub_category (name, category_id) SELECT 'Salle de bain', id FROM category WHERE name = 'Maison & Déco';
-INSERT INTO sub_category (name, category_id) SELECT 'Cuisine & Arts de la table', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Salons & Canapés', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Lits & Matelas', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Meubles', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Décoration', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Salle de bain', id FROM category WHERE name = 'Maison & Déco';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Cuisine & Arts de la table', id FROM category WHERE name = 'Maison & Déco';
 
 -- Pâtisserie & Traiteur
-INSERT INTO sub_category (name, category_id) SELECT 'Gâteaux', id FROM category WHERE name = 'Pâtisserie & Traiteur';
-INSERT INTO sub_category (name, category_id) SELECT 'Viennoiseries', id FROM category WHERE name = 'Pâtisserie & Traiteur';
-INSERT INTO sub_category (name, category_id) SELECT 'Pâtisseries traditionnelles', id FROM category WHERE name = 'Pâtisserie & Traiteur';
-INSERT INTO sub_category (name, category_id) SELECT 'Sur commande', id FROM category WHERE name = 'Pâtisserie & Traiteur';
-INSERT INTO sub_category (name, category_id) SELECT 'Plats traiteur', id FROM category WHERE name = 'Pâtisserie & Traiteur';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Gâteaux', id FROM category WHERE name = 'Pâtisserie & Traiteur';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Viennoiseries', id FROM category WHERE name = 'Pâtisserie & Traiteur';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Pâtisseries traditionnelles', id FROM category WHERE name = 'Pâtisserie & Traiteur';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Sur commande', id FROM category WHERE name = 'Pâtisserie & Traiteur';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Plats traiteur', id FROM category WHERE name = 'Pâtisserie & Traiteur';
 
 -- Immobilier
-INSERT INTO sub_category (name, category_id) SELECT 'Appartements', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_id) SELECT 'Maisons', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_id) SELECT 'Terrains', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_id) SELECT 'Locaux commerciaux', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_id) SELECT 'Chambres meublées', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Appartements', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Maisons', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Terrains', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Locaux commerciaux', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Chambres meublées', id FROM category WHERE name = 'Immobilier';
 
 -- Alimentation & Boissons
-INSERT INTO sub_category (name, category_id) SELECT 'Vivres frais', id FROM category WHERE name = 'Alimentation & Boissons';
-INSERT INTO sub_category (name, category_id) SELECT 'Vivres secs', id FROM category WHERE name = 'Alimentation & Boissons';
-INSERT INTO sub_category (name, category_id) SELECT 'Boissons', id FROM category WHERE name = 'Alimentation & Boissons';
-INSERT INTO sub_category (name, category_id) SELECT 'Épicerie fine', id FROM category WHERE name = 'Alimentation & Boissons';
-INSERT INTO sub_category (name, category_id) SELECT 'Produits locaux', id FROM category WHERE name = 'Alimentation & Boissons';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vivres frais', id FROM category WHERE name = 'Alimentation & Boissons';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vivres secs', id FROM category WHERE name = 'Alimentation & Boissons';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Boissons', id FROM category WHERE name = 'Alimentation & Boissons';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Épicerie fine', id FROM category WHERE name = 'Alimentation & Boissons';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Produits locaux', id FROM category WHERE name = 'Alimentation & Boissons';
 
 -- Auto & Moto
-INSERT INTO sub_category (name, category_id) SELECT 'Voitures', id FROM category WHERE name = 'Auto & Moto';
-INSERT INTO sub_category (name, category_id) SELECT 'Motos & Scooters', id FROM category WHERE name = 'Auto & Moto';
-INSERT INTO sub_category (name, category_id) SELECT 'Pièces détachées', id FROM category WHERE name = 'Auto & Moto';
-INSERT INTO sub_category (name, category_id) SELECT 'Accessoires auto', id FROM category WHERE name = 'Auto & Moto';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Voitures', id FROM category WHERE name = 'Auto & Moto';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Motos & Scooters', id FROM category WHERE name = 'Auto & Moto';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Pièces détachées', id FROM category WHERE name = 'Auto & Moto';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Accessoires auto', id FROM category WHERE name = 'Auto & Moto';
 
 -- Bébé & Enfants
-INSERT INTO sub_category (name, category_id) SELECT 'Vêtements enfants', id FROM category WHERE name = 'Bébé & Enfants';
-INSERT INTO sub_category (name, category_id) SELECT 'Jouets', id FROM category WHERE name = 'Bébé & Enfants';
-INSERT INTO sub_category (name, category_id) SELECT 'Poussettes & Accessoires', id FROM category WHERE name = 'Bébé & Enfants';
-INSERT INTO sub_category (name, category_id) SELECT 'Alimentation bébé', id FROM category WHERE name = 'Bébé & Enfants';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vêtements enfants', id FROM category WHERE name = 'Bébé & Enfants';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jouets', id FROM category WHERE name = 'Bébé & Enfants';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Poussettes & Accessoires', id FROM category WHERE name = 'Bébé & Enfants';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Alimentation bébé', id FROM category WHERE name = 'Bébé & Enfants';
 
 -- Sport & Loisirs
-INSERT INTO sub_category (name, category_id) SELECT 'Équipements sportifs', id FROM category WHERE name = 'Sport & Loisirs';
-INSERT INTO sub_category (name, category_id) SELECT 'Vêtements de sport', id FROM category WHERE name = 'Sport & Loisirs';
-INSERT INTO sub_category (name, category_id) SELECT 'Fitness & Musculation', id FROM category WHERE name = 'Sport & Loisirs';
-INSERT INTO sub_category (name, category_id) SELECT 'Camping & Plein air', id FROM category WHERE name = 'Sport & Loisirs';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Équipements sportifs', id FROM category WHERE name = 'Sport & Loisirs';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Vêtements de sport', id FROM category WHERE name = 'Sport & Loisirs';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Fitness & Musculation', id FROM category WHERE name = 'Sport & Loisirs';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Camping & Plein air', id FROM category WHERE name = 'Sport & Loisirs';
 
 -- Services
-INSERT INTO sub_category (name, category_id) SELECT 'Coiffure & Esthétique', id FROM category WHERE name = 'Services';
-INSERT INTO sub_category (name, category_id) SELECT 'Réparation & Dépannage', id FROM category WHERE name = 'Services';
-INSERT INTO sub_category (name, category_id) SELECT 'Cours & Formation', id FROM category WHERE name = 'Services';
-INSERT INTO sub_category (name, category_id) SELECT 'Événementiel', id FROM category WHERE name = 'Services';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Coiffure & Esthétique', id FROM category WHERE name = 'Services';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Réparation & Dépannage', id FROM category WHERE name = 'Services';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Cours & Formation', id FROM category WHERE name = 'Services';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Événementiel', id FROM category WHERE name = 'Services';
 
 -- Fournitures & Bureau
-INSERT INTO sub_category (name, category_id) SELECT 'Papeterie', id FROM category WHERE name = 'Fournitures & Bureau';
-INSERT INTO sub_category (name, category_id) SELECT 'Imprimantes & Encre', id FROM category WHERE name = 'Fournitures & Bureau';
-INSERT INTO sub_category (name, category_id) SELECT 'Mobilier de bureau', id FROM category WHERE name = 'Fournitures & Bureau';
-INSERT INTO sub_category (name, category_id) SELECT 'Fournitures scolaires', id FROM category WHERE name = 'Fournitures & Bureau';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Papeterie', id FROM category WHERE name = 'Fournitures & Bureau';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Imprimantes & Encre', id FROM category WHERE name = 'Fournitures & Bureau';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Mobilier de bureau', id FROM category WHERE name = 'Fournitures & Bureau';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Fournitures scolaires', id FROM category WHERE name = 'Fournitures & Bureau';
 
 -- Agriculture & Élevage
-INSERT INTO sub_category (name, category_id) SELECT 'Semences & Plants', id FROM category WHERE name = 'Agriculture & Élevage';
-INSERT INTO sub_category (name, category_id) SELECT 'Engrais & Produits phyto', id FROM category WHERE name = 'Agriculture & Élevage';
-INSERT INTO sub_category (name, category_id) SELECT 'Outils agricoles', id FROM category WHERE name = 'Agriculture & Élevage';
-INSERT INTO sub_category (name, category_id) SELECT 'Animaux & Bétail', id FROM category WHERE name = 'Agriculture & Élevage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Semences & Plants', id FROM category WHERE name = 'Agriculture & Élevage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Engrais & Produits phyto', id FROM category WHERE name = 'Agriculture & Élevage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Outils agricoles', id FROM category WHERE name = 'Agriculture & Élevage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Animaux & Bétail', id FROM category WHERE name = 'Agriculture & Élevage';
 
 -- Matériaux & BTP
-INSERT INTO sub_category (name, category_id) SELECT 'Ciment & Fer', id FROM category WHERE name = 'Matériaux & BTP';
-INSERT INTO sub_category (name, category_id) SELECT 'Plomberie', id FROM category WHERE name = 'Matériaux & BTP';
-INSERT INTO sub_category (name, category_id) SELECT 'Électricité', id FROM category WHERE name = 'Matériaux & BTP';
-INSERT INTO sub_category (name, category_id) SELECT 'Peinture & Finition', id FROM category WHERE name = 'Matériaux & BTP';
-INSERT INTO sub_category (name, category_id) SELECT 'Outillage', id FROM category WHERE name = 'Matériaux & BTP';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Ciment & Fer', id FROM category WHERE name = 'Matériaux & BTP';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Plomberie', id FROM category WHERE name = 'Matériaux & BTP';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Électricité', id FROM category WHERE name = 'Matériaux & BTP';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Peinture & Finition', id FROM category WHERE name = 'Matériaux & BTP';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Outillage', id FROM category WHERE name = 'Matériaux & BTP';

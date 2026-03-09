@@ -389,18 +389,28 @@ export default function DashboardClient({ products: initialProducts, profile, us
             </aside>
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
-            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 z-50 flex justify-around py-2 px-1 safe-area-bottom">
-                {menuItems.slice(0, 5).map(item => {
+            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 z-50 flex overflow-x-auto no-scrollbar gap-1 py-2 px-2 safe-area-bottom">
+                {menuItems.map(item => {
                     const Icon = item.icon
                     const isActive = activePage === item.id
+                    const badge = item.id === 'messages' && unreadMessages > 0
+                        ? unreadMessages
+                        : item.id === 'notifs' && unreadNotifs > 0
+                        ? unreadNotifs
+                        : null
                     return (
                         <button
                             key={item.id}
                             onClick={() => setActivePage(item.id)}
-                            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all ${isActive ? 'text-orange-500' : 'text-slate-400'}`}
+                            className={`relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 ${isActive ? 'text-orange-500 bg-orange-50 dark:bg-orange-500/10' : 'text-slate-400'}`}
                         >
-                            <Icon size={20} />
-                            <span className="text-[8px] font-black uppercase">{item.label}</span>
+                            <Icon size={18} />
+                            <span className="text-[7px] font-black uppercase whitespace-nowrap">{item.label}</span>
+                            {badge && (
+                                <span className="absolute -top-1 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                    {badge > 9 ? '9+' : badge}
+                                </span>
+                            )}
                         </button>
                     )
                 })}

@@ -1,5 +1,5 @@
 'use client'
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
@@ -9,13 +9,21 @@ import {
 } from 'lucide-react'
 
 const mesChoix: Record<string, string[]> = {
-    "Mode & Beauté": ["Perruques & Mèches", "Vêtements", "Sacs", "Bijoux"],
-    "High-Tech": ["Smartphones & Tablettes", "Ordinateurs", "Accessoires", "Audio"],
-    "Pharmacie & Santé": ["Matériel Médical", "Médicaments & Soins", "Boissons"],
-    "Électroménager": ["Cuisinières", "Réfrigérateurs", "Micro-ondes", "Lave-linge"],
-    "Maison & Déco": ["Salons & Canapés", "Salle de bain", "Décoration", "Meubles"],
-    "Pâtisserie": ["Gâteaux", "Viennoiseries", "Pâtisseries traditionnelles", "Sur commande"],
-    "Immobilier": ["Appartements", "Maisons", "Terrains", "Locaux commerciaux"],
+    "Mode & Beauté": ["Perruques & Mèches", "Vêtements Femme", "Vêtements Homme", "Chaussures", "Sacs & Pochettes", "Bijoux & Montres", "Cosmétiques & Maquillage", "Parfums"],
+    "High-Tech": ["Smartphones & Tablettes", "Ordinateurs & Laptops", "Accessoires Tech", "Audio & Casques", "TV & Écrans", "Consoles & Jeux vidéo"],
+    "Pharmacie & Santé": ["Matériel Médical", "Médicaments & Soins", "Compléments alimentaires", "Hygiène & Bien-être"],
+    "Électroménager": ["Cuisinières & Fours", "Réfrigérateurs & Congélateurs", "Micro-ondes", "Lave-linge", "Climatiseurs & Ventilateurs", "Petit électroménager"],
+    "Maison & Déco": ["Salons & Canapés", "Lits & Matelas", "Meubles", "Décoration", "Salle de bain", "Cuisine & Arts de la table"],
+    "Pâtisserie & Traiteur": ["Gâteaux", "Viennoiseries", "Pâtisseries traditionnelles", "Sur commande", "Plats traiteur"],
+    "Immobilier": ["Appartements", "Maisons", "Terrains", "Locaux commerciaux", "Chambres meublées"],
+    "Alimentation & Boissons": ["Vivres frais", "Vivres secs", "Boissons", "Épicerie fine", "Produits locaux"],
+    "Auto & Moto": ["Voitures", "Motos & Scooters", "Pièces détachées", "Accessoires auto"],
+    "Bébé & Enfants": ["Vêtements enfants", "Jouets", "Poussettes & Accessoires", "Alimentation bébé"],
+    "Sport & Loisirs": ["Équipements sportifs", "Vêtements de sport", "Fitness & Musculation", "Camping & Plein air"],
+    "Services": ["Coiffure & Esthétique", "Réparation & Dépannage", "Cours & Formation", "Événementiel"],
+    "Fournitures & Bureau": ["Papeterie", "Imprimantes & Encre", "Mobilier de bureau", "Fournitures scolaires"],
+    "Agriculture & Élevage": ["Semences & Plants", "Engrais & Produits phyto", "Outils agricoles", "Animaux & Bétail"],
+    "Matériaux & BTP": ["Ciment & Fer", "Plomberie", "Électricité", "Peinture & Finition", "Outillage"],
 }
 
 const STEPS = [
@@ -69,10 +77,10 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
     const [mainImage, setMainImage] = useState<File | null>(null)
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
 
-    const supabase = createBrowserClient(
+    const supabase = useMemo(() => createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    ), [])
 
     // ===== VALIDATION PAR ÉTAPE =====
     const validateStep = (s: number): string | null => {

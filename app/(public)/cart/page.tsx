@@ -226,7 +226,7 @@ export default function CartPage() {
                                 <div key={item.id} className="bg-white dark:bg-slate-800 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-700 flex items-center gap-6">
                                     {/* Image */}
                                     <div className="relative w-24 h-24 rounded-2xl overflow-hidden bg-slate-100 dark:bg-slate-700 flex-shrink-0">
-                                        <Image src={item.img || '/placeholder-image.jpg'} alt={item.name} fill sizes="96px" className="object-cover" />
+                                        <Image src={item.img || '/placeholder-image.svg'} alt={item.name} fill sizes="96px" className="object-cover" />
                                     </div>
 
                                     {/* Infos */}

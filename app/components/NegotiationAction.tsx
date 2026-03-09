@@ -20,8 +20,6 @@ const NegotiationAction = ({ product, initialPrice, user, shop, onNegotiatedPric
     const [hasPending, setHasPending] = useState(false)
     const [checkingStatus, setCheckingStatus] = useState(true)
 
-    if (!product) return null
-
     // Vérifier si l'utilisateur a déjà une négociation acceptée ou en attente
     useEffect(() => {
         if (!user?.id || !product?.id) {
@@ -46,6 +44,9 @@ const NegotiationAction = ({ product, initialPrice, user, shop, onNegotiatedPric
         checkNegotiation()
     }, [user?.id, product?.id])
 
+    // Early return APRÈS tous les hooks (Rules of Hooks)
+    if (!product) return null
+
     const isOwnProduct = user?.id === product?.seller_id
 
     const applyDiscount = (percent: number) => {
@@ -69,27 +70,32 @@ const NegotiationAction = ({ product, initialPrice, user, shop, onNegotiatedPric
         }
 
         setSending(true)
-        const result = await sendNegotiationOffer({
-            productId: product.id,
-            sellerId: product.seller_id,
-            initialPrice: initialPrice || 0,
-            proposedPrice,
-        })
+        try {
+            const result = await sendNegotiationOffer({
+                productId: product.id,
+                sellerId: product.seller_id,
+                initialPrice: initialPrice || 0,
+                proposedPrice,
+            })
 
-        if (result.error) {
-            alert(result.error)
+            if (result.error) {
+                alert(result.error)
+                return
+            }
+
+            setIsSent(true)
+            setHasPending(true)
+
+            setTimeout(() => {
+                setIsOpen(false)
+                setIsSent(false)
+            }, 4000)
+        } catch (err) {
+            console.error('Erreur négociation:', err)
+            alert('Une erreur réseau est survenue. Réessayez.')
+        } finally {
             setSending(false)
-            return
         }
-
-        setIsSent(true)
-        setHasPending(true)
-        setSending(false)
-
-        setTimeout(() => {
-            setIsOpen(false)
-            setIsSent(false)
-        }, 4000)
     }
 
     return (

@@ -3,6 +3,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { sendPickupNotificationEmail, sendDeliveryConfirmationRequestEmail, sendVendorDeliveryNotificationEmail } from '@/app/actions/emails'
+import { createNotification } from '@/app/actions/notifications'
+import { sanitizePostgrestValue } from '@/lib/sanitize'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -127,7 +129,7 @@ export async function markDelivered(orderId: string) {
 
     const { data: order } = await supabase
         .from('orders')
-        .select('logistician_id, status, customer_name, customer_email, items, vendor_payout, city')
+        .select('logistician_id, status, customer_name, customer_email, items, vendor_payout, city, user_id')
         .eq('id', orderId)
         .single()
 
@@ -174,6 +176,14 @@ export async function markDelivered(orderId: string) {
                 order.city || ''
             ).catch(() => {})
         }
+
+        // Notification in-app vendeur
+        createNotification(sellerId, 'order_delivered', 'Commande livrée', `${productName} a été livrée au client.`, `/account/dashboard?tab=orders`).catch(() => {})
+    }
+
+    // Notification in-app acheteur
+    if (order.user_id) {
+        createNotification(order.user_id, 'order_delivered', 'Commande livrée', `Votre commande a été livrée. Confirmez la réception.`, `/account/dashboard?tab=orders`).catch(() => {})
     }
 
     return { success: true }
@@ -195,6 +205,18 @@ export async function assignLogistician(orderId: string, logisticianId: string) 
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    // Vérifier que la commande est dans un état assignable
+    const { data: order } = await supabase
+        .from('orders')
+        .select('status')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+    if (!['confirmed', 'shipped'].includes(order.status)) {
+        return { error: 'La commande doit être confirmée ou expédiée pour assigner un logisticien' }
+    }
+
     // Vérifier que le logisticien existe
     const { data: logProfile } = await supabase
         .from('profiles')
@@ -208,7 +230,7 @@ export async function assignLogistician(orderId: string, logisticianId: string) 
 
     const { error } = await supabase
         .from('orders')
-        .update({ logistician_id: logisticianId })
+        .update({ logistician_id: logisticianId, status: 'shipped' })
         .eq('id', orderId)
 
     if (error) return { error: error.message }
@@ -254,6 +276,17 @@ export async function promoteToLogistician(userId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    // Vérifier le rôle actuel de la cible
+    const { data: targetProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+    if (!targetProfile) return { error: 'Utilisateur introuvable' }
+    if (targetProfile.role === 'admin') return { error: 'Impossible de modifier un admin' }
+    if (targetProfile.role === 'logistician') return { error: 'Cet utilisateur est déjà logisticien' }
+
     const { error } = await supabase
         .from('profiles')
         .update({ role: 'logistician', updated_at: new Date().toISOString() })
@@ -277,6 +310,16 @@ export async function demoteLogistician(userId: string) {
         .single()
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    // Vérifier que la cible est bien logisticien
+    const { data: targetProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', userId)
+        .single()
+
+    if (!targetProfile) return { error: 'Utilisateur introuvable' }
+    if (targetProfile.role !== 'logistician') return { error: 'Cet utilisateur n\'est pas logisticien' }
 
     const { error } = await supabase
         .from('profiles')
@@ -312,11 +355,12 @@ export async function searchUserByEmail(query: string) {
         return { users: JSON.parse(JSON.stringify(users || [])) }
     }
 
-    // Recherche par nom, prénom ou téléphone
+    // Recherche par nom, prénom ou téléphone (input sanitisé contre injection PostgREST)
+    const safeQuery = sanitizePostgrestValue(query)
     const { data: users } = await supabase
         .from('profiles')
         .select('id, full_name, first_name, phone, role')
-        .or(`full_name.ilike.%${query}%,first_name.ilike.%${query}%,phone.ilike.%${query}%`)
+        .or(`full_name.ilike.%${safeQuery}%,first_name.ilike.%${safeQuery}%,phone.ilike.%${safeQuery}%`)
         .limit(20)
 
     return { users: JSON.parse(JSON.stringify(users || [])) }

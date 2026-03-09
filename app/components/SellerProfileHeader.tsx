@@ -3,6 +3,7 @@
 import Image from 'next/image'
 import Link from 'next/link'
 import FollowButton from './FollowButton'
+import ShareButtons from './ShareButtons'
 import StarRating from './StarRating'
 import { Store, MapPin, Calendar, ArrowLeft } from 'lucide-react'
 
@@ -99,9 +100,14 @@ export default function SellerProfileHeader({
                     </p>
                 )}
 
-                {/* Follow button */}
-                <div className="flex justify-center mt-4">
+                {/* Follow + Share buttons */}
+                <div className="flex justify-center items-center gap-3 mt-4 flex-wrap">
                     <FollowButton sellerId={profile?.id} />
+                    <ShareButtons
+                        title={storeName}
+                        text={`Découvre la boutique ${storeName} sur Mayombe Market !`}
+                        url={typeof window !== 'undefined' ? `${window.location.origin}/seller/${profile?.id}` : ''}
+                    />
                 </div>
             </div>
 

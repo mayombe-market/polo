@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import Image from 'next/image'
+import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 
 export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
 
@@ -18,10 +19,11 @@ export default async function SubCategoryPage({ params }: { params: { id: string
         .eq('id', id)
         .single()
 
-    const { data: products, error } = await supabase
-        .from('products')
-        .select('*')
-        .eq('sub_category_uuid', id)
+    const expiredIds = await getExpiredSellerIds(supabase)
+    const { data: products, error } = await excludeExpiredSellers(
+        supabase.from('products').select('*').eq('sub_category_uuid', id),
+        expiredIds
+    )
 
     return (
         <div className="max-w-7xl mx-auto px-4 py-12">
@@ -44,7 +46,7 @@ export default async function SubCategoryPage({ params }: { params: { id: string
                         >
                             <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
                                 <Image
-                                    src={product.img || '/placeholder-image.jpg'}
+                                    src={product.img || '/placeholder-image.svg'}
                                     alt={product.name}
                                     fill
                                     sizes="(max-width: 768px) 50vw, 25vw"

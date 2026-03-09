@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
 import { createBrowserClient } from '@supabase/ssr'
 import {
@@ -11,22 +12,27 @@ import {
     TrendingUp, Eye, Users, Copy, Check, Trash2,
     ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
-    Bell, Upload, X as XIcon, MessageSquare
+    Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { playNewOrderSound, playNegotiationSound } from '@/lib/notificationSound'
-import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct } from '@/app/actions/orders'
+import { playNewOrderSound, playNegotiationSound, playMessageSound } from '@/lib/notificationSound'
+import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo } from '@/app/actions/orders'
+import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
+import { getUnreadCount } from '@/app/actions/messages'
+import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
+import MessagesPanel from './MessagesPanel'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
+import { getSubscriptionStatus, getDaysRemaining } from '@/lib/subscription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
     ssr: false
 })
 
-type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'stats' | 'wallet' | 'shop' | 'settings'
+type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings'
 
 const menuItems: { id: Page; label: string; icon: any }[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -34,6 +40,8 @@ const menuItems: { id: Page; label: string; icon: any }[] = [
     { id: 'add', label: 'Ajouter', icon: Plus },
     { id: 'orders', label: 'Commandes', icon: ShoppingCart },
     { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
+    { id: 'messages', label: 'Messages', icon: MessageCircle },
+    { id: 'notifs', label: 'Notifications', icon: Bell },
     { id: 'stats', label: 'Statistiques', icon: BarChart3 },
     { id: 'wallet', label: 'Portefeuille', icon: Wallet },
     { id: 'shop', label: 'Boutique', icon: Store },
@@ -41,6 +49,7 @@ const menuItems: { id: Page; label: string; icon: any }[] = [
 ]
 
 export default function DashboardClient({ products: initialProducts, profile, user, productCount }: any) {
+    const router = useRouter()
     const [activePage, setActivePage] = useState<Page>('dashboard')
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [followerCount, setFollowerCount] = useState(0)
@@ -54,6 +63,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [orderFilter, setOrderFilter] = useState('all')
     const [negotiations, setNegotiations] = useState<any[]>([])
     const [negotiationsLoading, setNegotiationsLoading] = useState(true)
+    const [unreadMessages, setUnreadMessages] = useState(0)
+    const [unreadNotifs, setUnreadNotifs] = useState(0)
 
     // ═══ Système d'abonnement & limites ═══
     const currentPlan = profile?.subscription_plan || 'free'
@@ -61,6 +72,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const currentProductCount = products?.length || productCount || 0
     const isAtLimit = maxProducts !== -1 && currentProductCount >= maxProducts
     const isApproachingLimit = maxProducts !== -1 && currentProductCount >= maxProducts * 0.7
+
+    // ═══ Expiration abonnement ═══
+    const subscriptionStatus = getSubscriptionStatus(profile)
+    const daysRemaining = getDaysRemaining(profile?.subscription_end_date)
+    const isExpired = subscriptionStatus === 'expired'
+    const isGrace = subscriptionStatus === 'grace'
+    const totalDays = profile?.subscription_billing === 'yearly' ? 365 : 30
 
     const [showLimitWarning, setShowLimitWarning] = useState(false)
     const [showUpgradePricing, setShowUpgradePricing] = useState(false)
@@ -152,6 +170,16 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 setNegotiations(result.negotiations || [])
             } catch (err) { console.error("Erreur négociations:", err) }
             finally { setNegotiationsLoading(false) }
+
+            try {
+                const result = await getUnreadCount()
+                setUnreadMessages(result.count || 0)
+            } catch (err) { console.error("Erreur messages:", err) }
+
+            try {
+                const count = await getUnreadNotifCount()
+                setUnreadNotifs(count)
+            } catch (err) { console.error("Erreur notifs:", err) }
         }
         fetchData()
     }, [user?.id])
@@ -210,6 +238,36 @@ export default function DashboardClient({ products: initialProducts, profile, us
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${user.id}` }, (payload) => {
                 const updated = payload.new as any
                 setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
+    // Real-time messages
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('vendor-dashboard-messages')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                const msg = payload.new as any
+                if (msg.sender_id !== user.id) {
+                    setUnreadMessages(prev => prev + 1)
+                    playMessageSound()
+                    toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
+                    sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
+                }
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
+    // Real-time notifications (badge)
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('vendor-dashboard-notifs')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+                setUnreadNotifs(prev => prev + 1)
             })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
@@ -287,7 +345,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     {menuItems.map(item => {
                         const Icon = item.icon
                         const isActive = activePage === item.id
-                        const badge = item.id === 'negotiations' && pendingNegotiationsCount > 0 ? pendingNegotiationsCount : null
+                        const badge = item.id === 'negotiations' && pendingNegotiationsCount > 0
+                            ? pendingNegotiationsCount
+                            : item.id === 'messages' && unreadMessages > 0
+                                ? unreadMessages
+                                : item.id === 'notifs' && unreadNotifs > 0
+                                    ? unreadNotifs
+                                    : null
                         return (
                             <button
                                 key={item.id}
@@ -357,7 +421,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         copied={copied}
                         onCopyLink={copyLink}
                         onNavigate={(page: Page) => {
-                            if (page === 'add' && isAtLimit) {
+                            if (page === 'add' && (isAtLimit || isExpired)) {
                                 setShowLimitWarning(true)
                                 return
                             }
@@ -368,6 +432,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         maxProducts={maxProducts}
                         isApproachingLimit={isApproachingLimit}
                         isAtLimit={isAtLimit}
+                        isExpired={isExpired}
+                        isGrace={isGrace}
+                        subscriptionStatus={subscriptionStatus}
+                        daysRemaining={daysRemaining}
+                        totalDays={totalDays}
                         onUpgrade={() => setShowUpgradePricing(true)}
                     />
                 )}
@@ -389,6 +458,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         maxProducts={maxProducts}
                         currentProductCount={currentProductCount}
                         onUpgrade={() => setShowUpgradePricing(true)}
+                        onProductsChange={setProducts}
                     />
                 )}
 
@@ -427,7 +497,23 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             </div>
                         )}
 
-                        {isAtLimit ? (
+                        {isExpired ? (
+                            /* Si abonnement expiré → message + bouton renouveler */
+                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-red-200 dark:border-red-800/30">
+                                <div className="text-6xl mb-4">🔴</div>
+                                <h2 className="text-xl font-black uppercase italic text-red-500 mb-2">Abonnement expiré</h2>
+                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                                    Votre abonnement {getPlanName(currentPlan)} a expiré. Vos produits sont masqués du site.
+                                    Renouvelez pour les réactiver et continuer à publier.
+                                </p>
+                                <button
+                                    onClick={() => setShowUpgradePricing(true)}
+                                    className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-red-500/20"
+                                >
+                                    🔄 Renouveler mon abonnement
+                                </button>
+                            </div>
+                        ) : isAtLimit ? (
                             /* Si limite atteinte → message + bouton upgrade */
                             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-red-200 dark:border-red-800/30">
                                 <div className="text-6xl mb-4">🔒</div>
@@ -484,6 +570,14 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             }
                         }}
                     />
+                )}
+
+                {activePage === 'messages' && (
+                    <MessagesPanel userId={user?.id} />
+                )}
+
+                {activePage === 'notifs' && (
+                    <VendorNotificationsPage userId={user?.id} onUnreadChange={setUnreadNotifs} />
                 )}
 
                 {activePage === 'shop' && (
@@ -584,7 +678,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             onBack={() => { setShowUpgradeCheckout(false); setShowUpgradePricing(true) }}
                             onComplete={() => {
                                 setShowUpgradeCheckout(false)
-                                window.location.reload()
+                                router.refresh()
                             }}
                         />
                     </div>
@@ -597,7 +691,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
 // =====================================================================
 // DASHBOARD HOME
 // =====================================================================
-function DashboardHome({ user, profile, orders, followerCount, totalRevenue, totalViews, totalOrders, productCount, copied, onCopyLink, onNavigate, getStatusDetails, currentPlan, maxProducts, isApproachingLimit, isAtLimit, onUpgrade }: any) {
+function DashboardHome({ user, profile, orders, followerCount, totalRevenue, totalViews, totalOrders, productCount, copied, onCopyLink, onNavigate, getStatusDetails, currentPlan, maxProducts, isApproachingLimit, isAtLimit, isExpired, isGrace, subscriptionStatus, daysRemaining, totalDays, onUpgrade }: any) {
     const stats = [
         { label: 'Revenus', value: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { label: 'Commandes', value: totalOrders, icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
@@ -628,8 +722,86 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
                 </div>
             </div>
 
+            {/* ═══ Bandeau expiration abonnement ═══ */}
+            {currentPlan !== 'free' && subscriptionStatus !== 'legacy' && subscriptionStatus !== 'free' && (
+                <div className={`rounded-3xl p-5 ${
+                    isExpired
+                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
+                        : isGrace
+                            ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
+                            : daysRemaining <= 5
+                                ? 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800'
+                                : 'bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800'
+                }`}>
+                    {isExpired ? (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div>
+                                <h3 className="font-black uppercase text-sm">🔴 Abonnement expiré — Vos produits sont masqués</h3>
+                                <p className="text-white/80 text-xs font-bold mt-1">
+                                    Vos {productCount || 0} produit(s) ne sont plus visibles sur le site. Renouvelez pour les réactiver.
+                                </p>
+                            </div>
+                            <button
+                                onClick={onUpgrade}
+                                className="flex items-center gap-2 bg-white text-red-600 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
+                            >
+                                🔄 Renouveler maintenant
+                            </button>
+                        </div>
+                    ) : isGrace ? (
+                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                            <div>
+                                <h3 className="font-black uppercase text-sm">⚠️ Abonnement expiré — Période de grâce</h3>
+                                <p className="text-white/80 text-xs font-bold mt-1">
+                                    Vos produits seront masqués dans {Math.max(0, daysRemaining + 3)} jour(s). Renouvelez maintenant pour éviter l'interruption.
+                                </p>
+                            </div>
+                            <button
+                                onClick={onUpgrade}
+                                className="flex items-center gap-2 bg-white text-red-500 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
+                            >
+                                🔄 Renouveler
+                            </button>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="flex items-center justify-between mb-2">
+                                <span className={`text-xs font-black uppercase ${
+                                    daysRemaining <= 5 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
+                                }`}>
+                                    📦 Plan {getPlanName(currentPlan)} · {daysRemaining} jour{daysRemaining > 1 ? 's' : ''} restant{daysRemaining > 1 ? 's' : ''}
+                                </span>
+                                {daysRemaining <= 5 && (
+                                    <button
+                                        onClick={onUpgrade}
+                                        className="text-[10px] font-black text-red-500 dark:text-red-400 hover:underline uppercase"
+                                    >
+                                        Renouveler
+                                    </button>
+                                )}
+                            </div>
+                            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                                <div
+                                    className={`h-full rounded-full transition-all duration-500 ${
+                                        daysRemaining <= 5 ? 'bg-red-500' : 'bg-green-500'
+                                    }`}
+                                    style={{ width: `${Math.max(0, Math.min(100, (daysRemaining / totalDays) * 100))}%` }}
+                                />
+                            </div>
+                            {daysRemaining <= 5 && (
+                                <p className={`text-[10px] font-bold mt-2 ${
+                                    daysRemaining <= 5 ? 'text-red-500 dark:text-red-400' : 'text-slate-400'
+                                }`}>
+                                    ⚠️ Pensez à renouveler votre abonnement !
+                                </p>
+                            )}
+                        </>
+                    )}
+                </div>
+            )}
+
             {/* Upgrade banner — visible quand on approche de la limite */}
-            {isApproachingLimit && (
+            {isApproachingLimit && !isExpired && (
                 <div className={`rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 ${
                     isAtLimit
                         ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
@@ -754,9 +926,173 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
 }
 
 // =====================================================================
+// VENDOR NOTIFICATIONS PAGE
+// =====================================================================
+function VendorNotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnreadChange?: (n: number) => void }) {
+    const [notifs, setNotifs] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const router = useRouter()
+
+    const typeIcons: Record<string, { icon: any; color: string }> = {
+        order_confirmed: { icon: ShoppingCart, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+        order_delivered: { icon: Package, color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+        new_negotiation: { icon: Tag, color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
+        negotiation_response: { icon: DollarSign, color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+        new_message: { icon: MessageCircle, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+    }
+
+    const supabaseClient = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+
+    useEffect(() => {
+        getNotifications(50).then(result => {
+            setNotifs(result.notifications || [])
+            setLoading(false)
+        })
+    }, [])
+
+    useEffect(() => {
+        if (!userId) return
+        const channel = supabaseClient
+            .channel('vendor-notifs-realtime')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
+                setNotifs(prev => [payload.new as any, ...prev])
+            })
+            .subscribe()
+        return () => { supabaseClient.removeChannel(channel) }
+    }, [userId])
+
+    const handleMarkAllRead = async () => {
+        await markAllAsRead()
+        setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
+        onUnreadChange?.(0)
+    }
+
+    const handleClickNotif = async (notif: any) => {
+        if (!notif.is_read) {
+            markAsRead(notif.id).catch(() => {})
+            setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n))
+            onUnreadChange?.((await getUnreadNotifCount()) || 0)
+        }
+        if (notif.link) router.push(notif.link)
+    }
+
+    const unreadCount = notifs.filter(n => !n.is_read).length
+
+    if (loading) {
+        return <div className="p-4 md:p-8 flex items-center justify-center py-20"><Loader2 size={24} className="animate-spin text-orange-500" /></div>
+    }
+
+    return (
+        <div className="p-4 md:p-8">
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Notifications</h2>
+                    <p className="text-sm text-slate-400 font-bold mt-1">{unreadCount} non lue{unreadCount !== 1 ? 's' : ''}</p>
+                </div>
+                {unreadCount > 0 && (
+                    <button onClick={handleMarkAllRead} className="text-[10px] font-black uppercase text-orange-500 hover:underline">
+                        Tout marquer comme lu
+                    </button>
+                )}
+            </div>
+
+            {notifs.length > 0 ? (
+                <div className="space-y-2">
+                    {notifs.map(n => {
+                        const info = typeIcons[n.type] || { icon: Bell, color: 'text-slate-500 bg-slate-50 dark:bg-slate-800' }
+                        const Icon = info.icon
+                        const date = new Date(n.created_at)
+                        return (
+                            <button
+                                key={n.id}
+                                onClick={() => handleClickNotif(n)}
+                                className={`w-full text-left flex items-start gap-4 p-4 rounded-2xl border transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!n.is_read ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'border-transparent'}`}
+                            >
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${info.color}`}>
+                                    <Icon size={18} />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2">
+                                        <p className={`text-sm font-bold truncate ${!n.is_read ? 'dark:text-white' : 'text-slate-500'}`}>{n.title}</p>
+                                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
+                                    </div>
+                                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.body}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        {date.toLocaleDateString('fr-FR')} à {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
+                                </div>
+                            </button>
+                        )
+                    })}
+                </div>
+            ) : (
+                <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <Bell size={48} className="mx-auto text-slate-200 dark:text-slate-600 mb-4" />
+                    <p className="text-xs font-black uppercase italic text-slate-400">Aucune notification</p>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// =====================================================================
 // PRODUCTS LIST
 // =====================================================================
-function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentPlan, maxProducts, currentProductCount, onUpgrade }: any) {
+function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentPlan, maxProducts, currentProductCount, onUpgrade, onProductsChange }: any) {
+    const [promoProduct, setPromoProduct] = useState<any>(null)
+    const [promoPercentage, setPromoPercentage] = useState(10)
+    const [promoDays, setPromoDays] = useState(3)
+    const [activatingPromo, setActivatingPromo] = useState(false)
+    const [deactivatingPromo, setDeactivatingPromo] = useState<string | null>(null)
+
+    const handleActivatePromo = async () => {
+        if (!promoProduct) return
+        setActivatingPromo(true)
+        try {
+            const result = await activatePromo(promoProduct.id, promoPercentage, promoDays)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success(`Promo -${promoPercentage}% activée pour ${promoDays} jour${promoDays > 1 ? 's' : ''}`)
+                // Update local state
+                onProductsChange?.((prev: any[]) => prev.map((p: any) =>
+                    p.id === promoProduct.id
+                        ? { ...p, promo_percentage: promoPercentage, promo_start_date: new Date().toISOString(), promo_end_date: new Date(Date.now() + promoDays * 86400000).toISOString() }
+                        : p
+                ))
+                setPromoProduct(null)
+            }
+        } catch {
+            toast.error('Erreur lors de l\'activation de la promo')
+        } finally {
+            setActivatingPromo(false)
+        }
+    }
+
+    const handleDeactivatePromo = async (productId: string) => {
+        setDeactivatingPromo(productId)
+        try {
+            const result = await deactivatePromo(productId)
+            if (result.error) {
+                toast.error(result.error)
+            } else {
+                toast.success('Promo désactivée')
+                onProductsChange?.((prev: any[]) => prev.map((p: any) =>
+                    p.id === productId
+                        ? { ...p, promo_percentage: null, promo_start_date: null, promo_end_date: null }
+                        : p
+                ))
+            }
+        } catch {
+            toast.error('Erreur lors de la désactivation')
+        } finally {
+            setDeactivatingPromo(null)
+        }
+    }
+
     return (
         <div className="p-4 md:p-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
@@ -772,7 +1108,7 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                             : 'bg-orange-500 text-white hover:bg-orange-600 shadow-orange-500/20'
                     }`}
                 >
-                    <Plus size={16} /> {isAtLimit ? '🔒 Limite atteinte' : 'Nouveau produit'}
+                    <Plus size={16} /> {isAtLimit ? 'Limite atteinte' : 'Nouveau produit'}
                 </button>
             </div>
 
@@ -789,7 +1125,7 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                         </span>
                         {isAtLimit && (
                             <button onClick={onUpgrade} className="text-[10px] font-black uppercase text-orange-500 hover:underline">
-                                ⚡ Upgrader
+                                Upgrader
                             </button>
                         )}
                     </div>
@@ -804,11 +1140,13 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
 
             {products && products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {products.map((p: any) => (
+                    {products.map((p: any) => {
+                        const hasPromo = isPromoActive(p)
+                        return (
                         <div key={p.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden group hover:shadow-lg transition-all">
                             <div className="relative aspect-[4/3] bg-slate-100">
                                 <Image
-                                    src={p.img || p.image_url || '/placeholder-image.jpg'}
+                                    src={p.img || p.image_url || '/placeholder-image.svg'}
                                     alt={p.name}
                                     fill
                                     sizes="(max-width: 768px) 100vw, 33vw"
@@ -818,6 +1156,11 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                                     <span className="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1">
                                         <Eye size={10} /> {p.views_count || 0}
                                     </span>
+                                    {hasPromo && (
+                                        <span className="bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black animate-pulse">
+                                            -{p.promo_percentage}%
+                                        </span>
+                                    )}
                                 </div>
                                 {p.has_stock && (
                                     <div className="absolute top-3 right-3">
@@ -838,6 +1181,25 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                                         {p.price?.toLocaleString('fr-FR')} <small className="text-[10px]">FCFA</small>
                                     </span>
                                     <div className="flex gap-2">
+                                        {/* Bouton Promo */}
+                                        {hasPromo ? (
+                                            <button
+                                                onClick={() => handleDeactivatePromo(p.id)}
+                                                disabled={deactivatingPromo === p.id}
+                                                className="w-9 h-9 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-500 hover:text-orange-600 transition-colors"
+                                                title="Désactiver la promo"
+                                            >
+                                                {deactivatingPromo === p.id ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+                                            </button>
+                                        ) : (
+                                            <button
+                                                onClick={() => { setPromoProduct(p); setPromoPercentage(10); setPromoDays(3) }}
+                                                className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-orange-500 transition-colors"
+                                                title="Activer une promo"
+                                            >
+                                                <Tag size={14} />
+                                            </button>
+                                        )}
                                         <Link
                                             href={`/product/${p.id}`}
                                             className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-blue-500 transition-colors"
@@ -855,7 +1217,8 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                                 </div>
                             </div>
                         </div>
-                    ))}
+                        )
+                    })}
                 </div>
             ) : (
                 <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-800">
@@ -864,6 +1227,75 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                     <button onClick={onAdd} className="bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs hover:bg-orange-600 transition-all">
                         Ajouter mon premier produit
                     </button>
+                </div>
+            )}
+
+            {/* Modal Promo */}
+            {promoProduct && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setPromoProduct(null)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 w-full max-w-sm shadow-2xl" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center justify-between mb-5">
+                            <h3 className="font-black uppercase text-sm tracking-tight dark:text-white">Activer une promo</h3>
+                            <button onClick={() => setPromoProduct(null)} className="text-slate-400 hover:text-slate-600">
+                                <XIcon size={18} />
+                            </button>
+                        </div>
+
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-4 truncate">{promoProduct.name}</p>
+
+                        {/* Pourcentage */}
+                        <div className="mb-5">
+                            <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Réduction</label>
+                            <div className="flex gap-2 flex-wrap">
+                                {[5, 10, 15, 20, 25, 30, 40, 50].map(pct => (
+                                    <button
+                                        key={pct}
+                                        onClick={() => setPromoPercentage(pct)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-black transition-all ${
+                                            promoPercentage === pct
+                                                ? 'bg-red-500 text-white shadow-lg shadow-red-500/20'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'
+                                        }`}
+                                    >
+                                        -{pct}%
+                                    </button>
+                                ))}
+                            </div>
+                            <p className="text-xs text-slate-400 mt-2">
+                                Prix promo : <span className="font-black text-red-500">{Math.round(promoProduct.price * (1 - promoPercentage / 100)).toLocaleString('fr-FR')} FCFA</span>
+                                <span className="text-slate-300 ml-2 line-through">{promoProduct.price?.toLocaleString('fr-FR')} FCFA</span>
+                            </p>
+                        </div>
+
+                        {/* Durée */}
+                        <div className="mb-6">
+                            <label className="text-[10px] font-black uppercase text-slate-500 mb-2 block">Durée</label>
+                            <div className="flex gap-2">
+                                {[1, 2, 3, 5, 7].map(d => (
+                                    <button
+                                        key={d}
+                                        onClick={() => setPromoDays(d)}
+                                        className={`px-3 py-2 rounded-xl text-xs font-black transition-all ${
+                                            promoDays === d
+                                                ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                                : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200'
+                                        }`}
+                                    >
+                                        {d}j
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <button
+                            onClick={handleActivatePromo}
+                            disabled={activatingPromo}
+                            className="w-full bg-red-500 text-white py-3 rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        >
+                            {activatingPromo ? <Loader2 size={14} className="animate-spin" /> : <Tag size={14} />}
+                            Activer -{promoPercentage}% pendant {promoDays} jour{promoDays > 1 ? 's' : ''}
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
@@ -940,7 +1372,7 @@ function OrdersPage({ orders, ordersLoading, orderFilter, setOrderFilter, filter
                                 <div className="space-y-2 mb-4">
                                     {vendorItems.map((item: any, idx: number) => (
                                         <div key={idx} className="flex gap-3 items-center bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl">
-                                            <Image src={item.img || '/placeholder-image.jpg'} alt={item.name || ''} width={40} height={40} className="w-10 h-10 object-cover rounded-xl" />
+                                            <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={40} height={40} className="w-10 h-10 object-cover rounded-xl" />
                                             <div className="flex-1">
                                                 <h3 className="text-xs font-black uppercase italic dark:text-white leading-tight">{item.name}</h3>
                                                 <p className="text-[10px] font-bold text-green-600">{item.price?.toLocaleString('fr-FR')} F x {item.quantity}</p>
@@ -1177,7 +1609,7 @@ function StatsPage({ orders, products, followerCount }: { orders: any[]; product
                                     {i + 1}
                                 </span>
                                 <Image
-                                    src={p.img || p.image_url || '/placeholder-image.jpg'}
+                                    src={p.img || p.image_url || '/placeholder-image.svg'}
                                     alt={p.name}
                                     width={40}
                                     height={40}
@@ -1623,7 +2055,7 @@ function NegotiationsPage({ negotiations, negotiationsLoading, onRespond }: {
             ) : filtered.length > 0 ? (
                 <div className="space-y-4">
                     {filtered.map((neg: any) => {
-                        const productImg = neg.products?.img || neg.products?.image_url || '/placeholder-image.jpg'
+                        const productImg = neg.products?.img || neg.products?.image_url || '/placeholder-image.svg'
                         const productName = neg.products?.name || 'Produit'
                         const discount = Math.round((1 - neg.proposed_price / neg.initial_price) * 100)
 

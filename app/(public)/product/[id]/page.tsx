@@ -12,7 +12,12 @@ import FollowButton from '../../../components/FollowButton'
 import StarRating from '../../../components/StarRating'
 import ReviewForm from '../../../components/ReviewForm'
 import OrderAction from '../../../components/OrderAction'
+import ShareButtons from '../../../components/ShareButtons'
+import SimilarProducts from '../../../components/SimilarProducts'
+import MessageButton from '../../../components/MessageButton'
 import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
+import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -36,6 +41,7 @@ export default function ProductDetailPage() {
     const [activeTab, setActiveTab] = useState<'desc' | 'details' | 'reviews'>('desc')
     const [liked, setLiked] = useState(false)
     const [negotiatedPrice, setNegotiatedPrice] = useState<number | null>(null)
+    const [sellerExpired, setSellerExpired] = useState(false)
 
     useEffect(() => {
         const fetchData = async () => {
@@ -50,12 +56,16 @@ export default function ProductDetailPage() {
                     setProduct(prod)
                     const shopRes = await supabase
                         .from('profiles')
-                        .select('full_name, avatar_url, followers_count, id, store_name, shop_name')
+                        .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date')
                         .eq('id', prod.seller_id)
                         .maybeSingle()
 
                     setShop(shopRes.data)
                     setFollowerCount(shopRes.data?.followers_count || 0)
+                    // Vérifier si le vendeur est expiré
+                    if (shopRes.data?.subscription_plan && shopRes.data.subscription_plan !== 'free') {
+                        setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
+                    }
 
                     const reviewsRes = await supabase
                         .from('reviews')
@@ -92,7 +102,10 @@ export default function ProductDetailPage() {
 
     const allImages = [product.img || product.image_url, ...(product.images_gallery || [])].filter(Boolean)
     const shopName = shop?.store_name || shop?.shop_name || shop?.full_name || 'Boutique'
-    const effectivePrice = negotiatedPrice ?? product.price
+    const hasPromo = isPromoActive(product)
+    const promoPrice = hasPromo ? getPromoPrice(product) : product.price
+    const basePrice = hasPromo ? promoPrice : product.price
+    const effectivePrice = negotiatedPrice ?? basePrice
     const total = effectivePrice * qty
 
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
@@ -164,7 +177,12 @@ export default function ProductDetailPage() {
                                 <span className="text-amber-500 text-[11px]">★ {avgRating.toFixed(1)}</span>
                             </div>
                         </div>
-                        <div onClick={e => e.preventDefault()}>
+                        <div className="flex items-center gap-2" onClick={e => e.preventDefault()}>
+                            <MessageButton
+                                sellerId={product.seller_id}
+                                productId={product.id}
+                                user={user}
+                            />
                             <FollowButton
                                 sellerId={product.seller_id}
                                 onFollowChange={(delta: number) => setFollowerCount(prev => Math.max(0, prev + delta))}
@@ -196,10 +214,32 @@ export default function ProductDetailPage() {
                         )}
                     </div>
 
+                    {/* Share buttons */}
+                    <ShareButtons
+                        title={product.name}
+                        text={`Découvre ${product.name} à ${fmt(product.price)} FCFA sur Mayombe Market !`}
+                        url={typeof window !== 'undefined' ? `${window.location.origin}/product/${product.id}` : ''}
+                    />
+
+                    {/* Promo banner */}
+                    {hasPromo && (
+                        <div className="flex items-center gap-3 mb-4 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                            <div className="bg-red-500 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full animate-pulse">
+                                -{product.promo_percentage}%
+                            </div>
+                            <div className="flex-1">
+                                <p className="text-xs font-bold text-red-600 dark:text-red-400">Promotion en cours</p>
+                                <p className="text-[10px] text-red-400 dark:text-red-500">
+                                    Expire dans {getPromoTimeRemaining(product.promo_end_date)}
+                                </p>
+                            </div>
+                        </div>
+                    )}
+
                     {/* Price + négociation */}
                     <div className="mb-4">
                         <NegotiationAction
-                            initialPrice={Number(product.price)}
+                            initialPrice={Number(basePrice)}
                             product={product}
                             user={user}
                             shop={shop}
@@ -483,9 +523,22 @@ export default function ProductDetailPage() {
                         </div>
                     )}
                 </div>
+
+                {/* ── PRODUITS SIMILAIRES ── */}
+                <SimilarProducts
+                    productId={product.id}
+                    subcategory={product.subcategory}
+                    category={product.category}
+                />
             </div>
 
             {/* ── STICKY BOTTOM BAR ── */}
+            {sellerExpired ? (
+                <div className="sticky bottom-0 w-full bg-red-50 dark:bg-red-900/20 backdrop-blur-xl border-t border-red-200 dark:border-red-800 px-5 py-4 pb-6 z-40 text-center">
+                    <p className="text-red-600 dark:text-red-400 text-sm font-bold">Ce vendeur est actuellement inactif.</p>
+                    <p className="text-red-400 dark:text-red-500 text-xs mt-1">Ce produit n'est pas disponible pour le moment.</p>
+                </div>
+            ) : (
             <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40">
                 {/* Total */}
                 <div className="flex-shrink-0 mr-1">
@@ -506,6 +559,7 @@ export default function ProductDetailPage() {
                     <OrderAction product={{ ...product, price: effectivePrice }} shop={shop} user={user} />
                 </div>
             </div>
+            )}
         </div>
     )
 }

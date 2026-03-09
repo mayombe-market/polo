@@ -4,6 +4,7 @@ import Link from 'next/link'
 import Image from 'next/image'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
+import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 
 interface Product {
     id: string
@@ -13,10 +14,16 @@ interface Product {
     image_url?: string
     category?: string
     stock_quantity?: number
+    promo_percentage?: number | null
+    promo_start_date?: string | null
+    promo_end_date?: string | null
 }
 
 export default function ProductCard({ product }: { product: Product }) {
     const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
+    const hasPromo = isPromoActive(product)
+    const promoPrice = hasPromo ? getPromoPrice(product) : product.price
+    const timeRemaining = hasPromo ? getPromoTimeRemaining(product.promo_end_date) : ''
 
     return (
         <Link
@@ -26,24 +33,31 @@ export default function ProductCard({ product }: { product: Product }) {
             {/* IMAGE CONTAINER */}
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800">
                 <Image
-                    src={product.img || product.image_url || '/placeholder-image.jpg'}
+                    src={product.img || product.image_url || '/placeholder-image.svg'}
                     alt={product.name}
                     fill
                     sizes="(max-width: 768px) 50vw, 25vw"
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                 />
 
-                {/* --- INSERTION ICI : BOUTON LIKE --- */}
+                {/* LIKE BUTTON */}
                 <div className="absolute top-3 right-3 z-20">
                     <LikeButton productId={product.id} />
                 </div>
 
                 {/* BADGES */}
-                {isOutOfStock && (
-                    <div className="absolute top-4 left-4 bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full z-10 shadow-lg">
-                        Épuisé
-                    </div>
-                )}
+                <div className="absolute top-4 left-4 flex flex-col gap-1.5 z-10">
+                    {hasPromo && (
+                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg animate-pulse">
+                            -{product.promo_percentage}%
+                        </div>
+                    )}
+                    {isOutOfStock && (
+                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg">
+                            Épuisé
+                        </div>
+                    )}
+                </div>
 
                 {/* OVERLAY ACTION */}
                 <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
@@ -67,9 +81,23 @@ export default function ProductCard({ product }: { product: Product }) {
                 </div>
 
                 <div className="mt-3 flex items-center justify-between">
-                    <p className="text-lg font-black tracking-tighter dark:text-white">
-                        {product.price.toLocaleString('fr-FR')} <span className="text-[10px] ml-0.5">FCFA</span>
-                    </p>
+                    {hasPromo ? (
+                        <div>
+                            <p className="text-xs text-slate-400 line-through font-bold">
+                                {product.price.toLocaleString('fr-FR')} F
+                            </p>
+                            <p className="text-lg font-black tracking-tighter text-red-500">
+                                {promoPrice.toLocaleString('fr-FR')} <span className="text-[10px] ml-0.5">FCFA</span>
+                            </p>
+                            <p className="text-[9px] font-bold text-red-400 mt-0.5">
+                                Expire dans {timeRemaining}
+                            </p>
+                        </div>
+                    ) : (
+                        <p className="text-lg font-black tracking-tighter dark:text-white">
+                            {product.price.toLocaleString('fr-FR')} <span className="text-[10px] ml-0.5">FCFA</span>
+                        </p>
+                    )}
 
                     <div className="bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl group-hover:bg-black group-hover:text-white dark:group-hover:bg-orange-500 transition-colors">
                         <ShoppingBag size={16} />

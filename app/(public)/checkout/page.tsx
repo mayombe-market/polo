@@ -10,6 +10,7 @@ import { CheckoutSchema, CheckoutType } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
+import { createOrder as createOrderAction } from '@/app/actions/orders'
 
 export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
@@ -63,86 +64,44 @@ export default function CheckoutPage() {
 
         setLoading(true)
         try {
-            const { data: { user } } = await supabase.auth.getUser()
-
-            const orderItems = cart.map(item => ({
-                id: item.id,
+            const items = cart.map(item => ({
+                id: item.product_id || item.id,
                 name: item.name,
                 price: item.price,
                 quantity: item.quantity || 1,
-                img: item.img,
-                seller_id: item.seller_id
+                img: item.img || '',
+                seller_id: item.seller_id || '',
             }))
 
-            // Commission dynamique selon le plan du vendeur
-            const sellerId = orderItems[0]?.seller_id
-            let commissionRate = 0.10
-            if (sellerId) {
-                const { data: sellerProfile } = await supabase
-                    .from('profiles')
-                    .select('subscription_plan')
-                    .eq('id', sellerId)
-                    .single()
-                const planRates: Record<string, number> = { pro: 0.07, premium: 0.04 }
-                commissionRate = planRates[sellerProfile?.subscription_plan] || 0.10
+            const result = await createOrderAction({
+                items,
+                city: formData.city,
+                district: formData.district,
+                payment_method: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
+                total_amount: total,
+                customer_name: formData.full_name,
+                phone: formData.phone,
+                landmark: formData.landmark,
+            })
+
+            if (result.error) {
+                alert(result.error)
+                return
             }
-            const commissionAmount = Math.round(total * commissionRate)
-            const vendorPayout = total - commissionAmount
 
-            const { error } = await supabase
-                .from('orders')
-                .insert([{
-                    user_id: user?.id || null,
-                    customer_email: userEmail || null,
-                    customer_name: formData.full_name,
-                    phone: formData.phone,
-                    city: formData.city,
-                    district: formData.district,
-                    landmark: formData.landmark,
-                    status: 'pending',
-                    total_amount: total,
-                    payment_method: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
-                    items: orderItems,
-                    commission_rate: commissionRate,
-                    commission_amount: commissionAmount,
-                    vendor_payout: vendorPayout,
-                    payout_status: 'pending'
-                }])
-                .select()
-                .single()
+            if (!result.order) {
+                alert('Erreur inattendue. Réessayez.')
+                return
+            }
 
-            if (error) throw error
-
-            // Décrémentation du stock (fire-and-forget)
-            Promise.all(
-                orderItems.map(async (item) => {
-                    try {
-                        const { data: product } = await supabase
-                            .from('products')
-                            .select('has_stock, stock_quantity')
-                            .eq('id', item.id)
-                            .single()
-
-                        if (product?.has_stock && product.stock_quantity > 0) {
-                            await supabase
-                                .from('products')
-                                .update({ stock_quantity: Math.max(0, product.stock_quantity - item.quantity) })
-                                .eq('id', item.id)
-                        }
-                    } catch (err) {
-                        console.error(`Erreur decrement stock pour ${item.id}:`, err)
-                    }
-                })
-            ).catch(err => console.error('Erreur globale decrement stock:', err))
-
-            // Envoi de l'email de confirmation (sans bloquer la navigation)
+            // Envoi de l'email de confirmation avec le vrai orderId
             if (userEmail) {
                 sendOrderConfirmationEmail({
                     customerName: formData.full_name,
                     customerEmail: userEmail,
-                    orderId: '',
-                    items: orderItems,
-                    total,
+                    orderId: result.order.id,
+                    items,
+                    total: result.order.total_amount,
                     paymentMethod: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
                     city: formData.city,
                     district: formData.district,
@@ -150,7 +109,7 @@ export default function CheckoutPage() {
             }
 
             clearCart()
-            router.push(`/checkout/success?method=${formData.payment_method}&total=${total}`)
+            router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}`)
 
         } catch (err) {
             console.error('Erreur commande:', err)
@@ -272,7 +231,7 @@ export default function CheckoutPage() {
                             {cart.map((item) => (
                                 <div key={item.id} className="flex items-center gap-4 group">
                                     <div className="relative w-16 h-16 bg-slate-100 rounded-2xl overflow-hidden flex-shrink-0">
-                                        <Image src={item.img || '/placeholder-image.jpg'} alt={item.name} fill className="object-cover" />
+                                        <Image src={item.img || '/placeholder-image.svg'} alt={item.name} fill className="object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-black uppercase italic text-[10px] truncate">{item.name}</h4>

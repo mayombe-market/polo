@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { getExpiredSellerIds } from '@/lib/filterActiveProducts'
 
 export const getFollowedProducts = async (userId: string) => {
     const supabase = createBrowserClient(
@@ -16,14 +17,20 @@ export const getFollowedProducts = async (userId: string) => {
 
     const followedSellerIds = follows.map(f => f.seller_id)
 
-    // 2. Récupérer les produits où seller_id est dans la liste des suivis
+    // Exclure les vendeurs expirés de la liste des suivis
+    const expiredIds = await getExpiredSellerIds(supabase)
+    const expiredSet = new Set(expiredIds)
+    const activeSellerIds = followedSellerIds.filter(id => !expiredSet.has(id))
+    if (activeSellerIds.length === 0) return { data: [], error: null }
+
+    // 2. Récupérer les produits où seller_id est dans la liste des suivis actifs
     const { data, error } = await supabase
         .from('products')
         .select(`
             *,
             profiles:seller_id (id, name, avatar_url)
         `)
-        .in('seller_id', followedSellerIds) // Utilisation de ta colonne seller_id
+        .in('seller_id', activeSellerIds) // Utilisation de ta colonne seller_id (vendeurs actifs uniquement)
         .order('created_at', { ascending: false })
         .limit(24)
 

@@ -12,17 +12,20 @@ import {
     Clock, CheckCircle2, Truck, LogOut, Lock, Camera,
     Phone, Home, Navigation, ShieldCheck, AlertCircle,
     ArrowUpRight, BellRing, X, Moon, Sun, Globe,
-    Smartphone, Volume2, Tag, TruckIcon
+    Smartphone, Volume2, Tag, TruckIcon, MessageCircle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { playNegotiationSound, playDeliverySound } from '@/lib/notificationSound'
+import { playNegotiationSound, playDeliverySound, playMessageSound } from '@/lib/notificationSound'
 import { getBuyerNegotiations } from '@/app/actions/negotiations'
+import { getUnreadCount } from '@/app/actions/messages'
+import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
+import MessagesPanel from './MessagesPanel'
 import { getLoyaltyPoints } from '@/app/actions/ratings'
 import TripleRatingModal from '@/app/components/TripleRatingModal'
 import { useRouter } from 'next/navigation'
 
-type Page = 'home' | 'orders' | 'wishlist' | 'cart' | 'following' | 'notifs' | 'addresses' | 'profile' | 'settings'
+type Page = 'home' | 'orders' | 'wishlist' | 'cart' | 'following' | 'messages' | 'notifs' | 'addresses' | 'profile' | 'settings'
 
 const MENU: { id: Page; icon: any; label: string }[] = [
     { id: 'home', icon: LayoutDashboard, label: 'Accueil' },
@@ -30,6 +33,7 @@ const MENU: { id: Page; icon: any; label: string }[] = [
     { id: 'wishlist', icon: Heart, label: 'Favoris' },
     { id: 'cart', icon: ShoppingCart, label: 'Mon panier' },
     { id: 'following', icon: Store, label: 'Boutiques suivies' },
+    { id: 'messages', icon: MessageCircle, label: 'Messages' },
     { id: 'notifs', icon: Bell, label: 'Notifications' },
     { id: 'addresses', icon: MapPin, label: 'Mes adresses' },
     { id: 'profile', icon: User, label: 'Mon profil' },
@@ -53,6 +57,9 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     const [negotiations, setNegotiations] = useState<any[]>([])
     const [loyaltyPoints, setLoyaltyPoints] = useState(0)
     const [ratingOrder, setRatingOrder] = useState<any | null>(null)
+    const [unreadMessages, setUnreadMessages] = useState(0)
+    const [unreadNotifs, setUnreadNotifs] = useState(0)
+    const [initialConvId, setInitialConvId] = useState<string | null>(null)
 
     // Cart hook
     const { cart, total, itemCount, updateQuantity, removeFromCart } = useCart()
@@ -61,6 +68,17 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
+
+    // ===== DEEP LINK depuis MessageButton =====
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search)
+        const tab = params.get('tab')
+        const conv = params.get('conv')
+        if (tab === 'messages') {
+            setActivePage('messages')
+            if (conv) setInitialConvId(conv)
+        }
+    }, [])
 
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
@@ -126,7 +144,8 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         if (id === 'orders' && activeOrdersCount > 0) return activeOrdersCount
         if (id === 'wishlist' && favorites.length > 0) return favorites.length
         if (id === 'cart' && itemCount > 0) return itemCount
-        if (id === 'notifs' && recentNegotiations.length > 0) return recentNegotiations.length
+        if (id === 'messages' && unreadMessages > 0) return unreadMessages
+        if (id === 'notifs' && unreadNotifs > 0) return unreadNotifs
         return null
     }
 
@@ -167,6 +186,18 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 const result = await getBuyerNegotiations()
                 setNegotiations(result.negotiations || [])
             } catch (err) { console.error('Erreur négociations:', err) }
+
+            // Unread messages
+            try {
+                const result = await getUnreadCount()
+                setUnreadMessages(result.count || 0)
+            } catch (err) { console.error('Erreur messages non-lus:', err) }
+
+            // Unread notifications
+            try {
+                const count = await getUnreadNotifCount()
+                setUnreadNotifs(count)
+            } catch (err) { console.error('Erreur notifs non-lues:', err) }
 
             // Address + loyalty points
             try {
@@ -232,6 +263,36 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 } else if (updated.status === 'refuse') {
                     toast.info('Offre refusée', { description: 'Le vendeur a refusé votre offre de négociation.' })
                 }
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
+    // Real-time messages
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('buyer-messages')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+                const msg = payload.new as any
+                if (msg.sender_id !== user.id) {
+                    setUnreadMessages(prev => prev + 1)
+                    playMessageSound()
+                    toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
+                    sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
+                }
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [user?.id])
+
+    // Real-time notifications
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('buyer-notifications')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+                setUnreadNotifs(prev => prev + 1)
             })
             .subscribe()
         return () => { supabase.removeChannel(channel) }
@@ -337,7 +398,8 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 {activePage === 'wishlist' && <BuyerWishlist favorites={favorites} setFavorites={setFavorites} userId={user?.id} />}
                 {activePage === 'cart' && <BuyerCart cart={cart} total={total} itemCount={itemCount} updateQuantity={updateQuantity} removeFromCart={removeFromCart} />}
                 {activePage === 'following' && <FollowingPage shops={followedShops} />}
-                {activePage === 'notifs' && <NotificationsPage orders={orders} negotiations={negotiations} />}
+                {activePage === 'messages' && <MessagesPanel userId={user?.id} initialConversationId={initialConvId} />}
+                {activePage === 'notifs' && <NotificationsPage userId={user?.id} onUnreadChange={setUnreadNotifs} />}
                 {activePage === 'addresses' && <AddressesPage address={address} setAddress={setAddress} userId={user?.id} />}
                 {activePage === 'profile' && <ProfilePage profile={profile} setProfile={setProfile} userId={user?.id} />}
                 {activePage === 'settings' && <SettingsPage />}
@@ -650,7 +712,7 @@ function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmR
                                 <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                                     {order.items?.map((item: any, idx: number) => (
                                         <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl">
-                                            <Image src={item.img || '/placeholder-image.jpg'} alt={item.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
+                                            <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
                                             <div>
                                                 <p className="text-[9px] font-black uppercase truncate max-w-[120px] dark:text-white">{item.name}</p>
                                                 <p className="text-[8px] text-slate-400 font-bold">x{item.quantity}</p>
@@ -719,7 +781,7 @@ function BuyerWishlist({ favorites, setFavorites, userId }: { favorites: any[]; 
                     {favorites.map((item: any) => (
                         <div key={item.id} className={`flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all ${item.has_stock && item.stock_quantity <= 0 ? 'opacity-50' : ''}`}>
                             <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                <Image src={item.img || item.image_url || '/placeholder-image.jpg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
+                                <Image src={item.img || item.image_url || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-black dark:text-white truncate">{item.name}</p>
@@ -771,7 +833,7 @@ function BuyerCart({ cart, total, itemCount, updateQuantity, removeFromCart }: a
                         {cart.map((item: any) => (
                             <div key={item.id} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
                                 <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                    <Image src={item.img || '/placeholder-image.jpg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
+                                    <Image src={item.img || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-black dark:text-white truncate">{item.name}</p>
@@ -884,88 +946,111 @@ function FollowingPage({ shops }: { shops: any[] }) {
 // =====================================================================
 // NOTIFICATIONS (based on order activity)
 // =====================================================================
-function NotificationsPage({ orders, negotiations = [] }: { orders: any[]; negotiations?: any[] }) {
-    // Notifications commandes
-    const orderNotifs = orders.slice(0, 10).map((order: any) => {
-        const statusInfo: Record<string, { icon: any; title: string; color: string }> = {
-            pending: { icon: Clock, title: 'Commande en attente', color: 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' },
-            confirmed: { icon: CheckCircle2, title: 'Commande confirmée', color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
-            shipped: { icon: Truck, title: 'Colis en livraison', color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20' },
-            delivered: { icon: Package, title: 'Commande livrée', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
-        }
-        const info = statusInfo[order.status] || statusInfo.pending
-        const firstItem = order.items?.[0]
-        return {
-            id: order.id,
-            type: 'order' as const,
-            Icon: info.icon,
-            title: info.title,
-            desc: `${firstItem?.name || 'Article'} - ${fmt(order.total_amount)} FCFA`,
-            time: new Date(order.updated_at || order.created_at).getTime(),
-            timeLabel: `${new Date(order.updated_at || order.created_at).toLocaleDateString('fr-FR')} à ${new Date(order.updated_at || order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
-            color: info.color,
-            isRecent: Date.now() - new Date(order.updated_at || order.created_at).getTime() < 86400000 * 3,
-        }
-    })
+function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnreadChange?: (n: number) => void }) {
+    const [notifs, setNotifs] = useState<any[]>([])
+    const [loading, setLoading] = useState(true)
+    const router = useRouter()
 
-    // Notifications négociations
-    const negNotifs = negotiations.map((neg: any) => {
-        const productName = neg.products?.name || 'Produit'
-        const statusMap: Record<string, { icon: any; title: string; color: string }> = {
-            en_attente: { icon: Clock, title: 'Offre envoyée', color: 'text-yellow-500 bg-yellow-50 dark:bg-yellow-900/20' },
-            accepte: { icon: CheckCircle2, title: 'Offre acceptée !', color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
-            refuse: { icon: AlertCircle, title: 'Offre refusée', color: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
-        }
-        const info = statusMap[neg.status] || statusMap.en_attente
-        return {
-            id: `neg-${neg.id}`,
-            type: 'negotiation' as const,
-            Icon: info.icon,
-            title: info.title,
-            desc: `${productName} — ${neg.proposed_price?.toLocaleString('fr-FR')} FCFA${neg.status === 'accepte' ? ' (rendez-vous sur le produit pour acheter)' : ''}`,
-            time: new Date(neg.updated_at || neg.created_at).getTime(),
-            timeLabel: `${new Date(neg.updated_at || neg.created_at).toLocaleDateString('fr-FR')} à ${new Date(neg.updated_at || neg.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`,
-            color: info.color,
-            isRecent: Date.now() - new Date(neg.updated_at || neg.created_at).getTime() < 86400000 * 3,
-            productId: neg.product_id,
-        }
-    })
+    const typeIcons: Record<string, { icon: any; color: string }> = {
+        order_confirmed: { icon: CheckCircle2, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+        order_rejected: { icon: AlertCircle, color: 'text-red-500 bg-red-50 dark:bg-red-900/20' },
+        order_shipped: { icon: Truck, color: 'text-orange-500 bg-orange-50 dark:bg-orange-900/20' },
+        order_delivered: { icon: Package, color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+        new_negotiation: { icon: Tag, color: 'text-purple-500 bg-purple-50 dark:bg-purple-900/20' },
+        negotiation_response: { icon: CheckCircle2, color: 'text-green-500 bg-green-50 dark:bg-green-900/20' },
+        new_message: { icon: MessageCircle, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
+    }
 
-    // Fusionner et trier par date décroissante
-    const allNotifs = [...orderNotifs, ...negNotifs].sort((a, b) => b.time - a.time)
+    useEffect(() => {
+        getNotifications(50).then(result => {
+            setNotifs(result.notifications || [])
+            setLoading(false)
+        })
+    }, [])
+
+    // Realtime: listen for new notifications
+    const supabase = createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    )
+    useEffect(() => {
+        if (!userId) return
+        const channel = supabase
+            .channel('notifs-page-realtime')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
+                setNotifs(prev => [payload.new as any, ...prev])
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    }, [userId])
+
+    const handleMarkAllRead = async () => {
+        await markAllAsRead()
+        setNotifs(prev => prev.map(n => ({ ...n, is_read: true })))
+        onUnreadChange?.(0)
+    }
+
+    const handleClickNotif = async (notif: any) => {
+        if (!notif.is_read) {
+            markAsRead(notif.id).catch(() => {})
+            setNotifs(prev => prev.map(n => n.id === notif.id ? { ...n, is_read: true } : n))
+            onUnreadChange?.((await getUnreadNotifCount()) || 0)
+        }
+        if (notif.link) {
+            router.push(notif.link)
+        }
+    }
+
+    const unreadCount = notifs.filter(n => !n.is_read).length
+
+    if (loading) {
+        return (
+            <div className="p-4 md:p-8 flex items-center justify-center py-20">
+                <Loader2 size={24} className="animate-spin text-orange-500" />
+            </div>
+        )
+    }
 
     return (
         <div className="p-4 md:p-8">
-            <div className="mb-6">
-                <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Notifications</h2>
-                <p className="text-sm text-slate-400 font-bold mt-1">{allNotifs.filter(n => n.isRecent).length} récentes</p>
+            <div className="flex items-center justify-between mb-6">
+                <div>
+                    <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Notifications</h2>
+                    <p className="text-sm text-slate-400 font-bold mt-1">{unreadCount} non lue{unreadCount !== 1 ? 's' : ''}</p>
+                </div>
+                {unreadCount > 0 && (
+                    <button onClick={handleMarkAllRead} className="text-[10px] font-black uppercase text-orange-500 hover:underline">
+                        Tout marquer comme lu
+                    </button>
+                )}
             </div>
 
-            {allNotifs.length > 0 ? (
+            {notifs.length > 0 ? (
                 <div className="space-y-2">
-                    {allNotifs.map(n => {
-                        const Icon = n.Icon
-                        const isNeg = n.type === 'negotiation'
+                    {notifs.map(n => {
+                        const info = typeIcons[n.type] || { icon: Bell, color: 'text-slate-500 bg-slate-50 dark:bg-slate-800' }
+                        const Icon = info.icon
+                        const date = new Date(n.created_at)
                         return (
-                            <div key={n.id} className={`flex items-start gap-4 p-4 rounded-2xl border transition-all ${n.isRecent ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'border-transparent'}`}>
-                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${n.color}`}>
+                            <button
+                                key={n.id}
+                                onClick={() => handleClickNotif(n)}
+                                className={`w-full text-left flex items-start gap-4 p-4 rounded-2xl border transition-all hover:bg-slate-50 dark:hover:bg-slate-800/50 ${!n.is_read ? 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800' : 'border-transparent'}`}
+                            >
+                                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center flex-shrink-0 ${info.color}`}>
                                     <Icon size={18} />
                                 </div>
-                                <div className="flex-1">
+                                <div className="flex-1 min-w-0">
                                     <div className="flex items-center gap-2">
-                                        <p className={`text-sm font-bold ${n.isRecent ? 'dark:text-white' : 'text-slate-500'}`}>{n.title}</p>
-                                        {isNeg && <span className="text-[8px] font-black uppercase px-2 py-0.5 rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400">Négociation</span>}
-                                        {n.isRecent && <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
+                                        <p className={`text-sm font-bold truncate ${!n.is_read ? 'dark:text-white' : 'text-slate-500'}`}>{n.title}</p>
+                                        {!n.is_read && <div className="w-2 h-2 rounded-full bg-orange-500 flex-shrink-0" />}
                                     </div>
-                                    <p className="text-xs text-slate-400 mt-0.5">{n.desc}</p>
-                                    <p className="text-[10px] text-slate-400 mt-1">{n.timeLabel}</p>
-                                    {isNeg && 'productId' in n && n.productId && (
-                                        <Link href={`/product/${n.productId}`} className="inline-block mt-2 text-[10px] font-black uppercase text-orange-500 hover:underline">
-                                            Voir le produit →
-                                        </Link>
-                                    )}
+                                    <p className="text-xs text-slate-400 mt-0.5 line-clamp-2">{n.body}</p>
+                                    <p className="text-[10px] text-slate-400 mt-1">
+                                        {date.toLocaleDateString('fr-FR')} à {date.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+                                    </p>
                                 </div>
-                            </div>
+                            </button>
                         )
                     })}
                 </div>

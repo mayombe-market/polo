@@ -115,6 +115,28 @@ export function playDeliverySound() {
     }
 }
 
+/** Son de nouveau message (ding court et doux) */
+export function playMessageSound() {
+    try {
+        const ctx = getAudioContext()
+        const now = ctx.currentTime
+
+        // Ding aigu doux : sine 1046Hz (Do aigu)
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'sine'
+        osc.frequency.setValueAtTime(1046, now)
+        osc.frequency.exponentialRampToValueAtTime(1318, now + 0.1)
+        gain.gain.setValueAtTime(0.2, now)
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3)
+        osc.connect(gain).connect(ctx.destination)
+        osc.start(now)
+        osc.stop(now + 0.3)
+    } catch (e) {
+        // Audio non supporte, on ignore silencieusement
+    }
+}
+
 /** Son de nouvelle commande (notification vendeur) */
 export function playNewOrderSound() {
     try {

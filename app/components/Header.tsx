@@ -8,7 +8,8 @@ import { useRouter } from 'next/navigation'
 import AuthModal from '@/app/components/AuthModal'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
-import { Menu, X } from 'lucide-react'
+import { Menu, X, Bell } from 'lucide-react'
+import { getUnreadNotifCount } from '@/app/actions/notifications'
 
 
 export default function Header() {
@@ -19,6 +20,7 @@ export default function Header() {
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+    const [unreadNotifCount, setUnreadNotifCount] = useState(0)
     const menuRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
 
@@ -62,6 +64,7 @@ export default function Header() {
             setUser(user)
             if (user) {
                 await fetchProfile(user.id)
+                getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
             }
         }
         checkUser()
@@ -70,9 +73,11 @@ export default function Header() {
             setUser(session?.user ?? null)
             if (session?.user) {
                 await fetchProfile(session.user.id)
+                getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
             } else {
                 setAvatarUrl(null)
                 setUserRole(null)
+                setUnreadNotifCount(0)
             }
         })
         return () => subscription.unsubscribe()
@@ -91,6 +96,23 @@ export default function Header() {
         }
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [showUserMenu])
+
+    // Realtime: update bell badge
+    useEffect(() => {
+        if (!user?.id) return
+        const channel = supabase
+            .channel('header-notifs')
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
+                setUnreadNotifCount(prev => prev + 1)
+            })
+            .subscribe()
+        return () => { supabase.removeChannel(channel) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [user?.id])
+
+    const notifDashboardLink = userRole === 'vendor' || userRole === 'admin'
+        ? '/vendor/dashboard?tab=notifs'
+        : '/account/dashboard?tab=notifs'
 
     const handleLogout = async () => {
         try {
@@ -124,6 +146,17 @@ export default function Header() {
                     <button onClick={toggleDarkMode} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
                         {isDarkMode ? '☀️' : '🌙'}
                     </button>
+
+                    {user && (
+                        <Link href={notifDashboardLink} className="relative p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all">
+                            <Bell size={20} className="text-slate-600 dark:text-slate-300" />
+                            {unreadNotifCount > 0 && (
+                                <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-black min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
+                                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                                </span>
+                            )}
+                        </Link>
+                    )}
 
                     <CartBadge />
 
@@ -178,6 +211,16 @@ export default function Header() {
 
                 {/* MOBILE: cart + hamburger */}
                 <div className="flex md:hidden items-center gap-3">
+                    {user && (
+                        <Link href={notifDashboardLink} className="relative p-1">
+                            <Bell size={20} className="text-slate-600 dark:text-slate-300" />
+                            {unreadNotifCount > 0 && (
+                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[8px] font-black min-w-[16px] h-[16px] flex items-center justify-center rounded-full px-0.5">
+                                    {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
+                                </span>
+                            )}
+                        </Link>
+                    )}
                     <CartBadge />
                     <button
                         onClick={() => setMobileMenuOpen(!mobileMenuOpen)}

@@ -16,6 +16,12 @@ CREATE POLICY "Profils publics en lecture" ON profiles
 CREATE POLICY "Modifier son propre profil" ON profiles
     FOR UPDATE USING (auth.uid() = id);
 
+-- Un admin peut modifier tous les profils (abonnements, rôles, etc.)
+CREATE POLICY "Admin modifie tous les profils" ON profiles
+    FOR UPDATE USING (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
 -- Un utilisateur ne peut insérer que son propre profil
 CREATE POLICY "Créer son propre profil" ON profiles
     FOR INSERT WITH CHECK (auth.uid() = id);
@@ -156,6 +162,70 @@ CREATE POLICY "Liker" ON likes
 
 CREATE POLICY "Retirer son like" ON likes
     FOR DELETE USING (auth.uid() = user_id);
+
+-- ========================
+-- TABLE : conversations
+-- ========================
+ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see their conversations" ON conversations
+    FOR SELECT USING (auth.uid() = buyer_id OR auth.uid() = seller_id);
+
+CREATE POLICY "Buyers create conversations" ON conversations
+    FOR INSERT WITH CHECK (auth.uid() = buyer_id);
+
+-- ========================
+-- TABLE : messages
+-- ========================
+ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see conversation messages" ON messages
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM conversations c
+            WHERE c.id = conversation_id
+            AND (c.buyer_id = auth.uid() OR c.seller_id = auth.uid())
+        )
+    );
+
+CREATE POLICY "Users send messages" ON messages
+    FOR INSERT WITH CHECK (
+        sender_id = auth.uid()
+        AND EXISTS (
+            SELECT 1 FROM conversations c
+            WHERE c.id = conversation_id
+            AND (c.buyer_id = auth.uid() OR c.seller_id = auth.uid())
+        )
+    );
+
+CREATE POLICY "Users mark messages read" ON messages
+    FOR UPDATE USING (
+        EXISTS (
+            SELECT 1 FROM conversations c
+            WHERE c.id = conversation_id
+            AND (c.buyer_id = auth.uid() OR c.seller_id = auth.uid())
+        )
+    );
+
+-- Activer le realtime pour les messages
+ALTER PUBLICATION supabase_realtime ADD TABLE messages;
+
+-- ========================
+-- TABLE : notifications
+-- ========================
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users see their notifications" ON notifications
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "System creates notifications" ON notifications
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Users mark notifications read" ON notifications
+    FOR UPDATE USING (auth.uid() = user_id);
+
+-- Activer le realtime pour les notifications
+ALTER PUBLICATION supabase_realtime ADD TABLE notifications;
 
 -- ========================
 -- STORAGE : bucket products

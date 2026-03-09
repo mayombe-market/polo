@@ -1,4 +1,6 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { sanitizePostgrestValue } from '@/lib/sanitize'
+import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 
 export const searchProducts = async (query: string, filters: any, page: number = 1) => {
     const supabase = createBrowserClient(
@@ -14,9 +16,10 @@ export const searchProducts = async (query: string, filters: any, page: number =
     // On sélectionne les colonnes et on demande le compte total (count)
     let request = supabase.from('products').select('*', { count: 'exact' })
 
-    // 1. RECHERCHE TEXTUELLE (Nom + Description)
+    // 1. RECHERCHE TEXTUELLE (Nom + Description) — input sanitisé
     if (query) {
-        request = request.or(`name.ilike.%${query}%,description.ilike.%${query}%`)
+        const safeQuery = sanitizePostgrestValue(query)
+        request = request.or(`name.ilike.%${safeQuery}%,description.ilike.%${safeQuery}%`)
     }
 
     // 2. FILTRES DYNAMIQUES
@@ -42,7 +45,11 @@ export const searchProducts = async (query: string, filters: any, page: number =
         request = request.order('created_at', { ascending: false })
     }
 
-    // 4. APPLICATION DE LA TRANCHE (PAGINATION)
+    // 4. EXCLURE LES VENDEURS EXPIRÉS
+    const expiredIds = await getExpiredSellerIds(supabase)
+    request = excludeExpiredSellers(request, expiredIds)
+
+    // 5. APPLICATION DE LA TRANCHE (PAGINATION)
     request = request.range(from, to)
 
     const { data, count, error } = await request

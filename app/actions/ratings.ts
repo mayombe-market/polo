@@ -68,8 +68,13 @@ export async function reportNotReceived(orderId: string) {
     if (!order) return { error: 'Commande introuvable' }
     if (order.user_id !== user.id) return { error: 'Non autorisé' }
 
-    // Pour l'instant on flag juste — gestion des litiges à implémenter plus tard
-    // On pourrait ajouter une colonne `disputed` ou une table `disputes`
+    // Marquer la commande comme disputée
+    const { error } = await supabase
+        .from('orders')
+        .update({ disputed: true })
+        .eq('id', orderId)
+
+    if (error) return { error: error.message }
     return { success: true, message: 'Signalement enregistré. Notre équipe va vous contacter.' }
 }
 
@@ -100,6 +105,14 @@ export async function submitRating(input: {
     if (order.user_id !== user.id) return { error: 'Non autorisé' }
     if (!order.client_confirmed) return { error: 'Confirmez d\'abord la réception' }
 
+    // Valider les notes (1-5)
+    const ratings = [input.vendorRating, input.deliveryRating, input.platformRating]
+    for (const r of ratings) {
+        if (r !== undefined && r !== null && (!Number.isInteger(r) || r < 1 || r > 5)) {
+            return { error: 'Les notes doivent être entre 1 et 5.' }
+        }
+    }
+
     // Vérifier qu'il n'y a pas déjà une notation
     const { data: existing } = await supabase
         .from('ratings')
@@ -126,7 +139,7 @@ export async function submitRating(input: {
 
     if (error) return { error: error.message }
 
-    // Ajouter 500 points de fidélité
+    // Ajouter 500 points de fidélité (avec optimistic concurrency check)
     const { data: profile } = await supabase
         .from('profiles')
         .select('loyalty_points')
@@ -134,12 +147,15 @@ export async function submitRating(input: {
         .single()
 
     const currentPoints = profile?.loyalty_points || 0
-    await supabase
+    const { error: pointsError } = await supabase
         .from('profiles')
         .update({ loyalty_points: currentPoints + 500 })
         .eq('id', user.id)
+        .eq('loyalty_points', currentPoints)
 
-    return { success: true, pointsEarned: 500, totalPoints: currentPoints + 500 }
+    // Si la mise à jour échoue (race condition), on ne bloque pas — les points seront ajoutés au prochain essai
+    const totalPoints = pointsError ? currentPoints : currentPoints + 500
+    return { success: true, pointsEarned: pointsError ? 0 : 500, totalPoints }
 }
 
 // Récupérer la notation d'une commande

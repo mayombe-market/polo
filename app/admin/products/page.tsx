@@ -127,7 +127,7 @@ export default function AdminProducts() {
                             {products.map((p) => (
                                 <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                                     <td className="p-6">
-                                        <NextImage src={p.img || '/placeholder-image.jpg'} alt={p.name || ''} width={64} height={64} className="w-16 h-16 rounded-2xl object-cover border dark:border-slate-700" />
+                                        <NextImage src={p.img || '/placeholder-image.svg'} alt={p.name || ''} width={64} height={64} className="w-16 h-16 rounded-2xl object-cover border dark:border-slate-700" />
                                     </td>
                                     <td className="p-6">
                                         <p className="font-black text-sm uppercase dark:text-white">{p.name}</p>

@@ -1,7 +1,7 @@
 // hooks/userCart.ts — Context-based cart (shared state across all components)
 'use client'
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 
 export interface CartItem {
@@ -39,14 +39,16 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const userRef = useRef<any>(null)
+    const cartRef = useRef<CartItem[]>([])
 
-    const supabase = createBrowserClient(
+    const supabase = useMemo(() => createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    ), [])
 
-    // Keep userRef in sync
+    // Keep refs in sync
     useEffect(() => { userRef.current = user }, [user])
+    useEffect(() => { cartRef.current = cart }, [cart])
 
     // Obtenir le panier local sans side effects
     const getLocalCart = useCallback((): CartItem[] => {
@@ -184,7 +186,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
 
     // Sauvegarder le panier (optimistic update)
     const saveCart = useCallback(async (newCart: CartItem[]) => {
-        const previousCart = cart
+        const previousCart = cartRef.current
         setCart(newCart)
 
         try {
@@ -215,39 +217,40 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
             setError('Erreur lors de la sauvegarde')
             console.error('Erreur sauvegarde panier:', (err as any)?.message || (err as any)?.details || JSON.stringify(err))
         }
-    }, [cart, supabase])
+    }, [supabase])
 
     const addToCart = useCallback(async (product: Omit<CartItem, 'quantity'>) => {
-        const existingItem = cart.find(item => item.id === product.id)
+        const current = cartRef.current
+        const existingItem = current.find(item => item.id === product.id)
         let newCart: CartItem[]
         if (existingItem) {
-            newCart = cart.map(item =>
+            newCart = current.map(item =>
                 item.id === product.id
                     ? { ...item, quantity: item.quantity + 1 }
                     : item
             )
         } else {
-            newCart = [...cart, { ...product, quantity: 1 }]
+            newCart = [...current, { ...product, quantity: 1 }]
         }
         await saveCart(newCart)
         return true
-    }, [cart, saveCart])
+    }, [saveCart])
 
     const removeFromCart = useCallback(async (itemId: string) => {
-        const newCart = cart.filter(item => item.id !== itemId)
+        const newCart = cartRef.current.filter(item => item.id !== itemId)
         await saveCart(newCart)
-    }, [cart, saveCart])
+    }, [saveCart])
 
     const updateQuantity = useCallback(async (itemId: string, quantity: number) => {
         if (quantity <= 0) {
             await removeFromCart(itemId)
             return
         }
-        const newCart = cart.map(item =>
+        const newCart = cartRef.current.map(item =>
             item.id === itemId ? { ...item, quantity } : item
         )
         await saveCart(newCart)
-    }, [cart, saveCart, removeFromCart])
+    }, [saveCart, removeFromCart])
 
     const clearCart = useCallback(async () => {
         await saveCart([])

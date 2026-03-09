@@ -42,7 +42,7 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                 <div ref={scrollContainerRef} className="flex overflow-x-auto snap-x snap-mandatory gap-4 scrollbar-hide pb-4" style={{ scrollbarWidth: 'none' }}>
                     {ads?.map((ad) => (
                         <div key={ad.id} className="min-w-[100%] snap-center relative h-[250px] md:h-[400px] rounded-[2rem] overflow-hidden bg-slate-200 shadow-lg">
-                            <Image src={ad.img || '/placeholder-image.jpg'} alt="" fill sizes="100vw" className="object-cover" />
+                            <Image src={ad.img || '/placeholder-image.svg'} alt="" fill sizes="100vw" className="object-cover" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-8">
                                 <h2 className="text-white text-3xl font-bold">{ad.title}</h2>
                             </div>
@@ -62,7 +62,7 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                             className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
                         >
                             <div className="relative overflow-hidden aspect-square">
-                                <Image src={product.img || product.image_url || '/placeholder-image.jpg'} alt={product.name} fill sizes="(max-width: 768px) 50vw, 20vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                <Image src={product.img || product.image_url || '/placeholder-image.svg'} alt={product.name} fill sizes="(max-width: 768px) 50vw, 20vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
                             </div>
                             <div className="p-3">
                                 <h3 className="font-semibold text-sm dark:text-gray-200 truncate">{product.name}</h3>

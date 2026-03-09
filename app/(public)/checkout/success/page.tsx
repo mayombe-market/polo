@@ -1,20 +1,41 @@
 'use client'
 
-import { Suspense, useEffect } from 'react'
+import { Suspense, useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCart } from '@/hooks/userCart'
+import { createBrowserClient } from '@supabase/ssr'
 import { CheckCircle, ShoppingBag, Package, Smartphone } from 'lucide-react'
 
 function SuccessContent() {
     const { clearCart } = useCart()
     const searchParams = useSearchParams()
     const method = searchParams.get('method')
-    const totalParam = searchParams.get('total')
+    const orderId = searchParams.get('orderId')
+    const totalParam = searchParams.get('total') // fallback legacy
+    const [orderTotal, setOrderTotal] = useState<number | null>(totalParam ? Number(totalParam) : null)
+
+    const supabase = useMemo(() => createBrowserClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ), [])
 
     useEffect(() => {
         clearCart()
     }, [clearCart])
+
+    // Charger le montant réel depuis la BDD si orderId est disponible
+    useEffect(() => {
+        if (!orderId) return
+        supabase
+            .from('orders')
+            .select('total_amount')
+            .eq('id', orderId)
+            .single()
+            .then(({ data }) => {
+                if (data?.total_amount) setOrderTotal(data.total_amount)
+            })
+    }, [orderId, supabase])
 
     return (
         <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center p-6">
@@ -40,7 +61,7 @@ function SuccessContent() {
                             <p className="font-black uppercase text-xs text-green-700 dark:text-green-400">Paiement Mobile Money</p>
                         </div>
                         <p className="text-sm text-green-800 dark:text-green-300 leading-relaxed">
-                            Envoyez <strong>{totalParam ? Number(totalParam).toLocaleString('fr-FR') : '...'} FCFA</strong> au
+                            Envoyez <strong>{orderTotal ? orderTotal.toLocaleString('fr-FR') : '...'} FCFA</strong> au
                             <strong> 06 938 71 69</strong> via MTN MoMo ou Airtel Money.
                         </p>
                         <p className="text-[10px] font-bold text-green-600 uppercase tracking-widest">
@@ -54,7 +75,7 @@ function SuccessContent() {
                             <p className="font-black uppercase text-xs text-orange-700 dark:text-orange-400">Cash à la livraison</p>
                         </div>
                         <p className="text-sm text-orange-800 dark:text-orange-300 leading-relaxed">
-                            Préparez <strong>{totalParam ? Number(totalParam).toLocaleString('fr-FR') : '...'} FCFA</strong> en espèces pour le livreur.
+                            Préparez <strong>{orderTotal ? orderTotal.toLocaleString('fr-FR') : '...'} FCFA</strong> en espèces pour le livreur.
                         </p>
                     </div>
                 )}

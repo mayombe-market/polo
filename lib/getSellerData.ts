@@ -1,4 +1,5 @@
 import { createBrowserClient } from '@supabase/ssr'
+import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 
 export const getSellerData = async (sellerId: string) => {
     const supabase = createBrowserClient(
@@ -22,17 +23,25 @@ export const getSellerData = async (sellerId: string) => {
         profileError = e
     }
 
-    // 2. Ses produits
+    // Vérifier si le vendeur est expiré (produits masqués)
+    const sellerExpired = profile
+        && profile.subscription_plan
+        && profile.subscription_plan !== 'free'
+        && isSubscriptionExpiredPastGrace(profile)
+
+    // 2. Ses produits (vide si vendeur expiré)
     let products: any[] = []
-    try {
-        const res = await supabase
-            .from('products')
-            .select('*')
-            .eq('seller_id', sellerId)
-            .order('created_at', { ascending: false })
-        products = res.data || []
-    } catch (e) {
-        console.error('Erreur produits:', e)
+    if (!sellerExpired) {
+        try {
+            const res = await supabase
+                .from('products')
+                .select('*')
+                .eq('seller_id', sellerId)
+                .order('created_at', { ascending: false })
+            products = res.data || []
+        } catch (e) {
+            console.error('Erreur produits:', e)
+        }
     }
 
     // 3. Nombre de followers (gens qui suivent ce vendeur)
@@ -84,6 +93,7 @@ export const getSellerData = async (sellerId: string) => {
     return {
         profile,
         products,
+        sellerExpired: !!sellerExpired,
         followerCount,
         followingCount,
         reviews,

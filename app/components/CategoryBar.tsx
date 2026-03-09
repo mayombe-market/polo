@@ -2,7 +2,24 @@
 
 import { useSearchParams, useRouter } from 'next/navigation'
 
-const categories = ['Tout', 'Perruques', 'Téléphones', 'Beauté', 'Accessoires', 'Pharmacie', 'Pâtisserie', 'Immobilier']
+const categories = [
+    'Tout',
+    'Mode & Beauté',
+    'High-Tech',
+    'Pharmacie & Santé',
+    'Électroménager',
+    'Maison & Déco',
+    'Pâtisserie & Traiteur',
+    'Immobilier',
+    'Alimentation & Boissons',
+    'Auto & Moto',
+    'Bébé & Enfants',
+    'Sport & Loisirs',
+    'Services',
+    'Fournitures & Bureau',
+    'Agriculture & Élevage',
+    'Matériaux & BTP',
+]
 
 export default function CategoryBar() {
     const searchParams = useSearchParams()

@@ -1,6 +1,7 @@
 'use server'
 
 import { resend, FROM_EMAIL } from '@/lib/resend'
+import { escapeHtml } from '@/lib/escapeHtml'
 
 interface OrderItem {
     name: string
@@ -22,11 +23,14 @@ interface OrderEmailData {
 // Email de confirmation de commande (envoyé à l'acheteur)
 export async function sendOrderConfirmationEmail(data: OrderEmailData) {
     const paymentLabel = data.paymentMethod === 'cash' ? 'Cash à la livraison' : 'Mobile Money'
+    const safeName = escapeHtml(data.customerName)
+    const safeCity = escapeHtml(data.city)
+    const safeDistrict = escapeHtml(data.district)
 
     const itemsHtml = data.items
         .map(item => `
             <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">${item.name}</td>
+                <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">${escapeHtml(item.name)}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: center;">x${item.quantity}</td>
                 <td style="padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: bold;">${(item.price * item.quantity).toLocaleString('fr-FR')} FCFA</td>
             </tr>
@@ -45,7 +49,7 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
                     </div>
 
                     <div style="padding: 30px;">
-                        <h2 style="color: #0f172a; margin-bottom: 5px;">Merci ${data.customerName} !</h2>
+                        <h2 style="color: #0f172a; margin-bottom: 5px;">Merci ${safeName} !</h2>
                         <p style="color: #64748b; font-size: 14px;">Votre commande a bien été enregistrée. Voici le récapitulatif :</p>
 
                         <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
@@ -70,7 +74,7 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
                                 <span style="color: #64748b; font-size: 13px;">Paiement : ${paymentLabel}</span>
                             </div>
                             <div style="margin-top: 4px;">
-                                <span style="color: #64748b; font-size: 13px;">Livraison : ${data.city}, ${data.district}</span>
+                                <span style="color: #64748b; font-size: 13px;">Livraison : ${safeCity}, ${safeDistrict}</span>
                             </div>
                         </div>
 
@@ -146,7 +150,7 @@ export async function sendOrderStatusEmail(
                         <div style="width: 60px; height: 60px; background: ${status.color}20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px; color: ${status.color};">●</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${customerName}</h2>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(customerName)}</h2>
                         <p style="color: #64748b; font-size: 14px;">${status.message}</p>
 
                         <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin: 24px 0; display: inline-block;">
@@ -157,7 +161,7 @@ export async function sendOrderStatusEmail(
                         ${trackingNumber ? `
                         <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 12px; margin: 16px 0;">
                             <span style="font-size: 12px; color: #64748b; text-transform: uppercase;">Numéro de suivi</span><br/>
-                            <span style="font-size: 18px; font-weight: bold; color: #1e40af; letter-spacing: 2px;">${trackingNumber}</span>
+                            <span style="font-size: 18px; font-weight: bold; color: #1e40af; letter-spacing: 2px;">${escapeHtml(trackingNumber)}</span>
                         </div>
                         ` : ''}
                     </div>
@@ -201,12 +205,12 @@ export async function sendNegotiationOfferEmail(
                         <div style="width: 60px; height: 60px; background: #f9731620; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px;">🤝</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${sellerName}</h2>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(sellerName)}</h2>
                         <p style="color: #64748b; font-size: 14px;">Un client souhaite négocier le prix d'un de vos produits.</p>
 
                         <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin: 24px 0;">
                             <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; margin: 0 0 8px 0;">Produit</p>
-                            <p style="font-size: 16px; font-weight: bold; color: #0f172a; margin: 0;">${productName}</p>
+                            <p style="font-size: 16px; font-weight: bold; color: #0f172a; margin: 0;">${escapeHtml(productName)}</p>
                         </div>
 
                         <div style="display: flex; gap: 16px; margin: 20px 0;">
@@ -220,7 +224,7 @@ export async function sendNegotiationOfferEmail(
                             </div>
                         </div>
 
-                        <p style="color: #64748b; font-size: 13px; margin: 8px 0 0 0;">De la part de <strong>${buyerName}</strong></p>
+                        <p style="color: #64748b; font-size: 13px; margin: 8px 0 0 0;">De la part de <strong>${escapeHtml(buyerName)}</strong></p>
 
                         <p style="color: #64748b; font-size: 13px; margin-top: 24px;">Connectez-vous à votre dashboard vendeur pour accepter ou refuser cette offre.</p>
                     </div>
@@ -260,12 +264,12 @@ export async function sendPickupNotificationEmail(
                         <div style="width: 60px; height: 60px; background: #3b82f620; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px;">🏍️</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${clientName}</h2>
-                        <p style="color: #64748b; font-size: 14px;">Votre colis "<strong>${productName}</strong>" a été récupéré chez le vendeur et est maintenant en route vers vous !</p>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(clientName)}</h2>
+                        <p style="color: #64748b; font-size: 14px;">Votre colis "<strong>${escapeHtml(productName)}</strong>" a été récupéré chez le vendeur et est maintenant en route vers vous !</p>
 
                         <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 12px; margin: 24px 0;">
                             <span style="font-size: 12px; color: #64748b; text-transform: uppercase;">Livreur</span><br/>
-                            <span style="font-size: 16px; font-weight: bold; color: #1e40af;">${logisticianName}</span>
+                            <span style="font-size: 16px; font-weight: bold; color: #1e40af;">${escapeHtml(logisticianName)}</span>
                         </div>
 
                         <p style="color: #64748b; font-size: 13px;">Vous serez notifié dès que le livreur arrivera chez vous.</p>
@@ -306,8 +310,8 @@ export async function sendDeliveryConfirmationRequestEmail(
                         <div style="width: 60px; height: 60px; background: #22c55e20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px;">📦</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${clientName}</h2>
-                        <p style="color: #64748b; font-size: 14px;">Votre colis "<strong>${productName}</strong>" a été livré !</p>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(clientName)}</h2>
+                        <p style="color: #64748b; font-size: 14px;">Votre colis "<strong>${escapeHtml(productName)}</strong>" a été livré !</p>
 
                         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; margin: 24px 0;">
                             <p style="color: #166534; font-weight: bold; font-size: 14px; margin: 0 0 8px 0;">Confirmez la réception</p>
@@ -346,7 +350,7 @@ export async function sendSubscriptionConfirmationEmail(
     const featuresHtml = features
         .map(f => `<div style="display: flex; align-items: center; gap: 10px; padding: 8px 0;">
             <span style="width: 22px; height: 22px; border-radius: 8px; background: rgba(34,197,94,0.15); color: #22C55E; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: bold;">✓</span>
-            <span style="color: #64748b; font-size: 13px;">${f}</span>
+            <span style="color: #64748b; font-size: 13px;">${escapeHtml(f)}</span>
         </div>`)
         .join('')
 
@@ -365,8 +369,8 @@ export async function sendSubscriptionConfirmationEmail(
                         <div style="width: 70px; height: 70px; background: linear-gradient(135deg, #f97316, #ea580c); border-radius: 22px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 36px;">🚀</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px; font-size: 22px;">Félicitations ${vendorName} !</h2>
-                        <p style="color: #64748b; font-size: 15px; margin-bottom: 4px;">Votre plan <strong style="color: #f97316;">${planName}</strong> est maintenant actif.</p>
+                        <h2 style="color: #0f172a; margin-bottom: 8px; font-size: 22px;">Félicitations ${escapeHtml(vendorName)} !</h2>
+                        <p style="color: #64748b; font-size: 15px; margin-bottom: 4px;">Votre plan <strong style="color: #f97316;">${escapeHtml(planName)}</strong> est maintenant actif.</p>
                         <p style="color: #94a3b8; font-size: 13px;">Paiement de ${planPrice.toLocaleString('fr-FR')} FCFA confirmé.</p>
 
                         <div style="background: #f8fafc; padding: 24px; border-radius: 16px; margin: 28px 0; text-align: left;">
@@ -413,8 +417,8 @@ export async function sendVendorDeliveryNotificationEmail(
                         <div style="width: 60px; height: 60px; background: #22c55e20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px;">✅</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${vendorName}</h2>
-                        <p style="color: #64748b; font-size: 14px;">Votre produit "<strong>${productName}</strong>" a été livré avec succès au client à ${customerCity} !</p>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(vendorName)}</h2>
+                        <p style="color: #64748b; font-size: 14px;">Votre produit "<strong>${escapeHtml(productName)}</strong>" a été livré avec succès au client à ${escapeHtml(customerCity)} !</p>
 
                         <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 20px; border-radius: 12px; margin: 24px 0;">
                             <p style="font-size: 12px; color: #94a3b8; text-transform: uppercase; margin: 0 0 8px 0;">Votre revenu</p>
@@ -446,9 +450,10 @@ export async function sendNegotiationResponseEmail(
 ) {
     const statusColor = accepted ? '#22c55e' : '#ef4444'
     const statusLabel = accepted ? 'Acceptée' : 'Refusée'
+    const safeProduct = escapeHtml(productName)
     const statusMessage = accepted
-        ? `Votre offre de ${proposedPrice.toLocaleString('fr-FR')} FCFA pour "${productName}" a été acceptée ! Rendez-vous sur la page du produit pour acheter à ce prix.`
-        : `Votre offre de ${proposedPrice.toLocaleString('fr-FR')} FCFA pour "${productName}" a été refusée par le vendeur.`
+        ? `Votre offre de ${proposedPrice.toLocaleString('fr-FR')} FCFA pour &laquo;${safeProduct}&raquo; a été acceptée ! Rendez-vous sur la page du produit pour acheter à ce prix.`
+        : `Votre offre de ${proposedPrice.toLocaleString('fr-FR')} FCFA pour &laquo;${safeProduct}&raquo; a été refusée par le vendeur.`
 
     try {
         await resend.emails.send({
@@ -465,7 +470,7 @@ export async function sendNegotiationResponseEmail(
                         <div style="width: 60px; height: 60px; background: ${statusColor}20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
                             <span style="font-size: 28px; color: ${statusColor};">●</span>
                         </div>
-                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${buyerName}</h2>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${escapeHtml(buyerName)}</h2>
                         <p style="color: #64748b; font-size: 14px;">${statusMessage}</p>
 
                         <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin: 24px 0; display: inline-block;">

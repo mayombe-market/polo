@@ -97,7 +97,7 @@ export function OrderCard({ order }: { order: any }) {
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 pt-6 border-t border-slate-50 dark:border-slate-800">
                 {order.items?.map((item: any, idx: number) => (
                     <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl flex items-center gap-3 border border-transparent hover:border-slate-200 transition-all">
-                        <Image src={item.img || '/placeholder-image.jpg'} alt={item.name} width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm" />
+                        <Image src={item.img || '/placeholder-image.svg'} alt={item.name} width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm" />
                         <div className="overflow-hidden">
                             <p className="text-[9px] font-black uppercase italic truncate leading-none mb-1">{item.name}</p>
                             <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Qté: {item.quantity}</p>

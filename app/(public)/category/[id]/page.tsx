@@ -1,6 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import Image from 'next/image'
+import { sanitizePostgrestValue } from '@/lib/sanitize'
+import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 
 export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
 
@@ -30,20 +32,23 @@ export default async function CategoryPage(props: any) {
         category = catData;
 
         if (category) {
-            let productQuery = supabase.from('products').select('*');
+            const expiredIds = await getExpiredSellerIds(supabase)
+            let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds);
 
             if (selectedSub) {
                 const subObj = category.sub_category?.find((s: any) => s.name === selectedSub);
+                const safeSub = sanitizePostgrestValue(selectedSub);
 
                 // REQUÊTE MIXTE : Cherche par Nom flou OU par UUID de l'ancienne base
-                let orConditions = `subcategory.ilike.%${selectedSub}%`;
+                let orConditions = `subcategory.ilike.%${safeSub}%`;
                 if (subObj) {
                     orConditions += `,sub_category_uuid.eq.${subObj.id}`;
                 }
                 productQuery = productQuery.or(orConditions);
             } else {
                 // REQUÊTE MIXTE : Cherche par Nom flou OU par ID numérique de l'ancienne base
-                productQuery = productQuery.or(`category.ilike.%${categoryName}%,category_id.eq.${category.id}`);
+                const safeCategoryName = sanitizePostgrestValue(categoryName);
+                productQuery = productQuery.or(`category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`);
             }
 
             const { data: prodData } = await productQuery.order('created_at', { ascending: false });
@@ -94,7 +99,7 @@ export default async function CategoryPage(props: any) {
                             <Link href={`/product/${p.id}`} key={p.id} className="group border border-slate-100 dark:border-slate-800 rounded-[2rem] overflow-hidden hover:shadow-2xl transition-all bg-white dark:bg-slate-800/50">
                                 <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
                                     <Image
-                                        src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.jpg'}
+                                        src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.svg'}
                                         alt={p.name}
                                         fill
                                         sizes="(max-width: 768px) 50vw, 25vw"

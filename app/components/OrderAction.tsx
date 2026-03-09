@@ -109,6 +109,11 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                 return
             }
 
+            if (!result.order) {
+                setOrderError('Erreur inattendue. Réessayez.')
+                return
+            }
+
             setOrderId(result.order.id)
             setOrderData(result.order)
             setStep('waiting')
@@ -146,6 +151,11 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
             if (result.error) {
                 setOrderError(result.error)
+                return
+            }
+
+            if (!result.order) {
+                setOrderError('Erreur inattendue. Réessayez.')
                 return
             }
 

@@ -3,6 +3,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { sendNegotiationResponseEmail } from '@/app/actions/emails'
+import { createNotification } from '@/app/actions/notifications'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -33,10 +34,19 @@ export async function sendNegotiationOffer(input: {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
-    if (user.id === input.sellerId) return { error: 'Vous ne pouvez pas négocier votre propre produit.' }
+
+    // Valider le produit depuis la BDD (ne pas faire confiance au client)
+    const { data: dbProduct } = await supabase
+        .from('products')
+        .select('id, price, seller_id')
+        .eq('id', input.productId)
+        .single()
+
+    if (!dbProduct) return { error: 'Produit introuvable.' }
+    if (user.id === dbProduct.seller_id) return { error: 'Vous ne pouvez pas négocier votre propre produit.' }
 
     if (input.proposedPrice < 100) return { error: 'Le prix proposé doit être d\'au moins 100 FCFA.' }
-    if (input.proposedPrice >= input.initialPrice) return { error: 'Votre offre doit être inférieure au prix actuel.' }
+    if (input.proposedPrice >= dbProduct.price) return { error: 'Votre offre doit être inférieure au prix actuel.' }
 
     // Vérifier qu'il n'y a pas déjà une offre en attente
     const { data: existing } = await supabase
@@ -61,9 +71,9 @@ export async function sendNegotiationOffer(input: {
         .from('negotiations')
         .insert([{
             product_id: input.productId,
-            seller_id: input.sellerId,
+            seller_id: dbProduct.seller_id,
             buyer_id: user.id,
-            initial_price: input.initialPrice,
+            initial_price: dbProduct.price,
             proposed_price: input.proposedPrice,
             status: 'en_attente',
             buyer_email: user.email || null,
@@ -74,8 +84,8 @@ export async function sendNegotiationOffer(input: {
 
     if (error) return { error: error.message }
 
-    // Note: le vendeur est notifié en temps réel via Supabase Realtime dans son dashboard
-    // (son + toast + notification push navigateur)
+    // Notifier le vendeur
+    createNotification(dbProduct.seller_id, 'new_negotiation', 'Nouvelle offre', `${buyer?.full_name || 'Un acheteur'} propose ${input.proposedPrice.toLocaleString('fr-FR')} FCFA`, `/account/dashboard?tab=negotiations`).catch(() => {})
 
     return { success: true, negotiationId: negotiation?.id }
 }
@@ -127,6 +137,10 @@ export async function respondToNegotiation(input: {
             input.response === 'accepte'
         ).catch(() => {})
     }
+
+    // Notifier l'acheteur
+    const statusText = input.response === 'accepte' ? 'acceptée' : 'refusée'
+    createNotification(negotiation.buyer_id, 'negotiation_response', `Offre ${statusText}`, `Votre offre de ${negotiation.proposed_price.toLocaleString('fr-FR')} FCFA a été ${statusText}.`, `/account/dashboard?tab=negotiations`).catch(() => {})
 
     return { success: true }
 }

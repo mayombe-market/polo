@@ -148,6 +148,26 @@ export async function middleware(request: NextRequest) {
         }
     }
 
+    const cspHeader = `
+        default-src 'self';
+        script-src 'self' 'unsafe-inline' 'unsafe-eval';
+        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+        img-src 'self' data: blob: https://*.unsplash.com               
+        https://images.unsplash.com 
+        https://ui-avatars.com https://*.supabase.co;
+        font-src 'self' https://fonts.gstatic.com;
+        connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+        frame-ancestors 'none';
+        base-uri 'self';
+        form-action 'self';
+    `.replace(/\s{2,}/g, ' ').trim();
+
+    supabaseResponse.headers.set('Content-Security-Policy', cspHeader);
+    // On ajoute aussi une protection contre le "vol de clic" (Clickjacking)
+    supabaseResponse.headers.set('X-Frame-Options', 'DENY');
+    // On empêche le navigateur de deviner le type de contenu (MIME sniffing)
+    supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
+
     return supabaseResponse
 }
 

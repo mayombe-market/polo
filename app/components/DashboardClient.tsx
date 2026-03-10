@@ -688,7 +688,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             onBack={() => { setShowUpgradeCheckout(false); setShowUpgradePricing(true) }}
                             onComplete={() => {
                                 setShowUpgradeCheckout(false)
-                                router.refresh()
+                                // Recharger la page proprement pour avoir le nouveau plan
+                                window.location.href = '/vendor/dashboard'
                             }}
                         />
                     </div>

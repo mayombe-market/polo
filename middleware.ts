@@ -50,7 +50,14 @@ export async function middleware(request: NextRequest) {
     )
 
     // IMPORTANT : getUser() rafraîchit le token auth automatiquement
-    const { data: { user } } = await supabase.auth.getUser()
+    // Protégé par try-catch pour ne pas crasher le middleware si auth échoue
+    let user = null
+    try {
+        const { data } = await supabase.auth.getUser()
+        user = data?.user ?? null
+    } catch {
+        // Si getUser échoue (timeout, réseau), on continue sans user
+    }
 
     // Protection des routes vendor
     if (pathname.startsWith('/vendor')) {

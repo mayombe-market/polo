@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { Heart } from 'lucide-react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 
 export default function LikeButton({ productId }: { productId: string }) {
     const [isLiked, setIsLiked] = useState(false)
@@ -11,7 +12,7 @@ export default function LikeButton({ productId }: { productId: string }) {
     useEffect(() => {
         const checkLike = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
+                const user = await safeGetUser(supabase)
                 if (user) {
                     const { data } = await supabase
                         .from('favorites')
@@ -32,7 +33,7 @@ export default function LikeButton({ productId }: { productId: string }) {
 
     const toggleLike = async (e: React.MouseEvent) => {
         e.preventDefault()
-        const { data: { user } } = await supabase.auth.getUser()
+        const user = await safeGetUser(supabase)
         if (!user) return alert("Connectez-vous pour ajouter aux favoris")
 
         if (isLiked) {

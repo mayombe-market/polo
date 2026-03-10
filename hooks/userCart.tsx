@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 
 export interface CartItem {
     id: string
@@ -145,22 +146,24 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
     useEffect(() => {
         const initCart = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
-                setUser(user)
+                // Timeout protégé pour éviter chargement infini
+                const currentUser = await safeGetUser(supabase)
+                setUser(currentUser)
 
-                if (user) {
-                    await loadCartFromSupabase(user.id)
+                if (currentUser) {
+                    await loadCartFromSupabase(currentUser.id)
                     const localCart = getLocalCart()
                     if (localCart.length > 0) {
-                        await mergeLocalCartToSupabase(user.id, localCart)
+                        await mergeLocalCartToSupabase(currentUser.id, localCart)
                         localStorage.removeItem('mayombe_cart')
                     }
                 } else {
                     setCart(getLocalCart())
                 }
             } catch (err) {
-                setError('Erreur lors du chargement du panier')
-                console.error(err)
+                // En cas d'erreur, charger le panier local
+                setCart(getLocalCart())
+                console.error('Erreur init panier:', err)
             } finally {
                 setLoading(false)
             }

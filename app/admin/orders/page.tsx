@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
@@ -69,7 +70,7 @@ export default function AdminOrders() {
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
+                const user = await safeGetUser(supabase)
                 if (!user) return
 
                 const { data, error } = await supabase

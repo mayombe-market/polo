@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import Image from 'next/image'
 import { User, Phone, Save, Loader2, Camera } from 'lucide-react'
 
@@ -24,7 +25,7 @@ export default function ProfilePage() {
     useEffect(() => {
         const getProfile = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
+                const user = await safeGetUser(supabase)
                 if (user) {
                     const { data } = await supabase
                         .from('profiles')
@@ -49,7 +50,7 @@ export default function ProfilePage() {
             const file = e.target.files?.[0]
             if (!file) return
 
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
             if (!user) throw new Error("Utilisateur non trouvé")
 
             const fileExt = file.name.split('.').pop()
@@ -86,7 +87,7 @@ export default function ProfilePage() {
         e.preventDefault()
         setUpdating(true)
         try {
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
             if (!user) throw new Error("Non connecté")
 
             const { error } = await supabase

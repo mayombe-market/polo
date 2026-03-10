@@ -3,6 +3,7 @@
 import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 
 export default function AccountRedirect() {
     const router = useRouter()
@@ -13,7 +14,7 @@ export default function AccountRedirect() {
 
     useEffect(() => {
         const redirect = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
 
             if (!user) {
                 router.replace('/')

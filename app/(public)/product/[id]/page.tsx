@@ -18,6 +18,7 @@ import MessageButton from '../../../components/MessageButton'
 import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
+import { safeGetUser } from '@/lib/supabase-utils'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -44,43 +45,52 @@ export default function ProductDetailPage() {
     const [sellerExpired, setSellerExpired] = useState(false)
 
     useEffect(() => {
+        let cancelled = false
+
         const fetchData = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
-                setUser(user)
+                // getUser avec timeout pour éviter les chargements infinis
+                const currentUser = await safeGetUser(supabase)
+                if (cancelled) return
+                setUser(currentUser)
 
                 const { data: prod, error: prodError } = await supabase.from('products').select('*').eq('id', id).single()
-                if (prodError) return
+                if (cancelled) return
+                if (prodError || !prod) return
 
-                if (prod) {
-                    setProduct(prod)
-                    const shopRes = await supabase
-                        .from('profiles')
-                        .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date')
-                        .eq('id', prod.seller_id)
-                        .maybeSingle()
+                setProduct(prod)
 
-                    setShop(shopRes.data)
-                    setFollowerCount(shopRes.data?.followers_count || 0)
-                    // Vérifier si le vendeur est expiré
-                    if (shopRes.data?.subscription_plan && shopRes.data.subscription_plan !== 'free') {
-                        setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
-                    }
+                const shopRes = await supabase
+                    .from('profiles')
+                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date')
+                    .eq('id', prod.seller_id)
+                    .maybeSingle()
 
-                    const reviewsRes = await supabase
-                        .from('reviews')
-                        .select('*')
-                        .eq('product_id', id)
-                        .order('created_at', { ascending: false })
-                    setReviews(reviewsRes.data || [])
+                if (cancelled) return
+                setShop(shopRes.data)
+                setFollowerCount(shopRes.data?.followers_count || 0)
+                // Vérifier si le vendeur est expiré
+                if (shopRes.data?.subscription_plan && shopRes.data.subscription_plan !== 'free') {
+                    setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
                 }
+
+                const reviewsRes = await supabase
+                    .from('reviews')
+                    .select('*')
+                    .eq('product_id', id)
+                    .order('created_at', { ascending: false })
+
+                if (cancelled) return
+                setReviews(reviewsRes.data || [])
             } catch (err) {
-                console.error('Erreur page produit:', err)
+                if (!cancelled) console.error('Erreur page produit:', err)
             } finally {
-                setLoading(false)
+                if (!cancelled) setLoading(false)
             }
         }
         fetchData()
+
+        return () => { cancelled = true }
     }, [id])
 
     if (loading) return (

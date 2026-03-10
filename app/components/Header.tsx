@@ -10,7 +10,7 @@ import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import { Menu, X, Bell } from 'lucide-react'
 import { getUnreadNotifCount } from '@/app/actions/notifications'
-
+import { safeGetUser } from '@/lib/supabase-utils'
 
 export default function Header() {
     const [user, setUser] = useState<any>(null)
@@ -60,10 +60,10 @@ export default function Header() {
         }
 
         const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            setUser(user)
-            if (user) {
-                await fetchProfile(user.id)
+            const u = await safeGetUser(supabase)
+            setUser(u)
+            if (u) {
+                await fetchProfile(u.id)
                 getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
             }
         }

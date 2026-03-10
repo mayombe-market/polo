@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { getFollowedProducts } from '@/lib/getFollowedProducts'
 import ProductCard from '@/app/components/ProductCard'
 import { Bell, Sparkles, Loader2 } from 'lucide-react'
@@ -19,11 +20,11 @@ export default function FeedPage() {
 
     useEffect(() => {
         const loadFeed = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
-            setUser(user)
+            const u = await safeGetUser(supabase)
+            setUser(u)
 
-            if (user) {
-                const { data } = await getFollowedProducts(user.id)
+            if (u) {
+                const { data } = await getFollowedProducts(u.id)
                 setProducts(data || [])
             }
             setLoading(false)

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 
 const COUNTRIES = [
@@ -39,25 +40,29 @@ export default function CompleteProfilePage() {
     useEffect(() => {
         let cancelled = false
         const checkUser = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
+            const u = await safeGetUser(supabase)
 
             if (cancelled) return
 
-            if (!user) {
+            if (!u) {
                 router.push('/')
                 return
             }
 
-            setUser(user)
+            setUser(u)
 
-            const { data: profile } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', user.id)
-                .single()
+            try {
+                const { data: profile } = await supabase
+                    .from('profiles')
+                    .select('*')
+                    .eq('id', u.id)
+                    .single()
 
-            if (!cancelled && profile && profile.first_name) {
-                router.push('/')
+                if (!cancelled && profile && profile.first_name) {
+                    router.push('/')
+                }
+            } catch {
+                // Profile pas encore créé — continuer normalement
             }
         }
 

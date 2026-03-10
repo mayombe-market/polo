@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { MapPin, Navigation, Home, Save, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function AddressesPage() {
@@ -22,7 +23,7 @@ export default function AddressesPage() {
     useEffect(() => {
         const getAddress = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
+                const user = await safeGetUser(supabase)
                 if (user) {
                     const { data } = await supabase
                         .from('profiles')
@@ -45,7 +46,8 @@ export default function AddressesPage() {
         setUpdating(true)
         setSaved(false)
         try {
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
+            if (!user) throw new Error('Non connecté')
             const { error } = await supabase
                 .from('profiles')
                 .update({

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 
 export default function SellerNegotiations() {
     const [negotiations, setNegotiations] = useState<any[]>([])
@@ -13,7 +14,7 @@ export default function SellerNegotiations() {
 
     useEffect(() => {
         const fetchNegotiations = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
             if (!user) return
 
             const { data } = await supabase

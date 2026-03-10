@@ -193,7 +193,8 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
             await revalidateProducts()
             alert("Produit mis en ligne !")
-            router.refresh()
+            // Recharger la page proprement au lieu de router.refresh() qui peut crasher
+            window.location.href = '/vendor/dashboard?tab=products'
         } catch (err: any) {
             alert("Erreur : " + (err.message || 'Impossible de publier le produit.'))
         } finally { setLoading(false) }

@@ -212,9 +212,10 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 }
             } catch (err) { console.error('Erreur adresse:', err) }
 
+            // Toujours arrêter le loading, même si des erreurs se sont produites
             setDataLoading(false)
         }
-        fetchAll()
+        fetchAll().catch(() => setDataLoading(false))
     }, [user?.id])
 
     // ===== REAL-TIME ORDERS =====
@@ -298,11 +299,14 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         return () => { supabase.removeChannel(channel) }
     }, [user?.id])
 
-    // Logout
+    // Logout — push seul suffit, router.refresh() redondant et peut crasher
     const handleLogout = async () => {
-        await supabase.auth.signOut()
+        try {
+            await supabase.auth.signOut({ scope: 'local' })
+        } catch (err) {
+            console.error('Erreur signOut:', err)
+        }
         router.push('/')
-        router.refresh()
     }
 
     const userName = profile?.full_name || user?.email?.split('@')[0] || 'Client'

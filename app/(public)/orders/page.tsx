@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { Package } from 'lucide-react'
 import Link from 'next/link'
 import { OrderCard } from '@/app/components/OrderCard'
@@ -21,7 +22,7 @@ export default function MyOrdersPage() {
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const { data: { user } } = await supabase.auth.getUser()
+                const user = await safeGetUser(supabase)
                 if (user) {
                     setUserId(user.id)
                     const { data, error } = await supabase

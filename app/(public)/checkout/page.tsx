@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createBrowserClient } from '@supabase/ssr'
+import { safeGetUser } from '@/lib/supabase-utils'
 import { CheckoutSchema, CheckoutType } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight } from 'lucide-react'
@@ -34,7 +35,7 @@ export default function CheckoutPage() {
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
         const loadSavedAddress = async () => {
-            const { data: { user } } = await supabase.auth.getUser()
+            const user = await safeGetUser(supabase)
             if (user) {
                 const { data: profile } = await supabase
                     .from('profiles')

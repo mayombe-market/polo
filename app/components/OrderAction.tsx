@@ -3,10 +3,12 @@
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { DELIVERY_FEES } from '@/lib/checkoutSchema'
 import { ArrowRight } from 'lucide-react'
 import AuthModal from './AuthModal'
 import StepIndicator from './checkout/StepIndicator'
 import LocationStep from './checkout/LocationStep'
+import DeliveryModeStep from './checkout/DeliveryModeStep'
 import PaymentMethodStep from './checkout/PaymentMethodStep'
 import TransferInfoStep from './checkout/TransferInfoStep'
 import EnterTransactionIdStep from './checkout/EnterTransactionIdStep'
@@ -14,7 +16,7 @@ import WaitingValidationStep from './checkout/WaitingValidationStep'
 import CashDeliveryStep from './checkout/CashDeliveryStep'
 import OrderConfirmedStep from './checkout/OrderConfirmedStep'
 
-type Step = 'location' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
+type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
 
 interface OrderActionProps {
     product: any
@@ -32,14 +34,19 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     const [transactionId, setTransactionId] = useState('')
     const [orderId, setOrderId] = useState('')
     const [orderData, setOrderData] = useState<any>(null)
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
 
-    // Step indicator index
+    const deliveryFee = DELIVERY_FEES[deliveryMode]
+    const grandTotal = product.price + deliveryFee
+
+    // Step indicator index (4 steps: Retrait, Livraison, Paiement, Confirmation)
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (['confirmed', 'rejected'].includes(step)) return 2
-        return 1
+        if (step === 'delivery_mode') return 1
+        if (['confirmed', 'rejected'].includes(step)) return 3
+        return 2
     }
 
     // Ouvrir le modal
@@ -58,6 +65,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
         setStep('location')
         setCity('')
         setDistrict('')
+        setDeliveryMode('standard')
         setPaymentMethod('')
         setTransactionId('')
         setOrderId('')
@@ -68,6 +76,12 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     const handleLocationConfirm = (selectedCity: string, selectedDistrict: string) => {
         setCity(selectedCity)
         setDistrict(selectedDistrict)
+        setStep('delivery_mode')
+    }
+
+    // Mode de livraison choisi
+    const handleDeliverySelect = (mode: 'standard' | 'express') => {
+        setDeliveryMode(mode)
         setStep('payment_method')
     }
 
@@ -100,8 +114,10 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: product.price,
+                total_amount: grandTotal,
                 transaction_id: id,
+                delivery_mode: deliveryMode,
+                delivery_fee: deliveryFee,
             })
 
             if (result.error) {
@@ -143,10 +159,12 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: product.price,
+                total_amount: grandTotal,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
+                delivery_mode: deliveryMode,
+                delivery_fee: deliveryFee,
             })
 
             if (result.error) {
@@ -216,8 +234,13 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
                         {/* Prix */}
                         <div className="text-center mb-4">
-                            <span className="text-3xl font-black italic text-orange-500">{product.price.toLocaleString('fr-FR')}</span>
+                            <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
+                            {step !== 'location' && step !== 'delivery_mode' && (
+                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                    {product.price.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F livraison
+                                </p>
+                            )}
                         </div>
 
                         <StepIndicator activeStep={getStepIndex()} />
@@ -230,17 +253,24 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                             />
                         )}
 
+                        {step === 'delivery_mode' && (
+                            <DeliveryModeStep
+                                onSelect={handleDeliverySelect}
+                                onBack={() => setStep('location')}
+                            />
+                        )}
+
                         {step === 'payment_method' && (
                             <PaymentMethodStep
                                 onSelect={handlePaymentSelect}
-                                onBack={() => setStep('location')}
+                                onBack={() => setStep('delivery_mode')}
                             />
                         )}
 
                         {step === 'transfer_info' && (
                             <TransferInfoStep
                                 method={paymentMethod}
-                                total={product.price}
+                                total={grandTotal}
                                 onConfirm={() => setStep('enter_id')}
                                 onBack={() => setStep('payment_method')}
                             />
@@ -267,7 +297,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
                         {step === 'cash_form' && (
                             <CashDeliveryStep
-                                total={product.price}
+                                total={grandTotal}
                                 onConfirm={handleCashConfirm}
                                 onBack={() => { setOrderError(''); setStep('payment_method') }}
                                 loading={saving}

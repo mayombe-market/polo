@@ -95,6 +95,36 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </>
       )}
       <body className={`${inter.className} m-0 p-0`}>
+        {/* SPLASH SCREEN — rendu en HTML pur, disparaît une fois l'app chargée */}
+        <div id="splash-screen">
+          <div className="splash-logo">
+            <img src="/logo.png" alt="Mayombe Market" width={88} height={46} />
+          </div>
+          <div className="splash-title">Mayombe Market</div>
+          <div className="splash-subtitle">Mode & Lifestyle au Congo</div>
+          <div className="splash-loader"></div>
+        </div>
+        <Script id="splash-dismiss" strategy="afterInteractive">
+          {`
+            (function() {
+              var splash = document.getElementById('splash-screen');
+              if (!splash) return;
+              // Attendre que la page soit complètement rendue
+              function hideSplash() {
+                splash.classList.add('splash-hidden');
+                setTimeout(function() { splash.remove(); }, 600);
+              }
+              // Minimum 1.2s d'affichage pour que ce soit joli, max 4s
+              var minDelay = setTimeout(function() {
+                if (document.readyState === 'complete') hideSplash();
+                else window.addEventListener('load', hideSplash);
+              }, 1200);
+              // Timeout de sécurité : toujours cacher après 4s
+              setTimeout(hideSplash, 4000);
+            })();
+          `}
+        </Script>
+
         {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
         <header className="w-full h-4 sticky top-0 z-50 shadow-sm">
           <div className="w-full h-full" style={{

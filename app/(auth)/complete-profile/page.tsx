@@ -37,8 +37,11 @@ export default function CompleteProfilePage() {
     )
 
     useEffect(() => {
+        let cancelled = false
         const checkUser = async () => {
             const { data: { user } } = await supabase.auth.getUser()
+
+            if (cancelled) return
 
             if (!user) {
                 router.push('/')
@@ -53,13 +56,14 @@ export default function CompleteProfilePage() {
                 .eq('id', user.id)
                 .single()
 
-            if (profile && profile.first_name) {
+            if (!cancelled && profile && profile.first_name) {
                 router.push('/')
             }
         }
 
         checkUser()
-    }, [supabase, router])
+        return () => { cancelled = true }
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePhoneChange = (value: string) => {
         // N'accepter que les chiffres

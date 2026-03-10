@@ -125,7 +125,6 @@ export default function Header() {
         setUserRole(null)
         setShowUserMenu(false)
         router.push('/')
-        router.refresh()
     }
 
     return (

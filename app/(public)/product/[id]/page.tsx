@@ -466,7 +466,10 @@ export default function ProductDetailPage() {
                             <ReviewForm
                                 productId={id as string}
                                 user={user}
-                                onReviewSubmit={() => window.location.reload()}
+                                onReviewSubmit={async () => {
+                                    const res = await supabase.from('reviews').select('*').eq('product_id', id).order('created_at', { ascending: false })
+                                    setReviews(res.data || [])
+                                }}
                             />
 
                             {/* Review list */}

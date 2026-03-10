@@ -1,16 +1,28 @@
-const CACHE_NAME = 'mayombe-v1'
+const CACHE_NAME = 'mayombe-v2'
 const OFFLINE_URL = '/'
+
+// Routes that should NEVER be cached (auth-sensitive)
+const NO_CACHE_ROUTES = [
+  '/auth',
+  '/complete-profile',
+  '/vendor/dashboard',
+  '/logistician/dashboard',
+  '/admin',
+  '/checkout',
+  '/cart',
+  '/orders',
+  '/account',
+]
 
 // Assets to cache immediately on install
 const PRECACHE_ASSETS = [
-  '/',
   '/manifest.json',
   '/icon-192x192.png',
   '/icon-512x512.png',
   '/placeholder-image.svg',
 ]
 
-// Install: precache essential assets
+// Install: precache essential assets (NOT pages)
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -34,7 +46,13 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-// Fetch: network-first strategy for pages, cache-first for assets
+// Check if URL is an auth-sensitive route
+function isProtectedRoute(url) {
+  const path = new URL(url).pathname
+  return NO_CACHE_ROUTES.some((route) => path.startsWith(route))
+}
+
+// Fetch handler
 self.addEventListener('fetch', (event) => {
   const { request } = event
 
@@ -47,16 +65,14 @@ self.addEventListener('fetch', (event) => {
   // Skip Chrome extensions
   if (request.url.startsWith('chrome-extension://')) return
 
-  // For navigation requests (HTML pages): network-first
+  // NEVER cache auth-sensitive pages — always go to network
+  if (isProtectedRoute(request.url)) return
+
+  // For navigation requests (HTML pages): network-only, no caching
+  // This prevents stale auth state from being served
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
-          return response
-        })
-        .catch(() => caches.match(OFFLINE_URL))
+      fetch(request).catch(() => caches.match(OFFLINE_URL) || new Response('Hors ligne', { status: 503 }))
     )
     return
   }
@@ -67,8 +83,10 @@ self.addEventListener('fetch', (event) => {
       caches.match(request).then((cached) => {
         if (cached) return cached
         return fetch(request).then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
           return response
         }).catch(() => caches.match('/placeholder-image.svg'))
       })
@@ -85,8 +103,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.match(request).then((cached) => {
         const fetchPromise = fetch(request).then((response) => {
-          const clone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
           return response
         })
         return cached || fetchPromise

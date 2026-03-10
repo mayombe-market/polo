@@ -1,5 +1,6 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
@@ -50,6 +51,7 @@ const presetColors = [
 ]
 
 export default function AddProductForm({ sellerId }: { sellerId: string }) {
+    const router = useRouter()
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
 
@@ -191,7 +193,7 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
             await revalidateProducts()
             alert("Produit mis en ligne !")
-            window.location.reload()
+            router.refresh()
         } catch (err: any) {
             alert("Erreur : " + (err.message || 'Impossible de publier le produit.'))
         } finally { setLoading(false) }

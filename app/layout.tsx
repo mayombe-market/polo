@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
 import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
+import SplashScreen from '@/app/components/SplashScreen'
 
 const inter = Inter({ subsets: ['latin'] })
 
@@ -95,38 +96,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </>
       )}
       <body className={`${inter.className} m-0 p-0`}>
-        {/* SPLASH SCREEN — inline script pour afficher/cacher AVANT React */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                // Ne montrer le splash qu'une seule fois par session
-                if (sessionStorage.getItem('splash_done')) {
-                  var s = document.getElementById('splash-screen');
-                  if (s) s.remove();
-                  return;
-                }
-                sessionStorage.setItem('splash_done', '1');
-                // Créer le splash dynamiquement
-                var splash = document.createElement('div');
-                splash.id = 'splash-screen';
-                splash.innerHTML = '<div class="splash-logo"><img src="/logo.png" alt="Mayombe Market" width="88" height="46"/></div><div class="splash-title">Mayombe Market</div><div class="splash-subtitle">Mode & Lifestyle au Congo</div><div class="splash-loader"></div>';
-                document.body.prepend(splash);
-                function hide() {
-                  if (splash.parentNode) {
-                    splash.classList.add('splash-hidden');
-                    setTimeout(function() { splash.remove(); }, 600);
-                  }
-                }
-                setTimeout(function() {
-                  if (document.readyState === 'complete') hide();
-                  else window.addEventListener('load', hide);
-                }, 1200);
-                setTimeout(hide, 4000);
-              })();
-            `,
-          }}
-        />
+        {/* SPLASH SCREEN PWA */}
+        <SplashScreen />
 
         {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
         <header className="w-full h-4 sticky top-0 z-50 shadow-sm">

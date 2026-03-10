@@ -10,7 +10,6 @@ import NegotiationAction from '../../../components/NegotiationAction'
 import AddToCartButton from '../../../components/AddToCartButton'
 import FollowButton from '../../../components/FollowButton'
 import StarRating from '../../../components/StarRating'
-import ReviewForm from '../../../components/ReviewForm'
 import OrderAction from '../../../components/OrderAction'
 import ShareButtons from '../../../components/ShareButtons'
 import SimilarProducts from '../../../components/SimilarProducts'
@@ -74,14 +73,53 @@ export default function ProductDetailPage() {
                     setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
                 }
 
-                const reviewsRes = await supabase
-                    .from('reviews')
-                    .select('*')
-                    .eq('product_id', id)
-                    .order('created_at', { ascending: false })
+                // Avis vérifiés : récupérer les notations des acheteurs ayant commandé ce produit
+                const { data: allOrders } = await supabase
+                    .from('orders')
+                    .select('id, items, user_id')
+                    .eq('client_confirmed', true)
+
+                const productOrders = (allOrders || []).filter(
+                    (o: any) => o.items?.some((i: any) => i.id === id)
+                )
+                const orderIds = productOrders.map((o: any) => o.id)
+
+                let productRatings: any[] = []
+                if (orderIds.length > 0) {
+                    const { data: ratingsData } = await supabase
+                        .from('ratings')
+                        .select('*')
+                        .in('order_id', orderIds)
+                        .order('created_at', { ascending: false })
+
+                    if (ratingsData && ratingsData.length > 0) {
+                        const userIds = [...new Set(ratingsData.map((r: any) => r.user_id))]
+                        const { data: ratingProfiles } = await supabase
+                            .from('profiles')
+                            .select('id, full_name, avatar_url')
+                            .in('id', userIds)
+
+                        const profileMap = new Map((ratingProfiles || []).map((p: any) => [p.id, p]))
+
+                        productRatings = ratingsData
+                            .filter((r: any) => r.vendor_rating && r.vendor_rating > 0)
+                            .map((r: any) => {
+                                const rProfile = profileMap.get(r.user_id)
+                                return {
+                                    id: r.id,
+                                    rating: r.vendor_rating,
+                                    user_name: rProfile?.full_name || 'Client',
+                                    user_avatar: rProfile?.avatar_url || null,
+                                    comment: r.comment || '',
+                                    vendor_tags: r.vendor_tags || [],
+                                    created_at: r.created_at,
+                                }
+                            })
+                    }
+                }
 
                 if (cancelled) return
-                setReviews(reviewsRes.data || [])
+                setReviews(productRatings)
             } catch (err) {
                 if (!cancelled) console.error('Erreur page produit:', err)
             } finally {
@@ -472,18 +510,8 @@ export default function ProductDetailPage() {
                                 </div>
                             )}
 
-                            {/* Review form */}
-                            <ReviewForm
-                                productId={id as string}
-                                user={user}
-                                onReviewSubmit={async () => {
-                                    const res = await supabase.from('reviews').select('*').eq('product_id', id).order('created_at', { ascending: false })
-                                    setReviews(res.data || [])
-                                }}
-                            />
-
-                            {/* Review list */}
-                            <div className="space-y-0 mt-6">
+                            {/* Liste des avis vérifiés */}
+                            <div className="space-y-0 mt-4">
                                 {reviews.length > 0 ? reviews.map((rev, i) => (
                                     <div
                                         key={rev.id}
@@ -491,13 +519,18 @@ export default function ProductDetailPage() {
                                     >
                                         <div className="flex items-center gap-2.5 mb-2">
                                             <div className="relative w-[34px] h-[34px] rounded-[11px] overflow-hidden flex-shrink-0">
-                                                <Image
-                                                    src={rev.user_avatar || `https://ui-avatars.com/api/?name=${rev.user_name}&background=random`}
-                                                    alt="Avatar"
-                                                    fill
-                                                    className="object-cover"
-                                                    unoptimized
-                                                />
+                                                {rev.user_avatar ? (
+                                                    <Image
+                                                        src={rev.user_avatar}
+                                                        alt="Avatar"
+                                                        fill
+                                                        className="object-cover"
+                                                    />
+                                                ) : (
+                                                    <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-black text-slate-400 italic">
+                                                        {(rev.user_name || 'C')?.[0]?.toUpperCase()}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="flex-1">
                                                 <span className="text-slate-900 dark:text-[#F0ECE2] text-[13px] font-semibold block">{rev.user_name}</span>
@@ -507,26 +540,30 @@ export default function ProductDetailPage() {
                                                     ))}
                                                 </div>
                                             </div>
-                                            <span className="text-slate-400 text-[11px]">
-                                                {new Date(rev.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
-                                            </span>
+                                            <div className="text-right">
+                                                <span className="text-slate-400 text-[11px] block">
+                                                    {new Date(rev.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                                                </span>
+                                                <span className="text-[8px] font-bold text-green-600 dark:text-green-400">✓ Achat vérifié</span>
+                                            </div>
                                         </div>
-                                        <p className="text-slate-500 dark:text-slate-400 text-[13px] leading-relaxed pl-11">
-                                            {rev.content || rev.comment}
-                                        </p>
 
-                                        {rev.images && rev.images.length > 0 && (
-                                            <div className="flex gap-2 mt-3 pl-11 overflow-x-auto pb-1">
-                                                {rev.images.map((imgUrl: string, idx: number) => (
-                                                    <div
-                                                        key={idx}
-                                                        className="relative w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 border border-slate-100 dark:border-white/[0.06] cursor-pointer"
-                                                        onClick={() => window.open(imgUrl, '_blank')}
-                                                    >
-                                                        <Image src={imgUrl} alt="Photo avis" fill className="object-cover hover:scale-110 transition-transform" />
-                                                    </div>
+                                        {/* Tags */}
+                                        {rev.vendor_tags && rev.vendor_tags.length > 0 && (
+                                            <div className="flex flex-wrap gap-1 pl-11 mb-1.5">
+                                                {rev.vendor_tags.map((tag: string, idx: number) => (
+                                                    <span key={idx} className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                                                        {tag}
+                                                    </span>
                                                 ))}
                                             </div>
+                                        )}
+
+                                        {/* Commentaire */}
+                                        {rev.comment && (
+                                            <p className="text-slate-500 dark:text-slate-400 text-[13px] leading-relaxed pl-11">
+                                                {rev.comment}
+                                            </p>
                                         )}
                                     </div>
                                 )) : (

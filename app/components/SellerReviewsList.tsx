@@ -18,7 +18,7 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                     Aucun avis pour le moment
                 </p>
                 <p className="text-[10px] text-slate-400 mt-2">
-                    Les avis des clients apparaîtront ici.
+                    Les avis des clients ayant acheté apparaîtront ici.
                 </p>
             </div>
         )
@@ -34,7 +34,7 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                     </p>
                     <StarRating rating={averageRating} size={14} />
                     <p className="text-[9px] font-bold uppercase text-slate-400 tracking-widest mt-1">
-                        {reviews.length} avis
+                        {reviews.length} avis vérifiés
                     </p>
                 </div>
                 <div className="flex-1">
@@ -98,28 +98,40 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                             </span>
                         </div>
 
+                        {/* Produit acheté */}
+                        {review.product_name && (
+                            <p className="text-[10px] font-bold text-orange-500 uppercase mb-2">
+                                📦 {review.product_name}
+                            </p>
+                        )}
+
+                        {/* Tags */}
+                        {review.vendor_tags && review.vendor_tags.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                                {review.vendor_tags.map((tag: string, idx: number) => (
+                                    <span
+                                        key={idx}
+                                        className="px-2.5 py-1 text-[9px] font-bold rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400"
+                                    >
+                                        {tag}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* Commentaire */}
                         {review.comment && (
                             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
                                 {review.comment}
                             </p>
                         )}
 
-                        {/* Images de l'avis */}
-                        {review.images && review.images.length > 0 && (
-                            <div className="flex gap-2 mt-3 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
-                                {review.images.map((img: string, idx: number) => (
-                                    <div key={idx} className="w-16 h-16 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-slate-800">
-                                        <Image
-                                            src={img}
-                                            alt=""
-                                            width={64}
-                                            height={64}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        {/* Badge achat vérifié */}
+                        <div className="mt-3 flex items-center gap-1.5">
+                            <span className="text-[9px] font-bold text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-500/10 px-2 py-0.5 rounded-full">
+                                ✓ Achat vérifié
+                            </span>
+                        </div>
                     </div>
                 ))}
             </div>

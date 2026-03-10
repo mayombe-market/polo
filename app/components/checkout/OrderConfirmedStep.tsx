@@ -77,9 +77,17 @@ export default function OrderConfirmedStep({ orderData, type, onClose }: OrderCo
                         </div>
                     )}
                     <div className="flex justify-between text-[10px] font-bold">
-                        <span className="text-slate-400">Livraison estimée</span>
-                        <span className="text-orange-500 font-black">24-48h</span>
+                        <span className="text-slate-400">Livraison</span>
+                        <span className={`font-black ${orderData.delivery_mode === 'express' ? 'text-orange-500' : 'text-green-500'}`}>
+                            {orderData.delivery_mode === 'express' ? '⚡ Express (3-6H)' : '📦 Standard (6-48H)'}
+                        </span>
                     </div>
+                    {orderData.delivery_fee != null && (
+                        <div className="flex justify-between text-[10px] font-bold">
+                            <span className="text-slate-400">Frais de livraison</span>
+                            <span>{(orderData.delivery_fee || 0).toLocaleString('fr-FR')} FCFA</span>
+                        </div>
+                    )}
                 </div>
             </div>
 

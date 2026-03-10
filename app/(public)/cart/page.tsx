@@ -12,14 +12,16 @@ import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight } from 'lucide-
 import AuthModal from '@/app/components/AuthModal'
 import StepIndicator from '@/app/components/checkout/StepIndicator'
 import LocationStep from '@/app/components/checkout/LocationStep'
+import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
 import PaymentMethodStep from '@/app/components/checkout/PaymentMethodStep'
 import TransferInfoStep from '@/app/components/checkout/TransferInfoStep'
 import EnterTransactionIdStep from '@/app/components/checkout/EnterTransactionIdStep'
 import WaitingValidationStep from '@/app/components/checkout/WaitingValidationStep'
 import CashDeliveryStep from '@/app/components/checkout/CashDeliveryStep'
 import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
+import { DELIVERY_FEES } from '@/lib/checkoutSchema'
 
-type Step = 'location' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
+type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
 
 export default function CartPage() {
     const { cart, total, itemCount, updateQuantity, removeFromCart, clearCart, loading } = useCart()
@@ -34,12 +36,16 @@ export default function CartPage() {
     const [step, setStep] = useState<Step>('location')
     const [city, setCity] = useState('')
     const [district, setDistrict] = useState('')
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
     const [paymentMethod, setPaymentMethod] = useState('')
     const [transactionId, setTransactionId] = useState('')
     const [orderId, setOrderId] = useState('')
     const [orderData, setOrderData] = useState<any>(null)
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
+
+    const deliveryFee = DELIVERY_FEES[deliveryMode] || DELIVERY_FEES.standard
+    const grandTotal = total + deliveryFee
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -57,8 +63,9 @@ export default function CartPage() {
 
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (['confirmed', 'rejected'].includes(step)) return 2
-        return 1
+        if (step === 'delivery_mode') return 1
+        if (['confirmed', 'rejected'].includes(step)) return 3
+        return 2
     }
 
     const handleCheckout = async () => {
@@ -76,6 +83,7 @@ export default function CartPage() {
         setStep('location')
         setCity('')
         setDistrict('')
+        setDeliveryMode('standard')
         setPaymentMethod('')
         setTransactionId('')
         setOrderId('')
@@ -85,6 +93,11 @@ export default function CartPage() {
     const handleLocationConfirm = (selectedCity: string, selectedDistrict: string) => {
         setCity(selectedCity)
         setDistrict(selectedDistrict)
+        setStep('delivery_mode')
+    }
+
+    const handleDeliverySelect = (mode: 'standard' | 'express') => {
+        setDeliveryMode(mode)
         setStep('payment_method')
     }
 
@@ -118,8 +131,10 @@ export default function CartPage() {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: total,
+                total_amount: grandTotal,
                 transaction_id: id,
+                delivery_mode: deliveryMode,
+                delivery_fee: deliveryFee,
             })
 
             if (result.error) {
@@ -158,10 +173,12 @@ export default function CartPage() {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: total,
+                total_amount: grandTotal,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
+                delivery_mode: deliveryMode,
+                delivery_fee: deliveryFee,
             })
 
             if (result.error) {
@@ -346,8 +363,13 @@ export default function CartPage() {
 
                         {/* Total */}
                         <div className="text-center mb-4">
-                            <span className="text-3xl font-black italic text-orange-500">{total.toLocaleString('fr-FR')}</span>
+                            <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
+                            {deliveryMode && step !== 'location' && (
+                                <p className="text-[9px] font-bold text-slate-400 mt-1">
+                                    ({total.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F livraison)
+                                </p>
+                            )}
                         </div>
 
                         <StepIndicator activeStep={getStepIndex()} />
@@ -356,13 +378,16 @@ export default function CartPage() {
                         {step === 'location' && (
                             <LocationStep onConfirm={handleLocationConfirm} onClose={closeCheckout} />
                         )}
+                        {step === 'delivery_mode' && (
+                            <DeliveryModeStep onSelect={handleDeliverySelect} onBack={() => setStep('location')} />
+                        )}
                         {step === 'payment_method' && (
-                            <PaymentMethodStep onSelect={handlePaymentSelect} onBack={() => setStep('location')} />
+                            <PaymentMethodStep onSelect={handlePaymentSelect} onBack={() => setStep('delivery_mode')} />
                         )}
                         {step === 'transfer_info' && (
                             <TransferInfoStep
                                 method={paymentMethod}
-                                total={total}
+                                total={grandTotal}
                                 onConfirm={() => setStep('enter_id')}
                                 onBack={() => setStep('payment_method')}
                             />
@@ -386,7 +411,7 @@ export default function CartPage() {
                         )}
                         {step === 'cash_form' && (
                             <CashDeliveryStep
-                                total={total}
+                                total={grandTotal}
                                 onConfirm={handleCashConfirm}
                                 onBack={() => { setOrderError(''); setStep('payment_method') }}
                                 loading={saving}

@@ -7,6 +7,13 @@ export const CheckoutSchema = z.object({
     district: z.string().min(2, "Quartier requis"),
     landmark: z.string().optional(), // Le fameux "Point de repère"
     payment_method: z.enum(['cod', 'mobile_money']), // COD = Cash on Delivery
+    delivery_mode: z.enum(['standard', 'express']).default('standard'),
 })
 
 export type CheckoutType = z.infer<typeof CheckoutSchema>
+
+// ═══ Tarifs livraison ═══
+export const DELIVERY_FEES = {
+    standard: 1000,
+    express: 2000,
+} as const

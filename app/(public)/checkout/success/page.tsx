@@ -5,15 +5,17 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCart } from '@/hooks/userCart'
 import { createBrowserClient } from '@supabase/ssr'
-import { CheckCircle, ShoppingBag, Package, Smartphone } from 'lucide-react'
+import { CheckCircle, ShoppingBag, Package, Smartphone, Zap, Clock } from 'lucide-react'
 
 function SuccessContent() {
     const { clearCart } = useCart()
     const searchParams = useSearchParams()
     const method = searchParams.get('method')
     const orderId = searchParams.get('orderId')
+    const delivery = searchParams.get('delivery') || 'standard'
     const totalParam = searchParams.get('total') // fallback legacy
     const [orderTotal, setOrderTotal] = useState<number | null>(totalParam ? Number(totalParam) : null)
+    const [deliveryFee, setDeliveryFee] = useState<number | null>(null)
 
     const supabase = useMemo(() => createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -29,13 +31,16 @@ function SuccessContent() {
         if (!orderId) return
         supabase
             .from('orders')
-            .select('total_amount')
+            .select('total_amount, delivery_fee, delivery_mode')
             .eq('id', orderId)
             .single()
             .then(({ data }) => {
                 if (data?.total_amount) setOrderTotal(data.total_amount)
+                if (data?.delivery_fee != null) setDeliveryFee(data.delivery_fee)
             })
     }, [orderId, supabase])
+
+    const isExpress = delivery === 'express'
 
     return (
         <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center p-6">
@@ -51,6 +56,30 @@ function SuccessContent() {
                     <p className="text-slate-500 font-bold text-xs uppercase tracking-widest leading-relaxed">
                         Votre commande a été enregistrée. Vous serez notifié dès sa confirmation.
                     </p>
+                </div>
+
+                {/* MODE DE LIVRAISON */}
+                <div className={`p-5 rounded-3xl border text-left ${isExpress
+                    ? 'bg-orange-50 dark:bg-orange-900/10 border-orange-200 dark:border-orange-800/30'
+                    : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/30'
+                }`}>
+                    <div className="flex items-center gap-3 mb-2">
+                        {isExpress ? <Zap size={18} className="text-orange-500" /> : <Package size={18} className="text-green-500" />}
+                        <p className={`font-black uppercase text-xs italic ${isExpress ? 'text-orange-600' : 'text-green-600'}`}>
+                            Livraison {isExpress ? 'Express' : 'Standard'}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2 ml-8">
+                        <Clock size={14} className="text-slate-400" />
+                        <p className="text-sm text-slate-600 dark:text-slate-400 font-bold">
+                            {isExpress ? 'Estimation : 3 à 6 heures' : 'Estimation : 6 à 48 heures'}
+                        </p>
+                    </div>
+                    {deliveryFee != null && (
+                        <p className="text-[10px] font-bold text-slate-400 uppercase ml-8 mt-1">
+                            Frais de livraison : {deliveryFee.toLocaleString('fr-FR')} FCFA
+                        </p>
+                    )}
                 </div>
 
                 {/* INSTRUCTIONS SELON LA MÉTHODE DE PAIEMENT */}

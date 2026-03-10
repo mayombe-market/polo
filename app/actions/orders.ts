@@ -356,6 +356,8 @@ export async function createOrder(input: {
     customer_name?: string
     phone?: string
     landmark?: string
+    delivery_mode?: string
+    delivery_fee?: number
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -386,9 +388,15 @@ export async function createOrder(input: {
         }
     })
 
-    const serverTotal = validatedItems.reduce(
+    const itemsTotal = validatedItems.reduce(
         (sum, item) => sum + item.price * item.quantity, 0
     )
+
+    // Frais de livraison (validés côté serveur)
+    const VALID_DELIVERY_FEES: Record<string, number> = { standard: 1000, express: 2000 }
+    const deliveryMode = input.delivery_mode || 'standard'
+    const deliveryFee = VALID_DELIVERY_FEES[deliveryMode] ?? VALID_DELIVERY_FEES.standard
+    const serverTotal = itemsTotal + deliveryFee
 
     // ═══ VÉRIFICATION DU STOCK AVANT COMMANDE ═══
     for (const item of validatedItems) {
@@ -413,8 +421,9 @@ export async function createOrder(input: {
         const rate = getPlanCommissionRate(plan)
         totalCommission += Math.round(item.price * item.quantity * rate)
     }
-    const vendorPayout = serverTotal - totalCommission
-    const avgCommissionRate = serverTotal > 0 ? totalCommission / serverTotal : 0.10
+    // Commission uniquement sur les produits, pas sur les frais de livraison
+    const vendorPayout = itemsTotal - totalCommission
+    const avgCommissionRate = itemsTotal > 0 ? totalCommission / itemsTotal : 0.10
 
     // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK ═══
     for (const item of validatedItems) {
@@ -451,6 +460,8 @@ export async function createOrder(input: {
         payout_status: 'pending',
         transaction_id: input.transaction_id || null,
         landmark: input.landmark || null,
+        delivery_mode: deliveryMode,
+        delivery_fee: deliveryFee,
     }]).select().single()
 
     if (error) return { error: error.message }

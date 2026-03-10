@@ -7,9 +7,9 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser } from '@/lib/supabase-utils'
-import { CheckoutSchema, CheckoutType } from '@/lib/checkoutSchema'
+import { CheckoutSchema, CheckoutType, DELIVERY_FEES } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 
@@ -25,12 +25,16 @@ export default function CheckoutPage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    const { register, handleSubmit, reset, watch, formState: { errors } } = useForm<CheckoutType>({
+    const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CheckoutType>({
         resolver: zodResolver(CheckoutSchema),
-        defaultValues: { payment_method: 'cod' }
+        defaultValues: { payment_method: 'cod', delivery_mode: 'standard' }
     })
 
     const selectedPayment = watch('payment_method')
+    const selectedDelivery = watch('delivery_mode')
+
+    const deliveryFee = DELIVERY_FEES[selectedDelivery] || DELIVERY_FEES.standard
+    const grandTotal = total + deliveryFee
 
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
@@ -50,7 +54,8 @@ export default function CheckoutPage() {
                         city: profile.city || '',
                         district: profile.district || '',
                         landmark: profile.landmark || '',
-                        payment_method: 'cod'
+                        payment_method: 'cod',
+                        delivery_mode: 'standard'
                     })
                 }
                 setUserEmail(user.email || '')
@@ -65,6 +70,9 @@ export default function CheckoutPage() {
 
         setLoading(true)
         try {
+            const currentDeliveryFee = DELIVERY_FEES[formData.delivery_mode] || DELIVERY_FEES.standard
+            const totalWithDelivery = total + currentDeliveryFee
+
             const items = cart.map(item => ({
                 id: item.product_id || item.id,
                 name: item.name,
@@ -79,10 +87,12 @@ export default function CheckoutPage() {
                 city: formData.city,
                 district: formData.district,
                 payment_method: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
-                total_amount: total,
+                total_amount: totalWithDelivery,
                 customer_name: formData.full_name,
                 phone: formData.phone,
                 landmark: formData.landmark,
+                delivery_mode: formData.delivery_mode,
+                delivery_fee: currentDeliveryFee,
             })
 
             if (result.error) {
@@ -110,7 +120,7 @@ export default function CheckoutPage() {
             }
 
             clearCart()
-            router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}`)
+            router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}&delivery=${formData.delivery_mode}`)
 
         } catch (err) {
             console.error('Erreur commande:', err)
@@ -134,6 +144,7 @@ export default function CheckoutPage() {
                     </header>
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+                        {/* ═══ INFORMATIONS DE LIVRAISON ═══ */}
                         <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3 text-orange-500 font-black uppercase text-xs italic">
@@ -169,6 +180,121 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
+                        {/* ═══ MODE DE LIVRAISON ═══ */}
+                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
+                            <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
+                                <Truck size={18} /> Mode de livraison
+                            </div>
+
+                            {/* EXPRESS */}
+                            <button
+                                type="button"
+                                onClick={() => setValue('delivery_mode', 'express')}
+                                className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'express'
+                                    ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-500/5'
+                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center">
+                                        <Zap size={22} className="text-orange-500" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-black uppercase text-xs italic">Express</p>
+                                            <span className="text-[8px] font-black bg-orange-100 dark:bg-orange-500/10 text-orange-600 px-2 py-0.5 rounded-full uppercase">Rapide</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <Clock size={12} className="text-slate-400" />
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase">3H — 6H · Livreur dédié</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                    <div>
+                                        <p className="font-black italic text-sm text-orange-500">{DELIVERY_FEES.express.toLocaleString('fr-FR')} F</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'express' ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                        {selectedDelivery === 'express' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* STANDARD */}
+                            <button
+                                type="button"
+                                onClick={() => setValue('delivery_mode', 'standard')}
+                                className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'standard'
+                                    ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5'
+                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                    }`}
+                            >
+                                <div className="flex items-center gap-4">
+                                    <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center">
+                                        <Package size={22} className="text-green-500" />
+                                    </div>
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-black uppercase text-xs italic">Standard</p>
+                                            <span className="text-[8px] font-black bg-green-100 dark:bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full uppercase">Économique</span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5 mt-1">
+                                            <Clock size={12} className="text-slate-400" />
+                                            <p className="text-[10px] font-bold text-slate-500 uppercase">6H — 48H · Livraison groupée</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="text-right flex items-center gap-3">
+                                    <div>
+                                        <p className="font-black italic text-sm text-green-500">{DELIVERY_FEES.standard.toLocaleString('fr-FR')} F</p>
+                                    </div>
+                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'standard' ? 'border-green-500 bg-green-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                        {selectedDelivery === 'standard' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                    </div>
+                                </div>
+                            </button>
+
+                            {/* Détails du mode sélectionné */}
+                            {selectedDelivery === 'express' && (
+                                <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-200 dark:border-orange-800/30 mt-2">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">🏍️</span>
+                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Livreur dédié à votre commande</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">📞</span>
+                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Le livreur vous appelle avant d&apos;arriver</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">📍</span>
+                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Suivi en temps réel par SMS</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {selectedDelivery === 'standard' && (
+                                <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800/30 mt-2">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">📦</span>
+                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Livraison groupée éco-responsable</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">📱</span>
+                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Notification SMS à la livraison</span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm">🕐</span>
+                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Créneau de livraison communiqué par SMS</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ═══ MÉTHODE DE PAIEMENT ═══ */}
                         <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
                                 <CreditCard size={18} /> Méthode de paiement
@@ -203,9 +329,12 @@ export default function CheckoutPage() {
                                 <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-2xl border border-green-200 dark:border-green-800 mt-2">
                                     <p className="text-[10px] font-black uppercase text-green-700 dark:text-green-400 mb-2">Instructions de paiement</p>
                                     <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
-                                        Envoyez <strong>{total.toLocaleString('fr-FR')} FCFA</strong> au
+                                        Envoyez <strong>{grandTotal.toLocaleString('fr-FR')} FCFA</strong> au
                                         <strong> 06 938 71 69</strong> (Mayombe Market) via MTN MoMo ou Airtel Money.
                                         Votre commande sera confirmée dès réception du paiement.
+                                    </p>
+                                    <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
+                                        ({total.toLocaleString('fr-FR')} F produits + {deliveryFee.toLocaleString('fr-FR')} F livraison)
                                     </p>
                                 </div>
                             )}
@@ -250,14 +379,22 @@ export default function CheckoutPage() {
                                 <span>Sous-total</span>
                                 <span>{total.toLocaleString('fr-FR')} FCFA</span>
                             </div>
-                            <div className="flex justify-between text-[10px] font-bold uppercase text-green-500">
-                                <span>Livraison</span>
-                                <span className="italic">À régler au livreur</span>
+                            <div className="flex justify-between text-[10px] font-bold uppercase">
+                                <span className="flex items-center gap-1.5">
+                                    {selectedDelivery === 'express' ? (
+                                        <><Zap size={12} className="text-orange-500" /> <span className="text-orange-500">Livraison Express</span></>
+                                    ) : (
+                                        <><Package size={12} className="text-green-500" /> <span className="text-green-500">Livraison Standard</span></>
+                                    )}
+                                </span>
+                                <span className={selectedDelivery === 'express' ? 'text-orange-500 italic' : 'text-green-500 italic'}>
+                                    +{deliveryFee.toLocaleString('fr-FR')} FCFA
+                                </span>
                             </div>
                             <div className="flex justify-between items-end pt-4">
                                 <span className="font-black uppercase italic text-lg">Total</span>
                                 <div className="text-right">
-                                    <span className="text-4xl font-black italic tracking-tighter text-orange-500">{total.toLocaleString('fr-FR')}</span>
+                                    <span className="text-4xl font-black italic tracking-tighter text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                                     <span className="text-[10px] font-black uppercase ml-1">FCFA</span>
                                 </div>
                             </div>

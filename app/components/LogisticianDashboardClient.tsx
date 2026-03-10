@@ -56,8 +56,10 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                         return prev.map(d => d.id === updated.id ? { ...d, ...updated } : d)
                     }
                     // Nouvelle assignation
+                    const productName = updated.items?.[0]?.name || 'Produit'
+                    const dlvLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
                     playDeliverySound()
-                    toast.success('Nouvelle course assignée !', { duration: 5000 })
+                    toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${updated.customer_name} · ${updated.district || updated.city}`, duration: 8000 })
                     return [updated, ...prev]
                 })
             })
@@ -68,8 +70,10 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                 filter: `logistician_id=eq.${user.id}`
             }, (payload) => {
                 const newOrder = payload.new as any
+                const productName = newOrder.items?.[0]?.name || 'Produit'
+                const dlvLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
                 playDeliverySound()
-                toast.success('Nouvelle course !', { duration: 5000 })
+                toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${newOrder.customer_name} · ${newOrder.district || newOrder.city}`, duration: 8000 })
                 setDeliveries(prev => [newOrder, ...prev])
             })
             .subscribe()
@@ -194,14 +198,20 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                     ← Retour à mes courses
                 </button>
 
-                {/* Badge statut */}
-                <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg mb-4 border ${st.bg}`}
-                    style={{ borderColor: `${st.color}22` }}>
-                    <span className="text-sm">{st.emoji}</span>
-                    <span className="text-xs font-bold" style={{ color: st.color }}>{st.label}</span>
-                    {d.delivery_fee > 0 && (
-                        <span className="px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/15 text-amber-500 ml-1">
-                            ⚡ EXPRESS
+                {/* Badge statut + livraison */}
+                <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <div className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border ${st.bg}`}
+                        style={{ borderColor: `${st.color}22` }}>
+                        <span className="text-sm">{st.emoji}</span>
+                        <span className="text-xs font-bold" style={{ color: st.color }}>{st.label}</span>
+                    </div>
+                    {d.delivery_mode === 'express' ? (
+                        <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold bg-orange-500/15 text-orange-400 border border-orange-500/20 animate-pulse">
+                            ⚡ EXPRESS 3-6H
+                        </span>
+                    ) : (
+                        <span className="px-3 py-1.5 rounded-lg text-[10px] font-extrabold bg-green-500/15 text-green-400 border border-green-500/20">
+                            📦 Standard 6-48H
                         </span>
                     )}
                 </div>
@@ -380,9 +390,13 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                                         style={{ color: st.color }}>
                                         {st.emoji} {st.label}
                                     </span>
-                                    {d.delivery_fee > 0 && (
-                                        <div className="mt-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-amber-500/10 text-amber-500 inline-block">
+                                    {d.delivery_mode === 'express' ? (
+                                        <div className="mt-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-orange-500/10 text-orange-400 inline-block animate-pulse">
                                             ⚡ EXPRESS
+                                        </div>
+                                    ) : (
+                                        <div className="mt-1 px-2 py-0.5 rounded-md text-[9px] font-extrabold bg-green-500/10 text-green-400 inline-block">
+                                            📦 Standard
                                         </div>
                                     )}
                                 </div>

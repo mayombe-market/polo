@@ -194,10 +194,12 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === user.id) || []
                 if (vendorItems.length > 0 && newOrder.status !== 'pending') {
                     setOrders(prev => [newOrder, ...prev])
-                    const desc = `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
+                    const productNames = vendorItems.map((i: any) => i.name).join(', ')
+                    const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
+                    const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
                     playNewOrderSound()
-                    toast.success('Nouvelle commande !', { description: desc })
-                    sendNotification('Nouvelle commande !', desc)
+                    toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
+                    sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
                 }
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
@@ -208,10 +210,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         const exists = prev.find(o => o.id === updated.id)
                         if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
                         if (updated.status !== 'pending') {
-                            const desc = `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
+                            const updatedVendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
+                            const productNames = updatedVendorItems.map((i: any) => i.name).join(', ')
+                            const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+                            const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
                             playNewOrderSound()
-                            toast.success('Nouvelle commande confirmée !', { description: desc })
-                            sendNotification('Commande confirmée !', desc)
+                            toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
+                            sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
                             return [updated, ...prev]
                         }
                         return prev
@@ -1371,6 +1376,15 @@ function OrdersPage({ orders, ordersLoading, orderFilter, setOrderFilter, filter
                                         <span className={`px-4 py-1.5 text-[9px] font-black uppercase rounded-full ${statusInfo.style}`}>
                                             {statusInfo.label}
                                         </span>
+                                        {order.delivery_mode === 'express' ? (
+                                            <span className="px-3 py-1 text-[9px] font-black uppercase rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 animate-pulse">
+                                                ⚡ EXPRESS 3-6H
+                                            </span>
+                                        ) : (
+                                            <span className="px-3 py-1 text-[9px] font-black uppercase rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400">
+                                                📦 Standard 6-48H
+                                            </span>
+                                        )}
                                         {order.tracking_number && (
                                             <span className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400 font-mono tracking-wider">
                                                 {order.tracking_number}

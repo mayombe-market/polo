@@ -18,6 +18,8 @@ interface OrderEmailData {
     paymentMethod: string
     city: string
     district: string
+    deliveryMode?: string
+    deliveryFee?: number
 }
 
 // Email de confirmation de commande (envoyé à l'acheteur)
@@ -76,6 +78,14 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
                             <div style="margin-top: 4px;">
                                 <span style="color: #64748b; font-size: 13px;">Livraison : ${safeCity}, ${safeDistrict}</span>
                             </div>
+                            ${data.deliveryMode ? `
+                            <div style="margin-top: 8px; background: ${data.deliveryMode === 'express' ? '#fff7ed' : '#f0fdf4'}; border: 1px solid ${data.deliveryMode === 'express' ? '#fed7aa' : '#bbf7d0'}; padding: 10px 14px; border-radius: 8px;">
+                                <span style="font-weight: bold; color: ${data.deliveryMode === 'express' ? '#ea580c' : '#16a34a'}; font-size: 13px;">
+                                    ${data.deliveryMode === 'express' ? '⚡ Express (3-6H)' : '📦 Standard (6-48H)'}
+                                </span>
+                                <span style="color: #64748b; font-size: 12px;"> — ${(data.deliveryFee || 0).toLocaleString('fr-FR')} FCFA</span>
+                            </div>
+                            ` : ''}
                         </div>
 
                         ${data.paymentMethod === 'mobile_money' ? `
@@ -107,7 +117,9 @@ export async function sendOrderStatusEmail(
     customerName: string,
     orderId: string,
     newStatus: string,
-    trackingNumber?: string
+    trackingNumber?: string,
+    deliveryMode?: string,
+    productNames?: string
 ) {
     const statusLabels: Record<string, { label: string; color: string; message: string }> = {
         confirmed: {
@@ -162,6 +174,21 @@ export async function sendOrderStatusEmail(
                         <div style="background: #eff6ff; border: 1px solid #bfdbfe; padding: 16px; border-radius: 12px; margin: 16px 0;">
                             <span style="font-size: 12px; color: #64748b; text-transform: uppercase;">Numéro de suivi</span><br/>
                             <span style="font-size: 18px; font-weight: bold; color: #1e40af; letter-spacing: 2px;">${escapeHtml(trackingNumber)}</span>
+                        </div>
+                        ` : ''}
+
+                        ${productNames ? `
+                        <div style="background: #f8fafc; padding: 12px 16px; border-radius: 8px; margin: 12px 0;">
+                            <span style="font-size: 12px; color: #94a3b8; text-transform: uppercase;">Produit(s)</span><br/>
+                            <span style="font-size: 14px; font-weight: bold; color: #0f172a;">${escapeHtml(productNames)}</span>
+                        </div>
+                        ` : ''}
+
+                        ${deliveryMode ? `
+                        <div style="background: ${deliveryMode === 'express' ? '#fff7ed' : '#f0fdf4'}; border: 1px solid ${deliveryMode === 'express' ? '#fed7aa' : '#bbf7d0'}; padding: 12px 16px; border-radius: 8px; margin: 12px 0;">
+                            <span style="font-weight: bold; font-size: 14px; color: ${deliveryMode === 'express' ? '#ea580c' : '#16a34a'};">
+                                ${deliveryMode === 'express' ? '⚡ Livraison Express (3-6H)' : '📦 Livraison Standard (6-48H)'}
+                            </span>
                         </div>
                         ` : ''}
                     </div>

@@ -77,7 +77,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
     // Vérifier que la commande contient des produits de ce vendeur
     const { data: order } = await supabase
         .from('orders')
-        .select('items, user_id')
+        .select('items, user_id, delivery_mode')
         .eq('id', orderId)
         .single()
 
@@ -103,17 +103,20 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
     // Envoyer un email au client
     const { data: orderData } = await supabase
         .from('orders')
-        .select('customer_name, customer_email, tracking_number')
+        .select('customer_name, customer_email, tracking_number, delivery_mode, items')
         .eq('id', orderId)
         .single()
 
     if (orderData?.customer_email) {
-        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, newStatus, orderData.tracking_number).catch(() => {})
+        const emailProductNames = (orderData.items || []).map((i: any) => i.name).join(', ')
+        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, newStatus, orderData.tracking_number, orderData.delivery_mode, emailProductNames).catch(() => {})
     }
 
     // Notifier l'acheteur
     if (order.user_id && newStatus === 'shipped') {
-        createNotification(order.user_id, 'order_shipped', 'Colis expédié', 'Votre commande a été expédiée.', `/account/dashboard?tab=orders`).catch(() => {})
+        const productNames = (order.items || []).map((i: any) => i.name).join(', ')
+        const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
+        createNotification(order.user_id, 'order_shipped', `Colis expédié — ${dlvLabel}`, `${productNames} est en route vers vous !`, `/account/dashboard?tab=orders`).catch(() => {})
     }
 
     return { success: true }
@@ -147,7 +150,7 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
     const { data: order } = await supabase
         .from('orders')
-        .select('transaction_id, payment_method, order_type, subscription_plan_id, subscription_billing, user_id, status, items')
+        .select('transaction_id, payment_method, order_type, subscription_plan_id, subscription_billing, user_id, status, items, delivery_mode, delivery_fee')
         .eq('id', orderId)
         .single()
 
@@ -233,19 +236,22 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
                 planFeatures[planId] || []
             ).catch(() => {})
         } else {
-            sendOrderStatusEmail(fullOrder.customer_email, fullOrder.customer_name, orderId, 'confirmed', tracking_number).catch(() => {})
+            const emailProdNames = (order.items || []).map((i: any) => i.name).join(', ')
+            sendOrderStatusEmail(fullOrder.customer_email, fullOrder.customer_name, orderId, 'confirmed', tracking_number, order.delivery_mode, emailProdNames).catch(() => {})
         }
     }
 
-    // Notifications
-    // Notifier les vendeurs concernés
+    // Notifications avec produit + mode livraison
+    const productNames = (order.items || []).filter((i: any) => i.id && !i.id.startsWith('subscription_')).map((i: any) => i.name).join(', ')
+    const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
     const sellerIds = [...new Set((order.items || []).map((i: any) => i.seller_id).filter(Boolean))]
     for (const sellerId of sellerIds) {
-        createNotification(sellerId as string, 'order_confirmed', 'Commande confirmée', 'Un paiement a été confirmé pour votre commande.', `/account/dashboard?tab=orders`).catch(() => {})
+        const sellerItems = (order.items || []).filter((i: any) => i.seller_id === sellerId).map((i: any) => i.name).join(', ')
+        createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/account/dashboard?tab=orders`).catch(() => {})
     }
     // Notifier l'acheteur
     if (order.user_id) {
-        createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé', 'Votre paiement a été validé. Votre commande est en cours.', `/account/dashboard?tab=orders`).catch(() => {})
+        createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé ✓', `${productNames} · ${dlvLabel} · Votre commande est en cours de préparation.`, `/account/dashboard?tab=orders`).catch(() => {})
     }
 
     return { success: true, tracking_number }
@@ -269,7 +275,7 @@ export async function adminRejectOrder(orderId: string) {
     // Récupérer les infos du client avant la mise à jour
     const { data: orderData } = await supabase
         .from('orders')
-        .select('customer_name, customer_email, status, user_id')
+        .select('customer_name, customer_email, status, user_id, items, delivery_mode')
         .eq('id', orderId)
         .single()
 
@@ -284,7 +290,8 @@ export async function adminRejectOrder(orderId: string) {
     if (error) return { error: error.message }
 
     if (orderData?.customer_email) {
-        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, 'rejected').catch(() => {})
+        const rejProdNames = (orderData.items || []).map((i: any) => i.name).join(', ')
+        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, 'rejected', undefined, orderData.delivery_mode, rejProdNames).catch(() => {})
     }
 
     // Notifier l'acheteur

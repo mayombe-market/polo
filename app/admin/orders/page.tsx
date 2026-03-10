@@ -103,10 +103,12 @@ export default function AdminOrders() {
                         duration: 5000
                     })
                 } else {
-                    const desc = `${order.customer_name} - ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+                    const productNames = order.items?.map((i: any) => i.name).join(', ') || 'Produit'
+                    const deliveryLabel = order.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+                    const desc = `${order.customer_name} · ${productNames} · ${deliveryLabel} · ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
                     playNewOrderSound()
-                    toast.success('Nouvelle commande !', { description: desc, duration: 8000 })
-                    sendNotification('Nouvelle commande !', desc)
+                    toast.success('Nouvelle commande !', { description: desc, duration: 10000 })
+                    sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${order.customer_name}`)
                 }
             })
             .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
@@ -381,6 +383,15 @@ export default function AdminOrders() {
                                                     <Truck size={10} /> {order.tracking_number}
                                                 </span>
                                             )}
+                                            {!isSubscription && (order.delivery_mode === 'express' ? (
+                                                <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 animate-pulse tracking-widest">
+                                                    ⚡ EXPRESS 3-6H · {(order.delivery_fee || 2000).toLocaleString('fr-FR')} F
+                                                </span>
+                                            ) : order.delivery_mode ? (
+                                                <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 tracking-widest">
+                                                    📦 Standard 6-48H · {(order.delivery_fee || 1000).toLocaleString('fr-FR')} F
+                                                </span>
+                                            ) : null)}
                                             {order.payout_status === 'paid' && (
                                                 <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-green-100 text-green-700">
                                                     Fonds libérés
@@ -453,6 +464,12 @@ export default function AdminOrders() {
                                                             <span className="text-slate-500">Total commande</span>
                                                             <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
                                                         </div>
+                                                        {order.delivery_fee > 0 && (
+                                                            <div className="flex justify-between text-[10px] font-bold">
+                                                                <span className="text-slate-500">↳ dont livraison {order.delivery_mode === 'express' ? '⚡' : '📦'}</span>
+                                                                <span className="font-black text-slate-400">{(order.delivery_fee || 0).toLocaleString('fr-FR')} F</span>
+                                                            </div>
+                                                        )}
                                                         <div className="flex justify-between text-[10px] font-bold">
                                                             <span className="text-orange-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%)</span>
                                                             <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>

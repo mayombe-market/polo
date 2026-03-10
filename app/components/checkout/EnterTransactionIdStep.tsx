@@ -19,16 +19,16 @@ export default function EnterTransactionIdStep({ onSubmit, onBack, loading, serv
     }, [])
 
     const digits = code.replace(/\D/g, '')
-    const isComplete = digits.length === 15
+    const isComplete = digits.length === 10
 
     const formatDisplay = (val: string) => {
-        const d = val.replace(/\D/g, '').slice(0, 15)
+        const d = val.replace(/\D/g, '').slice(0, 10)
         return d.replace(/(\d{3})(?=\d)/g, '$1 ')
     }
 
     const handleSubmit = () => {
         if (!isComplete) {
-            setError('Le code doit contenir exactement 15 chiffres')
+            setError('Le code doit contenir exactement 10 chiffres')
             return
         }
         setError('')
@@ -43,7 +43,7 @@ export default function EnterTransactionIdStep({ onSubmit, onBack, loading, serv
                 </div>
                 <h2 className="text-lg font-black uppercase italic tracking-tighter">Code de transaction</h2>
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
-                    Entrez l'ID à 15 chiffres reçu par SMS
+                    Entrez l'ID à 10 chiffres reçu par SMS
                 </p>
             </div>
 
@@ -68,8 +68,8 @@ export default function EnterTransactionIdStep({ onSubmit, onBack, loading, serv
                             setError('')
                         }}
                         onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-                        placeholder="000 000 000 000 000"
-                        maxLength={19}
+                        placeholder="000 000 000 0"
+                        maxLength={13}
                         className="w-full py-4 px-5 bg-transparent text-xl font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
                     />
                 </div>
@@ -78,10 +78,10 @@ export default function EnterTransactionIdStep({ onSubmit, onBack, loading, serv
                     {error ? (
                         <span className="text-red-500 text-[10px] font-bold">⚠ {error}</span>
                     ) : (
-                        <span className="text-slate-400 text-[10px] font-bold">Format: 15 chiffres</span>
+                        <span className="text-slate-400 text-[10px] font-bold">Format: 10 chiffres</span>
                     )}
                     <span className={`text-[10px] font-black ${isComplete ? 'text-green-500' : 'text-slate-400'}`}>
-                        {digits.length}/15
+                        {digits.length}/10
                     </span>
                 </div>
             </div>

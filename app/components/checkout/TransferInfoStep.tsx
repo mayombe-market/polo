@@ -60,7 +60,7 @@ export default function TransferInfoStep({ method, total, onConfirm, onBack }: T
                 <span className="text-base flex-shrink-0">⚠️</span>
                 <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 leading-relaxed">
                     Effectuez le transfert <strong>avant</strong> de cliquer sur le bouton ci-dessous.
-                    Vous aurez besoin du code de transaction (ID) de <strong>15 chiffres</strong> reçu par SMS.
+                    Vous aurez besoin du code de transaction (ID) de <strong>10 chiffres</strong> reçu par SMS.
                 </p>
             </div>
 

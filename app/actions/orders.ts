@@ -425,18 +425,16 @@ export async function createOrder(input: {
     const vendorPayout = itemsTotal - totalCommission
     const avgCommissionRate = itemsTotal > 0 ? totalCommission / itemsTotal : 0.10
 
-    // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK ═══
+    // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK (via RPC SECURITY DEFINER) ═══
     for (const item of validatedItems) {
         const dbProduct = productMap.get(item.id)!
         if (dbProduct.has_stock) {
-            const { data: updated } = await supabase
-                .from('products')
-                .update({ stock_quantity: dbProduct.stock_quantity - item.quantity })
-                .eq('id', item.id)
-                .gte('stock_quantity', item.quantity)
-                .select('id')
+            const { data: success, error: rpcError } = await supabase.rpc('decrement_stock', {
+                p_product_id: item.id,
+                p_quantity: item.quantity,
+            })
 
-            if (!updated || updated.length === 0) {
+            if (rpcError || !success) {
                 return { error: `Stock insuffisant pour "${dbProduct.name}". Un autre acheteur a été plus rapide.` }
             }
         }

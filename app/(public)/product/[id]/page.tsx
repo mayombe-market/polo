@@ -73,53 +73,16 @@ export default function ProductDetailPage() {
                     setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
                 }
 
-                // Avis vérifiés : récupérer les notations des acheteurs ayant commandé ce produit
-                const { data: allOrders } = await supabase
-                    .from('orders')
-                    .select('id, items, user_id')
-                    .eq('client_confirmed', true)
-
-                const productOrders = (allOrders || []).filter(
-                    (o: any) => o.items?.some((i: any) => i.id === id)
-                )
-                const orderIds = productOrders.map((o: any) => o.id)
-
-                let productRatings: any[] = []
-                if (orderIds.length > 0) {
-                    const { data: ratingsData } = await supabase
-                        .from('ratings')
-                        .select('*')
-                        .in('order_id', orderIds)
-                        .order('created_at', { ascending: false })
-
-                    if (ratingsData && ratingsData.length > 0) {
-                        const userIds = [...new Set(ratingsData.map((r: any) => r.user_id))]
-                        const { data: ratingProfiles } = await supabase
-                            .from('profiles')
-                            .select('id, full_name, avatar_url')
-                            .in('id', userIds)
-
-                        const profileMap = new Map((ratingProfiles || []).map((p: any) => [p.id, p]))
-
-                        productRatings = ratingsData
-                            .filter((r: any) => r.vendor_rating && r.vendor_rating > 0)
-                            .map((r: any) => {
-                                const rProfile = profileMap.get(r.user_id)
-                                return {
-                                    id: r.id,
-                                    rating: r.vendor_rating,
-                                    user_name: rProfile?.full_name || 'Client',
-                                    user_avatar: rProfile?.avatar_url || null,
-                                    comment: r.comment || '',
-                                    vendor_tags: r.vendor_tags || [],
-                                    created_at: r.created_at,
-                                }
-                            })
-                    }
+                // Avis vérifiés via RPC SECURITY DEFINER (contourne RLS pour voir TOUS les avis)
+                const { data: productRatings, error: ratingsError } = await supabase.rpc('get_product_reviews', {
+                    p_product_id: id as string
+                })
+                if (ratingsError) {
+                    console.error('Erreur RPC get_product_reviews:', ratingsError)
                 }
 
                 if (cancelled) return
-                setReviews(productRatings)
+                setReviews(productRatings || [])
             } catch (err) {
                 if (!cancelled) console.error('Erreur page produit:', err)
             } finally {

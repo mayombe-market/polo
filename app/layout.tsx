@@ -2,8 +2,17 @@ import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind
 import { Inter } from 'next/font/google'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
+import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
 
 const inter = Inter({ subsets: ['latin'] })
+
+export const viewport = {
+  themeColor: '#f97316',
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+}
 
 export const metadata = {
   title: {
@@ -50,7 +59,19 @@ export const metadata = {
   },
   icons: {
     icon: '/favicon.ico',
-    apple: '/logo.png',
+    apple: '/apple-touch-icon.png',
+  },
+  manifest: '/manifest.json',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Mayombe Market',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  other: {
+    'mobile-web-app-capable': 'yes',
   },
 }
 
@@ -83,6 +104,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                   #DC241F 55%, #DC241F 100%)`
           }}></div>
         </header>
+
+        {/* SERVICE WORKER PWA */}
+        <ServiceWorkerRegister />
 
         {/* CONTENU DE LA PAGE */}
         <CartProvider>

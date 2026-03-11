@@ -18,7 +18,14 @@ export default async function VendorProfilePage() {
         }
     )
 
-    const { data: { user } } = await supabase.auth.getUser()
+    let user = null
+    try {
+        const { data } = await Promise.race([
+            supabase.auth.getUser(),
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000)),
+        ])
+        user = data?.user ?? null
+    } catch {}
     if (!user) redirect('/')
 
     const { data: profile } = await supabase

@@ -49,11 +49,18 @@ export async function middleware(request: NextRequest) {
         }
     )
 
+    // Helper: timeout pour éviter que le middleware bloque indéfiniment
+    const withTimeout = <T,>(promise: Promise<T>, ms = 3000): Promise<T> =>
+        Promise.race([
+            promise,
+            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
+        ])
+
     // IMPORTANT : getUser() rafraîchit le token auth automatiquement
-    // Protégé par try-catch pour ne pas crasher le middleware si auth échoue
+    // Protégé par timeout (3s) + try-catch pour ne jamais bloquer le chargement
     let user = null
     try {
-        const { data } = await supabase.auth.getUser()
+        const { data } = await withTimeout(supabase.auth.getUser())
         user = data?.user ?? null
     } catch {
         // Si getUser échoue (timeout, réseau), on continue sans user
@@ -65,22 +72,14 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        const { data: profile, error } = await supabase
-            .from('profiles')
-            .select('role, first_name')
-            .eq('id', user.id)
-            .single()
-
-        // Si la requête profil échoue, ne pas bloquer — laisser passer
-        if (error || !profile) {
-            return NextResponse.redirect(new URL('/', request.url))
-        }
-
-        if (!profile.first_name) {
-            return NextResponse.redirect(new URL('/complete-profile', request.url))
-        }
-
-        if (profile.role !== 'vendor' && profile.role !== 'admin') {
+        try {
+            const { data: profile, error } = await withTimeout(
+                supabase.from('profiles').select('role, first_name').eq('id', user.id).single()
+            )
+            if (error || !profile) return NextResponse.redirect(new URL('/', request.url))
+            if (!profile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
+            if (profile.role !== 'vendor' && profile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
+        } catch {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
@@ -91,21 +90,14 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        const { data: logProfile, error } = await supabase
-            .from('profiles')
-            .select('role, first_name')
-            .eq('id', user.id)
-            .single()
-
-        if (error || !logProfile) {
-            return NextResponse.redirect(new URL('/', request.url))
-        }
-
-        if (!logProfile.first_name) {
-            return NextResponse.redirect(new URL('/complete-profile', request.url))
-        }
-
-        if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') {
+        try {
+            const { data: logProfile, error } = await withTimeout(
+                supabase.from('profiles').select('role, first_name').eq('id', user.id).single()
+            )
+            if (error || !logProfile) return NextResponse.redirect(new URL('/', request.url))
+            if (!logProfile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
+            if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
+        } catch {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
@@ -116,14 +108,12 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        const { data: adminProfile, error } = await supabase
-            .from('profiles')
-            .select('role')
-            .eq('id', user.id)
-            .single()
-
-        // Si la requête échoue, ne pas crasher — rediriger
-        if (error || !adminProfile || adminProfile.role !== 'admin') {
+        try {
+            const { data: adminProfile, error } = await withTimeout(
+                supabase.from('profiles').select('role').eq('id', user.id).single()
+            )
+            if (error || !adminProfile || adminProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
+        } catch {
             return NextResponse.redirect(new URL('/', request.url))
         }
     }
@@ -134,16 +124,16 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/', request.url))
         }
 
-        // Si logisticien → rediriger vers son dashboard
         if (pathname === '/account/dashboard') {
-            const { data: accProfile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', user.id)
-                .single()
-
-            if (accProfile?.role === 'logistician') {
-                return NextResponse.redirect(new URL('/logistician/dashboard', request.url))
+            try {
+                const { data: accProfile } = await withTimeout(
+                    supabase.from('profiles').select('role').eq('id', user.id).single()
+                )
+                if (accProfile?.role === 'logistician') {
+                    return NextResponse.redirect(new URL('/logistician/dashboard', request.url))
+                }
+            } catch {
+                // Timeout sur profile check — on laisse passer
             }
         }
     }

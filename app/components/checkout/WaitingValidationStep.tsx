@@ -13,6 +13,11 @@ interface WaitingValidationStepProps {
     onRejected: () => void
 }
 
+const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
 export default function WaitingValidationStep({ orderId, orderData, transactionId, onValidated, onRejected }: WaitingValidationStepProps) {
     const [dots, setDots] = useState('')
     const [elapsed, setElapsed] = useState(0)
@@ -31,11 +36,6 @@ export default function WaitingValidationStep({ orderId, orderData, transactionI
 
     // Supabase Realtime: écouter la validation de l'admin
     useEffect(() => {
-        const supabase = createBrowserClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-        )
-
         const channel = supabase
             .channel(`order-${orderId}`)
             .on('postgres_changes', {

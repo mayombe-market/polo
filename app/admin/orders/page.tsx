@@ -7,7 +7,7 @@ import { safeGetUser } from '@/lib/supabase-utils'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
-    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck
+    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
@@ -20,6 +20,7 @@ export default function AdminOrders() {
     const [loading, setLoading] = useState(true)
     const [updating, setUpdating] = useState<string | null>(null)
     const [activeFilter, setActiveFilter] = useState('all')
+    const [searchQuery, setSearchQuery] = useState('')
     const [adminInputs, setAdminInputs] = useState<Record<string, string>>({})
     const [logisticians, setLogisticians] = useState<any[]>([])
     const [assigningOrder, setAssigningOrder] = useState<string | null>(null)
@@ -261,12 +262,24 @@ export default function AdminOrders() {
     const totalCommissions = confirmedOrders.reduce((sum, o) => sum + (o.commission_amount || Math.round((o.total_amount || 0) * 0.10)), 0)
     const pendingPayouts = productOrders.filter(o => o.status === 'delivered' && o.payout_status === 'pending').length
 
-    // Filtrage
+    // Filtrage + recherche
     const filteredOrders = (() => {
-        if (activeFilter === 'subscriptions') return subscriptionOrders
-        const base = productOrders
-        if (activeFilter === 'all') return base
-        return base.filter(order => order.status === activeFilter)
+        let base: any[]
+        if (activeFilter === 'subscriptions') base = subscriptionOrders
+        else if (activeFilter === 'all') base = productOrders
+        else base = productOrders.filter(order => order.status === activeFilter)
+
+        if (searchQuery.trim()) {
+            const q = searchQuery.trim().toLowerCase()
+            base = base.filter(order =>
+                (order.customer_name || '').toLowerCase().includes(q) ||
+                (order.customer_phone || '').includes(q) ||
+                (order.id || '').toLowerCase().includes(q) ||
+                (order.tracking_number || '').toLowerCase().includes(q) ||
+                formatOrderNumber(order).toLowerCase().includes(q)
+            )
+        }
+        return base
     })()
 
     if (loading) return (
@@ -304,6 +317,23 @@ export default function AdminOrders() {
                             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">{stat.label}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* RECHERCHE */}
+                <div className="relative">
+                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Rechercher par nom, téléphone, numéro de commande..."
+                        className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 placeholder:text-slate-400 placeholder:font-normal"
+                    />
+                    {searchQuery && (
+                        <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                            <X size={16} />
+                        </button>
+                    )}
                 </div>
 
                 {/* FILTRES */}

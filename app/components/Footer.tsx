@@ -106,7 +106,7 @@ export default function Footer() {
           flexWrap: "wrap",
         }}>
           <span style={{ color: "#555", fontSize: 12, fontWeight: 600 }}>🌍 Disponible au :</span>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <div className="footer-country-pills" style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             {[
               { flag: "🇨🇬", name: "Congo", active: true },
               { flag: "🇨🇩", name: "RD Congo", active: false },
@@ -139,9 +139,9 @@ export default function Footer() {
           maxWidth: 1100, margin: "0 auto", padding: "0 24px",
           display: "flex", justifyContent: "center", gap: 16,
           flexWrap: "wrap",
-        }}>
+        }} className="footer-trust-badges">
           {trustBadges.map(b => (
-            <div key={b.text} style={{
+            <div key={b.text} className="footer-trust-badge" style={{
               display: "flex", alignItems: "center", gap: 8,
               padding: "10px 18px", borderRadius: 12,
               background: `${b.color}08`,
@@ -158,7 +158,7 @@ export default function Footer() {
       <div style={{
         maxWidth: 1100, margin: "0 auto", padding: "48px 24px 40px",
       }}>
-        <div style={{
+        <div className="footer-main-grid" style={{
           display: "grid",
           gridTemplateColumns: "1.4fr 1fr 1fr 1fr",
           gap: 40,
@@ -175,7 +175,7 @@ export default function Footer() {
               />
             </div>
 
-            <p style={{
+            <p className="footer-brand-text" style={{
               color: "#777", fontSize: 13, lineHeight: 1.8, margin: "0 0 20px",
               maxWidth: 280,
             }}>
@@ -289,7 +289,7 @@ export default function Footer() {
           marginTop: 36, paddingTop: 28,
           borderTop: "1px solid rgba(255,255,255,0.04)",
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: 32,
-        }}>
+        }} className="footer-legal-grid">
           {/* Legal links */}
           <div>
             <h4 style={{
@@ -301,7 +301,7 @@ export default function Footer() {
               <span style={{ fontSize: 14 }}>⚖️</span>
               LÉGAL
             </h4>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div className="footer-legal-links" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {columns[3].links.map(link => (
                 <a
                   key={link.label}
@@ -334,7 +334,7 @@ export default function Footer() {
               <span style={{ fontSize: 14 }}>💳</span>
               MOYENS DE PAIEMENT
             </h4>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+            <div className="footer-payment-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {payments.map(p => (
                 <span key={p} style={{
                   padding: "6px 14px", borderRadius: 8,
@@ -360,7 +360,7 @@ export default function Footer() {
           padding: "20px 24px",
         }}>
           {/* Company legal info */}
-          <div style={{
+          <div className="footer-company-info" style={{
             display: "flex", flexWrap: "wrap", justifyContent: "center",
             gap: 8, marginBottom: 14,
           }}>
@@ -372,13 +372,13 @@ export default function Footer() {
             ].map((info, i) => (
               <span key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ color: "#444", fontSize: 11 }}>{info}</span>
-                {i < 3 && <span style={{ color: "#2a2a2a", margin: "0 2px" }}>·</span>}
+                {i < 3 && <span className="footer-dot" style={{ color: "#2a2a2a", margin: "0 2px" }}>·</span>}
               </span>
             ))}
           </div>
 
           {/* Contact line */}
-          <div style={{
+          <div className="footer-contact-line" style={{
             display: "flex", flexWrap: "wrap", justifyContent: "center",
             gap: 16, marginBottom: 14,
           }}>
@@ -400,7 +400,7 @@ export default function Footer() {
           }} />
 
           {/* Copyright + bottom text */}
-          <div style={{
+          <div className="footer-bottom-row" style={{
             display: "flex", flexWrap: "wrap", justifyContent: "space-between",
             alignItems: "center", gap: 12,
           }}>
@@ -408,7 +408,7 @@ export default function Footer() {
               © 2026 Mayombe Market — Tous droits réservés
             </span>
 
-            <p style={{
+            <p className="footer-disclaimer" style={{
               color: "#3a3a3a", fontSize: 10, margin: 0,
               maxWidth: 420, textAlign: "center", lineHeight: 1.6,
             }}>
@@ -425,7 +425,7 @@ export default function Footer() {
         </div>
       </div>
 
-      {/* ══════════════ MOBILE VERSION ══════════════ */}
+      {/* ══════════════ STYLES ══════════════ */}
       <style>{`
         @keyframes footerLogoGlow {
           0%, 100% {
@@ -443,12 +443,53 @@ export default function Footer() {
           transform: scale(1.05);
         }
         @media (max-width: 768px) {
-          footer > div:nth-child(4) > div:first-child {
+          .footer-main-grid {
             grid-template-columns: 1fr !important;
             gap: 28px !important;
           }
-          footer > div:nth-child(4) > div:nth-child(2) {
+          .footer-legal-grid {
             grid-template-columns: 1fr !important;
+          }
+          .footer-bottom-row {
+            flex-direction: column !important;
+            align-items: center !important;
+            text-align: center !important;
+          }
+          .footer-country-pills {
+            justify-content: center !important;
+          }
+          .footer-trust-badges {
+            gap: 8px !important;
+          }
+          .footer-trust-badge {
+            padding: 8px 12px !important;
+          }
+          .footer-brand-text {
+            max-width: 100% !important;
+          }
+          .footer-company-info {
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 4px !important;
+          }
+          .footer-company-info .footer-dot {
+            display: none !important;
+          }
+          .footer-contact-line {
+            flex-direction: column !important;
+            align-items: center !important;
+            gap: 8px !important;
+          }
+          .footer-disclaimer {
+            max-width: 100% !important;
+          }
+          .footer-legal-links a,
+          .footer-payment-pills span {
+            font-size: 11px !important;
+            padding: 5px 10px !important;
+          }
+          .footer-newsletter {
+            max-width: 100% !important;
           }
         }
       `}</style>

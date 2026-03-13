@@ -22,6 +22,7 @@ export default function CompleteProfilePage() {
     const [role, setRole] = useState<'buyer' | 'vendor'>('buyer')
     const [shopName, setShopName] = useState('')
     const [vendorConfirmed, setVendorConfirmed] = useState(false)
+    const [termsAccepted, setTermsAccepted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [user, setUser] = useState<any>(null)
@@ -98,6 +99,12 @@ export default function CompleteProfilePage() {
             return
         }
 
+        if (!termsAccepted) {
+            setError('Veuillez accepter les conditions d\'utilisation pour continuer.')
+            setLoading(false)
+            return
+        }
+
         if (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) {
             setError('Veuillez remplir le nom de votre boutique et confirmer votre statut de vendeur.')
             setLoading(false)
@@ -121,6 +128,7 @@ export default function CompleteProfilePage() {
                     country: selectedCountry.code,
                     role,
                     ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
+                    terms_accepted_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                 })
 
@@ -443,11 +451,42 @@ export default function CompleteProfilePage() {
                                     className="w-5 h-5 accent-blue-500 rounded"
                                 />
                                 <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                                    Je confirme vouloir être vendeur et j&apos;accepte les conditions
+                                    Je confirme vouloir être vendeur
                                 </span>
                             </label>
                         </div>
                     )}
+
+                    {/* ACCEPTATION DES CONDITIONS */}
+                    <div className="p-5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-2xl">
+                        <label className="flex items-start gap-3 cursor-pointer">
+                            <input
+                                type="checkbox"
+                                checked={termsAccepted}
+                                onChange={(e) => setTermsAccepted(e.target.checked)}
+                                className="w-5 h-5 accent-green-500 rounded mt-0.5 flex-shrink-0"
+                            />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                                J&apos;ai lu et j&apos;accepte les{' '}
+                                {role === 'vendor' ? (
+                                    <>
+                                        <a href="/conditions-vendeurs" target="_blank" className="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-700">
+                                            conditions vendeurs
+                                        </a>
+                                        {' '}et les{' '}
+                                        <a href="/cgu" target="_blank" className="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-700">
+                                            conditions générales d&apos;utilisation
+                                        </a>
+                                    </>
+                                ) : (
+                                    <a href="/cgu" target="_blank" className="text-green-600 dark:text-green-400 underline font-semibold hover:text-green-700">
+                                        conditions générales d&apos;utilisation
+                                    </a>
+                                )}
+                                {' '}de Mayombe Market.
+                            </span>
+                        </label>
+                    </div>
 
                     {/* MESSAGE D'ERREUR */}
                     {error && (
@@ -459,7 +498,7 @@ export default function CompleteProfilePage() {
                     {/* BOUTON VALIDER */}
                     <button
                         type="submit"
-                        disabled={loading || (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) || !isPhoneValid}
+                        disabled={loading || !termsAccepted || (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) || !isPhoneValid}
                         className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? (

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
+import { withTimeout } from '@/lib/supabase-utils'
 import {
     Package, DollarSign, Clock, ShieldCheck, Users, ShoppingBag, Truck,
     ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle
@@ -29,6 +30,7 @@ function getStatusBadge(status: string) {
 
 export default function AdminDashboard() {
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
     const [stats, setStats] = useState({
         ordersToday: 0,
         revenueToday: 0,
@@ -44,6 +46,7 @@ export default function AdminDashboard() {
 
     useEffect(() => {
         const fetchStats = async () => {
+            try {
             const today = new Date()
             today.setHours(0, 0, 0, 0)
             const todayISO = today.toISOString()
@@ -59,7 +62,7 @@ export default function AdminDashboard() {
                 logisticiansRes,
                 pendingPayoutsRes,
                 recentRes,
-            ] = await Promise.all([
+            ] = await withTimeout(Promise.all([
                 // CA total aujourd'hui
                 supabase.from('orders').select('total_amount').gte('created_at', todayISO).neq('status', 'rejected').neq('order_type', 'subscription'),
                 // Commandes aujourd'hui
@@ -80,7 +83,7 @@ export default function AdminDashboard() {
                 supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'delivered').eq('payout_status', 'pending'),
                 // 5 dernières commandes
                 supabase.from('orders').select('*').neq('order_type', 'subscription').order('created_at', { ascending: false }).limit(5),
-            ])
+            ]), 15000)
 
             const revenueToday = (ordersRes.data || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
 
@@ -96,7 +99,12 @@ export default function AdminDashboard() {
                 pendingPayouts: pendingPayoutsRes.count || 0,
             })
             setRecentOrders(recentRes.data || [])
-            setLoading(false)
+            } catch (err) {
+                console.error('Erreur chargement dashboard:', err)
+                setError(true)
+            } finally {
+                setLoading(false)
+            }
         }
 
         fetchStats()
@@ -110,6 +118,13 @@ export default function AdminDashboard() {
 
         return () => { supabase.removeChannel(channel) }
     }, [])
+
+    if (error) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+            <p className="text-red-500 font-bold">Erreur de chargement</p>
+            <button onClick={() => { setError(false); setLoading(true); }} className="px-6 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm">Réessayer</button>
+        </div>
+    )
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">

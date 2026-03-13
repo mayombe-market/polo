@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getFollowedProducts } from '@/lib/getFollowedProducts'
 import ProductCard from '@/app/components/ProductCard'
 import { Bell, Sparkles, Loader2 } from 'lucide-react'
@@ -11,6 +11,7 @@ import Link from 'next/link'
 export default function FeedPage() {
     const [products, setProducts] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
     const [user, setUser] = useState<any>(null)
 
     const supabase = createBrowserClient(
@@ -20,17 +21,31 @@ export default function FeedPage() {
 
     useEffect(() => {
         const loadFeed = async () => {
-            const u = await safeGetUser(supabase)
-            setUser(u)
+            try {
+                const u = await safeGetUser(supabase)
+                setUser(u)
 
-            if (u) {
-                const { data } = await getFollowedProducts(u.id)
-                setProducts(data || [])
+                if (u) {
+                    const { data } = await withTimeout(getFollowedProducts(u.id))
+                    setProducts(data || [])
+                }
+            } catch (err) {
+                console.error('Erreur chargement feed:', err)
+                setError(true)
+            } finally {
+                setLoading(false)
             }
-            setLoading(false)
         }
         loadFeed()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    if (error) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+            <p className="text-red-500 font-bold">Erreur de chargement</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm">Réessayer</button>
+        </div>
+    )
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">

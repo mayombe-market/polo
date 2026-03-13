@@ -3,13 +3,14 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
-    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X
+    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription } from '@/app/actions/orders'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
@@ -24,6 +25,8 @@ export default function AdminOrders() {
     const [adminInputs, setAdminInputs] = useState<Record<string, string>>({})
     const [logisticians, setLogisticians] = useState<any[]>([])
     const [assigningOrder, setAssigningOrder] = useState<string | null>(null)
+    const [dateFilter, setDateFilter] = useState('all')
+    const [cityFilter, setCityFilter] = useState('all')
 
     const supabase = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -74,10 +77,10 @@ export default function AdminOrders() {
                 const user = await safeGetUser(supabase)
                 if (!user) return
 
-                const { data, error } = await supabase
+                const { data, error } = await withTimeout(supabase
                     .from('orders')
                     .select('*')
-                    .order('created_at', { ascending: false })
+                    .order('created_at', { ascending: false }))
 
                 if (error) console.error('Erreur chargement:', error)
                 setOrders(data || [])
@@ -269,6 +272,21 @@ export default function AdminOrders() {
         else if (activeFilter === 'all') base = productOrders
         else base = productOrders.filter(order => order.status === activeFilter)
 
+        // City filter
+        if (cityFilter !== 'all') {
+            base = base.filter(order => (order.city || '').toLowerCase() === cityFilter.toLowerCase())
+        }
+
+        // Date filter
+        if (dateFilter !== 'all') {
+            const now = new Date()
+            const cutoff = new Date()
+            if (dateFilter === 'today') cutoff.setHours(0, 0, 0, 0)
+            else if (dateFilter === '7days') cutoff.setDate(now.getDate() - 7)
+            else if (dateFilter === '30days') cutoff.setDate(now.getDate() - 30)
+            base = base.filter(order => new Date(order.created_at) >= cutoff)
+        }
+
         if (searchQuery.trim()) {
             const q = searchQuery.trim().toLowerCase()
             base = base.filter(order =>
@@ -281,6 +299,23 @@ export default function AdminOrders() {
         }
         return base
     })()
+
+    const handleExportCSV = () => {
+        exportCSV(filteredOrders, [
+            { header: 'N° Commande', accessor: (o: any) => formatOrderNumber(o) },
+            { header: 'Client', accessor: (o: any) => o.customer_name || '' },
+            { header: 'Téléphone', accessor: (o: any) => o.phone || '' },
+            { header: 'Ville', accessor: (o: any) => o.city || '' },
+            { header: 'Quartier', accessor: (o: any) => o.district || '' },
+            { header: 'Montant (FCFA)', accessor: (o: any) => o.total_amount || 0 },
+            { header: 'Frais livraison', accessor: (o: any) => o.delivery_fee || 0 },
+            { header: 'Mode livraison', accessor: (o: any) => o.delivery_mode === 'express' ? 'Express' : 'Standard' },
+            { header: 'Statut', accessor: (o: any) => getStatusDetails(o.status).label },
+            { header: 'Paiement', accessor: (o: any) => getPaymentBadge(o.payment_method).label },
+            { header: 'Tracking', accessor: (o: any) => o.tracking_number || '' },
+            { header: 'Date', accessor: (o: any) => new Date(o.created_at).toLocaleDateString('fr-FR') },
+        ], csvFilename('commandes'))
+    }
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">
@@ -319,21 +354,72 @@ export default function AdminOrders() {
                     ))}
                 </div>
 
-                {/* RECHERCHE */}
-                <div className="relative">
-                    <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                    <input
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Rechercher par nom, téléphone, numéro de commande..."
-                        className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 placeholder:text-slate-400 placeholder:font-normal"
-                    />
-                    {searchQuery && (
-                        <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                            <X size={16} />
+                {/* RECHERCHE + EXPORT */}
+                <div className="flex items-center gap-3">
+                    <div className="relative flex-1">
+                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                            type="text"
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            placeholder="Rechercher par nom, téléphone, numéro de commande..."
+                            className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 placeholder:text-slate-400 placeholder:font-normal"
+                        />
+                        {searchQuery && (
+                            <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                <X size={16} />
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={handleExportCSV}
+                        disabled={filteredOrders.length === 0}
+                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-green-500 text-white text-[10px] font-black uppercase italic hover:bg-green-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                        <FileDown size={14} /> CSV
+                    </button>
+                </div>
+
+                {/* FILTRE VILLE + DATE */}
+                <div className="flex items-center gap-4 overflow-x-auto pb-1 no-scrollbar flex-wrap">
+                    {/* Ville */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Ville :</span>
+                        <select
+                            value={cityFilter}
+                            onChange={(e) => setCityFilter(e.target.value)}
+                            className="px-4 py-2 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/30 cursor-pointer"
+                        >
+                            <option value="all">Toutes les villes</option>
+                            <option value="Brazzaville">Brazzaville</option>
+                            <option value="Pointe-Noire">Pointe-Noire</option>
+                        </select>
+                    </div>
+
+                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden sm:block" />
+
+                    {/* Date */}
+                    <div className="flex items-center gap-2">
+                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-1">Période :</span>
+                    {[
+                        { id: 'all', label: 'Tout' },
+                        { id: 'today', label: "Aujourd'hui" },
+                        { id: '7days', label: '7 jours' },
+                        { id: '30days', label: '30 jours' },
+                    ].map((f) => (
+                        <button
+                            key={f.id}
+                            onClick={() => setDateFilter(f.id)}
+                            className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all border ${
+                                dateFilter === f.id
+                                    ? 'bg-slate-800 dark:bg-white border-slate-800 dark:border-white text-white dark:text-slate-900'
+                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
+                            }`}
+                        >
+                            {f.label}
                         </button>
-                    )}
+                    ))}
+                    </div>
                 </div>
 
                 {/* FILTRES */}

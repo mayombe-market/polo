@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { CheckoutSchema, CheckoutType, DELIVERY_FEES } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
@@ -41,11 +41,11 @@ export default function CheckoutPage() {
         const loadSavedAddress = async () => {
             const user = await safeGetUser(supabase)
             if (user) {
-                const { data: profile } = await supabase
+                const { data: profile } = await withTimeout(supabase
                     .from('profiles')
                     .select('full_name, whatsapp_number, city, district, landmark')
                     .eq('id', user.id)
-                    .single()
+                    .single())
 
                 if (profile) {
                     reset({

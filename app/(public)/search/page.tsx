@@ -3,6 +3,7 @@
 import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { searchProducts } from '@/lib/searchProducts'
+import { withTimeout } from '@/lib/supabase-utils'
 import { X, SlidersHorizontal, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 import ProductCard from '@/app/components/ProductCard'
 
@@ -32,7 +33,7 @@ function SearchContent() {
         setLoading(true)
         try {
             // Appel de l'utilitaire avec la page en 3ème argument
-            const { data, totalPages: total, count } = await searchProducts(query, filters, page)
+            const { data, totalPages: total, count } = await withTimeout(searchProducts(query, filters, page))
             setProducts(data || [])
             setTotalPages(total)
             setTotalItems(count)

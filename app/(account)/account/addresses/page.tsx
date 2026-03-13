@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { MapPin, Navigation, Home, Save, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function AddressesPage() {
@@ -25,11 +25,11 @@ export default function AddressesPage() {
             try {
                 const user = await safeGetUser(supabase)
                 if (user) {
-                    const { data } = await supabase
+                    const { data } = await withTimeout(supabase
                         .from('profiles')
                         .select('city, district, landmark')
                         .eq('id', user.id)
-                        .single()
+                        .single())
                     if (data) setAddress(data)
                 }
             } catch (err) {

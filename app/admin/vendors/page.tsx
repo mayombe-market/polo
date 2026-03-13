@@ -6,8 +6,10 @@ import Link from 'next/link'
 import { createBrowserClient } from '@supabase/ssr'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
-    ShoppingBag, MapPin, Calendar, ExternalLink, Shield
+    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown
 } from 'lucide-react'
+import { exportCSV, csvFilename } from '@/lib/exportCSV'
+import { withTimeout } from '@/lib/supabase-utils'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -38,35 +40,41 @@ export default function AdminVendorsPage() {
     const [vendors, setVendors] = useState<any[]>([])
     const [productCounts, setProductCounts] = useState<Record<string, number>>({})
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
     const [filter, setFilter] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
 
     useEffect(() => {
         const fetchVendors = async () => {
-            const { data } = await supabase
-                .from('profiles')
-                .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, verification_status, avatar_url, created_at')
-                .eq('role', 'vendor')
-                .order('created_at', { ascending: false })
+            try {
+                const { data } = await withTimeout(supabase
+                    .from('profiles')
+                    .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, verification_status, avatar_url, created_at')
+                    .eq('role', 'vendor')
+                    .order('created_at', { ascending: false }))
 
-            setVendors(data || [])
+                setVendors(data || [])
 
-            // Fetch product counts per vendor
-            if (data && data.length > 0) {
-                const ids = data.map(v => v.id)
-                const { data: products } = await supabase
-                    .from('products')
-                    .select('seller_id')
-                    .in('seller_id', ids)
+                // Fetch product counts per vendor
+                if (data && data.length > 0) {
+                    const ids = data.map(v => v.id)
+                    const { data: products } = await withTimeout(supabase
+                        .from('products')
+                        .select('seller_id')
+                        .in('seller_id', ids))
 
-                const counts: Record<string, number> = {}
-                ;(products || []).forEach((p: any) => {
-                    counts[p.seller_id] = (counts[p.seller_id] || 0) + 1
-                })
-                setProductCounts(counts)
+                    const counts: Record<string, number> = {}
+                    ;(products || []).forEach((p: any) => {
+                        counts[p.seller_id] = (counts[p.seller_id] || 0) + 1
+                    })
+                    setProductCounts(counts)
+                }
+            } catch (err) {
+                console.error('Erreur chargement vendeurs:', err)
+                setError(true)
+            } finally {
+                setLoading(false)
             }
-
-            setLoading(false)
         }
 
         fetchVendors()
@@ -98,6 +106,28 @@ export default function AdminVendorsPage() {
         return base
     })()
 
+    const handleExportCSV = () => {
+        exportCSV(filteredVendors, [
+            { header: 'Nom', accessor: (v: any) => v.last_name || '' },
+            { header: 'Prénom', accessor: (v: any) => v.first_name || '' },
+            { header: 'Boutique', accessor: (v: any) => v.shop_name || v.store_name || '' },
+            { header: 'Email', accessor: (v: any) => v.email || '' },
+            { header: 'Téléphone', accessor: (v: any) => v.phone || '' },
+            { header: 'Ville', accessor: (v: any) => v.city || '' },
+            { header: 'Plan', accessor: (v: any) => v.subscription_plan || 'free' },
+            { header: 'Vérification', accessor: (v: any) => v.verification_status || 'unverified' },
+            { header: 'Produits', accessor: (v: any) => productCounts[v.id] || 0 },
+            { header: 'Date inscription', accessor: (v: any) => new Date(v.created_at).toLocaleDateString('fr-FR') },
+        ], csvFilename('vendeurs'))
+    }
+
+    if (error) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+            <p className="text-red-500 font-bold">Erreur de chargement des vendeurs</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm">Réessayer</button>
+        </div>
+    )
+
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center">
             <Loader2 className="animate-spin text-orange-500" size={40} />
@@ -108,13 +138,22 @@ export default function AdminVendorsPage() {
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* HEADER */}
             <div className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 py-8 px-4">
-                <div className="max-w-7xl mx-auto">
-                    <h1 className="text-4xl font-black uppercase italic tracking-tighter">
-                        <span className="text-orange-500">Vendeurs</span>
-                    </h1>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                        {totalVendors} vendeurs inscrits — {verifiedCount} vérifiés
-                    </p>
+                <div className="max-w-7xl mx-auto flex items-start justify-between">
+                    <div>
+                        <h1 className="text-4xl font-black uppercase italic tracking-tighter">
+                            <span className="text-orange-500">Vendeurs</span>
+                        </h1>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                            {totalVendors} vendeurs inscrits — {verifiedCount} vérifiés
+                        </p>
+                    </div>
+                    <button
+                        onClick={handleExportCSV}
+                        disabled={filteredVendors.length === 0}
+                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-green-500 text-white text-[10px] font-black uppercase italic hover:bg-green-600 transition-all disabled:opacity-40 whitespace-nowrap"
+                    >
+                        <FileDown size={14} /> Export CSV
+                    </button>
                 </div>
             </div>
 

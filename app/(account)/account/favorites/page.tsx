@@ -1,12 +1,13 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import ProductCard from '@/app/components/ProductCard'
 
 export default function FavoritesPage() {
     const [products, setProducts] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
     const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 
     useEffect(() => {
@@ -14,22 +15,30 @@ export default function FavoritesPage() {
             try {
                 const user = await safeGetUser(supabase)
                 if (user) {
-                    const { data, error } = await supabase
+                    const { data, error } = await withTimeout(supabase
                         .from('favorites')
                         .select('products(*)')
-                        .eq('user_id', user.id)
+                        .eq('user_id', user.id))
 
                     if (error) throw error
                     if (data) setProducts(data.map(f => f.products))
                 }
             } catch (err) {
                 console.error('Erreur chargement favoris:', err)
+                setError(true)
             } finally {
                 setLoading(false)
             }
         }
         fetchFavorites()
     }, [])
+
+    if (error) return (
+        <div className="p-20 text-center">
+            <p className="text-red-500 font-bold mb-4">Erreur de chargement</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm">Réessayer</button>
+        </div>
+    )
 
     if (loading) return <div className="p-20 text-center font-black italic">CHARGEMENT...</div>
 

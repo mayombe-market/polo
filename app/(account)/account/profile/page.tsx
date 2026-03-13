@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import Image from 'next/image'
 import { User, Phone, Save, Loader2, Camera } from 'lucide-react'
 
@@ -27,11 +27,11 @@ export default function ProfilePage() {
             try {
                 const user = await safeGetUser(supabase)
                 if (user) {
-                    const { data } = await supabase
+                    const { data } = await withTimeout(supabase
                         .from('profiles')
                         .select('full_name, whatsapp_number, avatar_url')
                         .eq('id', user.id)
-                        .maybeSingle()
+                        .maybeSingle())
                     if (data) setProfile(prev => ({ ...prev, ...data }))
                 }
             } catch (err) {

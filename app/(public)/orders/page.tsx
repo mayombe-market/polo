@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { Package } from 'lucide-react'
 import Link from 'next/link'
 import { OrderCard } from '@/app/components/OrderCard'
@@ -12,6 +12,7 @@ import { formatOrderNumber } from '@/lib/formatOrderNumber'
 export default function MyOrdersPage() {
     const [orders, setOrders] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
     const [userId, setUserId] = useState<string | null>(null)
 
     const supabase = createBrowserClient(
@@ -25,22 +26,24 @@ export default function MyOrdersPage() {
                 const user = await safeGetUser(supabase)
                 if (user) {
                     setUserId(user.id)
-                    const { data, error } = await supabase
+                    const { data, error } = await withTimeout(supabase
                         .from('orders')
                         .select('*')
                         .eq('user_id', user.id)
-                        .order('created_at', { ascending: false })
+                        .order('created_at', { ascending: false }))
                     if (error) throw error
                     setOrders(data || [])
                 }
             } catch (err) {
                 console.error('Erreur chargement commandes:', err)
+                setError(true)
             } finally {
                 setLoading(false)
             }
         }
         fetchOrders()
-    }, [supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     // REAL-TIME : Écouter les mises à jour de statut
     useEffect(() => {
@@ -81,7 +84,15 @@ export default function MyOrdersPage() {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [userId, supabase])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [userId])
+
+    if (error) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4">
+            <p className="text-red-500 font-bold">Erreur de chargement</p>
+            <button onClick={() => window.location.reload()} className="px-6 py-2 bg-orange-500 text-white rounded-xl font-bold text-sm">Réessayer</button>
+        </div>
+    )
 
     if (loading) return <div className="p-20 text-center font-black animate-pulse italic">CHARGEMENT...</div>
 

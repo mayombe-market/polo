@@ -17,7 +17,7 @@ import MessageButton from '../../../components/MessageButton'
 import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import VerifiedBadge from '@/app/components/VerifiedBadge'
 
 const supabase = createBrowserClient(
@@ -54,17 +54,17 @@ export default function ProductDetailPage() {
                 if (cancelled) return
                 setUser(currentUser)
 
-                const { data: prod, error: prodError } = await supabase.from('products').select('*').eq('id', id).single()
+                const { data: prod, error: prodError } = await withTimeout(supabase.from('products').select('*').eq('id', id).single(), 8000)
                 if (cancelled) return
                 if (prodError || !prod) return
 
                 setProduct(prod)
 
-                const shopRes = await supabase
+                const shopRes = await withTimeout(supabase
                     .from('profiles')
                     .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date, verification_status')
                     .eq('id', prod.seller_id)
-                    .maybeSingle()
+                    .maybeSingle(), 8000)
 
                 if (cancelled) return
                 setShop(shopRes.data)
@@ -75,9 +75,9 @@ export default function ProductDetailPage() {
                 }
 
                 // Avis vérifiés via RPC SECURITY DEFINER (contourne RLS pour voir TOUS les avis)
-                const { data: productRatings, error: ratingsError } = await supabase.rpc('get_product_reviews', {
+                const { data: productRatings, error: ratingsError } = await withTimeout(supabase.rpc('get_product_reviews', {
                     p_product_id: id as string
-                })
+                }), 8000)
                 if (ratingsError) {
                     console.error('Erreur RPC get_product_reviews:', ratingsError)
                 }

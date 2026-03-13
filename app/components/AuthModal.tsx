@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
+import { withTimeout } from '@/lib/supabase-utils'
 
 // ═══════════════════════════════════════════════
 // TOAST NOTIFICATION
@@ -230,9 +231,9 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
         try {
             if (mode === 'forgot') {
                 // MOT DE PASSE OUBLIÉ
-                const { error } = await supabase.auth.resetPasswordForEmail(email, {
+                const { error } = await withTimeout(supabase.auth.resetPasswordForEmail(email, {
                     redirectTo: `${window.location.origin}/auth/callback`,
-                })
+                }), 10000)
                 if (error) throw error
 
                 handleClose()
@@ -240,10 +241,10 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             } else if (mode === 'login') {
                 // CONNEXION
-                const { data, error } = await supabase.auth.signInWithPassword({
+                const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
                     email,
                     password,
-                })
+                }), 10000)
                 if (error) throw error
 
                 // Remember me
@@ -252,14 +253,14 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 // Récupérer le profil pour le nom et la redirection
                 let profile: any = null
                 try {
-                    const { data: p } = await supabase
+                    const { data: p } = await withTimeout(supabase
                         .from('profiles')
                         .select('role, full_name, first_name, shop_name, store_name')
                         .eq('id', data.user.id)
-                        .maybeSingle()
+                        .maybeSingle(), 5000)
                     profile = p
                 } catch {
-                    // Profil pas encore créé — on continue
+                    // Profil pas encore créé ou timeout — on continue
                 }
 
                 const displayName = profile?.full_name || profile?.first_name || profile?.store_name || profile?.shop_name || email.split('@')[0]
@@ -273,13 +274,13 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             } else {
                 // INSCRIPTION
                 const redirectUrl = `${window.location.origin}/auth/callback`
-                const { data, error } = await supabase.auth.signUp({
+                const { data, error } = await withTimeout(supabase.auth.signUp({
                     email,
                     password,
                     options: {
                         emailRedirectTo: redirectUrl,
                     }
-                })
+                }), 10000)
                 if (error) throw error
 
                 if (data?.user?.identities?.length === 0) {
@@ -312,6 +313,8 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 setError('Impossible d\'envoyer l\'email. Réessayez dans quelques minutes.')
             } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
                 setError('Trop de tentatives. Patientez quelques minutes.')
+            } else if (msg.includes('timeout') || msg.includes('Timeout')) {
+                setError('Connexion lente. Vérifiez votre réseau et réessayez.')
             } else {
                 setError(msg || 'Une erreur est survenue')
             }

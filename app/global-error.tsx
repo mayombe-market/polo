@@ -7,6 +7,20 @@ export default function GlobalError({
     error: Error & { digest?: string }
     reset: () => void
 }) {
+    const isChunkError =
+        error.name === 'ChunkLoadError' ||
+        error.message?.includes('Loading chunk') ||
+        error.message?.includes('Failed to fetch dynamically imported module') ||
+        error.message?.includes('Importing a module script failed')
+
+    const handleAction = () => {
+        if (isChunkError) {
+            window.location.reload()
+        } else {
+            reset()
+        }
+    }
+
     return (
         <html>
             <body>
@@ -22,15 +36,21 @@ export default function GlobalError({
                     padding: '20px',
                     textAlign: 'center',
                 }}>
-                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>😵</div>
+                    <div style={{ fontSize: '48px', marginBottom: '16px' }}>
+                        {isChunkError ? '🔄' : '😵'}
+                    </div>
                     <h1 style={{ fontSize: '22px', fontWeight: 800, marginBottom: '8px' }}>
-                        Oups, quelque chose a planté
+                        {isChunkError
+                            ? 'Nouvelle version disponible'
+                            : 'Oups, quelque chose a planté'}
                     </h1>
                     <p style={{ fontSize: '14px', color: '#94a3b8', marginBottom: '24px', maxWidth: '400px' }}>
-                        Une erreur inattendue s&apos;est produite. Cliquez ci-dessous pour réessayer.
+                        {isChunkError
+                            ? 'Le site a été mis à jour. Actualisez la page pour profiter de la dernière version.'
+                            : 'Une erreur inattendue s\u0027est produite. Cliquez ci-dessous pour réessayer.'}
                     </p>
                     <button
-                        onClick={() => reset()}
+                        onClick={handleAction}
                         style={{
                             background: 'linear-gradient(135deg, #E8A838, #D4341C)',
                             color: 'white',
@@ -42,7 +62,7 @@ export default function GlobalError({
                             cursor: 'pointer',
                         }}
                     >
-                        Réessayer
+                        {isChunkError ? 'Actualiser la page' : 'Réessayer'}
                     </button>
                     <a
                         href="/"

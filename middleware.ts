@@ -56,6 +56,13 @@ export async function middleware(request: NextRequest) {
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
         ])
 
+    // Anti-boucle: ne pas re-vérifier si on vient d'être redirigé
+    const redirectCount = request.nextUrl.searchParams.get('_rc')
+    if (redirectCount && parseInt(redirectCount) > 2) {
+        // Trop de redirects — laisser passer pour éviter la boucle
+        return supabaseResponse
+    }
+
     // IMPORTANT : getUser() rafraîchit le token auth automatiquement
     // Protégé par timeout (3s) + try-catch pour ne jamais bloquer le chargement
     let user = null
@@ -164,6 +171,13 @@ export async function middleware(request: NextRequest) {
     supabaseResponse.headers.set('X-Frame-Options', 'DENY');
     // On empêche le navigateur de deviner le type de contenu (MIME sniffing)
     supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
+
+    // Pas de cache sur les routes protégées pour éviter les états auth périmés
+    if (pathname.startsWith('/admin') || pathname.startsWith('/vendor') ||
+        pathname.startsWith('/account') || pathname.startsWith('/logistician') ||
+        pathname.startsWith('/checkout')) {
+        supabaseResponse.headers.set('Cache-Control', 'no-store, no-cache, must-revalidate')
+    }
 
     return supabaseResponse
 }

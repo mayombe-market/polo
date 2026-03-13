@@ -1,8 +1,10 @@
 import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind directives
 import { Inter } from 'next/font/google'
+import { AuthProvider } from '@/hooks/useAuth'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
 import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
+import OfflineBanner from '@/app/components/OfflineBanner'
 import SplashScreen from '@/app/components/SplashScreen'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -109,15 +111,18 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}></div>
         </header>
 
-        {/* SERVICE WORKER PWA */}
+        {/* SERVICE WORKER PWA + BANDEAUX OFFLINE/UPDATE */}
         <ServiceWorkerRegister />
+        <OfflineBanner />
 
         {/* CONTENU DE LA PAGE */}
-        <CartProvider>
-          <main>
-            {children}
-          </main>
-        </CartProvider>
+        <AuthProvider>
+          <CartProvider>
+            <main>
+              {children}
+            </main>
+          </CartProvider>
+        </AuthProvider>
       </body>
     </html>
   )

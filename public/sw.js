@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mayombe-v2'
+const CACHE_NAME = 'mayombe-v3'
 const OFFLINE_URL = '/'
 
 // Routes that should NEVER be cached (auth-sensitive)
@@ -22,7 +22,7 @@ const PRECACHE_ASSETS = [
   '/placeholder-image.svg',
 ]
 
-// Install: precache essential assets (NOT pages)
+// Install: precache essential assets
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -32,7 +32,7 @@ self.addEventListener('install', (event) => {
   self.skipWaiting()
 })
 
-// Activate: clean up old caches
+// Activate: clean up ALL old caches
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((cacheNames) => {
@@ -44,6 +44,13 @@ self.addEventListener('activate', (event) => {
     })
   )
   self.clients.claim()
+})
+
+// Listen for SKIP_WAITING message from the app
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting()
+  }
 })
 
 // Check if URL is an auth-sensitive route
@@ -68,11 +75,27 @@ self.addEventListener('fetch', (event) => {
   // NEVER cache auth-sensitive pages — always go to network
   if (isProtectedRoute(request.url)) return
 
-  // For navigation requests (HTML pages): network-only, no caching
-  // This prevents stale auth state from being served
+  // For navigation requests (HTML pages): network-first with cache fallback
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request).catch(() => caches.match(OFFLINE_URL) || new Response('Hors ligne', { status: 503 }))
+      fetch(request)
+        .then((response) => {
+          // Cache successful navigation responses for offline fallback
+          if (response.ok) {
+            const clone = response.clone()
+            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
+          }
+          return response
+        })
+        .catch(() => {
+          // Offline: try to serve cached version, then fallback to home
+          return caches.match(request)
+            .then((cached) => cached || caches.match(OFFLINE_URL))
+            .then((fallback) => fallback || new Response('Hors ligne — vérifiez votre connexion internet.', {
+              status: 503,
+              headers: { 'Content-Type': 'text/plain; charset=utf-8' }
+            }))
+        })
     )
     return
   }
@@ -108,6 +131,9 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(request, clone))
           }
           return response
+        }).catch(() => {
+          // Network failed, return cached or nothing
+          return cached || new Response('', { status: 503 })
         })
         return cached || fetchPromise
       })

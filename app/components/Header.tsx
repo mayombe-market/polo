@@ -3,19 +3,18 @@
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import AuthModal from '@/app/components/AuthModal'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import { Menu, X, Bell } from 'lucide-react'
 import { getUnreadNotifCount } from '@/app/actions/notifications'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { useAuth } from '@/hooks/useAuth'
 
 export default function Header() {
-    const [user, setUser] = useState<any>(null)
-    const [avatarUrl, setAvatarUrl] = useState<string | null>(null)
-    const [userRole, setUserRole] = useState<string | null>(null)
+    const { user, profile, supabase } = useAuth()
+    const avatarUrl = profile?.avatar_url || null
+    const userRole = profile?.role || null
     const [isDarkMode, setIsDarkMode] = useState(false)
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
@@ -23,11 +22,6 @@ export default function Header() {
     const [unreadNotifCount, setUnreadNotifCount] = useState(0)
     const menuRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
-
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
 
     useEffect(() => {
         const savedMode = localStorage.getItem('darkMode')
@@ -44,45 +38,14 @@ export default function Header() {
         else document.documentElement.classList.remove('dark')
     }
 
+    // Load notification count when user changes
     useEffect(() => {
-        const fetchProfile = async (userId: string) => {
-            try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('role, avatar_url')
-                    .eq('id', userId)
-                    .maybeSingle()
-                setUserRole(profile?.role || null)
-                setAvatarUrl(profile?.avatar_url || null)
-            } catch {
-                // Profil pas encore créé
-            }
+        if (user) {
+            getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
+        } else {
+            setUnreadNotifCount(0)
         }
-
-        const checkUser = async () => {
-            const u = await safeGetUser(supabase)
-            setUser(u)
-            if (u) {
-                await fetchProfile(u.id)
-                getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
-            }
-        }
-        checkUser()
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-            setUser(session?.user ?? null)
-            if (session?.user) {
-                await fetchProfile(session.user.id)
-                getUnreadNotifCount().then(c => setUnreadNotifCount(c)).catch(() => {})
-            } else {
-                setAvatarUrl(null)
-                setUserRole(null)
-                setUnreadNotifCount(0)
-            }
-        })
-        return () => subscription.unsubscribe()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [user?.id])
 
     // Fermer le menu quand on clique en dehors
     useEffect(() => {
@@ -120,9 +83,6 @@ export default function Header() {
         } catch (err) {
             console.error('Erreur signOut:', err)
         }
-        setUser(null)
-        setAvatarUrl(null)
-        setUserRole(null)
         setShowUserMenu(false)
         router.push('/')
     }

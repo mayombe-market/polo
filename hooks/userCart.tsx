@@ -2,8 +2,7 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { useAuth } from '@/hooks/useAuth'
 
 export interface CartItem {
     id: string
@@ -35,17 +34,13 @@ const CartContext = createContext<CartContextType | null>(null)
 // PROVIDER — wraps the app, holds shared state
 // ═══════════════════════════════════════
 export function CartProvider({ children }: { children: ReactNode }): React.JSX.Element {
+    const { user, supabase, loading: authLoading } = useAuth()
     const [cart, setCart] = useState<CartItem[]>([])
-    const [user, setUser] = useState<any>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
     const userRef = useRef<any>(null)
     const cartRef = useRef<CartItem[]>([])
-
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const prevUserIdRef = useRef<string | null>(null)
 
     // Keep refs in sync
     useEffect(() => { userRef.current = user }, [user])
@@ -142,50 +137,45 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
         }
     }, [supabase])
 
-    // Init + auth listener
+    // React to auth state changes from AuthProvider
     useEffect(() => {
-        const initCart = async () => {
-            try {
-                // Timeout protégé pour éviter chargement infini
-                const currentUser = await safeGetUser(supabase)
-                setUser(currentUser)
+        // Wait for auth to finish loading
+        if (authLoading) return
 
-                if (currentUser) {
-                    await loadCartFromSupabase(currentUser.id)
+        const currentUserId = user?.id || null
+        const previousUserId = prevUserIdRef.current
+
+        // Skip if user hasn't changed
+        if (currentUserId === previousUserId) {
+            setLoading(false)
+            return
+        }
+
+        prevUserIdRef.current = currentUserId
+
+        const syncCart = async () => {
+            try {
+                if (user) {
+                    await loadCartFromSupabase(user.id)
                     const localCart = getLocalCart()
                     if (localCart.length > 0) {
-                        await mergeLocalCartToSupabase(currentUser.id, localCart)
+                        await mergeLocalCartToSupabase(user.id, localCart)
                         localStorage.removeItem('mayombe_cart')
                     }
                 } else {
                     setCart(getLocalCart())
                 }
             } catch (err) {
-                // En cas d'erreur, charger le panier local
                 setCart(getLocalCart())
-                console.error('Erreur init panier:', err)
+                console.error('Erreur sync panier:', err)
             } finally {
                 setLoading(false)
             }
         }
 
-        initCart()
-
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event, session) => {
-                if (event === 'SIGNED_IN' && session?.user) {
-                    setUser(session.user)
-                    await loadCartFromSupabase(session.user.id)
-                } else if (event === 'SIGNED_OUT') {
-                    setUser(null)
-                    setCart(getLocalCart())
-                }
-            }
-        )
-
-        return () => { subscription.unsubscribe() }
+        syncCart()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [user?.id, authLoading])
 
     // Sauvegarder le panier (optimistic update)
     const saveCart = useCallback(async (newCart: CartItem[]) => {

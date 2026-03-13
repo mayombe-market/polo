@@ -6,6 +6,7 @@ import FollowButton from './FollowButton'
 import ShareButtons from './ShareButtons'
 import StarRating from './StarRating'
 import { Store, MapPin, Calendar, ArrowLeft } from 'lucide-react'
+import VerifiedBadge from './VerifiedBadge'
 
 interface SellerProfileHeaderProps {
     profile: any
@@ -81,6 +82,9 @@ export default function SellerProfileHeader({
                     <h1 className="text-3xl font-black uppercase italic tracking-tighter dark:text-white">
                         {storeName}
                     </h1>
+                    {profile?.verification_status === 'verified' && (
+                        <VerifiedBadge size="md" />
+                    )}
                     {profile?.subscription_plan === 'premium' && (
                         <span className="px-3 py-1 text-[10px] font-black uppercase rounded-full bg-gradient-to-r from-purple-500 to-indigo-500 text-white shadow-lg shadow-purple-500/20">
                             Premium

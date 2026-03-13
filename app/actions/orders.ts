@@ -718,13 +718,18 @@ export async function createProduct(input: {
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
 
-    // ═══ Vérification de la limite de produits selon le plan ═══
+    // ═══ Vérification de l'identité vendeur ═══
     const { data: profile } = await supabase
         .from('profiles')
-        .select('subscription_plan, subscription_end_date')
+        .select('subscription_plan, subscription_end_date, verification_status')
         .eq('id', user.id)
         .single()
 
+    if (profile?.verification_status !== 'verified') {
+        return { error: 'Votre compte doit être vérifié avant de publier des produits. Rendez-vous dans Vérification depuis votre dashboard.' }
+    }
+
+    // ═══ Vérification de la limite de produits selon le plan ═══
     const plan = profile?.subscription_plan || 'free'
     const maxProducts = getPlanMaxProducts(plan)
 

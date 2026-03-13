@@ -18,6 +18,7 @@ import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { safeGetUser } from '@/lib/supabase-utils'
+import VerifiedBadge from '@/app/components/VerifiedBadge'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -61,7 +62,7 @@ export default function ProductDetailPage() {
 
                 const shopRes = await supabase
                     .from('profiles')
-                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date')
+                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date, verification_status')
                     .eq('id', prod.seller_id)
                     .maybeSingle()
 
@@ -181,6 +182,7 @@ export default function ProductDetailPage() {
                                 <span className="text-slate-900 dark:text-[#F0ECE2] text-sm font-bold truncate group-hover:text-green-600 transition-colors">
                                     {shopName}
                                 </span>
+                                {shop?.verification_status === 'verified' && <VerifiedBadge />}
                             </div>
                             <div className="flex items-center gap-2 mt-0.5">
                                 <span className="text-slate-400 text-[11px]">{followerCount} abonnés</span>

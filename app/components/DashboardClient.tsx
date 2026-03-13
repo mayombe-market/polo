@@ -24,6 +24,7 @@ import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negot
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
 import MessagesPanel from './MessagesPanel'
+import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
 import { getSubscriptionStatus, getDaysRemaining } from '@/lib/subscription'
 
@@ -34,19 +35,25 @@ const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.
 
 type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings'
 
-const menuItems: { id: Page; label: string; icon: any }[] = [
-    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-    { id: 'products', label: 'Produits', icon: Package },
-    { id: 'add', label: 'Ajouter', icon: Plus },
-    { id: 'orders', label: 'Commandes', icon: ShoppingCart },
-    { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
-    { id: 'messages', label: 'Messages', icon: MessageCircle },
-    { id: 'notifs', label: 'Notifications', icon: Bell },
-    { id: 'stats', label: 'Statistiques', icon: BarChart3 },
-    { id: 'wallet', label: 'Portefeuille', icon: Wallet },
-    { id: 'shop', label: 'Boutique', icon: Store },
-    { id: 'settings', label: 'Paramètres', icon: Settings },
-]
+const getMenuItems = (verificationStatus?: string): { id: Page; label: string; icon: any }[] => {
+    const items: { id: Page; label: string; icon: any }[] = [
+        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'products', label: 'Produits', icon: Package },
+        { id: 'add', label: 'Ajouter', icon: Plus },
+        { id: 'orders', label: 'Commandes', icon: ShoppingCart },
+        { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
+        { id: 'messages', label: 'Messages', icon: MessageCircle },
+        { id: 'notifs', label: 'Notifications', icon: Bell },
+        { id: 'stats', label: 'Statistiques', icon: BarChart3 },
+        { id: 'wallet', label: 'Portefeuille', icon: Wallet },
+        { id: 'shop', label: 'Boutique', icon: Store },
+        { id: 'settings', label: 'Paramètres', icon: Settings },
+    ]
+    return items
+}
+
+// Keep backward compat
+const menuItems = getMenuItems()
 
 export default function DashboardClient({ products: initialProducts, profile, user, productCount }: any) {
     const router = useRouter()
@@ -423,6 +430,9 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 pb-24 md:pb-0 overflow-y-auto">
+                {/* Bannière vérification */}
+                <VerificationBanner verificationStatus={profile?.verification_status} />
+
                 {activePage === 'dashboard' && (
                     <DashboardHome
                         user={user}
@@ -479,6 +489,23 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {activePage === 'add' && (
                     <div className="p-4 md:p-8 max-w-4xl mx-auto">
+                        {/* Gate vérification */}
+                        {profile?.verification_status !== 'verified' ? (
+                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30">
+                                <div className="text-6xl mb-4">🔒</div>
+                                <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">Vérification requise</h2>
+                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                                    Votre compte doit être vérifié avant de pouvoir publier des produits.
+                                    Soumettez vos documents pour activer la publication.
+                                </p>
+                                <a
+                                    href="/vendor/verification"
+                                    className="inline-block bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-amber-500/20 no-underline"
+                                >
+                                    🛡️ Vérifier mon compte
+                                </a>
+                            </div>
+                        ) : (<>
                         {/* Barre de limite de produits */}
                         {maxProducts !== -1 && (
                             <div className={`mb-6 p-4 rounded-2xl border ${
@@ -554,6 +581,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                 <AddProductForm sellerId={user?.id} />
                             </>
                         )}
+                        </>)}
                     </div>
                 )}
 

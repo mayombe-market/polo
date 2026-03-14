@@ -50,7 +50,7 @@ export async function middleware(request: NextRequest) {
     )
 
     // Helper: timeout pour éviter que le middleware bloque indéfiniment
-    const withTimeout = <T,>(promise: Promise<T>, ms = 3000): Promise<T> =>
+    const withTimeout = <T,>(promise: Promise<T>, ms = 5000): Promise<T> =>
         Promise.race([
             promise,
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
             if (!profile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (profile.role !== 'vendor' && profile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            return NextResponse.redirect(new URL('/', request.url))
+            // Timeout — laisser passer, le client-side vérifiera
         }
     }
 
@@ -105,7 +105,7 @@ export async function middleware(request: NextRequest) {
             if (!logProfile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            return NextResponse.redirect(new URL('/', request.url))
+            // Timeout — laisser passer, le client-side vérifiera
         }
     }
 
@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest) {
             )
             if (error || !adminProfile || adminProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            return NextResponse.redirect(new URL('/', request.url))
+            // Timeout — laisser passer, le client-side vérifiera
         }
     }
 

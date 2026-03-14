@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -259,7 +260,7 @@ export default function Footer() {
               </h4>
               <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                 {col.links.map(link => (
-                  <a
+                  <Link
                     key={link.label}
                     href={link.href}
                     onMouseEnter={() => setHoveredLink(link.label)}
@@ -277,7 +278,7 @@ export default function Footer() {
                       background: "rgba(232,168,56,0.15)", color: "#E8A838",
                     }}>NEW</span>}
                     {link.label}
-                  </a>
+                  </Link>
                 ))}
               </div>
             </div>
@@ -303,7 +304,7 @@ export default function Footer() {
             </h4>
             <div className="footer-legal-links" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
               {columns[3].links.map(link => (
-                <a
+                <Link
                   key={link.label}
                   href={link.href}
                   onMouseEnter={() => setHoveredLink(link.label)}
@@ -318,7 +319,7 @@ export default function Footer() {
                   }}
                 >
                   {link.label}
-                </a>
+                </Link>
               ))}
             </div>
           </div>

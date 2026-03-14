@@ -60,7 +60,14 @@ export default function CompleteProfilePage() {
                     .single()
 
                 if (!cancelled && profile && profile.first_name) {
-                    router.push('/')
+                    // Profil déjà complet — rediriger vers le bon dashboard selon le rôle
+                    if (profile.role === 'vendor') {
+                        router.push('/vendor/dashboard')
+                    } else if (profile.role === 'admin') {
+                        router.push('/admin')
+                    } else {
+                        router.push('/account/dashboard')
+                    }
                 }
             } catch {
                 // Profile pas encore créé — continuer normalement

@@ -8,6 +8,7 @@ import {
     Megaphone, Search, Eye, EyeOff, Pencil, GripVertical
 } from 'lucide-react'
 import { withTimeout } from '@/lib/supabase-utils'
+import { revalidateHome } from '@/app/actions/revalidate'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -145,6 +146,7 @@ export default function AdminAds() {
             setFormData(defaultForm)
             setEditingAd(null)
             fetchAds()
+            revalidateHome()
         } catch (err: any) {
             alert('Erreur: ' + (err.message || 'Erreur inconnue'))
         } finally {
@@ -161,12 +163,16 @@ export default function AdminAds() {
             return
         }
         fetchAds()
+        revalidateHome()
     }
 
     // Toggle actif/inactif
     const toggleActive = async (ad: Ad) => {
         const { error } = await supabase.from('ads').update({ is_active: !ad.is_active }).eq('id', ad.id)
-        if (!error) fetchAds()
+        if (!error) {
+            fetchAds()
+            revalidateHome()
+        }
     }
 
     if (error) return (

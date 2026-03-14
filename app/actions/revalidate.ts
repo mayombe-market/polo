@@ -7,3 +7,7 @@ export async function revalidateProducts() {
     revalidatePath('/category/[id]', 'page')
     revalidatePath('/sub_category/[id]', 'page')
 }
+
+export async function revalidateHome() {
+    revalidatePath('/')
+}

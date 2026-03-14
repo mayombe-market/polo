@@ -154,23 +154,30 @@ export async function middleware(request: NextRequest) {
 
     const cspHeader = `
         default-src 'self';
-        script-src 'self' 'unsafe-inline';
+        script-src 'self' 'unsafe-inline' https://www.googletagmanager.com;
         style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        img-src 'self' data: blob: https://*.unsplash.com               
-        https://images.unsplash.com 
-        https://ui-avatars.com https://*.supabase.co;
+        img-src 'self' data: blob: https://*.unsplash.com
+        https://images.unsplash.com
+        https://ui-avatars.com https://*.supabase.co https://www.googletagmanager.com;
         font-src 'self' https://fonts.gstatic.com;
-        connect-src 'self' https://*.supabase.co wss://*.supabase.co;
+        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://*.googletagmanager.com;
         frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';
     `.replace(/\s{2,}/g, ' ').trim();
 
     supabaseResponse.headers.set('Content-Security-Policy', cspHeader);
-    // On ajoute aussi une protection contre le "vol de clic" (Clickjacking)
     supabaseResponse.headers.set('X-Frame-Options', 'DENY');
-    // On empêche le navigateur de deviner le type de contenu (MIME sniffing)
     supabaseResponse.headers.set('X-Content-Type-Options', 'nosniff');
+    supabaseResponse.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload');
+    supabaseResponse.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    supabaseResponse.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), payment=(self)');
+    // Cross-origin isolation (ZAP: "Mauvaise configuration inter-domaines")
+    supabaseResponse.headers.set('Cross-Origin-Opener-Policy', 'same-origin');
+    supabaseResponse.headers.set('Cross-Origin-Resource-Policy', 'cross-origin');
+    // Masquer les infos serveur (ZAP: "Timestamp Disclosure" / "Information Disclosure")
+    supabaseResponse.headers.delete('Server');
+    supabaseResponse.headers.delete('X-Powered-By');
 
     // Pas de cache sur les routes protégées pour éviter les états auth périmés
     if (pathname.startsWith('/admin') || pathname.startsWith('/vendor') ||

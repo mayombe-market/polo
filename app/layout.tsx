@@ -1,6 +1,7 @@
 import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind directives
 import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
+import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
 import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
@@ -86,6 +87,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <Script
             src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
             strategy="afterInteractive"
+            crossOrigin="anonymous"
           />
           <Script id="google-analytics" strategy="afterInteractive">
             {`
@@ -117,11 +119,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>
-          <CartProvider>
-            <main>
-              {children}
-            </main>
-          </CartProvider>
+          <RealtimeProvider>
+            <CartProvider>
+              <main>
+                {children}
+              </main>
+            </CartProvider>
+          </RealtimeProvider>
         </AuthProvider>
       </body>
     </html>

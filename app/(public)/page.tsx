@@ -22,7 +22,7 @@ export default async function HomePage() {
     { data: popularProducts },
     { data: promoProducts },
   ] = await Promise.all([
-    supabase.from('ads').select('id, img, title').limit(5),
+    supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     excludeExpiredSellers(
       supabase.from('products').select('id, name, price, shop, loc, views_count, img, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
       expiredIds

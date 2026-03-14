@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import AuthModal from '@/app/components/AuthModal'
 import ProductCard from '@/app/components/ProductCard'
 import { Truck, Store, ArrowRight, Flame } from 'lucide-react'
@@ -21,6 +22,7 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
+    const router = useRouter()
     useEffect(() => {
         if (ads.length <= 1) return
         const interval = setInterval(() => {
@@ -43,7 +45,11 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
             <section className="max-w-7xl mx-auto px-4 pt-8">
                 <div ref={scrollContainerRef} className="flex overflow-x-auto snap-x snap-mandatory gap-4 scrollbar-hide pb-4" style={{ scrollbarWidth: 'none' }}>
                     {ads?.map((ad) => (
-                        <div key={ad.id} className="min-w-[100%] snap-center relative h-[250px] md:h-[400px] rounded-[2rem] overflow-hidden bg-slate-200 shadow-lg">
+                        <div
+                            key={ad.id}
+                            className={`min-w-[100%] snap-center relative h-[250px] md:h-[400px] rounded-[2rem] overflow-hidden bg-slate-200 shadow-lg ${ad.link_url ? 'cursor-pointer' : ''}`}
+                            onClick={() => ad.link_url && router.push(ad.link_url)}
+                        >
                             <Image src={ad.img || '/placeholder-image.svg'} alt="" fill sizes="100vw" className="object-cover" />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-8">
                                 <h2 className="text-white text-3xl font-bold">{ad.title}</h2>

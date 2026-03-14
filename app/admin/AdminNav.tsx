@@ -1,10 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone } from 'lucide-react'
+import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -18,35 +19,31 @@ const links = [
     { href: '/admin/verifications', label: 'Vérifications', icon: ShieldCheck, badgeKey: 'verifications' as const },
     { href: '/admin/vendors', label: 'Vendeurs', icon: Users, badgeKey: null },
     { href: '/admin/logisticians', label: 'Logisticiens', icon: Truck, badgeKey: null },
+    { href: '/admin/ads', label: 'Pubs', icon: Megaphone, badgeKey: null },
 ]
 
 export default function AdminNav() {
     const pathname = usePathname()
     const [badges, setBadges] = useState<{ orders: number; verifications: number }>({ orders: 0, verifications: 0 })
 
-    useEffect(() => {
-        const fetchCounts = async () => {
-            const [ordersRes, verificationsRes] = await Promise.all([
-                supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-                supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-            ])
-            setBadges({
-                orders: ordersRes.count || 0,
-                verifications: verificationsRes.count || 0,
-            })
-        }
-
-        fetchCounts()
-
-        // Realtime : refresh quand orders ou verifications changent
-        const channel = supabase
-            .channel('admin-nav-badges')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchCounts())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_verifications' }, () => fetchCounts())
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
+    const fetchCounts = useCallback(async () => {
+        const [ordersRes, verificationsRes] = await Promise.all([
+            supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+        ])
+        setBadges({
+            orders: ordersRes.count || 0,
+            verifications: verificationsRes.count || 0,
+        })
     }, [])
+
+    useEffect(() => { fetchCounts() }, [fetchCounts])
+
+    // Realtime via shared channel
+    useRealtime('order:insert', fetchCounts)
+    useRealtime('order:update', fetchCounts)
+    useRealtime('verification:insert', fetchCounts)
+    useRealtime('verification:update', fetchCounts)
 
     return (
         <nav className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">

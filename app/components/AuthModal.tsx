@@ -332,9 +332,10 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
         if (role === 'vendor') {
             window.location.href = '/vendor/dashboard'
         } else if (role === 'admin') {
-            window.location.href = '/admin/products'
+            window.location.href = '/admin/orders'
         } else {
-            window.location.href = '/'
+            // Fermer le modal et rester sur la page actuelle au lieu de rediriger vers /
+            onClose()
         }
     }
 

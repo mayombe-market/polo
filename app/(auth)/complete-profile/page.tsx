@@ -148,7 +148,8 @@ export default function CompleteProfilePage() {
                 return
             }
 
-            router.push('/')
+            // Acheteur — aller vers le dashboard
+            router.push('/account/dashboard')
 
         } catch (err: any) {
             setError(err.message || 'Une erreur est survenue')
@@ -192,7 +193,7 @@ export default function CompleteProfilePage() {
                     billing={billing}
                     onBack={() => setProfileStep('subscription')}
                     onComplete={() => {
-                        router.push('/')
+                        router.push('/vendor/dashboard')
                     }}
                 />
             </div>
@@ -240,7 +241,7 @@ export default function CompleteProfilePage() {
                     }}
                     onSkip={async () => {
                         await saveSubscriptionPlan('free')
-                        router.push('/')
+                        router.push('/vendor/dashboard')
                     }}
                 />
             </div>

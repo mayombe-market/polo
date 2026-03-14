@@ -19,7 +19,8 @@ export default function VendorOrders() {
                 const result = await getVendorOrders()
 
                 if (!result.vendorId) {
-                    router.push('/')
+                    // Pas de vendorId = pas authentifié ou pas vendeur
+                    // Ne pas rediriger vers / (le middleware gère déjà), juste arrêter le loading
                     return
                 }
 

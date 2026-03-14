@@ -40,7 +40,7 @@ export default function AdminProducts() {
 
     const fetchProducts = async () => {
         try {
-            const { data } = await withTimeout(supabase.from('products').select('*').order('created_at', { ascending: false }))
+            const { data } = await withTimeout(supabase.from('products').select('*').order('created_at', { ascending: false }).limit(500))
             if (data) {
                 setProducts(data)
 

@@ -1,15 +1,19 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import AuthModal from '@/app/components/AuthModal'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import { Menu, X, Bell } from 'lucide-react'
+
+// Lazy load AuthModal — ne se charge que quand l'user clique "Connexion"
+const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 import { getUnreadNotifCount } from '@/app/actions/notifications'
 import { useAuth } from '@/hooks/useAuth'
+import { useRealtime } from '@/hooks/useRealtime'
 
 export default function Header() {
     const { user, profile, supabase } = useAuth()
@@ -60,18 +64,10 @@ export default function Header() {
         return () => document.removeEventListener('mousedown', handleClickOutside)
     }, [showUserMenu])
 
-    // Realtime: update bell badge
-    useEffect(() => {
-        if (!user?.id) return
-        const channel = supabase
-            .channel('header-notifs')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
-                setUnreadNotifCount(prev => prev + 1)
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [user?.id])
+    // Realtime: update bell badge (via shared channel)
+    useRealtime('notification:insert', () => {
+        setUnreadNotifCount(prev => prev + 1)
+    })
 
     const notifDashboardLink = userRole === 'vendor' || userRole === 'admin'
         ? '/vendor/dashboard?tab=notifs'

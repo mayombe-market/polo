@@ -22,7 +22,7 @@ export default async function SubCategoryPage({ params }: { params: { id: string
 
     const expiredIds = await getExpiredSellerIds(supabase)
     const { data: products, error } = await excludeExpiredSellers(
-        supabase.from('products').select('*').eq('sub_category_uuid', id),
+        supabase.from('products').select('*').eq('sub_category_uuid', id).order('created_at', { ascending: false }).limit(100),
         expiredIds
     )
 

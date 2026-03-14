@@ -52,7 +52,7 @@ export default async function CategoryPage(props: any) {
                 productQuery = productQuery.or(`category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`);
             }
 
-            const { data: prodData } = await productQuery.order('created_at', { ascending: false });
+            const { data: prodData } = await productQuery.order('created_at', { ascending: false }).limit(100);
             products = prodData || [];
         }
     } catch (e) {

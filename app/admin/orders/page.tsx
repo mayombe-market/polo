@@ -15,6 +15,7 @@ import { generateInvoice } from '@/lib/generateInvoice'
 import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription } from '@/app/actions/orders'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
+import { useRealtime } from '@/hooks/useRealtime'
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -80,7 +81,8 @@ export default function AdminOrders() {
                 const { data, error } = await withTimeout(supabase
                     .from('orders')
                     .select('*')
-                    .order('created_at', { ascending: false }))
+                    .order('created_at', { ascending: false })
+                    .limit(500))
 
                 if (error) console.error('Erreur chargement:', error)
                 setOrders(data || [])
@@ -95,33 +97,30 @@ export default function AdminOrders() {
         // Charger les logisticiens disponibles
         getAvailableLogisticians().then(({ logisticians: logs }) => setLogisticians(logs))
 
-        // Real-time : écouter nouvelles commandes et mises à jour
-        const channel = supabase
-            .channel('admin-orders')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-                const order = payload.new as any
-                setOrders(prev => [order, ...prev])
-                if (order.order_type === 'subscription') {
-                    toast.info('Nouvel abonnement vendeur', {
-                        description: `${order.customer_name} — ${order.total_amount?.toLocaleString('fr-FR')} FCFA`,
-                        duration: 5000
-                    })
-                } else {
-                    const productNames = order.items?.map((i: any) => i.name).join(', ') || 'Produit'
-                    const deliveryLabel = order.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-                    const desc = `${order.customer_name} · ${productNames} · ${deliveryLabel} · ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
-                    playNewOrderSound()
-                    toast.success('Nouvelle commande !', { description: desc, duration: 10000 })
-                    sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${order.customer_name}`)
-                }
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
-                setOrders(prev => prev.map(o => o.id === (payload.new as any).id ? { ...o, ...payload.new } : o))
-            })
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
     }, [supabase])
+
+    // Realtime via shared channel
+    useRealtime('order:insert', (payload) => {
+        const order = payload.new as any
+        setOrders(prev => [order, ...prev])
+        if (order.order_type === 'subscription') {
+            toast.info('Nouvel abonnement vendeur', {
+                description: `${order.customer_name} — ${order.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                duration: 5000
+            })
+        } else {
+            const productNames = order.items?.map((i: any) => i.name).join(', ') || 'Produit'
+            const deliveryLabel = order.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+            const desc = `${order.customer_name} · ${productNames} · ${deliveryLabel} · ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+            playNewOrderSound()
+            toast.success('Nouvelle commande !', { description: desc, duration: 10000 })
+            sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${order.customer_name}`)
+        }
+    })
+
+    useRealtime('order:update', (payload) => {
+        setOrders(prev => prev.map(o => o.id === (payload.new as any).id ? { ...o, ...payload.new } : o))
+    })
 
     // VERROU 1 : Confirmer le paiement (pending → confirmed) — via Server Action
     const confirmPayment = async (orderId: string) => {

@@ -3,6 +3,7 @@
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { syncCart as syncCartServer, loadCart as loadCartServer } from '@/app/actions/cart'
 
 export interface CartItem {
     id: string
@@ -56,16 +57,11 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
         }
     }, [])
 
-    // Charger depuis Supabase
-    const loadCartFromSupabase = useCallback(async (userId: string) => {
+    // Charger depuis Supabase via server action sécurisée
+    const loadCartFromSupabase = useCallback(async (_userId: string) => {
         try {
-            const { data, error } = await supabase
-                .from('cart')
-                .select('*')
-                .eq('user_id', userId)
-
-            if (error) throw error
-            setCart((data || []).map((item: any) => ({
+            const { items } = await loadCartServer()
+            setCart((items || []).map((item: any) => ({
                 id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}`,
                 product_id: item.product_id,
                 name: item.name,
@@ -81,17 +77,14 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
             setError('Erreur lors du chargement du panier')
             console.error('Erreur chargement panier Supabase:', err)
         }
-    }, [supabase])
+    }, [])
 
-    // Fusionner le panier local vers Supabase
-    const mergeLocalCartToSupabase = useCallback(async (userId: string, localCart: CartItem[]) => {
+    // Fusionner le panier local vers Supabase via server action sécurisée
+    const mergeLocalCartToSupabase = useCallback(async (_userId: string, localCart: CartItem[]) => {
         try {
-            const { data: existingCart } = await supabase
-                .from('cart')
-                .select('*')
-                .eq('user_id', userId)
+            const { items: existingItems } = await loadCartServer()
 
-            const mergedItems: CartItem[] = [...(existingCart || []).map((item: any) => ({
+            const mergedItems: CartItem[] = [...(existingItems || []).map((item: any) => ({
                 id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}`,
                 product_id: item.product_id,
                 name: item.name,
@@ -116,26 +109,21 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
                 }
             })
 
-            await supabase.from('cart').delete().eq('user_id', userId)
-            if (mergedItems.length > 0) {
-                const cleanData = mergedItems.map(item => ({
-                    user_id: userId,
-                    product_id: item.product_id,
-                    name: item.name,
-                    price: item.price,
-                    quantity: item.quantity,
-                    img: item.img,
-                    seller_id: item.seller_id || null,
-                    selected_size: item.selectedSize || null,
-                    selected_color: item.selectedColor || null,
-                }))
-                await supabase.from('cart').insert(cleanData)
-            }
+            await syncCartServer(mergedItems.map(item => ({
+                product_id: item.product_id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                img: item.img,
+                seller_id: item.seller_id || null,
+                selected_size: item.selectedSize || null,
+                selected_color: item.selectedColor || null,
+            })))
             setCart(mergedItems)
         } catch (err) {
             console.error('Erreur fusion panier:', err)
         }
-    }, [supabase])
+    }, [])
 
     // React to auth state changes from AuthProvider
     useEffect(() => {
@@ -177,7 +165,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id, authLoading])
 
-    // Sauvegarder le panier (optimistic update)
+    // Sauvegarder le panier (optimistic update) via server action sécurisée
     const saveCart = useCallback(async (newCart: CartItem[]) => {
         const previousCart = cartRef.current
         setCart(newCart)
@@ -185,22 +173,16 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
         try {
             const currentUser = userRef.current
             if (currentUser) {
-                await supabase.from('cart').delete().eq('user_id', currentUser.id)
-                if (newCart.length > 0) {
-                    const cartData = newCart.map(item => ({
-                        user_id: currentUser.id,
-                        product_id: item.product_id,
-                        name: item.name,
-                        price: item.price,
-                        quantity: item.quantity,
-                        img: item.img,
-                        seller_id: item.seller_id || null,
-                        selected_size: item.selectedSize || null,
-                        selected_color: item.selectedColor || null,
-                    }))
-                    const { error } = await supabase.from('cart').insert(cartData)
-                    if (error) throw error
-                }
+                await syncCartServer(newCart.map(item => ({
+                    product_id: item.product_id,
+                    name: item.name,
+                    price: item.price,
+                    quantity: item.quantity,
+                    img: item.img,
+                    seller_id: item.seller_id || null,
+                    selected_size: item.selectedSize || null,
+                    selected_color: item.selectedColor || null,
+                })))
                 setError(null)
             } else {
                 localStorage.setItem('mayombe_cart', JSON.stringify(newCart))
@@ -210,7 +192,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
             setError('Erreur lors de la sauvegarde')
             console.error('Erreur sauvegarde panier:', (err as any)?.message || (err as any)?.details || JSON.stringify(err))
         }
-    }, [supabase])
+    }, [])
 
     const addToCart = useCallback(async (product: Omit<CartItem, 'quantity'>) => {
         const current = cartRef.current

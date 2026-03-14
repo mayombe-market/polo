@@ -21,7 +21,7 @@ async function getSupabase() {
     )
 }
 
-/** Crée une notification pour un utilisateur */
+/** Crée une notification pour un utilisateur (vérifie que l'appelant est authentifié) */
 export async function createNotification(
     userId: string,
     type: string,
@@ -31,6 +31,11 @@ export async function createNotification(
 ) {
     try {
         const supabase = await getSupabase()
+
+        // Vérifier que l'appelant est connecté (protection contre appel direct depuis le client)
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return
+
         await supabase.from('notifications').insert({
             user_id: userId,
             type,

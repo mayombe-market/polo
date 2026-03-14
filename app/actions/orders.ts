@@ -168,12 +168,14 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
     // Générer un numéro de suivi à la confirmation
     const tracking_number = generateTrackingNumber()
 
-    const { error } = await supabase
-        .from('orders')
-        .update({ status: 'confirmed', tracking_number })
-        .eq('id', orderId)
+    // ═══ CONFIRMATION ATOMIQUE (verrou optimiste via RPC) ═══
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_confirm_order', {
+        p_order_id: orderId,
+        p_tracking_number: tracking_number,
+    })
 
-    if (error) return { error: error.message }
+    if (rpcError) return { error: rpcError.message }
+    if (!rpcResult) return { error: 'Cette commande a déjà été confirmée par un autre admin.' }
 
     // Si c'est un abonnement → activer le plan vendeur automatiquement
     if (order.order_type === 'subscription' && order.subscription_plan_id) {
@@ -282,12 +284,13 @@ export async function adminRejectOrder(orderId: string) {
     if (!orderData) return { error: 'Commande introuvable' }
     if (orderData.status !== 'pending') return { error: `Impossible de rejeter : la commande est "${orderData.status}".` }
 
-    const { error } = await supabase
-        .from('orders')
-        .update({ status: 'rejected' })
-        .eq('id', orderId)
+    // ═══ REJET ATOMIQUE (verrou optimiste via RPC) ═══
+    const { data: rejected, error: rpcError } = await supabase.rpc('admin_reject_order', {
+        p_order_id: orderId,
+    })
 
-    if (error) return { error: error.message }
+    if (rpcError) return { error: rpcError.message }
+    if (!rejected) return { error: 'Cette commande a déjà été traitée par un autre admin.' }
 
     if (orderData?.customer_email) {
         const rejProdNames = (orderData.items || []).map((i: any) => i.name).join(', ')
@@ -318,28 +321,14 @@ export async function adminReleaseFunds(orderId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
-    // Vérifier que la commande est livrée et que 48h sont passées
-    const { data: order } = await supabase
-        .from('orders')
-        .select('status, payout_status, delivered_at')
-        .eq('id', orderId)
-        .single()
+    // ═══ LIBÉRATION ATOMIQUE DES FONDS (via RPC avec FOR UPDATE) ═══
+    const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_release_funds', {
+        p_order_id: orderId,
+    })
 
-    if (!order) return { error: 'Commande introuvable' }
-    if (order.status !== 'delivered') return { error: 'Commande non livrée' }
-    if (order.payout_status !== 'pending') return { error: 'Fonds déjà libérés' }
+    if (rpcError) return { error: rpcError.message }
+    if (rpcResult !== 'OK') return { error: rpcResult || 'Erreur inconnue' }
 
-    if (order.delivered_at) {
-        const elapsed = Date.now() - new Date(order.delivered_at).getTime()
-        if (elapsed < 48 * 60 * 60 * 1000) return { error: 'Il faut attendre 48h après la livraison' }
-    }
-
-    const { error } = await supabase
-        .from('orders')
-        .update({ payout_status: 'paid' })
-        .eq('id', orderId)
-
-    if (error) return { error: error.message }
     return { success: true }
 }
 
@@ -370,6 +359,34 @@ export async function createOrder(input: {
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    // ═══ VALIDATION DES INPUTS ═══
+    const VALID_PAYMENT_METHODS = ['mobile_money', 'airtel_money', 'cash']
+    if (!VALID_PAYMENT_METHODS.includes(input.payment_method)) {
+        return { error: 'Méthode de paiement invalide.' }
+    }
+
+    if (!input.city?.trim() || input.city.length > 100) {
+        return { error: 'Ville invalide (max 100 caractères).' }
+    }
+    if (!input.district?.trim() || input.district.length > 100) {
+        return { error: 'Quartier invalide (max 100 caractères).' }
+    }
+    if (input.customer_name && input.customer_name.length > 100) {
+        return { error: 'Nom trop long (max 100 caractères).' }
+    }
+    if (input.landmark && input.landmark.length > 255) {
+        return { error: 'Point de repère trop long (max 255 caractères).' }
+    }
+    if (input.transaction_id && input.transaction_id.length > 100) {
+        return { error: 'ID de transaction trop long (max 100 caractères).' }
+    }
+    if (input.phone && input.phone.length > 20) {
+        return { error: 'Numéro de téléphone invalide.' }
+    }
+    if (!input.items || input.items.length === 0 || input.items.length > 50) {
+        return { error: 'Panier invalide.' }
+    }
 
     // ═══ VALIDATION SERVEUR DES PRIX ═══
     const productIds = input.items.map(item => item.id)

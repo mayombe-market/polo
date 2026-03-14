@@ -1,6 +1,6 @@
 /**
  * Échappe les caractères spéciaux PostgREST dans les inputs utilisateur
- * pour éviter l'injection dans les filtres .or().
+ * pour éviter l'injection dans les filtres .or() et les wildcards SQL.
  * Caractères échappés : \ , . ( ) % _
  */
 export function sanitizePostgrestValue(input: string): string {
@@ -10,4 +10,6 @@ export function sanitizePostgrestValue(input: string): string {
         .replace(/\./g, '\\.')
         .replace(/\(/g, '\\(')
         .replace(/\)/g, '\\)')
+        .replace(/%/g, '\\%')
+        .replace(/_/g, '\\_')
 }

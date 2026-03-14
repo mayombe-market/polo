@@ -63,7 +63,7 @@ export default function CheckoutPage() {
             setLoadingProfile(false)
         }
         loadSavedAddress()
-    }, [reset, supabase])
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const onSubmit = async (formData: CheckoutType) => {
         if (cart.length === 0) return alert("Votre panier est vide")

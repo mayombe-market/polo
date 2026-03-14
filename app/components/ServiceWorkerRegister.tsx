@@ -38,9 +38,12 @@ export default function ServiceWorkerRegister() {
             })
 
         // Handle controller change (after skipWaiting)
-        navigator.serviceWorker.addEventListener('controllerchange', () => {
-            window.location.reload()
-        })
+        const onControllerChange = () => window.location.reload()
+        navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+
+        return () => {
+            navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+        }
     }, [])
 
     const handleUpdate = () => {

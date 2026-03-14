@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser } from '@/lib/supabase-utils'
 import { Bell, BellRing, Loader2 } from 'lucide-react'
+import { toggleFollow } from '@/app/actions/follows'
 
 interface FollowButtonProps {
     sellerId: string
@@ -49,24 +50,7 @@ export default function FollowButton({ sellerId, onFollowChange }: FollowButtonP
         checkFollow()
     }, [sellerId])
 
-    const updateFollowerCount = async () => {
-        try {
-            // Compter le vrai nombre de followers pour être précis
-            const { count } = await supabase
-                .from('seller_follows')
-                .select('id', { count: 'exact', head: true })
-                .eq('seller_id', sellerId)
-
-            await supabase
-                .from('profiles')
-                .update({ followers_count: count ?? 0 })
-                .eq('id', sellerId)
-        } catch (err) {
-            console.error("Erreur mise à jour compteur followers:", err)
-        }
-    }
-
-    const toggleFollow = async (e: React.MouseEvent) => {
+    const handleToggle = async (e: React.MouseEvent) => {
         e.preventDefault()
 
         if (!currentUserId) return alert("Connectez-vous pour suivre ce vendeur")
@@ -75,25 +59,9 @@ export default function FollowButton({ sellerId, onFollowChange }: FollowButtonP
         setLoading(true)
 
         try {
-            if (isFollowing) {
-                await supabase
-                    .from('seller_follows')
-                    .delete()
-                    .eq('follower_id', currentUserId)
-                    .eq('seller_id', sellerId)
-
-                setIsFollowing(false)
-                await updateFollowerCount()
-                onFollowChange?.(-1)
-            } else {
-                await supabase
-                    .from('seller_follows')
-                    .insert([{ follower_id: currentUserId, seller_id: sellerId }])
-
-                setIsFollowing(true)
-                await updateFollowerCount()
-                onFollowChange?.(1)
-            }
+            const result = await toggleFollow(sellerId)
+            setIsFollowing(result.isFollowing)
+            onFollowChange?.(result.isFollowing ? 1 : -1)
         } catch (err) {
             alert("Une erreur est survenue.")
         } finally {
@@ -105,7 +73,7 @@ export default function FollowButton({ sellerId, onFollowChange }: FollowButtonP
 
     return (
         <button
-            onClick={toggleFollow}
+            onClick={handleToggle}
             disabled={loading}
             className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-black uppercase text-[10px] tracking-widest transition-all shadow-sm border ${isFollowing
                 ? 'bg-orange-500 text-white border-orange-600 shadow-orange-500/20'

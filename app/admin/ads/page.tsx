@@ -7,9 +7,9 @@ import {
     Trash2, Plus, X, Image as ImageIcon, Loader2,
     Megaphone, Search, Eye, EyeOff, Pencil, GripVertical
 } from 'lucide-react'
-import { withTimeout } from '@/lib/supabase-utils'
-import { revalidateHome } from '@/app/actions/revalidate'
+import { getAds, createAd, updateAd, deleteAd, toggleAdActive } from '@/app/actions/ads'
 
+// Supabase client uniquement pour l'upload d'images (Storage)
 const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -40,9 +40,7 @@ export default function AdminAds() {
 
     const fetchAds = async () => {
         try {
-            const { data } = await withTimeout(
-                supabase.from('ads').select('*').order('position', { ascending: true })
-            )
+            const data = await getAds()
             setAds(data || [])
         } catch {
             setError(true)
@@ -65,7 +63,7 @@ export default function AdminAds() {
         return ads.filter(a => (a.title || '').toLowerCase().includes(q))
     })()
 
-    // Upload image
+    // Upload image (reste côté client car c'est du Storage, pas de la BDD)
     const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         try {
             setUploading(true)
@@ -116,7 +114,7 @@ export default function AdminAds() {
         setShowModal(true)
     }
 
-    // Sauvegarder (create ou update)
+    // Sauvegarder (create ou update) via server action sécurisée
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
         if (!formData.title.trim() || !formData.img) {
@@ -135,18 +133,15 @@ export default function AdminAds() {
             }
 
             if (editingAd) {
-                const { error } = await supabase.from('ads').update(payload).eq('id', editingAd.id)
-                if (error) throw error
+                await updateAd(editingAd.id, payload)
             } else {
-                const { error } = await supabase.from('ads').insert([payload])
-                if (error) throw error
+                await createAd(payload)
             }
 
             setShowModal(false)
             setFormData(defaultForm)
             setEditingAd(null)
             fetchAds()
-            revalidateHome()
         } catch (err: any) {
             alert('Erreur: ' + (err.message || 'Erreur inconnue'))
         } finally {
@@ -154,24 +149,24 @@ export default function AdminAds() {
         }
     }
 
-    // Supprimer
+    // Supprimer via server action sécurisée
     const handleDelete = async (id: string) => {
         if (!confirm('Supprimer cette publicité ?')) return
-        const { error } = await supabase.from('ads').delete().eq('id', id)
-        if (error) {
-            alert('Erreur: ' + error.message)
-            return
+        try {
+            await deleteAd(id)
+            fetchAds()
+        } catch (err: any) {
+            alert('Erreur: ' + (err.message || 'Erreur inconnue'))
         }
-        fetchAds()
-        revalidateHome()
     }
 
-    // Toggle actif/inactif
+    // Toggle actif/inactif via server action sécurisée
     const toggleActive = async (ad: Ad) => {
-        const { error } = await supabase.from('ads').update({ is_active: !ad.is_active }).eq('id', ad.id)
-        if (!error) {
+        try {
+            await toggleAdActive(ad.id, ad.is_active)
             fetchAds()
-            revalidateHome()
+        } catch (err: any) {
+            alert('Erreur: ' + (err.message || 'Erreur inconnue'))
         }
     }
 
@@ -252,7 +247,7 @@ export default function AdminAds() {
                     <div className="text-center py-16 text-slate-400">
                         <Megaphone size={40} className="mx-auto mb-3 opacity-30" />
                         <p className="text-sm font-bold">Aucune publicité</p>
-                        <p className="text-xs text-slate-400 mt-1">Cliquez sur "Nouvelle pub" pour commencer</p>
+                        <p className="text-xs text-slate-400 mt-1">Cliquez sur &quot;Nouvelle pub&quot; pour commencer</p>
                     </div>
                 ) : (
                     <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">

@@ -87,7 +87,7 @@ export async function middleware(request: NextRequest) {
             if (!profile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (profile.role !== 'vendor' && profile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            // Timeout — laisser passer, le client-side vérifiera
+            return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 
@@ -105,7 +105,7 @@ export async function middleware(request: NextRequest) {
             if (!logProfile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            // Timeout — laisser passer, le client-side vérifiera
+            return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 
@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest) {
             )
             if (error || !adminProfile || adminProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
         } catch {
-            // Timeout — laisser passer, le client-side vérifiera
+            return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 

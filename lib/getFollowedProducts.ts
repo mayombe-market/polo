@@ -1,11 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { getExpiredSellerIds } from '@/lib/filterActiveProducts'
 
 export const getFollowedProducts = async (userId: string) => {
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // 1. Récupérer les IDs des vendeurs que l'utilisateur suit
     const { data: follows } = await supabase

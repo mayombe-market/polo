@@ -3,8 +3,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
 import { useCart } from '@/hooks/userCart'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     LayoutDashboard, Package, Heart, ShoppingCart, Store,
     Bell, MapPin, User, Settings, ChevronLeft, ChevronRight,
@@ -20,6 +20,7 @@ import { playNegotiationSound, playDeliverySound, playMessageSound } from '@/lib
 import { getBuyerNegotiations } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
+import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
 import { getLoyaltyPoints } from '@/app/actions/ratings'
 import TripleRatingModal from '@/app/components/TripleRatingModal'
@@ -64,10 +65,7 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     // Cart hook
     const { cart, total, itemCount, updateQuantity, removeFromCart } = useCart()
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // ===== DEEP LINK depuis MessageButton =====
     useEffect(() => {
@@ -219,85 +217,54 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     }, [user?.id])
 
     // ===== REAL-TIME ORDERS =====
-    useEffect(() => {
+    useRealtime('order:update', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('buyer-orders')
-            .on('postgres_changes', {
-                event: 'UPDATE', schema: 'public', table: 'orders',
-                filter: `user_id=eq.${user.id}`,
-            }, (payload) => {
-                const updated = payload.new as any
-                setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
-                const labels: Record<string, string> = { confirmed: 'Confirmée', shipped: 'Expédiée', picked_up: 'En livraison 🏍️', delivered: 'Livrée ✅' }
-                const label = labels[updated.status]
-                if (label) {
-                    if (updated.status === 'picked_up' || updated.status === 'delivered') {
-                        playDeliverySound()
-                    }
-                    toast.success(formatOrderNumber(updated), { description: `Statut : ${label}` })
-                    sendNotification(
-                        `Commande ${formatOrderNumber(updated)}`,
-                        `Votre commande est maintenant : ${label}`
-                    )
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const updated = payload.new as any
+        setOrders(prev => prev.map(o => o.id === updated.id ? { ...o, ...updated } : o))
+        const labels: Record<string, string> = { confirmed: 'Confirmée', shipped: 'Expédiée', picked_up: 'En livraison 🏍️', delivered: 'Livrée ✅' }
+        const label = labels[updated.status]
+        if (label) {
+            if (updated.status === 'picked_up' || updated.status === 'delivered') {
+                playDeliverySound()
+            }
+            toast.success(formatOrderNumber(updated), { description: `Statut : ${label}` })
+            sendNotification(
+                `Commande ${formatOrderNumber(updated)}`,
+                `Votre commande est maintenant : ${label}`
+            )
+        }
     }, [user?.id])
 
     // Real-time negotiations (quand le vendeur répond)
-    useEffect(() => {
+    useRealtime('negotiation:update', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('buyer-negotiations')
-            .on('postgres_changes', {
-                event: 'UPDATE', schema: 'public', table: 'negotiations',
-                filter: `buyer_id=eq.${user.id}`,
-            }, (payload) => {
-                const updated = payload.new as any
-                setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
-                if (updated.status === 'accepte') {
-                    playNegotiationSound()
-                    toast.success('Offre acceptée !', { description: 'Votre prix négocié a été accepté par le vendeur.' })
-                    sendNotification('Offre acceptée !', 'Votre prix négocié a été accepté.')
-                } else if (updated.status === 'refuse') {
-                    toast.info('Offre refusée', { description: 'Le vendeur a refusé votre offre de négociation.' })
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const updated = payload.new as any
+        setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
+        if (updated.status === 'accepte') {
+            playNegotiationSound()
+            toast.success('Offre acceptée !', { description: 'Votre prix négocié a été accepté par le vendeur.' })
+            sendNotification('Offre acceptée !', 'Votre prix négocié a été accepté.')
+        } else if (updated.status === 'refuse') {
+            toast.info('Offre refusée', { description: 'Le vendeur a refusé votre offre de négociation.' })
+        }
     }, [user?.id])
 
     // Real-time messages
-    useEffect(() => {
+    useRealtime('message:insert', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('buyer-messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-                const msg = payload.new as any
-                if (msg.sender_id !== user.id) {
-                    setUnreadMessages(prev => prev + 1)
-                    playMessageSound()
-                    toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
-                    sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const msg = payload.new as any
+        if (msg.sender_id !== user.id) {
+            setUnreadMessages(prev => prev + 1)
+            playMessageSound()
+            toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
+            sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
+        }
     }, [user?.id])
 
     // Real-time notifications
-    useEffect(() => {
-        if (!user?.id) return
-        const channel = supabase
-            .channel('buyer-notifications')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
-                setUnreadNotifs(prev => prev + 1)
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [user?.id])
+    useRealtime('notification:insert', () => {
+        setUnreadNotifs(prev => prev + 1)
+    })
 
     // Logout — push seul suffit, router.refresh() redondant et peut crasher
     const handleLogout = async () => {
@@ -761,7 +728,7 @@ function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmR
 // =====================================================================
 function BuyerWishlist({ favorites, setFavorites, userId }: { favorites: any[]; setFavorites: any; userId: string }) {
     const [removing, setRemoving] = useState<string | null>(null)
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = getSupabaseBrowserClient()
 
     const removeFav = async (productId: string) => {
         setRemoving(productId)
@@ -973,20 +940,9 @@ function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnre
     }, [])
 
     // Realtime: listen for new notifications
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-    useEffect(() => {
-        if (!userId) return
-        const channel = supabase
-            .channel('notifs-page-realtime')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
-                setNotifs(prev => [payload.new as any, ...prev])
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [userId])
+    useRealtime('notification:insert', (payload) => {
+        setNotifs(prev => [payload.new as any, ...prev])
+    })
 
     const handleMarkAllRead = async () => {
         await markAllAsRead()
@@ -1074,7 +1030,7 @@ function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnre
 function AddressesPage({ address, setAddress, userId }: { address: any; setAddress: any; userId: string }) {
     const [updating, setUpdating] = useState(false)
     const [saved, setSaved] = useState(false)
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = getSupabaseBrowserClient()
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -1144,7 +1100,7 @@ function AddressesPage({ address, setAddress, userId }: { address: any; setAddre
 function ProfilePage({ profile, setProfile, userId }: { profile: any; setProfile: any; userId: string }) {
     const [updating, setUpdating] = useState(false)
     const [uploading, setUploading] = useState(false)
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = getSupabaseBrowserClient()
 
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
@@ -1248,7 +1204,7 @@ function SettingsPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [newPassword, setNewPassword] = useState('')
     const [message, setMessage] = useState({ type: '', text: '' })
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = getSupabaseBrowserClient()
 
     // Preferences stored in localStorage
     const [prefs, setPrefs] = useState({

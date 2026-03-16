@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
+import { memo } from 'react'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
@@ -19,7 +20,7 @@ interface Product {
     promo_end_date?: string | null
 }
 
-export default function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product }: { product: Product }) {
     const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
     const hasPromo = isPromoActive(product)
     const promoPrice = hasPromo ? getPromoPrice(product) : product.price
@@ -36,7 +37,9 @@ export default function ProductCard({ product }: { product: Product }) {
                     src={product.img || product.image_url || '/placeholder-image.svg'}
                     alt={product.name}
                     fill
-                    sizes="(max-width: 768px) 50vw, 25vw"
+                    // Grilles produits: 2 cols mobile, 3 cols tablette, 4 cols desktop
+                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    quality={70}
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                 />
 
@@ -108,3 +111,23 @@ export default function ProductCard({ product }: { product: Product }) {
         </Link>
     )
 }
+
+const propsAreEqual = (prev: { product: Product }, next: { product: Product }) => {
+    const a = prev.product
+    const b = next.product
+
+    return (
+        a.id === b.id &&
+        a.name === b.name &&
+        a.price === b.price &&
+        a.img === b.img &&
+        a.image_url === b.image_url &&
+        a.category === b.category &&
+        a.stock_quantity === b.stock_quantity &&
+        a.promo_percentage === b.promo_percentage &&
+        a.promo_start_date === b.promo_start_date &&
+        a.promo_end_date === b.promo_end_date
+    )
+}
+
+export default memo(ProductCard, propsAreEqual)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -20,10 +20,7 @@ import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import VerifiedBadge from '@/app/components/VerifiedBadge'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
@@ -50,7 +47,7 @@ export default function ProductDetailPage() {
         const fetchData = async () => {
             try {
                 // getUser avec timeout pour éviter les chargements infinis
-                const currentUser = await safeGetUser(supabase)
+                const { user: currentUser } = await safeGetUser(supabase)
                 if (cancelled) return
                 setUser(currentUser)
 
@@ -154,7 +151,7 @@ export default function ProductDetailPage() {
 
                 {/* ── PRODUCT GALLERY (images conservées) ── */}
                 <div className="px-4 mb-5">
-                    <ProductGallery images={allImages} productName={product.name} />
+                    <ProductGallery images={allImages} productName={product.name} priorityMain />
                 </div>
 
                 {/* ── CONTENT ── */}

@@ -90,13 +90,20 @@ export default function CompleteProfilePage() {
 
         // 2. Check actif : getSession → safeGetUser → retry
         const initAuth = async () => {
+            // DEBUG — à retirer après diagnostic
+            const sbCookies = document.cookie.split(';').filter(c => c.trim().startsWith('sb-'))
+            console.log('[complete-profile] ENV URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
+            console.log('[complete-profile] sb-* cookies:', sbCookies.length, sbCookies.map(c => c.trim().split('=')[0]))
+
             // Check 1 : getSession (rapide, lit les cookies locaux)
             const sessionUser = await getSessionUser()
+            console.log('[complete-profile] getSession result:', sessionUser ? `user ${sessionUser.id}` : 'null')
             if (sessionUser) { processUser(sessionUser); return }
 
             // Check 2 : safeGetUser (interroge le serveur Supabase)
             try {
-                const { user: u } = await safeGetUser(supabase)
+                const { user: u, status } = await safeGetUser(supabase)
+                console.log('[complete-profile] safeGetUser result:', status, u ? `user ${u.id}` : 'null')
                 if (u) { processUser(u); return }
             } catch { /* ignore */ }
 

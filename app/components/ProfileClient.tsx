@@ -1,18 +1,15 @@
 'use client'
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import Image from 'next/image'
 import { Upload, X } from 'lucide-react'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 function ProfileClient({ profile, user }: any) {
     const [loading, setLoading] = useState(false)
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]

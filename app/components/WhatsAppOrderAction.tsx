@@ -1,8 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import AuthModal from './AuthModal'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 interface WhatsAppOrderActionProps {
     product: any
@@ -16,10 +16,7 @@ function WhatsAppOrderAction({ product, shop, user }: WhatsAppOrderActionProps) 
     const [city, setCity] = useState('')
     const [saving, setSaving] = useState(false)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     const locations: Record<string, string[]> = {
         "Pointe-Noire": ["Loandjili", "Lumumba", "Von-Von", "Thystère", "Vindoulou", "Tié-Tié"],

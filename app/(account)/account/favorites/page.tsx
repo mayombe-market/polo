@@ -1,19 +1,19 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import ProductCard from '@/app/components/ProductCard'
 
 export default function FavoritesPage() {
     const [products, setProducts] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
-    const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         const fetchFavorites = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
                 if (user) {
                     const { data, error } = await withTimeout(supabase
                         .from('favorites')

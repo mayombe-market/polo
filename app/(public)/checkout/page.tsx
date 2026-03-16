@@ -5,8 +5,8 @@ import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { CheckoutSchema, CheckoutType, DELIVERY_FEES } from '@/lib/checkoutSchema'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
@@ -20,10 +20,7 @@ export default function CheckoutPage() {
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CheckoutType>({
         resolver: zodResolver(CheckoutSchema),
@@ -39,7 +36,7 @@ export default function CheckoutPage() {
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
         const loadSavedAddress = async () => {
-            const user = await safeGetUser(supabase)
+            const { user } = await safeGetUser(supabase)
             if (user) {
                 const { data: profile } = await withTimeout(supabase
                     .from('profiles')

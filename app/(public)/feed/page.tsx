@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getFollowedProducts } from '@/lib/getFollowedProducts'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import ProductCard from '@/app/components/ProductCard'
 import { Bell, Sparkles, Loader2 } from 'lucide-react'
 import Link from 'next/link'
@@ -13,16 +13,15 @@ export default function FeedPage() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
     const [user, setUser] = useState<any>(null)
+    const [visibleCount, setVisibleCount] = useState(24)
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         const loadFeed = async () => {
             try {
-                const u = await safeGetUser(supabase)
+                const { user: u } = await safeGetUser(supabase)
                 setUser(u)
 
                 if (u) {
@@ -39,6 +38,34 @@ export default function FeedPage() {
         loadFeed()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+
+    useEffect(() => {
+        // Reset du lazy loading quand on change la liste
+        setVisibleCount(24)
+    }, [products.length])
+
+    useEffect(() => {
+        if (!sentinelRef.current) return
+        if (visibleCount >= products.length) return
+
+        const el = sentinelRef.current
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const first = entries[0]
+                if (!first?.isIntersecting) return
+                setVisibleCount((c) => Math.min(c + 24, products.length))
+            },
+            { root: null, rootMargin: '800px 0px', threshold: 0 }
+        )
+
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [visibleCount, products.length])
+
+    const visibleProducts = useMemo(
+        () => products.slice(0, visibleCount),
+        [products, visibleCount]
+    )
 
     if (error) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4">
@@ -80,11 +107,16 @@ export default function FeedPage() {
                 </header>
 
                 {products.length > 0 ? (
+                    <>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                        {products.map((product) => (
+                        {visibleProducts.map((product) => (
                             <ProductCard key={product.id} product={product} />
                         ))}
                     </div>
+                    {visibleCount < products.length && (
+                        <div ref={sentinelRef} className="h-12" />
+                    )}
+                    </>
                 ) : (
                     <div className="bg-slate-50 dark:bg-slate-900/50 rounded-[3rem] p-12 text-center border-2 border-dashed border-slate-100 dark:border-slate-800">
                         <p className="font-black uppercase text-slate-400 italic">

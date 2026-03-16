@@ -1,9 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { getConversations, getMessages, sendMessage } from '@/app/actions/messages'
 import { playMessageSound } from '@/lib/notificationSound'
+import { useRealtime } from '@/hooks/useRealtime'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import { ArrowLeft, Send, Loader2, MessageCircle, Package } from 'lucide-react'
 import { toast } from 'sonner'
@@ -23,10 +24,7 @@ export default function MessagesPanel({ userId, initialConversationId }: Message
     const [sending, setSending] = useState(false)
     const messagesEndRef = useRef<HTMLDivElement>(null)
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     // Charger les conversations
     useEffect(() => {
@@ -78,54 +76,39 @@ export default function MessagesPanel({ userId, initialConversationId }: Message
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }, [messages])
 
-    // Real-time : écouter les nouveaux messages
-    useEffect(() => {
-        if (!userId) return
+    // Real-time via shared channel
+    useRealtime('message:insert', (payload) => {
+        const msg = payload.new as any
 
-        const channel = supabase
-            .channel('messages-realtime-panel')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'messages',
-            }, (payload) => {
-                const msg = payload.new as any
-
-                // Si le message est dans la conversation active, l'ajouter
-                if (msg.conversation_id === activeConversation) {
-                    setMessages(prev => {
-                        // Éviter les doublons (on ajoute déjà localement au send)
-                        if (prev.some(m => m.id === msg.id)) return prev
-                        return [...prev, msg]
-                    })
-
-                    // Marquer comme lu si c'est de l'autre personne
-                    if (msg.sender_id !== userId) {
-                        supabase
-                            .from('messages')
-                            .update({ is_read: true })
-                            .eq('id', msg.id)
-                            .then(() => {})
-                    }
-                }
-
-                // Notification si ce n'est pas notre message
-                if (msg.sender_id !== userId) {
-                    if (msg.conversation_id !== activeConversation) {
-                        // Message dans une autre conversation → incrémenter le badge
-                        setConversations(prev => prev.map(c =>
-                            c.id === msg.conversation_id
-                                ? { ...c, unreadCount: (c.unreadCount || 0) + 1, lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at } }
-                                : c
-                        ))
-                    }
-                    playMessageSound()
-                }
+        // Si le message est dans la conversation active, l'ajouter
+        if (msg.conversation_id === activeConversation) {
+            setMessages(prev => {
+                if (prev.some(m => m.id === msg.id)) return prev
+                return [...prev, msg]
             })
-            .subscribe()
 
-        return () => { supabase.removeChannel(channel) }
-    }, [userId, activeConversation, supabase])
+            // Marquer comme lu si c'est de l'autre personne
+            if (msg.sender_id !== userId) {
+                supabase
+                    .from('messages')
+                    .update({ is_read: true })
+                    .eq('id', msg.id)
+                    .then(() => {})
+            }
+        }
+
+        // Notification si ce n'est pas notre message
+        if (msg.sender_id !== userId) {
+            if (msg.conversation_id !== activeConversation) {
+                setConversations(prev => prev.map(c =>
+                    c.id === msg.conversation_id
+                        ? { ...c, unreadCount: (c.unreadCount || 0) + 1, lastMessage: { content: msg.content, sender_id: msg.sender_id, created_at: msg.created_at } }
+                        : c
+                ))
+            }
+            playMessageSound()
+        }
+    }, [activeConversation, userId])
 
     // Envoyer un message
     const handleSend = async () => {

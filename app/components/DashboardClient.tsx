@@ -5,7 +5,7 @@ import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     LayoutDashboard, Package, Plus, ShoppingCart, BarChart3,
     Wallet, Store, Settings, ChevronLeft, ChevronRight,
@@ -23,6 +23,7 @@ import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
+import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
@@ -93,10 +94,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [upgradeBilling, setUpgradeBilling] = useState('monthly')
     const [upgradeSelectedPlan, setUpgradeSelectedPlan] = useState<any>(null)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
@@ -192,98 +190,76 @@ export default function DashboardClient({ products: initialProducts, profile, us
     }, [user?.id])
 
     // Real-time orders
-    useEffect(() => {
+    useRealtime('order:insert', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('vendor-dashboard-orders')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, (payload) => {
-                const newOrder = payload.new as any
-                const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === user.id) || []
-                if (vendorItems.length > 0 && newOrder.status !== 'pending') {
-                    setOrders(prev => [newOrder, ...prev])
-                    const productNames = vendorItems.map((i: any) => i.name).join(', ')
-                    const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
-                    const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
+        const newOrder = payload.new as any
+        const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === user.id) || []
+        if (vendorItems.length > 0 && newOrder.status !== 'pending') {
+            setOrders(prev => [newOrder, ...prev])
+            const productNames = vendorItems.map((i: any) => i.name).join(', ')
+            const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
+            const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
+            playNewOrderSound()
+            toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
+            sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
+        }
+    }, [user?.id])
+
+    useRealtime('order:update', (payload) => {
+        if (!user?.id) return
+        const updated = payload.new as any
+        const vendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
+        if (vendorItems.length > 0) {
+            setOrders(prev => {
+                const exists = prev.find(o => o.id === updated.id)
+                if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
+                if (updated.status !== 'pending') {
+                    const updatedVendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
+                    const productNames = updatedVendorItems.map((i: any) => i.name).join(', ')
+                    const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+                    const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
                     playNewOrderSound()
-                    toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
-                    sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
+                    toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
+                    sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
+                    return [updated, ...prev]
                 }
+                return prev
             })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, (payload) => {
-                const updated = payload.new as any
-                const vendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
-                if (vendorItems.length > 0) {
-                    setOrders(prev => {
-                        const exists = prev.find(o => o.id === updated.id)
-                        if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
-                        if (updated.status !== 'pending') {
-                            const updatedVendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
-                            const productNames = updatedVendorItems.map((i: any) => i.name).join(', ')
-                            const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-                            const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
-                            playNewOrderSound()
-                            toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
-                            sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
-                            return [updated, ...prev]
-                        }
-                        return prev
-                    })
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        }
     }, [user?.id])
 
     // Real-time negotiations
-    useEffect(() => {
+    useRealtime('negotiation:insert', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('vendor-dashboard-negotiations')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${user.id}` }, (payload) => {
-                const newNeg = payload.new as any
-                setNegotiations(prev => [newNeg, ...prev])
-                const desc = `${newNeg.buyer_name || 'Client'} propose ${newNeg.proposed_price?.toLocaleString('fr-FR')} FCFA`
-                playNegotiationSound()
-                toast.success('Nouvelle offre de négociation !', { description: desc })
-                sendNotification('Nouvelle offre !', desc)
-            })
-            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${user.id}` }, (payload) => {
-                const updated = payload.new as any
-                setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const newNeg = payload.new as any
+        setNegotiations(prev => [newNeg, ...prev])
+        const desc = `${newNeg.buyer_name || 'Client'} propose ${newNeg.proposed_price?.toLocaleString('fr-FR')} FCFA`
+        playNegotiationSound()
+        toast.success('Nouvelle offre de négociation !', { description: desc })
+        sendNotification('Nouvelle offre !', desc)
     }, [user?.id])
 
+    useRealtime('negotiation:update', (payload) => {
+        const updated = payload.new as any
+        setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
+    })
+
     // Real-time messages
-    useEffect(() => {
+    useRealtime('message:insert', (payload) => {
         if (!user?.id) return
-        const channel = supabase
-            .channel('vendor-dashboard-messages')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-                const msg = payload.new as any
-                if (msg.sender_id !== user.id) {
-                    setUnreadMessages(prev => prev + 1)
-                    playMessageSound()
-                    toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
-                    sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
-                }
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
+        const msg = payload.new as any
+        if (msg.sender_id !== user.id) {
+            setUnreadMessages(prev => prev + 1)
+            playMessageSound()
+            toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
+            sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
+        }
     }, [user?.id])
 
     // Real-time notifications (badge)
-    useEffect(() => {
-        if (!user?.id) return
-        const channel = supabase
-            .channel('vendor-dashboard-notifs')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` }, () => {
-                setUnreadNotifs(prev => prev + 1)
-            })
-            .subscribe()
-        return () => { supabase.removeChannel(channel) }
-    }, [user?.id])
+    useRealtime('notification:insert', () => {
+        setUnreadNotifs(prev => prev + 1)
+    })
 
     const copyLink = () => {
         const url = `${window.location.origin}/seller/${user?.id}`
@@ -985,11 +961,6 @@ function VendorNotificationsPage({ userId, onUnreadChange }: { userId?: string; 
         new_message: { icon: MessageCircle, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
     }
 
-    const supabaseClient = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
-
     useEffect(() => {
         getNotifications(50).then(result => {
             setNotifs(result.notifications || [])
@@ -997,16 +968,9 @@ function VendorNotificationsPage({ userId, onUnreadChange }: { userId?: string; 
         })
     }, [])
 
-    useEffect(() => {
-        if (!userId) return
-        const channel = supabaseClient
-            .channel('vendor-notifs-realtime')
-            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, (payload) => {
-                setNotifs(prev => [payload.new as any, ...prev])
-            })
-            .subscribe()
-        return () => { supabaseClient.removeChannel(channel) }
-    }, [userId])
+    useRealtime('notification:insert', (payload) => {
+        setNotifs(prev => [payload.new as any, ...prev])
+    })
 
     const handleMarkAllRead = async () => {
         await markAllAsRead()

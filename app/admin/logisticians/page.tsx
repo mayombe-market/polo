@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Loader2, Search, UserPlus, Truck, Phone, X, Package, CheckCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -12,10 +12,8 @@ import {
 } from '@/app/actions/deliveries'
 import { withTimeout } from '@/lib/supabase-utils'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 export default function AdminLogisticians() {
     const [logisticians, setLogisticians] = useState<any[]>([])

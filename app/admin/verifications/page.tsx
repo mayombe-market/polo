@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Image from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
 import { ShieldCheck, Check, X, Loader2, Clock, Eye, ChevronDown, ChevronUp, User, Phone, MapPin, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { safeGetUser } from '@/lib/supabase-utils'
+import { useRealtime } from '@/hooks/useRealtime'
 import AdminNav from '../AdminNav'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     adminGetPendingVerifications,
     adminGetAllVerifications,
@@ -14,10 +15,8 @@ import {
     adminRejectVerification,
 } from '@/app/actions/verifications'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 export default function AdminVerificationsPage() {
     const [tab, setTab] = useState<'pending' | 'all'>('pending')
@@ -42,21 +41,10 @@ export default function AdminVerificationsPage() {
         fetchVerifications()
     }, [tab])
 
-    // Realtime pour les nouvelles demandes
-    useEffect(() => {
-        const channel = supabase
-            .channel('admin-verifications')
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'vendor_verifications',
-            }, () => {
-                if (tab === 'pending') fetchVerifications()
-                toast.info('Nouvelle demande de vérification !')
-            })
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
+    // Realtime via shared channel
+    useRealtime('verification:insert', () => {
+        if (tab === 'pending') fetchVerifications()
+        toast.info('Nouvelle demande de vérification !')
     }, [tab])
 
     const handleApprove = async (id: string) => {

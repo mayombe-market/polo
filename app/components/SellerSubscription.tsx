@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect } from "react"
-import { createBrowserClient } from '@supabase/ssr'
 import { createSubscriptionOrder } from '@/app/actions/orders'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n)
 
@@ -563,10 +563,7 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
   // Supabase Realtime — écouter la validation admin
   useEffect(() => {
     if (step !== 'waiting' || !orderId) return
-    const supabase = createBrowserClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+const supabase = getSupabaseBrowserClient()
     const channel = supabase
       .channel(`sub-${orderId}`)
       .on('postgres_changes', {

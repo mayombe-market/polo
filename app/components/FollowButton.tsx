@@ -1,7 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Bell, BellRing, Loader2 } from 'lucide-react'
 import { toggleFollow } from '@/app/actions/follows'
 
@@ -16,15 +16,12 @@ export default function FollowButton({ sellerId, onFollowChange }: FollowButtonP
     const [checking, setChecking] = useState(true)
     const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         const checkFollow = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
 
                 if (!user || !sellerId) {
                     setChecking(false)

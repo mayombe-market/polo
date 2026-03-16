@@ -1,7 +1,4 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
-// C'est la nouvelle version propre pour Next.js
-export const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+// Compat: ancien import — retourne désormais le singleton partagé
+export const supabase = getSupabaseBrowserClient()

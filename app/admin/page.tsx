@@ -1,19 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
 import { withTimeout } from '@/lib/supabase-utils'
+import { useRealtime } from '@/hooks/useRealtime'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Package, DollarSign, Clock, ShieldCheck, Users, ShoppingBag, Truck,
     ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 function getStatusBadge(status: string) {
     const map: Record<string, { label: string; cls: string }> = {
@@ -44,9 +43,8 @@ export default function AdminDashboard() {
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
 
-    useEffect(() => {
-        const fetchStats = async () => {
-            try {
+    const fetchStats = useCallback(async () => {
+        try {
             const today = new Date()
             today.setHours(0, 0, 0, 0)
             const todayISO = today.toISOString()
@@ -63,25 +61,15 @@ export default function AdminDashboard() {
                 pendingPayoutsRes,
                 recentRes,
             ] = await withTimeout(Promise.all([
-                // CA total aujourd'hui
                 supabase.from('orders').select('total_amount').gte('created_at', todayISO).neq('status', 'rejected').neq('order_type', 'subscription'),
-                // Commandes aujourd'hui
                 supabase.from('orders').select('*', { count: 'exact', head: true }).gte('created_at', todayISO).neq('order_type', 'subscription'),
-                // Commandes pending
                 supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-                // Vérifications pending
                 supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
-                // Vendeurs totaux
                 supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor'),
-                // Vendeurs vérifiés
                 supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor').eq('verification_status', 'verified'),
-                // Produits
                 supabase.from('products').select('*', { count: 'exact', head: true }),
-                // Livreurs
                 supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'logistician'),
-                // Fonds à libérer
                 supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'delivered').eq('payout_status', 'pending'),
-                // 5 dernières commandes
                 supabase.from('orders').select('*').neq('order_type', 'subscription').order('created_at', { ascending: false }).limit(5),
             ]), 15000)
 
@@ -99,25 +87,21 @@ export default function AdminDashboard() {
                 pendingPayouts: pendingPayoutsRes.count || 0,
             })
             setRecentOrders(recentRes.data || [])
-            } catch (err) {
-                console.error('Erreur chargement dashboard:', err)
-                setError(true)
-            } finally {
-                setLoading(false)
-            }
+        } catch (err) {
+            console.error('Erreur chargement dashboard:', err)
+            setError(true)
+        } finally {
+            setLoading(false)
         }
-
-        fetchStats()
-
-        // Realtime refresh
-        const channel = supabase
-            .channel('admin-dashboard')
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, () => fetchStats())
-            .on('postgres_changes', { event: '*', schema: 'public', table: 'vendor_verifications' }, () => fetchStats())
-            .subscribe()
-
-        return () => { supabase.removeChannel(channel) }
     }, [])
+
+    useEffect(() => { fetchStats() }, [fetchStats])
+
+    // Realtime via shared channel
+    useRealtime('order:insert', fetchStats)
+    useRealtime('order:update', fetchStats)
+    useRealtime('verification:insert', fetchStats)
+    useRealtime('verification:update', fetchStats)
 
     if (error) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4">

@@ -2,8 +2,8 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
@@ -29,10 +29,7 @@ export default function AdminOrders() {
     const [dateFilter, setDateFilter] = useState('all')
     const [cityFilter, setCityFilter] = useState('all')
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
@@ -75,7 +72,7 @@ export default function AdminOrders() {
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
                 if (!user) return
 
                 const { data, error } = await withTimeout(supabase

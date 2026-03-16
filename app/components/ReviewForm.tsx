@@ -1,8 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import StarRating from './StarRating'
 import { Send, Loader2, Camera, X } from 'lucide-react'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 export default function ReviewForm({ productId, user, onReviewSubmit }: { productId: string, user: any, onReviewSubmit: () => void }) {
     const [rating, setRating] = useState(5)
@@ -11,10 +11,7 @@ export default function ReviewForm({ productId, user, onReviewSubmit }: { produc
     const [images, setImages] = useState<File[]>([])
     const [previews, setPreviews] = useState<string[]>([])
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // Gestion de la sélection des photos
     const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {

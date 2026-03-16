@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, Suspense } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { searchProducts } from '@/lib/searchProducts'
 import { withTimeout } from '@/lib/supabase-utils'
@@ -21,6 +21,10 @@ function SearchContent() {
     const [totalPages, setTotalPages] = useState(1)
     const [totalItems, setTotalItems] = useState(0)
 
+    // Lazy render côté UI (réduit le coût DOM/CPU sur grosses pages)
+    const [visibleCount, setVisibleCount] = useState(24)
+    const sentinelRef = useRef<HTMLDivElement | null>(null)
+
     const [filters, setFilters] = useState({
         category: searchParams.get('category') || '',
         minPrice: searchParams.get('minPrice') || '',
@@ -37,6 +41,7 @@ function SearchContent() {
             setProducts(data || [])
             setTotalPages(total)
             setTotalItems(count)
+            setVisibleCount(24)
         } catch (err) {
             console.error('Erreur recherche:', err)
         } finally {
@@ -67,6 +72,30 @@ function SearchContent() {
         else params.delete(key)
         router.push(`/search?${params.toString()}`, { scroll: false })
     }
+
+    useEffect(() => {
+        if (!sentinelRef.current) return
+        if (loading) return
+        if (visibleCount >= products.length) return
+
+        const el = sentinelRef.current
+        const observer = new IntersectionObserver(
+            (entries) => {
+                const first = entries[0]
+                if (!first?.isIntersecting) return
+                setVisibleCount((c) => Math.min(c + 24, products.length))
+            },
+            { root: null, rootMargin: '800px 0px', threshold: 0 }
+        )
+
+        observer.observe(el)
+        return () => observer.disconnect()
+    }, [visibleCount, products.length, loading])
+
+    const visibleProducts = useMemo(
+        () => products.slice(0, visibleCount),
+        [products, visibleCount]
+    )
 
     return (
         <div className="min-h-screen bg-white dark:bg-slate-950 px-4 py-8">
@@ -159,10 +188,13 @@ function SearchContent() {
                         ) : products.length > 0 ? (
                             <>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                                    {products.map((product) => (
+                                    {visibleProducts.map((product) => (
                                         <ProductCard key={product.id} product={product} />
                                     ))}
                                 </div>
+                                {visibleCount < products.length && (
+                                    <div ref={sentinelRef} className="h-12" />
+                                )}
 
                                 {/* PAGINATION CONTROLS */}
                                 {totalPages > 1 && (

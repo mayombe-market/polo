@@ -3,8 +3,8 @@
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useCart } from '@/hooks/userCart'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import Link from 'next/link'
 import Image from 'next/image'
@@ -47,15 +47,12 @@ export default function CartPage() {
     const deliveryFee = DELIVERY_FEES[deliveryMode] || DELIVERY_FEES.standard
     const grandTotal = total + deliveryFee
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // Check user on first interaction (avec timeout)
     const checkUser = async () => {
         if (userChecked) return user
-        const u = await safeGetUser(supabase)
+        const { user: u } = await safeGetUser(supabase)
         setUser(u)
         setUserChecked(true)
         return u

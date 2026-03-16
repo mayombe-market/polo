@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Lock, Mail, Eye, EyeOff, Loader2, ShieldCheck, AlertCircle } from 'lucide-react'
 
 export default function SettingsPage() {
@@ -10,10 +10,7 @@ export default function SettingsPage() {
     const [newPassword, setNewPassword] = useState('')
     const [message, setMessage] = useState({ type: '', text: '' })
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     const handleUpdatePassword = async (e: React.FormEvent) => {
         e.preventDefault()

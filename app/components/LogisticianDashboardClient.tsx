@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import Image from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
 import { toast } from 'sonner'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Phone, Loader2, Package, MapPin, Clock, CheckCircle2, LogOut } from 'lucide-react'
 import { playDeliverySound } from '@/lib/notificationSound'
+import { useRealtime } from '@/hooks/useRealtime'
 import { getLogisticianDeliveries, markPickedUp, markDelivered } from '@/app/actions/deliveries'
 import { useRouter } from 'next/navigation'
 
@@ -26,10 +27,7 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
     const [confirmAction, setConfirmAction] = useState<string | null>(null)
     const [updating, setUpdating] = useState(false)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // Fetch deliveries
     useEffect(() => {
@@ -39,46 +37,33 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
             setLoading(false)
         }
         fetch()
+    }, [])
 
-        // Realtime : écouter les commandes assignées au logisticien
-        const channel = supabase
-            .channel('logistician-deliveries')
-            .on('postgres_changes', {
-                event: 'UPDATE',
-                schema: 'public',
-                table: 'orders',
-                filter: `logistician_id=eq.${user.id}`
-            }, (payload) => {
-                const updated = payload.new as any
-                setDeliveries(prev => {
-                    const exists = prev.find(d => d.id === updated.id)
-                    if (exists) {
-                        return prev.map(d => d.id === updated.id ? { ...d, ...updated } : d)
-                    }
-                    // Nouvelle assignation
-                    const productName = updated.items?.[0]?.name || 'Produit'
-                    const dlvLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-                    playDeliverySound()
-                    toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${updated.customer_name} · ${updated.district || updated.city}`, duration: 8000 })
-                    return [updated, ...prev]
-                })
-            })
-            .on('postgres_changes', {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'orders',
-                filter: `logistician_id=eq.${user.id}`
-            }, (payload) => {
-                const newOrder = payload.new as any
-                const productName = newOrder.items?.[0]?.name || 'Produit'
-                const dlvLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-                playDeliverySound()
-                toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${newOrder.customer_name} · ${newOrder.district || newOrder.city}`, duration: 8000 })
-                setDeliveries(prev => [newOrder, ...prev])
-            })
-            .subscribe()
+    // Realtime via shared channel
+    useRealtime('order:update', (payload) => {
+        const updated = payload.new as any
+        if (updated.logistician_id !== user.id) return
+        setDeliveries(prev => {
+            const exists = prev.find(d => d.id === updated.id)
+            if (exists) {
+                return prev.map(d => d.id === updated.id ? { ...d, ...updated } : d)
+            }
+            const productName = updated.items?.[0]?.name || 'Produit'
+            const dlvLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+            playDeliverySound()
+            toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${updated.customer_name} · ${updated.district || updated.city}`, duration: 8000 })
+            return [updated, ...prev]
+        })
+    }, [user.id])
 
-        return () => { supabase.removeChannel(channel) }
+    useRealtime('order:insert', (payload) => {
+        const newOrder = payload.new as any
+        if (newOrder.logistician_id !== user.id) return
+        const productName = newOrder.items?.[0]?.name || 'Produit'
+        const dlvLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+        playDeliverySound()
+        toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${newOrder.customer_name} · ${newOrder.district || newOrder.city}`, duration: 8000 })
+        setDeliveries(prev => [newOrder, ...prev])
     }, [user.id])
 
     const active = deliveries.filter(d => d.status === 'shipped' || d.status === 'picked_up')

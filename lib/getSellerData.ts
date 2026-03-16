@@ -1,11 +1,8 @@
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 
 export const getSellerData = async (sellerId: string) => {
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // 1. Infos du profil (query essentielle)
     let profile: any = null

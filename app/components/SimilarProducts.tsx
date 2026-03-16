@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import ProductCard from './ProductCard'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 const SimilarProducts = ({ productId, subcategory, category }: {
     productId: string
@@ -12,10 +12,7 @@ const SimilarProducts = ({ productId, subcategory, category }: {
 }) => {
     const [products, setProducts] = useState<any[]>([])
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     useEffect(() => {
         if (!productId) return

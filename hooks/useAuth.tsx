@@ -1,8 +1,8 @@
 'use client'
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 interface UserProfile {
     role: string | null
@@ -36,10 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
     const [profile, setProfile] = useState<UserProfile | null>(null)
     const [loading, setLoading] = useState(true)
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     const fetchProfile = useCallback(async (userId: string) => {
         try {
@@ -76,12 +73,21 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
         const init = async () => {
             try {
-                const currentUser = await safeGetUser(supabase)
+                const { user: currentUser, status } = await safeGetUser(supabase)
                 if (cancelled) return
 
-                setUser(currentUser)
-                if (currentUser) {
-                    await fetchProfile(currentUser.id)
+                if (status === 'ok') {
+                    setUser(currentUser)
+                    if (currentUser) {
+                        await fetchProfile(currentUser.id)
+                    }
+                } else if (status === 'no-user') {
+                    setUser(null)
+                    setProfile(null)
+                } else {
+                    // timeout / network-error / unknown-error :
+                    // on ne force pas user = null pour éviter les fausses déconnexions
+                    console.warn('safeGetUser auth init error status:', status)
                 }
             } catch {
                 // Auth failed — continue as guest

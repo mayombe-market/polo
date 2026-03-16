@@ -4,7 +4,7 @@ import { Suspense, useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCart } from '@/hooks/userCart'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { CheckCircle, ShoppingBag, Package, Smartphone, Zap, Clock } from 'lucide-react'
 
 function SuccessContent() {
@@ -17,10 +17,7 @@ function SuccessContent() {
     const [orderTotal, setOrderTotal] = useState<number | null>(totalParam ? Number(totalParam) : null)
     const [deliveryFee, setDeliveryFee] = useState<number | null>(null)
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     useEffect(() => {
         clearCart()

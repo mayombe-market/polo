@@ -1,0 +1,7 @@
+{
+  "terminal.integrated.cwd": "${workspaceFolder}",
+  "terminal.integrated.env.osx": {
+    "MallocNanoZone": null,
+    "MallocStackLogging": null
+  }
+}

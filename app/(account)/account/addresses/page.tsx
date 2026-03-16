@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { MapPin, Navigation, Home, Save, Loader2, CheckCircle2 } from 'lucide-react'
 
 export default function AddressesPage() {
@@ -15,15 +15,12 @@ export default function AddressesPage() {
         landmark: ''
     })
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         const getAddress = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
                 if (user) {
                     const { data } = await withTimeout(supabase
                         .from('profiles')
@@ -46,7 +43,7 @@ export default function AddressesPage() {
         setUpdating(true)
         setSaved(false)
         try {
-            const user = await safeGetUser(supabase)
+            const { user } = await safeGetUser(supabase)
             if (!user) throw new Error('Non connecté')
             const { error } = await supabase
                 .from('profiles')

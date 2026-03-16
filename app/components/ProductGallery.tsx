@@ -1,20 +1,21 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { memo, useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 
-export default function ProductGallery({ images, productName }: { images: string[], productName: string }) {
-    // Sécurité : Initialisation de l'image principale
-    const [mainImg, setMainImg] = useState("")
+function ProductGallery({ images, productName, priorityMain = false }: { images: string[], productName: string, priorityMain?: boolean }) {
+    const normalizedImages = useMemo(() => (Array.isArray(images) ? images : []), [images])
+    const firstImage = normalizedImages[0] ?? ''
+
+    // Initialisation de l'image principale
+    const [mainImg, setMainImg] = useState(firstImage)
 
     // Synchronisation au chargement
     useEffect(() => {
-        if (images && images.length > 0) {
-            setMainImg(images[0])
-        }
-    }, [images])
+        if (firstImage) setMainImg(firstImage)
+    }, [firstImage])
 
-    if (!images || images.length === 0) {
+    if (normalizedImages.length === 0) {
         return (
             <div className="aspect-square rounded-[2.5rem] bg-slate-100 animate-pulse border flex items-center justify-center text-slate-400 text-[10px] font-black uppercase tracking-[0.2em]">
                 Aucune image
@@ -27,10 +28,13 @@ export default function ProductGallery({ images, productName }: { images: string
             {/* Image Principale - CORRECTION QUALITÉ OPTIMISÉE */}
             <div className="aspect-square rounded-[2.5rem] overflow-hidden bg-white border border-slate-100 shadow-sm group relative">
                 <Image
-                    src={mainImg || images[0]}
+                    src={mainImg || firstImage}
                     alt={productName}
                     fill
-                    sizes="(max-width: 768px) 100vw, 50vw"
+                    // Page produit (max-w-lg): éviter de servir une 4K sur desktop
+                    sizes="(max-width: 640px) 100vw, 512px"
+                    quality={80}
+                    priority={priorityMain}
                     className="object-cover transition-all duration-700 ease-in-out group-hover:scale-105"
                 />
 
@@ -43,9 +47,9 @@ export default function ProductGallery({ images, productName }: { images: string
             </div>
 
             {/* Miniatures interactives */}
-            {images.length > 1 && (
+            {normalizedImages.length > 1 && (
                 <div className="grid grid-cols-5 gap-3">
-                    {images.map((img, i) => (
+                    {normalizedImages.map((img, i) => (
                         <div
                             key={i}
                             onClick={() => setMainImg(img)}
@@ -58,7 +62,9 @@ export default function ProductGallery({ images, productName }: { images: string
                             <Image
                                 src={img}
                                 fill
-                                sizes="10vw"
+                                // 5 vignettes: ~20% de la largeur, mais cap visuel autour de ~96px
+                                sizes="(max-width: 640px) 18vw, 96px"
+                                quality={55}
                                 className="object-cover"
                                 alt={`miniature-${i}`}
                             />
@@ -69,3 +75,19 @@ export default function ProductGallery({ images, productName }: { images: string
         </div>
     )
 }
+
+const propsAreEqual = (
+    prev: { images: string[]; productName: string; priorityMain?: boolean },
+    next: { images: string[]; productName: string; priorityMain?: boolean }
+) => {
+    if ((prev.priorityMain ?? false) !== (next.priorityMain ?? false)) return false
+    if (prev.productName !== next.productName) return false
+    if (prev.images === next.images) return true
+    if (prev.images.length !== next.images.length) return false
+    for (let i = 0; i < prev.images.length; i++) {
+        if (prev.images[i] !== next.images[i]) return false
+    }
+    return true
+}
+
+export default memo(ProductGallery, propsAreEqual)

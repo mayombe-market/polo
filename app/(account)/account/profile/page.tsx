@@ -1,8 +1,8 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import { User, Phone, Save, Loader2, Camera } from 'lucide-react'
 
@@ -16,32 +16,37 @@ export default function ProfilePage() {
         avatar_url: ''
     })
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     // Charger les données initiales
     useEffect(() => {
         const getProfile = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
                 if (user) {
-                    const { data } = await withTimeout(supabase
+                    const res: any = await withTimeout(supabase
                         .from('profiles')
                         .select('full_name, whatsapp_number, avatar_url')
                         .eq('id', user.id)
                         .maybeSingle())
-                    if (data) setProfile(prev => ({ ...prev, ...data }))
+
+                    // On vérifie si les données sont directement dans res 
+                    // ou dans res.data (le nouveau format)
+                    const profileData = res?.data || res
+
+                    if (profileData && typeof profileData === 'object' && 'full_name' in profileData) {
+                        setProfile(prev => ({ ...prev, ...profileData }))
+                    }
                 }
             } catch (err) {
                 console.error('Erreur chargement profil:', err)
             } finally {
+                // Cette ligne est la clé pour arrêter le chargement infini
                 setLoading(false)
             }
         }
         getProfile()
-    }, [])
+    }, [supabase])
 
     // LOGIQUE D'UPLOAD D'IMAGE
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -50,7 +55,7 @@ export default function ProfilePage() {
             const file = e.target.files?.[0]
             if (!file) return
 
-            const user = await safeGetUser(supabase)
+            const { user } = await safeGetUser(supabase)
             if (!user) throw new Error("Utilisateur non trouvé")
 
             const fileExt = file.name.split('.').pop()
@@ -87,7 +92,7 @@ export default function ProfilePage() {
         e.preventDefault()
         setUpdating(true)
         try {
-            const user = await safeGetUser(supabase)
+            const { user } = await safeGetUser(supabase)
             if (!user) throw new Error("Non connecté")
 
             const { error } = await supabase

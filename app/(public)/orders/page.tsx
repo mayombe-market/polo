@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Package } from 'lucide-react'
 import Link from 'next/link'
 import { OrderCard } from '@/app/components/OrderCard'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { useRealtime } from '@/hooks/useRealtime'
 
 export default function MyOrdersPage() {
     const [orders, setOrders] = useState<any[]>([])
@@ -15,15 +16,12 @@ export default function MyOrdersPage() {
     const [error, setError] = useState(false)
     const [userId, setUserId] = useState<string | null>(null)
 
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         const fetchOrders = async () => {
             try {
-                const user = await safeGetUser(supabase)
+                const { user } = await safeGetUser(supabase)
                 if (user) {
                     setUserId(user.id)
                     const { data, error } = await withTimeout(supabase
@@ -45,47 +43,26 @@ export default function MyOrdersPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    // REAL-TIME : Écouter les mises à jour de statut
-    useEffect(() => {
-        if (!userId) return
+    // Realtime via shared channel
+    useRealtime('order:update', (payload) => {
+        const updated = payload.new as any
+        setOrders((prev) =>
+            prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
+        )
 
-        const channel = supabase
-            .channel('client-orders')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'orders',
-                    filter: `user_id=eq.${userId}`,
-                },
-                (payload) => {
-                    const updated = payload.new as any
-                    setOrders((prev) =>
-                        prev.map((o) => (o.id === updated.id ? { ...o, ...updated } : o))
-                    )
-
-                    const statusLabels: Record<string, string> = {
-                        confirmed: 'Confirmée',
-                        shipped: 'Expédiée',
-                        delivered: 'Livrée',
-                    }
-                    const label = statusLabels[updated.status]
-                    if (label) {
-                        toast.success(formatOrderNumber(updated), {
-                            description: `Statut mis à jour : ${label}`,
-                            duration: 6000,
-                        })
-                    }
-                }
-            )
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
+        const statusLabels: Record<string, string> = {
+            confirmed: 'Confirmée',
+            shipped: 'Expédiée',
+            delivered: 'Livrée',
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [userId])
+        const label = statusLabels[updated.status]
+        if (label) {
+            toast.success(formatOrderNumber(updated), {
+                description: `Statut mis à jour : ${label}`,
+                duration: 6000,
+            })
+        }
+    })
 
     if (error) return (
         <div className="min-h-screen flex flex-col items-center justify-center gap-4">

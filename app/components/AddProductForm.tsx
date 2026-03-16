@@ -1,9 +1,9 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     ChevronRight, ChevronLeft, Upload, X, Check,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
@@ -79,10 +79,7 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
     const [mainImage, setMainImage] = useState<File | null>(null)
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     // ===== VALIDATION PAR ÉTAPE =====
     const validateStep = (s: number): string | null => {

@@ -6,25 +6,53 @@
  * ajoute un timeout de sécurité pour éviter les chargements infinis.
  */
 
+export type SafeGetUserStatus = 'ok' | 'no-user' | 'timeout' | 'network-error' | 'unknown-error'
+
+export interface SafeGetUserResult<UserType = any> {
+    user: UserType | null
+    status: SafeGetUserStatus
+    error?: Error
+}
+
 /**
  * Appelle supabase.auth.getUser() avec un timeout de sécurité.
- * Si l'appel dépasse le timeout, retourne null au lieu de bloquer.
+ * Contrairement à l'ancienne version, différencie :
+ * - utilisateur inexistant (no-user)
+ * - timeout réseau / lenteur (timeout / network-error)
+ * - autres erreurs (unknown-error)
  *
  * @param supabase - Instance du client Supabase
  * @param timeoutMs - Timeout en millisecondes (défaut: 5000ms)
- * @returns L'utilisateur ou null
+ * @returns Un objet décrivant l'utilisateur et le statut de l'appel
  */
-export async function safeGetUser(supabase: any, timeoutMs = 5000): Promise<any | null> {
+export async function safeGetUser(supabase: any, timeoutMs = 5000): Promise<SafeGetUserResult> {
+    const timeoutError = new Error('Auth timeout')
+
     try {
         const result = await Promise.race([
             supabase.auth.getUser(),
             new Promise<never>((_, reject) =>
-                setTimeout(() => reject(new Error('Auth timeout')), timeoutMs)
+                setTimeout(() => reject(timeoutError), timeoutMs)
             ),
         ])
-        return (result as any)?.data?.user ?? null
-    } catch {
-        return null
+
+        const user = (result as any)?.data?.user ?? null
+
+        if (!user) {
+            return { user: null, status: 'no-user' }
+        }
+
+        return { user, status: 'ok' }
+    } catch (err: any) {
+        if (err === timeoutError || err?.message === timeoutError.message) {
+            return { user: null, status: 'timeout', error: err }
+        }
+
+        if (typeof err?.message === 'string' && err.message.toLowerCase().includes('network')) {
+            return { user: null, status: 'network-error', error: err }
+        }
+
+        return { user: null, status: 'unknown-error', error: err instanceof Error ? err : undefined }
     }
 }
 

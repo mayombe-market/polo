@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { playSuccessSound } from '@/lib/notificationSound'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 interface WaitingValidationStepProps {
     orderId: string
@@ -13,10 +13,8 @@ interface WaitingValidationStepProps {
     onRejected: () => void
 }
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 export default function WaitingValidationStep({ orderId, orderData, transactionId, onValidated, onRejected }: WaitingValidationStepProps) {
     const [dots, setDots] = useState('')

@@ -1,13 +1,13 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState } from 'react'
 import Image from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
 import { Phone, Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { playNewOrderSound } from '@/lib/notificationSound'
+import { useRealtime } from '@/hooks/useRealtime'
 import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 
 export default function OrdersListClient({ initialOrders, currentVendorId }: { initialOrders: any[], currentVendorId: string }) {
@@ -17,75 +17,46 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
     // État pour le filtre actif
     const [activeFilter, setActiveFilter] = useState('all')
 
-    const supabase = useMemo(() => createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    ), [])
-
     // REAL-TIME : Écouter les nouvelles commandes et mises à jour
-    useEffect(() => {
-        const channel = supabase
-            .channel('vendor-orders')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'orders',
-                },
-                (payload) => {
-                    const newOrder = payload.new as any
-                    const vendorItems = newOrder.items?.filter(
-                        (i: any) => i.seller_id === currentVendorId
-                    ) || []
+    useRealtime('order:insert', (payload) => {
+        const newOrder = payload.new as any
+        const vendorItems = newOrder.items?.filter(
+            (i: any) => i.seller_id === currentVendorId
+        ) || []
 
-                    if (vendorItems.length > 0 && newOrder.status !== 'pending') {
-                        setOrders((prev) => [newOrder, ...prev])
-                        playNewOrderSound()
-                        toast.success('Nouvelle commande !', {
-                            description: `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`,
-                            duration: 8000,
-                        })
-                    }
-                }
-            )
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'orders',
-                },
-                (payload) => {
-                    const updated = payload.new as any
-                    const vendorItems = updated.items?.filter(
-                        (i: any) => i.seller_id === currentVendorId
-                    ) || []
-
-                    if (vendorItems.length > 0) {
-                        setOrders((prev) => {
-                            const exists = prev.find(o => o.id === updated.id)
-                            if (exists) {
-                                return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
-                            } else if (updated.status !== 'pending') {
-                                playNewOrderSound()
-                                toast.success('Nouvelle commande confirmée !', {
-                                    description: `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`,
-                                    duration: 8000,
-                                })
-                                return [updated, ...prev]
-                            }
-                            return prev
-                        })
-                    }
-                }
-            )
-            .subscribe()
-
-        return () => {
-            supabase.removeChannel(channel)
+        if (vendorItems.length > 0 && newOrder.status !== 'pending') {
+            setOrders((prev) => [newOrder, ...prev])
+            playNewOrderSound()
+            toast.success('Nouvelle commande !', {
+                description: `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                duration: 8000,
+            })
         }
-    }, [currentVendorId, supabase])
+    }, [currentVendorId])
+
+    useRealtime('order:update', (payload) => {
+        const updated = payload.new as any
+        const vendorItems = updated.items?.filter(
+            (i: any) => i.seller_id === currentVendorId
+        ) || []
+
+        if (vendorItems.length > 0) {
+            setOrders((prev) => {
+                const exists = prev.find(o => o.id === updated.id)
+                if (exists) {
+                    return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
+                } else if (updated.status !== 'pending') {
+                    playNewOrderSound()
+                    toast.success('Nouvelle commande confirmée !', {
+                        description: `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                        duration: 8000,
+                    })
+                    return [updated, ...prev]
+                }
+                return prev
+            })
+        }
+    }, [currentVendorId])
 
     const updateStatus = async (orderId: string, newStatus: string) => {
         setUpdating(orderId)

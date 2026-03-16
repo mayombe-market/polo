@@ -3,14 +3,12 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 const links = [
     { href: '/admin', label: 'Dashboard', icon: LayoutDashboard, badgeKey: null },

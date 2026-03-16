@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import NextImage from 'next/image'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Trash2, Plus, X, Image as ImageIcon, Loader2,
     Megaphone, Search, Eye, EyeOff, Pencil, GripVertical
@@ -10,10 +10,8 @@ import {
 import { getAds, createAd, updateAd, deleteAd, toggleAdActive } from '@/app/actions/ads'
 
 // Supabase client uniquement pour l'upload d'images (Storage)
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 interface Ad {
     id: string

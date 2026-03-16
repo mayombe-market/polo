@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
     ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown
@@ -11,10 +11,8 @@ import {
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 function getPlanBadge(plan: string) {
     const map: Record<string, { label: string; cls: string }> = {

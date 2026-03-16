@@ -4,15 +4,13 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
-import { createBrowserClient } from '@supabase/ssr'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Shield, Upload, Camera, CreditCard, CheckCircle, Clock, XCircle, ArrowLeft, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { submitVerification } from '@/app/actions/verifications'
 
-const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-)
+const supabase = getSupabaseBrowserClient()
+
 
 interface Props {
     user: any

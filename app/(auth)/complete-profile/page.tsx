@@ -94,10 +94,28 @@ export default function CompleteProfilePage() {
             const sbCookies = document.cookie.split(';').filter(c => c.trim().startsWith('sb-'))
             console.log('[complete-profile] ENV URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
             console.log('[complete-profile] sb-* cookies:', sbCookies.length, sbCookies.map(c => c.trim().split('=')[0]))
+            // Log les 200 premiers chars de chaque cookie sb-*
+            sbCookies.forEach(c => {
+                const [name, ...rest] = c.trim().split('=')
+                const val = rest.join('=')
+                console.log(`[complete-profile] cookie ${name}: ${val.substring(0, 200)}...`)
+            })
 
-            // Check 1 : getSession (rapide, lit les cookies locaux)
+            // Check 1 : getSession — log le résultat complet
+            try {
+                const fullResult = await supabase.auth.getSession()
+                console.log('[complete-profile] getSession FULL:', JSON.stringify({
+                    hasData: !!fullResult?.data,
+                    hasSession: !!fullResult?.data?.session,
+                    hasUser: !!fullResult?.data?.session?.user,
+                    error: fullResult?.error?.message || null,
+                }))
+            } catch (e: any) {
+                console.log('[complete-profile] getSession THREW:', e?.message)
+            }
+
             const sessionUser = await getSessionUser()
-            console.log('[complete-profile] getSession result:', sessionUser ? `user ${sessionUser.id}` : 'null')
+            console.log('[complete-profile] getSession user:', sessionUser ? `user ${sessionUser.id}` : 'null')
             if (sessionUser) { processUser(sessionUser); return }
 
             // Check 2 : safeGetUser (interroge le serveur Supabase)

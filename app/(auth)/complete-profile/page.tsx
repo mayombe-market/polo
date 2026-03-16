@@ -38,9 +38,10 @@ export default function CompleteProfilePage() {
 
     useEffect(() => {
         let handled = false
+        let mounted = true
 
         const processUser = async (u: any) => {
-            if (handled || !u) return
+            if (handled || !mounted || !u?.id) return
             handled = true
 
             try {
@@ -50,62 +51,77 @@ export default function CompleteProfilePage() {
                     .eq('id', u.id)
                     .maybeSingle()
 
+                if (!mounted) return
+
                 if (profile?.first_name) {
                     // Profil déjà complété → rediriger sans afficher le formulaire
-                    if (profile.role === 'vendor') router.replace('/vendor/dashboard')
-                    else if (profile.role === 'admin') router.replace('/admin')
-                    else router.replace('/account/dashboard')
+                    try {
+                        if (profile.role === 'vendor') router.replace('/vendor/dashboard')
+                        else if (profile.role === 'admin') router.replace('/admin')
+                        else router.replace('/account/dashboard')
+                    } catch { /* navigation aborted — ignore */ }
                     return
                 }
             } catch {
+                if (!mounted) return
                 // Profil pas encore créé → continuer vers le formulaire
             }
 
             // Profil incomplet → afficher le formulaire
-            setUser(u)
+            if (mounted) setUser(u)
         }
 
-        // 1. onAuthStateChange — temps réel, se déclenche si la session change
+        // Récupère la session de manière sûre (pas de destructuring qui crash)
+        const getSessionUser = async () => {
+            try {
+                const result = await supabase.auth.getSession()
+                return result?.data?.session?.user ?? null
+            } catch {
+                return null
+            }
+        }
+
+        // 1. onAuthStateChange — temps réel
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event: string, session: any) => {
                 if (session?.user) processUser(session.user)
             }
         )
 
-        // 2. Check actif : getSession (lit les cookies) → safeGetUser (interroge le serveur)
+        // 2. Check actif : getSession → safeGetUser → retry
         const initAuth = async () => {
             // Check 1 : getSession (rapide, lit les cookies locaux)
-            try {
-                const { data: { session } } = await supabase.auth.getSession()
-                if (session?.user) { processUser(session.user); return }
-            } catch { /* ignore */ }
+            const sessionUser = await getSessionUser()
+            if (sessionUser) { processUser(sessionUser); return }
 
-            // Check 2 : safeGetUser (plus lent, interroge le serveur Supabase)
-            const { user: u } = await safeGetUser(supabase)
-            if (u) { processUser(u); return }
+            // Check 2 : safeGetUser (interroge le serveur Supabase)
+            try {
+                const { user: u } = await safeGetUser(supabase)
+                if (u) { processUser(u); return }
+            } catch { /* ignore */ }
 
             // Check 3 : retry après 1.5s (laisse le temps aux cookies de se propager)
             setTimeout(async () => {
-                if (handled) return
-                try {
-                    const { data: { session } } = await supabase.auth.getSession()
-                    if (session?.user) { processUser(session.user); return }
-                } catch { /* ignore */ }
+                if (handled || !mounted) return
+                const retryUser = await getSessionUser()
+                if (retryUser) { processUser(retryUser); return }
 
-                // Dernier recours : safeGetUser
-                const { user: u2 } = await safeGetUser(supabase)
-                if (u2) processUser(u2)
+                try {
+                    const { user: u2 } = await safeGetUser(supabase)
+                    if (u2) processUser(u2)
+                } catch { /* ignore */ }
             }, 1500)
         }
         initAuth()
 
         // 3. Timeout final : si rien n'a marché après 6s
         const failTimeout = setTimeout(() => {
-            if (!handled) setSessionFailed(true)
+            if (!handled && mounted) setSessionFailed(true)
         }, 6000)
 
         return () => {
             handled = true
+            mounted = false
             subscription.unsubscribe()
             clearTimeout(failTimeout)
         }

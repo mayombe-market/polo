@@ -37,10 +37,11 @@ export default function CompleteProfilePage() {
     const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
-        let cancelled = false
+        let handled = false
 
-        const handleUser = async (u: any) => {
-            if (cancelled || !u) return
+        const processUser = async (u: any) => {
+            if (handled || !u) return
+            handled = true
             setUser(u)
 
             try {
@@ -50,73 +51,43 @@ export default function CompleteProfilePage() {
                     .eq('id', u.id)
                     .single()
 
-                if (!cancelled && profile && profile.first_name) {
+                if (profile?.first_name) {
                     if (profile.role === 'vendor') {
-                        router.push('/vendor/dashboard')
+                        router.replace('/vendor/dashboard')
                     } else if (profile.role === 'admin') {
-                        router.push('/admin')
+                        router.replace('/admin')
                     } else {
-                        router.push('/account/dashboard')
+                        router.replace('/account/dashboard')
                     }
                 }
+                // Sinon : profil incomplet → rester sur cette page (formulaire)
             } catch {
-                // Profile pas encore créé — continuer normalement
+                // Profil pas encore créé → rester sur cette page
             }
         }
 
-        // Après un redirect depuis /auth/callback, les cookies de session
-        // peuvent ne pas être immédiatement disponibles pour le client browser.
-        // On essaie plusieurs fois avant d'abandonner.
-        const checkUser = async () => {
-            // Tentative 1 : getSession (lit les cookies/localStorage)
-            const { data: sessionData } = await supabase.auth.getSession()
-            if (!cancelled && sessionData?.session?.user) {
-                await handleUser(sessionData.session.user)
-                return
-            }
-
-            // Tentative 2 : getUser (vérifie côté serveur)
-            const { user: u } = await safeGetUser(supabase)
-            if (!cancelled && u) {
-                await handleUser(u)
-                return
-            }
-
-            // Tentative 3 : attendre un peu que les cookies se propagent
-            if (!cancelled) {
-                await new Promise(r => setTimeout(r, 1500))
-                const { data: retrySession } = await supabase.auth.getSession()
-                if (!cancelled && retrySession?.session?.user) {
-                    await handleUser(retrySession.session.user)
-                    return
-                }
-
-                const { user: retryUser } = await safeGetUser(supabase)
-                if (!cancelled && retryUser) {
-                    await handleUser(retryUser)
-                    return
-                }
-            }
-
-            // Aucune session trouvée — afficher un message au lieu de rediriger
-            if (!cancelled) {
-                setSessionFailed(true)
-            }
-        }
-
-        // Écouter les changements d'auth (session établie après redirect)
+        // onAuthStateChange est le mécanisme principal.
+        // Il se déclenche dès que Supabase détecte une session (cookies/localStorage).
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event: string, session: any) => {
-                if (session?.user && !cancelled) {
-                    handleUser(session.user)
+                if (session?.user) {
+                    processUser(session.user)
                 }
             }
         )
 
-        checkUser()
+        // Fallback : si onAuthStateChange ne se déclenche pas après 5s,
+        // marquer la session comme introuvable.
+        const timeout = setTimeout(() => {
+            if (!handled) {
+                setSessionFailed(true)
+            }
+        }, 5000)
+
         return () => {
-            cancelled = true
+            handled = true
             subscription.unsubscribe()
+            clearTimeout(timeout)
         }
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 

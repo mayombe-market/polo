@@ -26,6 +26,7 @@ export default function CompleteProfilePage() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [user, setUser] = useState<any>(null)
+    const [sessionFailed, setSessionFailed] = useState(false)
 
     // ═══ Étape abonnement ═══
     const [profileStep, setProfileStep] = useState<'form' | 'subscription' | 'checkout'>('form')
@@ -97,9 +98,9 @@ export default function CompleteProfilePage() {
                 }
             }
 
-            // Aucune session trouvée après plusieurs tentatives
+            // Aucune session trouvée — afficher un message au lieu de rediriger
             if (!cancelled) {
-                router.push('/')
+                setSessionFailed(true)
             }
         }
 
@@ -211,7 +212,28 @@ export default function CompleteProfilePage() {
     if (!user) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
-                <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent"></div>
+                {sessionFailed ? (
+                    <div className="text-center p-8 max-w-md">
+                        <div className="text-5xl mb-4">🔒</div>
+                        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                            Session introuvable
+                        </h2>
+                        <p className="text-gray-500 dark:text-gray-400 mb-6">
+                            Votre session a expiré ou n&apos;a pas pu être établie. Veuillez vous reconnecter.
+                        </p>
+                        <button
+                            onClick={() => router.push('/')}
+                            className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all"
+                        >
+                            Retour à l&apos;accueil
+                        </button>
+                    </div>
+                ) : (
+                    <div className="text-center">
+                        <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent mx-auto mb-4"></div>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">Chargement de votre session...</p>
+                    </div>
+                )}
             </div>
         )
     }

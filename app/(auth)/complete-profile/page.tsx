@@ -133,6 +133,12 @@ export default function CompleteProfilePage() {
         setLoading(true)
         setError('')
 
+        if (!user?.id) {
+            setError('Votre session a expiré. Veuillez rafraîchir la page.')
+            setLoading(false)
+            return
+        }
+
         if (!isPhoneValid) {
             setError(`Le numéro doit contenir exactement ${selectedCountry.maxDigits} chiffres.`)
             setLoading(false)
@@ -152,8 +158,6 @@ export default function CompleteProfilePage() {
         }
 
         try {
-            if (!user) throw new Error('Non connecté')
-
             const fullPhone = `${selectedCountry.dial}${phoneNumber}`
 
             const { error: profileError } = await supabase
@@ -161,16 +165,16 @@ export default function CompleteProfilePage() {
                 .upsert({
                     id: user.id,
                     email: user.email,
-                    first_name: firstName,
-                    last_name: lastName,
-                    full_name: `${firstName} ${lastName}`,
+                    first_name: firstName.trim(),
+                    last_name: lastName.trim(),
+                    full_name: `${firstName.trim()} ${lastName.trim()}`,
                     phone: fullPhone,
                     country: selectedCountry.code,
                     role,
                     ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
                     terms_accepted_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
-                })
+                }, { onConflict: 'id' })
 
             if (profileError) throw profileError
 

@@ -83,14 +83,8 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // Debug : ajouter des infos dans l'URL pour diagnostiquer
-    const debugUrl = new URL(redirectTo, request.url)
-    debugUrl.searchParams.set('_flow', code ? 'pkce' : token_hash ? 'token' : 'none')
-    debugUrl.searchParams.set('_cookies', String(pendingCookies.length))
-    if (type) debugUrl.searchParams.set('_type', type)
-
     // Créer la réponse redirect et y attacher les cookies de session
-    const response = NextResponse.redirect(debugUrl)
+    const response = NextResponse.redirect(new URL(redirectTo, request.url))
     pendingCookies.forEach(({ name, value, options }) => {
         response.cookies.set(name, value, options)
     })

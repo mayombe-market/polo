@@ -42,52 +42,72 @@ export default function CompleteProfilePage() {
         const processUser = async (u: any) => {
             if (handled || !u) return
             handled = true
-            setUser(u)
 
             try {
                 const { data: profile } = await supabase
                     .from('profiles')
-                    .select('*')
+                    .select('first_name, role')
                     .eq('id', u.id)
-                    .single()
+                    .maybeSingle()
 
                 if (profile?.first_name) {
-                    if (profile.role === 'vendor') {
-                        router.replace('/vendor/dashboard')
-                    } else if (profile.role === 'admin') {
-                        router.replace('/admin')
-                    } else {
-                        router.replace('/account/dashboard')
-                    }
+                    // Profil déjà complété → rediriger sans afficher le formulaire
+                    if (profile.role === 'vendor') router.replace('/vendor/dashboard')
+                    else if (profile.role === 'admin') router.replace('/admin')
+                    else router.replace('/account/dashboard')
+                    return
                 }
-                // Sinon : profil incomplet → rester sur cette page (formulaire)
             } catch {
-                // Profil pas encore créé → rester sur cette page
+                // Profil pas encore créé → continuer vers le formulaire
             }
+
+            // Profil incomplet → afficher le formulaire
+            setUser(u)
         }
 
-        // onAuthStateChange est le mécanisme principal.
-        // Il se déclenche dès que Supabase détecte une session (cookies/localStorage).
+        // 1. onAuthStateChange — temps réel, se déclenche si la session change
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event: string, session: any) => {
-                if (session?.user) {
-                    processUser(session.user)
-                }
+                if (session?.user) processUser(session.user)
             }
         )
 
-        // Fallback : si onAuthStateChange ne se déclenche pas après 5s,
-        // marquer la session comme introuvable.
-        const timeout = setTimeout(() => {
-            if (!handled) {
-                setSessionFailed(true)
-            }
-        }, 5000)
+        // 2. Check actif : getSession (lit les cookies) → safeGetUser (interroge le serveur)
+        const initAuth = async () => {
+            // Check 1 : getSession (rapide, lit les cookies locaux)
+            try {
+                const { data: { session } } = await supabase.auth.getSession()
+                if (session?.user) { processUser(session.user); return }
+            } catch { /* ignore */ }
+
+            // Check 2 : safeGetUser (plus lent, interroge le serveur Supabase)
+            const { user: u } = await safeGetUser(supabase)
+            if (u) { processUser(u); return }
+
+            // Check 3 : retry après 1.5s (laisse le temps aux cookies de se propager)
+            setTimeout(async () => {
+                if (handled) return
+                try {
+                    const { data: { session } } = await supabase.auth.getSession()
+                    if (session?.user) { processUser(session.user); return }
+                } catch { /* ignore */ }
+
+                // Dernier recours : safeGetUser
+                const { user: u2 } = await safeGetUser(supabase)
+                if (u2) processUser(u2)
+            }, 1500)
+        }
+        initAuth()
+
+        // 3. Timeout final : si rien n'a marché après 6s
+        const failTimeout = setTimeout(() => {
+            if (!handled) setSessionFailed(true)
+        }, 6000)
 
         return () => {
             handled = true
             subscription.unsubscribe()
-            clearTimeout(timeout)
+            clearTimeout(failTimeout)
         }
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -192,11 +212,6 @@ export default function CompleteProfilePage() {
                         <p className="text-gray-500 dark:text-gray-400 mb-6">
                             Votre session a expiré ou n&apos;a pas pu être établie. Veuillez vous reconnecter.
                         </p>
-                        {/* DEBUG TEMPORAIRE */}
-                        <div className="text-left bg-gray-100 dark:bg-slate-800 p-4 rounded-xl mb-4 text-xs font-mono break-all max-h-40 overflow-auto">
-                            <p className="font-bold mb-1">Cookies visibles par JS :</p>
-                            <p>{typeof document !== 'undefined' ? (document.cookie || '(aucun cookie)') : 'SSR'}</p>
-                        </div>
                         <button
                             onClick={() => router.push('/')}
                             className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all"

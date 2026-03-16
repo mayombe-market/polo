@@ -63,20 +63,63 @@ export async function middleware(request: NextRequest) {
         return supabaseResponse
     }
 
-    // IMPORTANT : getUser() rafraîchit le token auth automatiquement
-    // Protégé par timeout (3s) + try-catch pour ne jamais bloquer le chargement
-    let user = null
-    try {
-        const { data } = await withTimeout(supabase.auth.getUser())
-        user = data?.user ?? null
-    } catch {
-        // Si getUser échoue (timeout, réseau), on continue sans user
+    // IMPORTANT : getUser() rafraîchit le token auth automatiquement.
+    // Ici on distingue explicitement :
+    // - utilisateur absent (no-user)
+    // - timeout / erreurs réseau (on évite de traiter ça comme une vraie déconnexion)
+    type ServerSafeGetUserStatus = 'ok' | 'no-user' | 'timeout' | 'network-error' | 'unknown-error'
+
+    interface ServerSafeGetUserResult<UserType = any> {
+        user: UserType | null
+        status: ServerSafeGetUserStatus
+        error?: Error
     }
+
+    const serverSafeGetUser = async (client: any, timeoutMs = 5000): Promise<ServerSafeGetUserResult> => {
+        const timeoutError = new Error('Auth timeout')
+
+        try {
+            const result = await Promise.race([
+                client.auth.getUser(),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(timeoutError), timeoutMs)
+                ),
+            ])
+
+            const user = (result as any)?.data?.user ?? null
+
+            if (!user) {
+                return { user: null, status: 'no-user' }
+            }
+
+            return { user, status: 'ok' }
+        } catch (err: any) {
+            if (err === timeoutError || err?.message === timeoutError.message) {
+                return { user: null, status: 'timeout', error: err }
+            }
+
+            if (typeof err?.message === 'string' && err.message.toLowerCase().includes('network')) {
+                return { user: null, status: 'network-error', error: err }
+            }
+
+            return { user: null, status: 'unknown-error', error: err instanceof Error ? err : undefined }
+        }
+    }
+
+    const { user, status: authStatus } = await serverSafeGetUser(supabase)
 
     // Protection des routes vendor
     if (pathname.startsWith('/vendor')) {
-        if (!user) {
+        if (!user && authStatus === 'no-user') {
             return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!user && authStatus !== 'no-user') {
+            // Timeout / erreur réseau : ne pas traiter comme une vraie déconnexion.
+            // On laisse passer la requête, éventuellement avec un flag pour afficher un message côté front.
+            const url = request.nextUrl.clone()
+            url.searchParams.set('auth_error', authStatus)
+            return NextResponse.next({ request })
         }
 
         try {
@@ -86,15 +129,27 @@ export async function middleware(request: NextRequest) {
             if (error || !profile) return NextResponse.redirect(new URL('/', request.url))
             if (!profile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (profile.role !== 'vendor' && profile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
-        } catch {
+        } catch (err: any) {
+            // En cas de timeout sur la requête profil, on évite de faire croire à une déconnexion.
+            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
+                const url = new URL(request.url)
+                url.searchParams.set('auth_error', 'profile-timeout')
+                return NextResponse.next({ request })
+            }
             return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 
     // Protection des routes logisticien
     if (pathname.startsWith('/logistician')) {
-        if (!user) {
+        if (!user && authStatus === 'no-user') {
             return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!user && authStatus !== 'no-user') {
+            const url = request.nextUrl.clone()
+            url.searchParams.set('auth_error', authStatus)
+            return NextResponse.next({ request })
         }
 
         try {
@@ -104,15 +159,26 @@ export async function middleware(request: NextRequest) {
             if (error || !logProfile) return NextResponse.redirect(new URL('/', request.url))
             if (!logProfile.first_name) return NextResponse.redirect(new URL('/complete-profile', request.url))
             if (logProfile.role !== 'logistician' && logProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
-        } catch {
+        } catch (err: any) {
+            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
+                const url = new URL(request.url)
+                url.searchParams.set('auth_error', 'profile-timeout')
+                return NextResponse.next({ request })
+            }
             return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 
     // Protection des routes admin
     if (pathname.startsWith('/admin')) {
-        if (!user) {
+        if (!user && authStatus === 'no-user') {
             return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!user && authStatus !== 'no-user') {
+            const url = request.nextUrl.clone()
+            url.searchParams.set('auth_error', authStatus)
+            return NextResponse.next({ request })
         }
 
         try {
@@ -120,15 +186,26 @@ export async function middleware(request: NextRequest) {
                 supabase.from('profiles').select('role').eq('id', user.id).single()
             )
             if (error || !adminProfile || adminProfile.role !== 'admin') return NextResponse.redirect(new URL('/', request.url))
-        } catch {
+        } catch (err: any) {
+            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
+                const url = new URL(request.url)
+                url.searchParams.set('auth_error', 'profile-timeout')
+                return NextResponse.next({ request })
+            }
             return NextResponse.redirect(new URL('/?timeout=1', request.url))
         }
     }
 
     // Protection des routes account + redirection logisticien
     if (pathname.startsWith('/account')) {
-        if (!user) {
+        if (!user && authStatus === 'no-user') {
             return NextResponse.redirect(new URL('/', request.url))
+        }
+
+        if (!user && authStatus !== 'no-user') {
+            const url = request.nextUrl.clone()
+            url.searchParams.set('auth_error', authStatus)
+            return NextResponse.next({ request })
         }
 
         if (pathname === '/account/dashboard') {
@@ -145,12 +222,9 @@ export async function middleware(request: NextRequest) {
         }
     }
 
-    // Protection de la page complete-profile
-    if (pathname === '/complete-profile') {
-        if (!user) {
-            return NextResponse.redirect(new URL('/', request.url))
-        }
-    }
+    // /complete-profile : pas de protection middleware.
+    // La page gère elle-même l'auth (retries + onAuthStateChange)
+    // pour éviter une course entre les cookies du callback et le middleware.
 
     const cspHeader = `
         default-src 'self';

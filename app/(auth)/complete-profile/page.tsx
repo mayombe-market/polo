@@ -192,6 +192,11 @@ export default function CompleteProfilePage() {
                         <p className="text-gray-500 dark:text-gray-400 mb-6">
                             Votre session a expiré ou n&apos;a pas pu être établie. Veuillez vous reconnecter.
                         </p>
+                        {/* DEBUG TEMPORAIRE */}
+                        <div className="text-left bg-gray-100 dark:bg-slate-800 p-4 rounded-xl mb-4 text-xs font-mono break-all max-h-40 overflow-auto">
+                            <p className="font-bold mb-1">Cookies visibles par JS :</p>
+                            <p>{typeof document !== 'undefined' ? (document.cookie || '(aucun cookie)') : 'SSR'}</p>
+                        </div>
                         <button
                             onClick={() => router.push('/')}
                             className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all"

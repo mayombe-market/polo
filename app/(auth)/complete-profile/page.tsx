@@ -71,16 +71,6 @@ export default function CompleteProfilePage() {
             if (mounted) setUser(u)
         }
 
-        // Récupère la session de manière sûre (pas de destructuring qui crash)
-        const getSessionUser = async () => {
-            try {
-                const result = await supabase.auth.getSession()
-                return result?.data?.session?.user ?? null
-            } catch {
-                return null
-            }
-        }
-
         // 1. onAuthStateChange — temps réel
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             (_event: string, session: any) => {
@@ -88,49 +78,56 @@ export default function CompleteProfilePage() {
             }
         )
 
-        // 2. Check actif : getSession → safeGetUser → retry
+        // 2. Check actif : tokens dans le hash URL → getSession → safeGetUser
         const initAuth = async () => {
-            // DEBUG — à retirer après diagnostic
-            const sbCookies = document.cookie.split(';').filter(c => c.trim().startsWith('sb-'))
-            console.log('[complete-profile] ENV URL:', process.env.NEXT_PUBLIC_SUPABASE_URL)
-            console.log('[complete-profile] sb-* cookies:', sbCookies.length, sbCookies.map(c => c.trim().split('=')[0]))
-            // Log les 200 premiers chars de chaque cookie sb-*
-            sbCookies.forEach(c => {
-                const [name, ...rest] = c.trim().split('=')
-                const val = rest.join('=')
-                console.log(`[complete-profile] cookie ${name}: ${val.substring(0, 200)}...`)
-            })
+            // Priorité 1 : tokens passés dans le hash URL par le callback
+            const hash = window.location.hash.substring(1)
+            if (hash) {
+                const params = new URLSearchParams(hash)
+                const access_token = params.get('access_token')
+                const refresh_token = params.get('refresh_token')
 
-            // Check 1 : getSession — log le résultat complet
-            try {
-                const fullResult = await supabase.auth.getSession()
-                console.log('[complete-profile] getSession FULL:', JSON.stringify({
-                    hasData: !!fullResult?.data,
-                    hasSession: !!fullResult?.data?.session,
-                    hasUser: !!fullResult?.data?.session?.user,
-                    error: fullResult?.error?.message || null,
-                }))
-            } catch (e: any) {
-                console.log('[complete-profile] getSession THREW:', e?.message)
+                if (access_token && refresh_token) {
+                    // Nettoyer le hash de l'URL (sécurité)
+                    window.history.replaceState(null, '', window.location.pathname)
+
+                    // Injecter la session côté client
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token,
+                        refresh_token,
+                    })
+                    if (!error && data.user) {
+                        processUser(data.user)
+                        return
+                    }
+                }
             }
 
-            const sessionUser = await getSessionUser()
-            console.log('[complete-profile] getSession user:', sessionUser ? `user ${sessionUser.id}` : 'null')
-            if (sessionUser) { processUser(sessionUser); return }
-
-            // Check 2 : safeGetUser (interroge le serveur Supabase)
+            // Priorité 2 : getSession (lit les cookies locaux)
             try {
-                const { user: u, status } = await safeGetUser(supabase)
-                console.log('[complete-profile] safeGetUser result:', status, u ? `user ${u.id}` : 'null')
+                const result = await supabase.auth.getSession()
+                if (result?.data?.session?.user) {
+                    processUser(result.data.session.user)
+                    return
+                }
+            } catch { /* ignore */ }
+
+            // Priorité 3 : safeGetUser (interroge le serveur Supabase)
+            try {
+                const { user: u } = await safeGetUser(supabase)
                 if (u) { processUser(u); return }
             } catch { /* ignore */ }
 
-            // Check 3 : retry après 1.5s (laisse le temps aux cookies de se propager)
+            // Priorité 4 : retry après 1.5s
             setTimeout(async () => {
                 if (handled || !mounted) return
-                const retryUser = await getSessionUser()
-                if (retryUser) { processUser(retryUser); return }
-
+                try {
+                    const result = await supabase.auth.getSession()
+                    if (result?.data?.session?.user) {
+                        processUser(result.data.session.user)
+                        return
+                    }
+                } catch { /* ignore */ }
                 try {
                     const { user: u2 } = await safeGetUser(supabase)
                     if (u2) processUser(u2)

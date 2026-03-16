@@ -36,24 +36,33 @@ export async function GET(request: NextRequest) {
     )
 
     let redirectTo = '/?error=confirmation_failed'
+    let sessionTokens: { access_token: string; refresh_token: string } | null = null
 
     // Flow PKCE (code dans l'URL)
     if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code)
-        if (!error) {
+        const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+        if (!error && data.session) {
+            sessionTokens = {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+            }
             redirectTo = '/complete-profile'
         }
     }
 
     // Flow par token (confirmation email / reset password)
     if (!code && token_hash && type) {
-        const { error } = await supabase.auth.verifyOtp({
+        const { data, error } = await supabase.auth.verifyOtp({
             token_hash,
             type: type as any,
         })
-        if (!error) {
+        if (!error && data.session) {
+            sessionTokens = {
+                access_token: data.session.access_token,
+                refresh_token: data.session.refresh_token,
+            }
             redirectTo = type === 'recovery' ? '/' : '/complete-profile'
-        } else {
+        } else if (error) {
             redirectTo = `/?error=${encodeURIComponent(error.message)}`
         }
     }
@@ -64,7 +73,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Redirection selon le rôle (si profil complété)
-    if (redirectTo === '/complete-profile') {
+    if (redirectTo === '/complete-profile' && sessionTokens) {
         const { data: { user } } = await supabase.auth.getUser()
         if (user) {
             const { data: profile } = await supabase
@@ -74,7 +83,6 @@ export async function GET(request: NextRequest) {
                 .single()
 
             if (profile?.first_name) {
-                // Profil déjà complété → rediriger selon le rôle
                 if (profile.role === 'logistician') redirectTo = '/logistician/dashboard'
                 else if (profile.role === 'vendor') redirectTo = '/vendor/dashboard'
                 else if (profile.role === 'admin') redirectTo = '/admin/orders'
@@ -83,8 +91,17 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    // Créer la réponse redirect et y attacher les cookies de session
-    const response = NextResponse.redirect(new URL(redirectTo, request.url))
+    // Construire l'URL de redirection
+    const redirectUrl = new URL(redirectTo, request.url)
+
+    // Passer les tokens de session dans le hash (fragment URL)
+    // Le hash n'est PAS envoyé au serveur, il reste côté client uniquement
+    if (sessionTokens) {
+        redirectUrl.hash = `access_token=${sessionTokens.access_token}&refresh_token=${sessionTokens.refresh_token}`
+    }
+
+    // Créer la réponse redirect et y attacher les cookies de session (backup)
+    const response = NextResponse.redirect(redirectUrl)
     pendingCookies.forEach(({ name, value, options }) => {
         response.cookies.set(name, value, options)
     })

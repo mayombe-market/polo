@@ -24,8 +24,11 @@ export async function GET(request: NextRequest) {
                 },
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value, options }) => {
-                        cookieStore.set(name, value, options)
-                        pendingCookies.push({ name, value, options })
+                        // httpOnly doit être false pour que le client browser
+                        // puisse lire les cookies de session via document.cookie
+                        const safeOptions = { ...options, httpOnly: false }
+                        cookieStore.set(name, value, safeOptions)
+                        pendingCookies.push({ name, value, options: safeOptions })
                     })
                 },
             },

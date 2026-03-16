@@ -1,9 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createBrowserClient } from '@supabase/ssr'
 import { useRouter } from 'next/navigation'
 import { safeGetUser } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 
 const COUNTRIES = [
@@ -33,23 +33,13 @@ export default function CompleteProfilePage() {
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
     const router = useRouter()
-    const supabase = createBrowserClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    )
+    const supabase = getSupabaseBrowserClient()
 
     useEffect(() => {
         let cancelled = false
-        const checkUser = async () => {
-            const u = await safeGetUser(supabase)
 
-            if (cancelled) return
-
-            if (!u) {
-                router.push('/')
-                return
-            }
-
+        const handleUser = async (u: any) => {
+            if (cancelled || !u) return
             setUser(u)
 
             try {
@@ -60,7 +50,6 @@ export default function CompleteProfilePage() {
                     .single()
 
                 if (!cancelled && profile && profile.first_name) {
-                    // Profil déjà complet — rediriger vers le bon dashboard selon le rôle
                     if (profile.role === 'vendor') {
                         router.push('/vendor/dashboard')
                     } else if (profile.role === 'admin') {
@@ -74,8 +63,60 @@ export default function CompleteProfilePage() {
             }
         }
 
+        // Après un redirect depuis /auth/callback, les cookies de session
+        // peuvent ne pas être immédiatement disponibles pour le client browser.
+        // On essaie plusieurs fois avant d'abandonner.
+        const checkUser = async () => {
+            // Tentative 1 : getSession (lit les cookies/localStorage)
+            const { data: sessionData } = await supabase.auth.getSession()
+            if (!cancelled && sessionData?.session?.user) {
+                await handleUser(sessionData.session.user)
+                return
+            }
+
+            // Tentative 2 : getUser (vérifie côté serveur)
+            const { user: u } = await safeGetUser(supabase)
+            if (!cancelled && u) {
+                await handleUser(u)
+                return
+            }
+
+            // Tentative 3 : attendre un peu que les cookies se propagent
+            if (!cancelled) {
+                await new Promise(r => setTimeout(r, 1500))
+                const { data: retrySession } = await supabase.auth.getSession()
+                if (!cancelled && retrySession?.session?.user) {
+                    await handleUser(retrySession.session.user)
+                    return
+                }
+
+                const { user: retryUser } = await safeGetUser(supabase)
+                if (!cancelled && retryUser) {
+                    await handleUser(retryUser)
+                    return
+                }
+            }
+
+            // Aucune session trouvée après plusieurs tentatives
+            if (!cancelled) {
+                router.push('/')
+            }
+        }
+
+        // Écouter les changements d'auth (session établie après redirect)
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+            (_event: string, session: any) => {
+                if (session?.user && !cancelled) {
+                    handleUser(session.user)
+                }
+            }
+        )
+
         checkUser()
-        return () => { cancelled = true }
+        return () => {
+            cancelled = true
+            subscription.unsubscribe()
+        }
     }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePhoneChange = (value: string) => {

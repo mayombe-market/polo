@@ -50,7 +50,14 @@ export async function GET(request: NextRequest) {
         })
         if (!error) {
             redirectTo = type === 'recovery' ? '/' : '/complete-profile'
+        } else {
+            redirectTo = `/?error=${encodeURIComponent(error.message)}`
         }
+    }
+
+    // Aucun paramètre reçu — pas de code ni de token
+    if (!code && !token_hash) {
+        redirectTo = '/?error=missing_params'
     }
 
     // Redirection selon le rôle (si profil complété)

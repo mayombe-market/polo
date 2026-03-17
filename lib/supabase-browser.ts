@@ -15,7 +15,17 @@ export function getSupabaseBrowserClient() {
 
     browserClient = createBrowserClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        {
+            auth: {
+                flowType: 'pkce',
+                persistSession: true,
+                detectSessionInUrl: true,
+                // Désactiver navigator.locks pour éviter les deadlocks
+                // qui bloquent getSession/getUser indéfiniment
+                lock: 'no-op' as any,
+            },
+        }
     )
 
     return browserClient

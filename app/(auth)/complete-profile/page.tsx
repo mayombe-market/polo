@@ -58,35 +58,36 @@ export default function CompleteProfilePage() {
 
         if (processedRef.current) return
 
-        // Si on a le user → agir immédiatement (ne PAS attendre authLoading=false)
+        // Si on a le user → afficher le formulaire IMMÉDIATEMENT
         if (authUser?.id) {
             processedRef.current = true
-            console.log('[complete-profile] user found, checking profile...')
+            console.log('[complete-profile] user found, showing form immediately')
+            setUser(authUser)
 
+            // Vérifier en arrière-plan si le profil est déjà complété (avec timeout)
             const checkProfile = async () => {
                 try {
-                    const { data: profile, error: profileError } = await supabase
-                        .from('profiles')
-                        .select('first_name, role')
-                        .eq('id', authUser.id)
-                        .maybeSingle()
+                    const result = await Promise.race([
+                        supabase
+                            .from('profiles')
+                            .select('first_name, role')
+                            .eq('id', authUser.id)
+                            .maybeSingle(),
+                        new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
+                    ])
 
-                    console.log('[complete-profile] profile query:', { profile, error: profileError?.message })
+                    const profile = result && 'data' in result ? result.data : null
+                    console.log('[complete-profile] profile check:', profile?.first_name || 'no profile')
 
                     if (profile?.first_name) {
                         const dest = profile.role === 'vendor' ? '/vendor/dashboard'
                             : profile.role === 'admin' ? '/admin'
                             : '/account/dashboard'
-                        console.log('[complete-profile] redirecting to', dest)
                         try { router.replace(dest) } catch { /* navigation aborted */ }
-                        return
                     }
                 } catch (e: any) {
-                    console.log('[complete-profile] profile query error:', e?.message)
+                    console.log('[complete-profile] profile check failed:', e?.message)
                 }
-
-                console.log('[complete-profile] showing form')
-                setUser(authUser)
             }
 
             checkProfile()

@@ -54,41 +54,41 @@ export default function CompleteProfilePage() {
 
     // Réagir au user détecté par AuthProvider (une seule source de vérité)
     useEffect(() => {
-        console.log('[complete-profile] useEffect:', { authLoading, authUser: authUser?.id?.substring(0, 8) || null, processed: processedRef.current })
+        if (processedRef.current) return
 
-        if (authLoading || processedRef.current) return
+        // Si on a le user → agir immédiatement (ne PAS attendre authLoading=false)
+        if (authUser?.id) {
+            processedRef.current = true
 
-        if (!authUser?.id) {
-            console.log('[complete-profile] → sessionFailed (no user after loading)')
-            setSessionFailed(true)
+            const checkProfile = async () => {
+                try {
+                    const { data: profile } = await supabase
+                        .from('profiles')
+                        .select('first_name, role')
+                        .eq('id', authUser.id)
+                        .maybeSingle()
+
+                    if (profile?.first_name) {
+                        try {
+                            if (profile.role === 'vendor') router.replace('/vendor/dashboard')
+                            else if (profile.role === 'admin') router.replace('/admin')
+                            else router.replace('/account/dashboard')
+                        } catch { /* navigation aborted */ }
+                        return
+                    }
+                } catch { /* profil pas encore créé */ }
+
+                setUser(authUser)
+            }
+
+            checkProfile()
             return
         }
 
-        processedRef.current = true
-
-        // Vérifier si le profil est déjà complété
-        const checkProfile = async () => {
-            try {
-                const { data: profile } = await supabase
-                    .from('profiles')
-                    .select('first_name, role')
-                    .eq('id', authUser.id)
-                    .maybeSingle()
-
-                if (profile?.first_name) {
-                    try {
-                        if (profile.role === 'vendor') router.replace('/vendor/dashboard')
-                        else if (profile.role === 'admin') router.replace('/admin')
-                        else router.replace('/account/dashboard')
-                    } catch { /* navigation aborted */ }
-                    return
-                }
-            } catch { /* profil pas encore créé */ }
-
-            setUser(authUser)
+        // Seulement si le chargement est terminé ET pas de user → échec
+        if (!authLoading && !authUser?.id) {
+            setSessionFailed(true)
         }
-
-        checkProfile()
     }, [authUser, authLoading, supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePhoneChange = (value: string) => {

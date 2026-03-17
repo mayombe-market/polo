@@ -152,33 +152,46 @@ export default function CompleteProfilePage() {
 
             console.log('[complete-profile] submitting profile for', user.id.substring(0, 8))
 
-            const upsertPromise = supabase
-                .from('profiles')
-                .upsert({
-                    id: user.id,
-                    email: user.email,
-                    first_name: firstName.trim(),
-                    last_name: lastName.trim(),
-                    full_name: `${firstName.trim()} ${lastName.trim()}`,
-                    phone: fullPhone,
-                    country: selectedCountry.code,
-                    role,
-                    ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
-                    terms_accepted_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                }, { onConflict: 'id' })
+            // Contourner supabase.from() qui bloque en interne
+            // Appel direct à PostgREST via fetch()
+            const { data: { session } } = await supabase.auth.getSession()
+            if (!session?.access_token) throw new Error('Session expirée')
 
-            const result = await Promise.race([
-                upsertPromise,
-                new Promise<{ error: { message: string } }>((resolve) =>
-                    setTimeout(() => resolve({ error: { message: 'La sauvegarde a pris trop de temps. Vérifiez votre connexion et réessayez.' } }), 10000)
-                ),
-            ])
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+            const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
-            const profileError = result?.error
-            console.log('[complete-profile] upsert result:', profileError ? profileError.message : 'success')
+            const profileData = {
+                id: user.id,
+                email: user.email,
+                first_name: firstName.trim(),
+                last_name: lastName.trim(),
+                full_name: `${firstName.trim()} ${lastName.trim()}`,
+                phone: fullPhone,
+                country: selectedCountry.code,
+                role,
+                ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
+                terms_accepted_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            }
 
-            if (profileError) throw profileError
+            const res = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'apikey': supabaseKey,
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'Prefer': 'resolution=merge-duplicates',
+                },
+                body: JSON.stringify(profileData),
+            })
+
+            console.log('[complete-profile] fetch result:', res.status, res.statusText)
+
+            if (!res.ok) {
+                const errBody = await res.text()
+                console.log('[complete-profile] fetch error body:', errBody)
+                throw new Error(`Erreur ${res.status}: ${errBody}`)
+            }
 
             // Si vendeur → passer à l'étape abonnement
             if (role === 'vendor') {

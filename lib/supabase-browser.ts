@@ -23,7 +23,9 @@ export function getSupabaseBrowserClient() {
                 detectSessionInUrl: true,
                 // Désactiver navigator.locks pour éviter les deadlocks
                 // qui bloquent getSession/getUser indéfiniment
-                lock: (_name: string, _acquireTimeout: number, fn: () => any) => fn(),
+                lock: async (_name: string, _acquireTimeout: number, fn: () => Promise<any>) => {
+                    return await fn()
+                },
             },
         }
     )

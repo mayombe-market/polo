@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
-import { safeGetUser } from '@/lib/supabase-utils'
+import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 
@@ -34,120 +34,62 @@ export default function CompleteProfilePage() {
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
     const router = useRouter()
-    const supabase = getSupabaseBrowserClient()
+    const { user: authUser, loading: authLoading, supabase } = useAuth()
+    const processedRef = useRef(false)
 
+    // Gérer les tokens dans le hash URL (venant du callback)
     useEffect(() => {
-        let handled = false
-        let mounted = true
+        const hash = window.location.hash.substring(1)
+        if (!hash) return
 
-        const processUser = async (u: any) => {
-            if (handled || !mounted || !u?.id) return
-            handled = true
+        const params = new URLSearchParams(hash)
+        const access_token = params.get('access_token')
+        const refresh_token = params.get('refresh_token')
 
+        if (access_token && refresh_token) {
+            window.history.replaceState(null, '', window.location.pathname)
+            supabase.auth.setSession({ access_token, refresh_token }).catch(() => {})
+        }
+    }, [supabase])
+
+    // Réagir au user détecté par AuthProvider (une seule source de vérité)
+    useEffect(() => {
+        console.log('[complete-profile] useEffect:', { authLoading, authUser: authUser?.id?.substring(0, 8) || null, processed: processedRef.current })
+
+        if (authLoading || processedRef.current) return
+
+        if (!authUser?.id) {
+            console.log('[complete-profile] → sessionFailed (no user after loading)')
+            setSessionFailed(true)
+            return
+        }
+
+        processedRef.current = true
+
+        // Vérifier si le profil est déjà complété
+        const checkProfile = async () => {
             try {
                 const { data: profile } = await supabase
                     .from('profiles')
                     .select('first_name, role')
-                    .eq('id', u.id)
+                    .eq('id', authUser.id)
                     .maybeSingle()
 
-                if (!mounted) return
-
                 if (profile?.first_name) {
-                    // Profil déjà complété → rediriger sans afficher le formulaire
                     try {
                         if (profile.role === 'vendor') router.replace('/vendor/dashboard')
                         else if (profile.role === 'admin') router.replace('/admin')
                         else router.replace('/account/dashboard')
-                    } catch { /* navigation aborted — ignore */ }
+                    } catch { /* navigation aborted */ }
                     return
                 }
-            } catch {
-                if (!mounted) return
-                // Profil pas encore créé → continuer vers le formulaire
-            }
+            } catch { /* profil pas encore créé */ }
 
-            // Profil incomplet → afficher le formulaire
-            if (mounted) setUser(u)
+            setUser(authUser)
         }
 
-        // 1. onAuthStateChange — temps réel
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            (_event: string, session: any) => {
-                if (session?.user) processUser(session.user)
-            }
-        )
-
-        // 2. Check actif : tokens dans le hash URL → getSession → safeGetUser
-        const initAuth = async () => {
-            // Priorité 1 : tokens passés dans le hash URL par le callback
-            const hash = window.location.hash.substring(1)
-            if (hash) {
-                const params = new URLSearchParams(hash)
-                const access_token = params.get('access_token')
-                const refresh_token = params.get('refresh_token')
-
-                if (access_token && refresh_token) {
-                    // Nettoyer le hash de l'URL (sécurité)
-                    window.history.replaceState(null, '', window.location.pathname)
-
-                    // Injecter la session côté client
-                    const { data, error } = await supabase.auth.setSession({
-                        access_token,
-                        refresh_token,
-                    })
-                    if (!error && data.user) {
-                        processUser(data.user)
-                        return
-                    }
-                }
-            }
-
-            // Priorité 2 : getSession (lit les cookies locaux)
-            try {
-                const result = await supabase.auth.getSession()
-                if (result?.data?.session?.user) {
-                    processUser(result.data.session.user)
-                    return
-                }
-            } catch { /* ignore */ }
-
-            // Priorité 3 : safeGetUser (interroge le serveur Supabase)
-            try {
-                const { user: u } = await safeGetUser(supabase)
-                if (u) { processUser(u); return }
-            } catch { /* ignore */ }
-
-            // Priorité 4 : retry après 1.5s
-            setTimeout(async () => {
-                if (handled || !mounted) return
-                try {
-                    const result = await supabase.auth.getSession()
-                    if (result?.data?.session?.user) {
-                        processUser(result.data.session.user)
-                        return
-                    }
-                } catch { /* ignore */ }
-                try {
-                    const { user: u2 } = await safeGetUser(supabase)
-                    if (u2) processUser(u2)
-                } catch { /* ignore */ }
-            }, 1500)
-        }
-        initAuth()
-
-        // 3. Timeout final : si rien n'a marché après 6s
-        const failTimeout = setTimeout(() => {
-            if (!handled && mounted) setSessionFailed(true)
-        }, 6000)
-
-        return () => {
-            handled = true
-            mounted = false
-            subscription.unsubscribe()
-            clearTimeout(failTimeout)
-        }
-    }, []) // eslint-disable-line react-hooks/exhaustive-deps
+        checkProfile()
+    }, [authUser, authLoading, supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
 
     const handlePhoneChange = (value: string) => {
         // N'accepter que les chiffres

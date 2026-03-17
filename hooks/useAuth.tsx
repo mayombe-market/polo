@@ -72,8 +72,20 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         let cancelled = false
 
         const init = async () => {
+            // DEBUG: vérifier les cookies et getSession avant safeGetUser
+            const sbCookies = document.cookie.split(';').filter(c => c.trim().startsWith('sb-'))
+            console.log('[AuthProvider] sb-* cookies:', sbCookies.length, sbCookies.map(c => c.trim().split('=')[0]))
+
+            try {
+                const sessionResult = await supabase.auth.getSession()
+                console.log('[AuthProvider] getSession:', sessionResult?.data?.session ? 'HAS SESSION' : 'NULL', sessionResult?.error?.message || '')
+            } catch (e: any) {
+                console.log('[AuthProvider] getSession THREW:', e?.message)
+            }
+
             try {
                 const { user: currentUser, status } = await safeGetUser(supabase)
+                console.log('[AuthProvider] safeGetUser:', status, currentUser ? currentUser.id.substring(0, 8) : 'null')
                 if (cancelled) return
 
                 if (status === 'ok') {
@@ -85,12 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
                     setUser(null)
                     setProfile(null)
                 } else {
-                    // timeout / network-error / unknown-error :
-                    // on ne force pas user = null pour éviter les fausses déconnexions
-                    console.warn('safeGetUser auth init error status:', status)
+                    console.warn('[AuthProvider] safeGetUser error status:', status)
                 }
-            } catch {
-                // Auth failed — continue as guest
+            } catch (e: any) {
+                console.log('[AuthProvider] init catch:', e?.message)
             } finally {
                 if (!cancelled) setLoading(false)
             }
@@ -100,6 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
             async (event: string, session: any) => {
+                console.log('[AuthProvider] onAuthStateChange:', event, session?.user ? session.user.id.substring(0, 8) : 'no-user')
                 if (cancelled) return
 
                 const sessionUser = session?.user ?? null
@@ -111,7 +122,6 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
                     setProfile(null)
                 }
 
-                // Ensure loading is false after any auth event
                 setLoading(false)
             }
         )

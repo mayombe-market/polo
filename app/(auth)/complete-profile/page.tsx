@@ -54,30 +54,38 @@ export default function CompleteProfilePage() {
 
     // Réagir au user détecté par AuthProvider (une seule source de vérité)
     useEffect(() => {
+        console.log('[complete-profile]', { authLoading, authUser: authUser?.id?.substring(0, 8) || null, processed: processedRef.current, localUser: !!user })
+
         if (processedRef.current) return
 
         // Si on a le user → agir immédiatement (ne PAS attendre authLoading=false)
         if (authUser?.id) {
             processedRef.current = true
+            console.log('[complete-profile] user found, checking profile...')
 
             const checkProfile = async () => {
                 try {
-                    const { data: profile } = await supabase
+                    const { data: profile, error: profileError } = await supabase
                         .from('profiles')
                         .select('first_name, role')
                         .eq('id', authUser.id)
                         .maybeSingle()
 
+                    console.log('[complete-profile] profile query:', { profile, error: profileError?.message })
+
                     if (profile?.first_name) {
-                        try {
-                            if (profile.role === 'vendor') router.replace('/vendor/dashboard')
-                            else if (profile.role === 'admin') router.replace('/admin')
-                            else router.replace('/account/dashboard')
-                        } catch { /* navigation aborted */ }
+                        const dest = profile.role === 'vendor' ? '/vendor/dashboard'
+                            : profile.role === 'admin' ? '/admin'
+                            : '/account/dashboard'
+                        console.log('[complete-profile] redirecting to', dest)
+                        try { router.replace(dest) } catch { /* navigation aborted */ }
                         return
                     }
-                } catch { /* profil pas encore créé */ }
+                } catch (e: any) {
+                    console.log('[complete-profile] profile query error:', e?.message)
+                }
 
+                console.log('[complete-profile] showing form')
                 setUser(authUser)
             }
 
@@ -87,6 +95,7 @@ export default function CompleteProfilePage() {
 
         // Seulement si le chargement est terminé ET pas de user → échec
         if (!authLoading && !authUser?.id) {
+            console.log('[complete-profile] → sessionFailed')
             setSessionFailed(true)
         }
     }, [authUser, authLoading, supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps

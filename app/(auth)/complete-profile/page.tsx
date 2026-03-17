@@ -150,7 +150,9 @@ export default function CompleteProfilePage() {
         try {
             const fullPhone = `${selectedCountry.dial}${phoneNumber}`
 
-            const { error: profileError } = await supabase
+            console.log('[complete-profile] submitting profile for', user.id.substring(0, 8))
+
+            const upsertPromise = supabase
                 .from('profiles')
                 .upsert({
                     id: user.id,
@@ -165,6 +167,16 @@ export default function CompleteProfilePage() {
                     terms_accepted_at: new Date().toISOString(),
                     updated_at: new Date().toISOString(),
                 }, { onConflict: 'id' })
+
+            const result = await Promise.race([
+                upsertPromise,
+                new Promise<{ error: { message: string } }>((resolve) =>
+                    setTimeout(() => resolve({ error: { message: 'La sauvegarde a pris trop de temps. Vérifiez votre connexion et réessayez.' } }), 10000)
+                ),
+            ])
+
+            const profileError = result?.error
+            console.log('[complete-profile] upsert result:', profileError ? profileError.message : 'success')
 
             if (profileError) throw profileError
 

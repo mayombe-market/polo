@@ -166,18 +166,30 @@ export default function CompleteProfilePage() {
 
             if (!rawCookie) throw new Error('Session expirée — cookie introuvable')
 
-            // Décoder le cookie (base64url → JSON)
+            console.log('[complete-profile] raw cookie (first 50):', rawCookie.substring(0, 50))
+
+            // Décoder le cookie — format: "base64-<base64url encoded JSON>"
             let accessToken: string
             try {
-                const decoded = atob(rawCookie.replace(/-/g, '+').replace(/_/g, '/'))
+                // Enlever le préfixe "base64-" si présent
+                let encoded = rawCookie
+                if (encoded.startsWith('base64-')) {
+                    encoded = encoded.substring(7) // "base64-".length = 7
+                }
+
+                // base64url → base64 standard → decode
+                const b64 = encoded.replace(/-/g, '+').replace(/_/g, '/')
+                const decoded = atob(b64)
                 const session = JSON.parse(decoded)
                 accessToken = session.access_token
-            } catch {
-                // Peut-être déjà en JSON direct
+                console.log('[complete-profile] token decoded OK')
+            } catch (e1) {
+                // Fallback: JSON direct ou URL-encoded
                 try {
                     const session = JSON.parse(decodeURIComponent(rawCookie))
                     accessToken = session.access_token
                 } catch {
+                    console.log('[complete-profile] decode failed:', (e1 as any)?.message)
                     throw new Error('Session expirée — cookie illisible')
                 }
             }

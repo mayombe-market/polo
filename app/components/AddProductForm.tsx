@@ -163,14 +163,16 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
             // Upload via fetch direct (contourne le blocage interne du client JS)
             const uploadFile = async (file: File, path: string): Promise<string> => {
+                const formData = new FormData()
+                formData.append('', file, file.name)
+
                 const res = await fetch(`${supabaseUrl}/storage/v1/object/products/${path}`, {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${accessToken}`,
                         'apikey': supabaseKey,
-                        'Content-Type': file.type,
                     },
-                    body: file,
+                    body: formData,
                 })
                 if (!res.ok) {
                     const err = await res.text()

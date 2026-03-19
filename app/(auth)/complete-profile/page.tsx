@@ -152,13 +152,38 @@ export default function CompleteProfilePage() {
 
             console.log('[complete-profile] submitting profile for', user.id.substring(0, 8))
 
-            // Contourner supabase.from() qui bloque en interne
-            // Appel direct à PostgREST via fetch()
-            const { data: { session } } = await supabase.auth.getSession()
-            if (!session?.access_token) throw new Error('Session expirée')
-
+            // Lire le token directement depuis les cookies (supabase.auth.getSession() bloque)
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
             const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+            const projectRef = supabaseUrl.replace('https://', '').split('.')[0]
+
+            const rawCookie = document.cookie
+                .split('; ')
+                .find(c => c.startsWith(`sb-${projectRef}-auth-token=`))
+                ?.split('=')
+                .slice(1)
+                .join('=')
+
+            if (!rawCookie) throw new Error('Session expirée — cookie introuvable')
+
+            // Décoder le cookie (base64url → JSON)
+            let accessToken: string
+            try {
+                const decoded = atob(rawCookie.replace(/-/g, '+').replace(/_/g, '/'))
+                const session = JSON.parse(decoded)
+                accessToken = session.access_token
+            } catch {
+                // Peut-être déjà en JSON direct
+                try {
+                    const session = JSON.parse(decodeURIComponent(rawCookie))
+                    accessToken = session.access_token
+                } catch {
+                    throw new Error('Session expirée — cookie illisible')
+                }
+            }
+
+            if (!accessToken) throw new Error('Session expirée — pas de token')
+            console.log('[complete-profile] token found, sending to PostgREST')
 
             const profileData = {
                 id: user.id,
@@ -179,7 +204,7 @@ export default function CompleteProfilePage() {
                 headers: {
                     'Content-Type': 'application/json',
                     'apikey': supabaseKey,
-                    'Authorization': `Bearer ${session.access_token}`,
+                    'Authorization': `Bearer ${accessToken}`,
                     'Prefer': 'resolution=merge-duplicates',
                 },
                 body: JSON.stringify(profileData),

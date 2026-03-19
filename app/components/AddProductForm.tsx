@@ -153,20 +153,42 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
         setLoading(true)
         try {
+            // Récupérer le token pour les appels directs
+            const { data: { session } } = await supabase.auth.getSession()
+            const accessToken = session?.access_token
+            if (!accessToken) throw new Error('Session expirée. Rafraîchissez la page.')
+
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+            const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+            // Upload via fetch direct (contourne le blocage interne du client JS)
+            const uploadFile = async (file: File, path: string): Promise<string> => {
+                const res = await fetch(`${supabaseUrl}/storage/v1/object/products/${path}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${accessToken}`,
+                        'apikey': supabaseKey,
+                        'Content-Type': file.type,
+                    },
+                    body: file,
+                })
+                if (!res.ok) {
+                    const err = await res.text()
+                    throw new Error(`Upload échoué: ${err}`)
+                }
+                return `${supabaseUrl}/storage/v1/object/public/products/${path}`
+            }
+
             // Upload main image
             const mainName = `${sellerId}/${Date.now()}-main`
-            const { error: mainError } = await supabase.storage.from('products').upload(mainName, mainImage!)
-            if (mainError) throw new Error(`Image principale : ${mainError.message}`)
-            const mainUrl = supabase.storage.from('products').getPublicUrl(mainName).data.publicUrl
+            const mainUrl = await uploadFile(mainImage!, mainName)
 
-            // Upload gallery (avec vérification d'erreur)
+            // Upload gallery
             const galleryUrls = []
             for (let i = 0; i < gallery.length; i++) {
                 if (gallery[i]) {
                     const fileName = `${sellerId}/${Date.now()}-gallery-${i}`
-                    const { error: galError } = await supabase.storage.from('products').upload(fileName, gallery[i]!)
-                    if (galError) throw new Error(`Image galerie ${i + 1} : ${galError.message}`)
-                    galleryUrls.push(supabase.storage.from('products').getPublicUrl(fileName).data.publicUrl)
+                    galleryUrls.push(await uploadFile(gallery[i]!, fileName))
                 }
             }
 

@@ -30,7 +30,7 @@ export default function CheckoutPage() {
     const selectedPayment = watch('payment_method')
     const selectedDelivery = watch('delivery_mode')
 
-    const deliveryFee = DELIVERY_FEES[selectedDelivery] || DELIVERY_FEES.standard
+    const deliveryFee = selectedDelivery ? (DELIVERY_FEES[selectedDelivery as keyof typeof DELIVERY_FEES] ?? 0) : 0
     const grandTotal = total + deliveryFee
 
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL

@@ -36,7 +36,7 @@ export default function CartPage() {
     const [step, setStep] = useState<Step>('location')
     const [city, setCity] = useState('')
     const [district, setDistrict] = useState('')
-    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | null>(null)
     const [paymentMethod, setPaymentMethod] = useState('')
     const [transactionId, setTransactionId] = useState('')
     const [orderId, setOrderId] = useState('')
@@ -44,7 +44,7 @@ export default function CartPage() {
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
 
-    const deliveryFee = DELIVERY_FEES[deliveryMode] || DELIVERY_FEES.standard
+    const deliveryFee = deliveryMode ? DELIVERY_FEES[deliveryMode] : 0
     const grandTotal = total + deliveryFee
 
     const supabase = getSupabaseBrowserClient()
@@ -80,7 +80,7 @@ export default function CartPage() {
         setStep('location')
         setCity('')
         setDistrict('')
-        setDeliveryMode('standard')
+        setDeliveryMode(null)
         setPaymentMethod('')
         setTransactionId('')
         setOrderId('')
@@ -93,7 +93,7 @@ export default function CartPage() {
         setStep('delivery_mode')
     }
 
-    const handleDeliverySelect = (mode: 'standard' | 'express') => {
+    const handleDeliverySelect = (mode: 'standard' | 'express' | null) => {
         setDeliveryMode(mode)
         setStep('payment_method')
     }
@@ -130,7 +130,7 @@ export default function CartPage() {
                 payment_method: paymentMethod,
                 total_amount: grandTotal,
                 transaction_id: id,
-                delivery_mode: deliveryMode,
+                delivery_mode: deliveryMode || 'standard',
                 delivery_fee: deliveryFee,
             })
 
@@ -174,7 +174,7 @@ export default function CartPage() {
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
-                delivery_mode: deliveryMode,
+                delivery_mode: deliveryMode || 'standard',
                 delivery_fee: deliveryFee,
             })
 
@@ -362,7 +362,7 @@ export default function CartPage() {
                         <div className="text-center mb-4">
                             <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
-                            {deliveryMode && step !== 'location' && (
+                            {deliveryMode && deliveryFee > 0 && (
                                 <p className="text-[9px] font-bold text-slate-400 mt-1">
                                     ({total.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F livraison)
                                 </p>

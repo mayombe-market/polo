@@ -206,7 +206,7 @@ export default function CompleteProfilePage() {
                 phone: fullPhone,
                 country: selectedCountry.code,
                 role,
-                ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'free' } : {}),
+                ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),
                 terms_accepted_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
             }

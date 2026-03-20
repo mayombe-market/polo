@@ -15,7 +15,7 @@ interface Props {
     existingVerification: any
 }
 
-/** Bucket Supabase + préfixe chemin : doit rester aligné avec supabase-storage-vendor-verifications.sql (RLS : verifications/{userId}/...) */
+/** Bucket + chemin verifications/{userId}/… — aligné sur supabase-vendors-storage-and-profiles-unlock.sql */
 const BUCKET = 'vendor-verifications'
 
 function extFromFile(file: File): string {
@@ -84,10 +84,10 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         })
 
         if (error) {
-            console.error('Upload error:', error)
+            console.error('DEBUG UPLOAD:', error)
             toast.error(
                 error.message.includes('Bucket not found')
-                    ? 'Bucket Storage « vendor-verifications » manquant. Créez-le dans Supabase (voir supabase-storage-vendor-verifications.sql).'
+                    ? 'Bucket Storage « vendor-verifications » manquant. Exécutez supabase-vendors-storage-and-profiles-unlock.sql dans Supabase.'
                     : `Upload : ${error.message}`
             )
             return null
@@ -121,6 +121,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             const cniPhotoUrl = await uploadImage(cniPhoto, `verifications/${user.id}/${timestamp}-cni`)
 
             if (!shopPhotoUrl || !cniPhotoUrl) {
+                console.error('DEBUG UPLOAD:', { shopPhotoUrl, cniPhotoUrl, hint: 'upload a retourné null (voir logs upload ci-dessus)' })
                 toast.error('Erreur lors de l\'upload des photos. Réessayez.')
                 return
             }

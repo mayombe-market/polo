@@ -1,4 +1,6 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ Préférez : supabase-vendors-storage-and-profiles-unlock.sql (tout-en-un)
+--
 -- Storage : bucket vendor-verifications (KYC vendeur)
 -- À exécuter dans Supabase → SQL Editor (débloque RLS « new row violates policy »)
 --

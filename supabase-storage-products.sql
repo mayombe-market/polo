@@ -1,4 +1,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ Script unique recommandé : supabase-vendors-storage-and-profiles-unlock.sql
+--    (products + vendor-verifications + profiles + RLS products en une exécution)
+--
 -- Mayombe Market — Bucket Storage « products » + RLS table public.products
 -- À exécuter dans Supabase → SQL Editor (Run) — idempotent, réexécutable
 --

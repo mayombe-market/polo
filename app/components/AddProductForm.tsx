@@ -262,6 +262,7 @@ export default function AddProductForm({
             alert(MSG_SLOW_UPLOAD)
             return
         }
+        console.error('DEBUG UPLOAD:', err)
         alert(MSG_FRIENDLY_TECH)
     }
 
@@ -402,6 +403,7 @@ export default function AddProductForm({
                 if (isActionableServerMessage(result.error)) {
                     alert(result.error)
                 } else {
+                    console.error('DEBUG UPLOAD:', result.error, diag)
                     alert(MSG_FRIENDLY_TECH)
                 }
                 return

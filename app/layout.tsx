@@ -8,12 +8,14 @@ import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import SplashScreen from '@/app/components/SplashScreen'
 
-// preload: false évite l’avertissement navigateur quand le fichier préchargé ne correspond pas au sous-ensemble réellement peint (layout + splash).
+// Pas de <link rel="preload"> sur le .woff2 : toute route (dont /reset-password) hérite de la même
+// police via <html className>, donc pas de ressource « préchargée mais jamais utilisée » sur les pages légères.
 const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   adjustFontFallback: true,
   preload: false,
+  fallback: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
 })
 
 export const viewport = {

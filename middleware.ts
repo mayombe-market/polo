@@ -5,6 +5,7 @@
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
+import { getContentSecurityPolicy } from '@/lib/content-security-policy'
 
 /** Conserve les cookies de session rafraîchis (setAll) sur une autre réponse. */
 function withRefreshedSessionCookies(sessionResponse: NextResponse, response: NextResponse) {
@@ -42,22 +43,7 @@ function isAuthRecoveryPath(pathname: string) {
 }
 
 function applySecurityHeaders(pathname: string, response: NextResponse) {
-    const cspHeader = `
-        default-src 'self';
-        script-src 'self' 'unsafe-inline' https://www.googletagmanager.com;
-        style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-        img-src 'self' data: blob: https://*.unsplash.com
-        https://images.unsplash.com
-        https://ui-avatars.com https://*.supabase.co https://www.googletagmanager.com;
-        font-src 'self' data: blob: https://fonts.gstatic.com;
-        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://*.googletagmanager.com
-        https://challenges.cloudflare.com https://*.cloudflare.com;
-        frame-ancestors 'none';
-        base-uri 'self';
-        form-action 'self';
-    `.replace(/\s{2,}/g, ' ').trim()
-
-    response.headers.set('Content-Security-Policy', cspHeader)
+    response.headers.set('Content-Security-Policy', getContentSecurityPolicy())
     response.headers.set('X-Frame-Options', 'DENY')
     response.headers.set('X-Content-Type-Options', 'nosniff')
     response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')

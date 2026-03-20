@@ -2,7 +2,7 @@
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail } from '@/app/actions/emails'
+import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejectedVendorEmail } from '@/app/actions/emails'
 import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
@@ -283,7 +283,7 @@ export async function adminRejectOrder(orderId: string) {
     // Récupérer les infos du client avant la mise à jour
     const { data: orderData } = await supabase
         .from('orders')
-        .select('customer_name, customer_email, status, user_id, items, delivery_mode')
+        .select('customer_name, customer_email, status, user_id, items, delivery_mode, order_type')
         .eq('id', orderId)
         .single()
 
@@ -301,6 +301,29 @@ export async function adminRejectOrder(orderId: string) {
     if (orderData?.customer_email) {
         const rejProdNames = (orderData.items || []).map((i: any) => i.name).join(', ')
         sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, 'rejected', undefined, orderData.delivery_mode, rejProdNames).catch(() => {})
+    }
+
+    // Emails vendeurs (une commande peut concerner plusieurs vendeurs)
+    const items = (orderData.items || []) as { seller_id?: string }[]
+    let vendorIds = [...new Set(items.map(i => i.seller_id).filter(Boolean))] as string[]
+    if (vendorIds.length === 0 && orderData.order_type === 'subscription' && orderData.user_id) {
+        vendorIds = [orderData.user_id]
+    }
+    if (vendorIds.length > 0) {
+        const { data: vendorProfiles } = await supabase
+            .from('profiles')
+            .select('email')
+            .in('id', vendorIds)
+
+        const seen = new Set<string>()
+        for (const row of vendorProfiles || []) {
+            const em = (row.email || '').trim()
+            if (!em) continue
+            const key = em.toLowerCase()
+            if (seen.has(key)) continue
+            seen.add(key)
+            sendOrderRejectedVendorEmail(em).catch(() => {})
+        }
     }
 
     // Notifier l'acheteur

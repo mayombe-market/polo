@@ -206,6 +206,40 @@ export async function sendOrderStatusEmail(
     }
 }
 
+/** Email envoyé aux vendeurs lorsqu’un admin rejette une commande en attente (Resend) */
+export async function sendOrderRejectedVendorEmail(vendorEmail: string) {
+    const subject = 'Mise à jour concernant votre commande sur Mayombe Market.'
+    const bodyText =
+        'Bonjour, nous vous informons que les conditions ne sont pas réunies pour l\'heure pour confirmer cette commande. Veuillez retenter une fois que tout est prêt.'
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: vendorEmail,
+            subject,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+                    <div style="padding: 30px;">
+                        <p style="color: #0f172a; font-size: 15px; line-height: 1.6; margin: 0;">
+                            ${escapeHtml(bodyText)}
+                        </p>
+                    </div>
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email rejet vendeur:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de nouvelle offre de négociation (envoyé au vendeur)
 export async function sendNegotiationOfferEmail(
     sellerEmail: string,

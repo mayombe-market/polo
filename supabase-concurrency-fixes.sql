@@ -61,14 +61,18 @@ GRANT EXECUTE ON FUNCTION public.admin_confirm_order(UUID, TEXT) TO service_role
 
 
 -- ═══ 3. RPC ATOMIQUE POUR REJET DE COMMANDE ═══
+-- (Aligné sur public + search_path + GRANT — voir aussi supabase-admin-reject-order.sql)
 
-CREATE OR REPLACE FUNCTION admin_reject_order(
-    p_order_id UUID
-) RETURNS BOOLEAN AS $$
+CREATE OR REPLACE FUNCTION public.admin_reject_order(p_order_id UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
 DECLARE
     rows_affected INT;
 BEGIN
-    UPDATE orders
+    UPDATE public.orders
     SET status = 'rejected'
     WHERE id = p_order_id
       AND status = 'pending';
@@ -76,7 +80,11 @@ BEGIN
     GET DIAGNOSTICS rows_affected = ROW_COUNT;
     RETURN rows_affected > 0;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$;
+
+REVOKE ALL ON FUNCTION public.admin_reject_order(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_reject_order(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_reject_order(UUID) TO service_role;
 
 
 -- ═══ 4. RPC ATOMIQUE POUR LIBÉRATION DES FONDS ═══

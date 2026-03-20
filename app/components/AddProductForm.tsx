@@ -8,6 +8,44 @@ import {
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
 } from 'lucide-react'
 
+/** Contexte minimal pour la validation (module-scope = pas de TDZ). */
+export type ProductFormValidationContext = {
+    name: string
+    selectedCategory: string
+    selectedSubcategory: string
+    price: string
+    hasStock: boolean
+    stockQuantity: string
+    mainImage: File | null
+    gallery: (File | null)[]
+}
+
+/**
+ * Validation par étape — **globale**, chargée avec le module (pas dans le composant).
+ */
+function validateProductStep(s: number, ctx: ProductFormValidationContext): string | null {
+    const { name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity, mainImage, gallery } = ctx
+    switch (s) {
+        case 1:
+            if (!name.trim()) return "Le nom du produit est requis."
+            if (!selectedCategory) return "Choisissez une catégorie."
+            if (!selectedSubcategory) return "Choisissez une sous-catégorie."
+            return null
+        case 2: {
+            const p = parseInt(price, 10)
+            if (!p || p < 100 || p > 100000000) return "Le prix doit être entre 100 et 100 000 000 FCFA."
+            if (hasStock && (!stockQuantity || parseInt(stockQuantity, 10) < 1)) return "La quantité en stock est requise."
+            return null
+        }
+        case 5:
+            if (!mainImage) return "L'image principale est obligatoire."
+            if (!gallery[0] || !gallery[1] || !gallery[2]) return "3 miniatures minimum sont obligatoires."
+            return null
+        default:
+            return null
+    }
+}
+
 const mesChoix: Record<string, string[]> = {
     "Mode & Beauté": ["Perruques & Mèches", "Vêtements Femme", "Vêtements Homme", "Chaussures", "Sacs & Pochettes", "Bijoux & Montres", "Cosmétiques & Maquillage", "Parfums"],
     "High-Tech": ["Smartphones & Tablettes", "Ordinateurs & Laptops", "Accessoires Tech", "Audio & Casques", "TV & Écrans", "Consoles & Jeux vidéo"],
@@ -122,6 +160,9 @@ export default function AddProductForm({
     isVendorAccount,
     verificationStatus,
 }: AddProductFormProps) {
+    // Test de survie : à chaque rendu (retirer en prod si trop verbeux)
+    console.log("Formulaire Produit initialisé")
+
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const [publishProgress, setPublishProgress] = useState(0)
@@ -154,31 +195,15 @@ export default function AddProductForm({
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
-    /**
-     * function déclarée (hoisted dans le corps du composant) — évite ReferenceError
-     * « can't access lexical declaration before initialization » si le bundler réordonne
-     * ou si useMemo s’exécute avant un const validateStep.
-     */
-    function validateStep(s: number): string | null {
-        switch (s) {
-            case 1:
-                if (!name.trim()) return "Le nom du produit est requis."
-                if (!selectedCategory) return "Choisissez une catégorie."
-                if (!selectedSubcategory) return "Choisissez une sous-catégorie."
-                return null
-            case 2: {
-                const p = parseInt(price, 10)
-                if (!p || p < 100 || p > 100000000) return "Le prix doit être entre 100 et 100 000 000 FCFA."
-                if (hasStock && (!stockQuantity || parseInt(stockQuantity, 10) < 1)) return "La quantité en stock est requise."
-                return null
-            }
-            case 5:
-                if (!mainImage) return "L'image principale est obligatoire."
-                if (!gallery[0] || !gallery[1] || !gallery[2]) return "3 miniatures minimum sont obligatoires."
-                return null
-            default:
-                return null
-        }
+    const validationCtx: ProductFormValidationContext = {
+        name,
+        selectedCategory,
+        selectedSubcategory,
+        price,
+        hasStock,
+        stockQuantity,
+        mainImage,
+        gallery,
     }
 
     useEffect(() => {
@@ -202,7 +227,7 @@ export default function AddProductForm({
         if (verificationStatus != null && verificationStatus !== 'verified') {
             hints.push('Terminez la vérification de votre boutique (menu Vérification) avant de publier.')
         }
-        const stepErr = validateStep(5)
+        const stepErr = validateProductStep(5, validationCtx)
         if (stepErr) hints.push(stepErr)
         if (mainImage) {
             const im = validateImageFile(mainImage)
@@ -218,7 +243,7 @@ export default function AddProductForm({
     }
 
     const goNext = () => {
-        const error = validateStep(step)
+        const error = validateProductStep(step, validationCtx)
         if (error) { alert(error); return }
         setStep(Math.min(step + 1, 5))
     }

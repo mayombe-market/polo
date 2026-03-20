@@ -109,6 +109,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </>
       )}
       <body className="m-0 p-0">
+        {/* Zod v4 : config({ jitless: true }) côté client (lib/zod-jitless.ts) — évite JIT / ReferenceError « ed » */}
         <ZodClientInit />
         {/* SPLASH SCREEN PWA */}
         <SplashScreen />

@@ -835,7 +835,14 @@ export async function createSubscriptionOrder(input: {
     return { order: JSON.parse(JSON.stringify(order)) }
 }
 
+export type CreateProductDiagnostic = {
+    code?: string
+    details?: string
+    hint?: string
+}
+
 // Créer un produit (server-side pour contourner les problèmes RLS côté client)
+// N’écrit pas sur profiles : shop_* / boutique vides ne bloquent pas l’insert.
 export async function createProduct(input: {
     name: string
     price: number
@@ -849,55 +856,105 @@ export async function createProduct(input: {
     has_variants: boolean
     sizes: string[]
     colors: string[]
-}) {
-    const supabase = await getSupabase()
-    const { data: { user } } = await supabase.auth.getUser()
+}): Promise<
+    | { product: Record<string, unknown> }
+    | { error: string; diagnostic?: CreateProductDiagnostic }
+> {
+    try {
+        const supabase = await getSupabase()
+        const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+        if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
 
-    // ═══ Vérification de l'identité vendeur ═══
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('subscription_plan, subscription_end_date, verification_status')
-        .eq('id', user.id)
-        .single()
+        // ═══ Vérification de l'identité vendeur ═══
+        const { data: profile, error: profileErr } = await supabase
+            .from('profiles')
+            .select('subscription_plan, subscription_end_date, verification_status')
+            .eq('id', user.id)
+            .single()
 
-    if (profile?.verification_status !== 'verified') {
-        return { error: 'Votre compte doit être vérifié avant de publier des produits. Rendez-vous dans Vérification depuis votre dashboard.' }
-    }
-
-    // ═══ Vérification de la limite de produits selon le plan ═══
-    const plan = profile?.subscription_plan || 'free'
-    const maxProducts = getPlanMaxProducts(plan)
-
-    // Vérifier si l'abonnement est expiré (au-delà de la période de grâce)
-    if (plan !== 'free' && isSubscriptionExpiredPastGrace(profile)) {
-        return { error: 'Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des produits.' }
-    }
-
-    if (maxProducts !== -1) { // -1 = illimité (premium)
-        const { count } = await supabase
-            .from('products')
-            .select('*', { count: 'exact', head: true })
-            .eq('seller_id', user.id)
-
-        if ((count || 0) >= maxProducts) {
-            const planName = plan === 'free' ? 'Gratuit' : plan.charAt(0).toUpperCase() + plan.slice(1)
-            return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} produits. Passez au niveau supérieur pour continuer à publier.` }
+        if (profileErr) {
+            console.error('[createProduct] lecture profil:', profileErr.message, profileErr)
+            return {
+                error: profileErr.message,
+                diagnostic: {
+                    code: profileErr.code,
+                    details: profileErr.details ?? undefined,
+                    hint: profileErr.hint ?? undefined,
+                },
+            }
         }
-    }
 
-    const { data: product, error } = await supabase
-        .from('products')
-        .insert({
-            ...input,
+        if (profile?.verification_status !== 'verified') {
+            return { error: 'Votre compte doit être vérifié avant de publier des produits. Rendez-vous dans Vérification depuis votre dashboard.' }
+        }
+
+        // ═══ Vérification de la limite de produits selon le plan ═══
+        const plan = profile?.subscription_plan || 'free'
+        const maxProducts = getPlanMaxProducts(plan)
+
+        if (plan !== 'free' && isSubscriptionExpiredPastGrace(profile)) {
+            return { error: 'Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des produits.' }
+        }
+
+        if (maxProducts !== -1) {
+            const { count } = await supabase
+                .from('products')
+                .select('*', { count: 'exact', head: true })
+                .eq('seller_id', user.id)
+
+            if ((count || 0) >= maxProducts) {
+                const planName = plan === 'free' ? 'Gratuit' : plan.charAt(0).toUpperCase() + plan.slice(1)
+                return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} produits. Passez au niveau supérieur pour continuer à publier.` }
+            }
+        }
+
+        // Payload explicite (évite toute clé inconnue issue d’un spread)
+        const row = {
+            name: input.name,
+            price: input.price,
+            description: input.description ?? '',
+            category: input.category,
+            subcategory: input.subcategory,
+            img: input.img,
+            images_gallery: Array.isArray(input.images_gallery) ? input.images_gallery : [],
+            has_stock: Boolean(input.has_stock),
+            stock_quantity: Number.isFinite(input.stock_quantity) ? input.stock_quantity : 0,
+            has_variants: Boolean(input.has_variants),
+            sizes: Array.isArray(input.sizes) ? input.sizes : [],
+            colors: Array.isArray(input.colors) ? input.colors : [],
             seller_id: user.id,
-        })
-        .select()
-        .single()
+        }
 
-    if (error) return { error: error.message }
-    return { product: JSON.parse(JSON.stringify(product)) }
+        const { data: product, error } = await supabase
+            .from('products')
+            .insert(row)
+            .select()
+            .single()
+
+        if (error) {
+            console.error('[createProduct] insert products:', {
+                message: error.message,
+                code: error.code,
+                details: error.details,
+                hint: error.hint,
+            })
+            return {
+                error: error.message,
+                diagnostic: {
+                    code: error.code,
+                    details: error.details ?? undefined,
+                    hint: error.hint ?? undefined,
+                },
+            }
+        }
+
+        return { product: JSON.parse(JSON.stringify(product)) as Record<string, unknown> }
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        console.error('[createProduct] exception:', e)
+        return { error: msg, diagnostic: { details: 'exception_createProduct' } }
+    }
 }
 
 // Admin : annuler l'abonnement d'un vendeur

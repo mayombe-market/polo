@@ -249,7 +249,15 @@ export default function AddProductForm({
     const removeFeature = (idx: number) => setFeatures(features.filter((_, index) => index !== idx))
 
     const reportTechnicalFailure = (context: string, err: unknown) => {
-        console.error('[AddProductForm][support]', context, err)
+        if (err instanceof Error) {
+            console.error(`[AddProductForm] Cause réelle — ${context}`, {
+                message: err.message,
+                name: err.name,
+                stack: err.stack,
+            })
+        } else {
+            console.error(`[AddProductForm] Cause réelle — ${context}`, err)
+        }
         if (isTimeoutError(err)) {
             alert(MSG_SLOW_UPLOAD)
             return
@@ -383,8 +391,14 @@ export default function AddProductForm({
                 return
             }
 
-            if (result.error) {
-                console.error('[AddProductForm][support] createProduct error:', result.error)
+            if ('error' in result && result.error) {
+                const diag = result.diagnostic
+                console.error('[AddProductForm] Cause réelle (createProduct / Supabase)', {
+                    message: result.error,
+                    codePostgrest: diag?.code,
+                    details: diag?.details,
+                    hint: diag?.hint,
+                })
                 if (isActionableServerMessage(result.error)) {
                     alert(result.error)
                 } else {

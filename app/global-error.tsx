@@ -1,5 +1,7 @@
 'use client'
 
+import { useEffect } from 'react'
+
 export default function GlobalError({
     error,
     reset,
@@ -7,6 +9,13 @@ export default function GlobalError({
     error: Error & { digest?: string }
     reset: () => void
 }) {
+    useEffect(() => {
+        console.error('[Mayombe] Global error — message:', error?.message)
+        console.error('[Mayombe] Global error — stack:', error?.stack)
+        if (error?.digest) console.error('[Mayombe] Global error — digest:', error.digest)
+        console.error('[Mayombe] Global error — objet complet:', error)
+    }, [error])
+
     const isChunkError =
         error.name === 'ChunkLoadError' ||
         error.message?.includes('Loading chunk') ||

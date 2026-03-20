@@ -21,7 +21,10 @@ export default function Error({
     const isChunkError = isChunkLoadError(error)
 
     useEffect(() => {
-        console.error('Erreur app:', error)
+        console.error('[Mayombe] Error boundary — message:', error?.message)
+        console.error('[Mayombe] Error boundary — stack:', error?.stack)
+        if (error?.digest) console.error('[Mayombe] Error boundary — digest:', error.digest)
+        console.error('[Mayombe] Error boundary — objet complet:', error)
     }, [error])
 
     const handleAction = () => {

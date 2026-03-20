@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import ForgotPassword from '@/app/components/ForgotPassword'
 
 // ═══════════════════════════════════════════════
 // TOAST NOTIFICATION
@@ -216,7 +217,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             triggerShake()
             return
         }
-        if (mode !== 'forgot' && password.length < 8) {
+        if (password.length < 8) {
             setError('Le mot de passe doit faire au moins 8 caractères')
             triggerShake()
             return
@@ -226,17 +227,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
         setError('')
 
         try {
-            if (mode === 'forgot') {
-                // MOT DE PASSE OUBLIÉ
-                const { error } = await withTimeout(supabase.auth.resetPasswordForEmail(email, {
-                    redirectTo: `${window.location.origin}/auth/callback`,
-                }), 10000)
-                if (error) throw error
-
-                handleClose()
-                setToast({ message: `Lien de réinitialisation envoyé à ${email}`, type: 'info' })
-
-            } else if (mode === 'login') {
+            if (mode === 'login') {
                 // CONNEXION
                 const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
                     email,
@@ -385,15 +376,33 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             <p className="text-slate-600 text-[13px]">{titles[mode].sub}</p>
                         </div>
 
-                        {/* Error message */}
-                        {error && (
+                        {/* Error message (login / signup uniquement) */}
+                        {error && mode !== 'forgot' && (
                             <div className="bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5 mb-4 flex items-center gap-2 animate-auth-fadeDown">
                                 <span className="text-sm">⚠️</span>
                                 <span className="text-red-400 text-[13px] font-medium">{error}</span>
                             </div>
                         )}
 
-                        {/* Form fields */}
+                        {mode === 'forgot' ? (
+                            <div className="mb-5">
+                                <ForgotPassword
+                                    compact
+                                    onEmailSent={(sentEmail) => {
+                                        handleClose()
+                                        setToast({
+                                            message: `Lien de réinitialisation envoyé à ${sentEmail}`,
+                                            type: 'info',
+                                        })
+                                    }}
+                                    onBack={() => {
+                                        setMode('login')
+                                        setError('')
+                                    }}
+                                />
+                            </div>
+                        ) : (
+                        /* Form fields */
                         <div className="flex flex-col gap-3 mb-5">
                             {mode === 'signup' && (
                                 <div>
@@ -426,14 +435,13 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                 />
                             </div>
 
-                            {mode !== 'forgot' && (
-                                <PasswordField
-                                    value={password}
-                                    onChange={v => { setPassword(v); if (error) setError('') }}
-                                    onKeyDown={handleKeyDown}
-                                />
-                            )}
+                            <PasswordField
+                                value={password}
+                                onChange={v => { setPassword(v); if (error) setError('') }}
+                                onKeyDown={handleKeyDown}
+                            />
                         </div>
+                        )}
 
                         {/* Forgot password link */}
                         {mode === 'login' && (
@@ -447,64 +455,60 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             </div>
                         )}
 
-                        {/* Submit button */}
-                        <button
-                            onClick={handleAuth}
-                            disabled={loading}
-                            className="w-full py-4 rounded-[14px] border-none text-white text-[15px] font-bold cursor-pointer flex items-center justify-center gap-2.5 relative overflow-hidden transition-all duration-300 disabled:cursor-wait"
-                            style={{
-                                background: loading
-                                    ? 'rgba(232,168,56,0.3)'
-                                    : 'linear-gradient(135deg, #E8A838, #D4782F)',
-                                boxShadow: loading ? 'none' : '0 8px 24px rgba(232,168,56,0.25)',
-                            }}
-                        >
-                            {loading && (
-                                <div className="w-5 h-5 rounded-full border-[2.5px] border-white/20 border-t-white animate-spin" />
-                            )}
-                            <span>
-                                {loading
-                                    ? (mode === 'forgot' ? 'Envoi en cours...' : mode === 'login' ? 'Connexion...' : 'Création...')
-                                    : (mode === 'forgot' ? 'Envoyer le lien' : mode === 'login' ? 'Se connecter' : 'Créer mon compte')
-                                }
-                            </span>
-                            {/* Progress bar */}
-                            {loading && (
-                                <div className="absolute bottom-0 left-0 h-[3px] bg-white/40 rounded-r-sm animate-auth-progress" />
-                            )}
-                        </button>
+                        {/* Submit button (login / signup) */}
+                        {mode !== 'forgot' && (
+                            <button
+                                onClick={handleAuth}
+                                disabled={loading}
+                                className="w-full py-4 rounded-[14px] border-none text-white text-[15px] font-bold cursor-pointer flex items-center justify-center gap-2.5 relative overflow-hidden transition-all duration-300 disabled:cursor-wait"
+                                style={{
+                                    background: loading
+                                        ? 'rgba(232,168,56,0.3)'
+                                        : 'linear-gradient(135deg, #E8A838, #D4782F)',
+                                    boxShadow: loading ? 'none' : '0 8px 24px rgba(232,168,56,0.25)',
+                                }}
+                            >
+                                {loading && (
+                                    <div className="w-5 h-5 rounded-full border-[2.5px] border-white/20 border-t-white animate-spin" />
+                                )}
+                                <span>
+                                    {loading
+                                        ? (mode === 'login' ? 'Connexion...' : 'Création...')
+                                        : (mode === 'login' ? 'Se connecter' : 'Créer mon compte')
+                                    }
+                                </span>
+                                {loading && (
+                                    <div className="absolute bottom-0 left-0 h-[3px] bg-white/40 rounded-r-sm animate-auth-progress" />
+                                )}
+                            </button>
+                        )}
 
                         {/* Switch mode */}
-                        <div className="text-center mt-5 pb-2">
-                            {mode === 'login' ? (
-                                <p className="text-slate-600 text-[13px]">
-                                    Pas encore de compte ?{' '}
-                                    <button
-                                        onClick={() => { setMode('signup'); setError(''); setPassword('') }}
-                                        className="bg-transparent border-none text-orange-400 font-bold cursor-pointer text-[13px] p-0 hover:text-orange-300 transition-colors"
-                                    >
-                                        Inscrivez-vous
-                                    </button>
-                                </p>
-                            ) : mode === 'signup' ? (
-                                <p className="text-slate-600 text-[13px]">
-                                    Déjà un compte ?{' '}
-                                    <button
-                                        onClick={() => { setMode('login'); setError('') }}
-                                        className="bg-transparent border-none text-orange-400 font-bold cursor-pointer text-[13px] p-0 hover:text-orange-300 transition-colors"
-                                    >
-                                        Connectez-vous
-                                    </button>
-                                </p>
-                            ) : (
-                                <button
-                                    onClick={() => { setMode('login'); setError('') }}
-                                    className="bg-transparent border-none text-slate-500 text-[13px] font-medium cursor-pointer p-0 hover:text-slate-300 transition-colors"
-                                >
-                                    ← Retour à la connexion
-                                </button>
-                            )}
-                        </div>
+                        {mode !== 'forgot' && (
+                            <div className="text-center mt-5 pb-2">
+                                {mode === 'login' ? (
+                                    <p className="text-slate-600 text-[13px]">
+                                        Pas encore de compte ?{' '}
+                                        <button
+                                            onClick={() => { setMode('signup'); setError(''); setPassword('') }}
+                                            className="bg-transparent border-none text-orange-400 font-bold cursor-pointer text-[13px] p-0 hover:text-orange-300 transition-colors"
+                                        >
+                                            Inscrivez-vous
+                                        </button>
+                                    </p>
+                                ) : (
+                                    <p className="text-slate-600 text-[13px]">
+                                        Déjà un compte ?{' '}
+                                        <button
+                                            onClick={() => { setMode('login'); setError('') }}
+                                            className="bg-transparent border-none text-orange-400 font-bold cursor-pointer text-[13px] p-0 hover:text-orange-300 transition-colors"
+                                        >
+                                            Connectez-vous
+                                        </button>
+                                    </p>
+                                )}
+                            </div>
+                        )}
 
                         {/* Info inscription */}
                         {mode === 'signup' && (

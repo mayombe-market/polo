@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
                 access_token: data.session.access_token,
                 refresh_token: data.session.refresh_token,
             }
-            redirectTo = type === 'recovery' ? '/' : '/complete-profile'
+            redirectTo = type === 'recovery' ? '/reset-password' : '/complete-profile'
         } else if (error) {
             redirectTo = `/?error=${encodeURIComponent(error.message)}`
         }

@@ -1,8 +1,9 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { compressImageForUpload } from '@/lib/compressImageForUpload'
 import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
@@ -79,10 +80,25 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-const UPLOAD_TIMEOUT_MS = 30_000
+/** Délai max par fichier uploadé (connexions lentes / gros fichiers après compression). */
+const UPLOAD_TIMEOUT_MS = 60_000
 
 const MSG_SLOW_UPLOAD =
-    'Connexion lente, veuillez réessayer avec une image plus légère.'
+    'Connexion très lente : l’envoi a dépassé 1 minute. Réessayez avec le Wi‑Fi ou des photos plus légères.'
+
+/** Fait avancer la barre pendant les opérations longues (compression / upload). */
+function startProgressPulse(
+    setProgress: Dispatch<SetStateAction<number>>,
+    ceiling: number,
+    options?: { step?: number; intervalMs?: number },
+): () => void {
+    const step = options?.step ?? 0.42
+    const intervalMs = options?.intervalMs ?? 320
+    const id = setInterval(() => {
+        setProgress((p) => (p < ceiling - 0.2 ? Math.min(ceiling - 0.35, p + step) : p))
+    }, intervalMs)
+    return () => clearInterval(id)
+}
 
 const MSG_FRIENDLY_TECH =
     'Oups, une petite erreur technique est survenue. Nos équipes sont prévenues. Réessayez dans un instant.'

@@ -1,6 +1,6 @@
 'use client'
 
-import React, { createContext, useContext, useEffect, useRef, useCallback, useMemo, ReactNode } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useCallback, useMemo, ReactNode, type DependencyList } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 
 // ═══ Types d'événements real-time ═══
@@ -135,6 +135,7 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
 export function useRealtime(
     event: RealtimeEvent,
     callback: RealtimeCallback,
+    deps?: DependencyList,
 ) {
     const context = useContext(RealtimeContext)
     const callbackRef = useRef(callback)
@@ -148,5 +149,6 @@ export function useRealtime(
         const handler: RealtimeCallback = (payload) => callbackRef.current(payload)
         const unsubscribe = context.subscribe(event, handler)
         return unsubscribe
-    }, [context, event]) // eslint-disable-line react-hooks/exhaustive-deps
+        // deps permet de ré-enregistrer le handler quand user / tab etc. changent
+    }, [context, event, ...(deps ?? [])]) // eslint-disable-line react-hooks/exhaustive-deps
 }

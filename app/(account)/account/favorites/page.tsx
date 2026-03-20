@@ -21,7 +21,7 @@ export default function FavoritesPage() {
                         .eq('user_id', user.id))
 
                     if (error) throw error
-                    if (data) setProducts(data.map(f => f.products))
+                    if (data) setProducts(data.map((f: { products: unknown }) => f.products))
                 }
             } catch (err) {
                 console.error('Erreur chargement favoris:', err)

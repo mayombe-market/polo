@@ -31,7 +31,7 @@ function SuccessContent() {
             .select('total_amount, delivery_fee, delivery_mode')
             .eq('id', orderId)
             .single()
-            .then(({ data }) => {
+            .then(({ data }: { data: { total_amount?: number; delivery_fee?: number | null } | null }) => {
                 if (data?.total_amount) setOrderTotal(data.total_amount)
                 if (data?.delivery_fee != null) setDeliveryFee(data.delivery_fee)
             })

@@ -1,11 +1,9 @@
 'use client'
 
 import { useState } from 'react'
+import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 
-const LOCATIONS: Record<string, string[]> = {
-    "Brazzaville": ["Talangaï", "Bacongo", "Mfilou", "Moungali", "Ouenzé", "Poto-Poto", "Kintélé"],
-    "Pointe-Noire": ["Loandjili", "Lumumba", "Von-Von", "Thystère", "Vindoulou", "Tié-Tié"]
-}
+const LOCATIONS = DELIVERY_LOCATIONS
 
 interface LocationStepProps {
     onConfirm: (city: string, district: string) => void

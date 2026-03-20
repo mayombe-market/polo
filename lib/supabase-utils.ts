@@ -64,9 +64,13 @@ export async function safeGetUser(supabase: any, timeoutMs = 5000): Promise<Safe
  * @param timeoutMs - Timeout en millisecondes (défaut: 10000ms)
  * @returns Le résultat de la requête
  */
-export async function withTimeout<T>(queryPromise: Promise<T>, timeoutMs = 10000): Promise<T> {
+/**
+ * Les builders Supabase (PostgrestBuilder) sont PromiseLike mais infèrent souvent `unknown` en strict mode.
+ * Défaut `any` pour que les appels existants (`const { data } = await withTimeout(...)`) restent typables sans cast partout.
+ */
+export async function withTimeout<T = any>(queryPromise: PromiseLike<T>, timeoutMs = 10000): Promise<T> {
     return Promise.race([
-        queryPromise,
+        Promise.resolve(queryPromise),
         new Promise<never>((_, reject) =>
             setTimeout(() => reject(new Error('Query timeout')), timeoutMs)
         ),

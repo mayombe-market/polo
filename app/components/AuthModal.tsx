@@ -330,6 +330,8 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             window.location.href = '/vendor/dashboard'
         } else if (role === 'admin') {
             window.location.href = '/admin/orders'
+        } else if (role === 'logistician') {
+            window.location.href = '/logistician/dashboard'
         } else {
             // Fermer le modal et rester sur la page actuelle au lieu de rediriger vers /
             onClose()

@@ -12,12 +12,12 @@ export const getFollowedProducts = async (userId: string) => {
 
     if (!follows || follows.length === 0) return { data: [], error: null }
 
-    const followedSellerIds = follows.map(f => f.seller_id)
+    const followedSellerIds = follows.map((f: { seller_id: string }) => f.seller_id)
 
     // Exclure les vendeurs expirés de la liste des suivis
     const expiredIds = await getExpiredSellerIds(supabase)
     const expiredSet = new Set(expiredIds)
-    const activeSellerIds = followedSellerIds.filter(id => !expiredSet.has(id))
+    const activeSellerIds = followedSellerIds.filter((id: string) => !expiredSet.has(id))
     if (activeSellerIds.length === 0) return { data: [], error: null }
 
     // 2. Récupérer les produits où seller_id est dans la liste des suivis actifs

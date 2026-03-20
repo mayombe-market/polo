@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import { useForm } from 'react-hook-form'
+import { useForm, type DefaultValues } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -12,6 +12,15 @@ import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+
+const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
+    full_name: '',
+    phone: '',
+    city: '',
+    district: '',
+    landmark: '',
+    payment_method: 'cod',
+}
 
 export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
@@ -24,7 +33,7 @@ export default function CheckoutPage() {
 
     const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CheckoutType>({
         resolver: zodResolver(CheckoutSchema),
-        defaultValues: { payment_method: 'cod', delivery_mode: 'standard' }
+        defaultValues: CHECKOUT_DEFAULTS,
     })
 
     const selectedPayment = watch('payment_method')
@@ -46,13 +55,13 @@ export default function CheckoutPage() {
 
                 if (profile) {
                     reset({
+                        ...CHECKOUT_DEFAULTS,
                         full_name: profile.full_name || '',
                         phone: profile.whatsapp_number || '',
                         city: profile.city || '',
                         district: profile.district || '',
                         landmark: profile.landmark || '',
                         payment_method: 'cod',
-                        delivery_mode: 'standard'
                     })
                 }
                 setUserEmail(user.email || '')
@@ -67,7 +76,7 @@ export default function CheckoutPage() {
 
         setLoading(true)
         try {
-            const currentDeliveryFee = DELIVERY_FEES[formData.delivery_mode] || DELIVERY_FEES.standard
+            const currentDeliveryFee = DELIVERY_FEES[formData.delivery_mode]
             const totalWithDelivery = total + currentDeliveryFee
 
             const items = cart.map(item => ({
@@ -289,6 +298,10 @@ export default function CheckoutPage() {
                                     </div>
                                 </div>
                             )}
+
+                            {errors.delivery_mode && (
+                                <p className="text-red-500 text-[9px] font-black uppercase ml-1">{errors.delivery_mode.message}</p>
+                            )}
                         </div>
 
                         {/* ═══ MÉTHODE DE PAIEMENT ═══ */}
@@ -325,14 +338,28 @@ export default function CheckoutPage() {
                             {selectedPayment === 'mobile_money' && (
                                 <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-2xl border border-green-200 dark:border-green-800 mt-2">
                                     <p className="text-[10px] font-black uppercase text-green-700 dark:text-green-400 mb-2">Instructions de paiement</p>
-                                    <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
-                                        Envoyez <strong>{grandTotal.toLocaleString('fr-FR')} FCFA</strong> au
-                                        <strong> 06 938 71 69</strong> (Mayombe Market) via MTN MoMo ou Airtel Money.
-                                        Votre commande sera confirmée dès réception du paiement.
-                                    </p>
-                                    <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
-                                        ({total.toLocaleString('fr-FR')} F produits + {deliveryFee.toLocaleString('fr-FR')} F livraison)
-                                    </p>
+                                    {selectedDelivery ? (
+                                        <>
+                                            <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
+                                                Envoyez <strong>{grandTotal.toLocaleString('fr-FR')} FCFA</strong> au
+                                                <strong> 06 938 71 69</strong> (Mayombe Market) via MTN MoMo ou Airtel Money.
+                                                Votre commande sera confirmée dès réception du paiement.
+                                            </p>
+                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
+                                                ({total.toLocaleString('fr-FR')} F produits + {deliveryFee.toLocaleString('fr-FR')} F livraison)
+                                            </p>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
+                                                Sélectionnez d&apos;abord un <strong>mode de livraison</strong> ci-dessus pour afficher le <strong>montant exact</strong> à envoyer au{' '}
+                                                <strong>06 938 71 69</strong>.
+                                            </p>
+                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
+                                                Sous-total articles : {total.toLocaleString('fr-FR')} FCFA — livraison à calculer
+                                            </p>
+                                        </>
+                                    )}
                                 </div>
                             )}
                         </div>
@@ -377,15 +404,25 @@ export default function CheckoutPage() {
                                 <span>{total.toLocaleString('fr-FR')} FCFA</span>
                             </div>
                             <div className="flex justify-between text-[10px] font-bold uppercase">
-                                <span className="flex items-center gap-1.5">
+                                <span className="flex items-center gap-1.5 text-slate-400">
                                     {selectedDelivery === 'express' ? (
                                         <><Zap size={12} className="text-orange-500" /> <span className="text-orange-500">Livraison Express</span></>
-                                    ) : (
+                                    ) : selectedDelivery === 'standard' ? (
                                         <><Package size={12} className="text-green-500" /> <span className="text-green-500">Livraison Standard</span></>
+                                    ) : (
+                                        <span>Livraison</span>
                                     )}
                                 </span>
-                                <span className={selectedDelivery === 'express' ? 'text-orange-500 italic' : 'text-green-500 italic'}>
-                                    +{deliveryFee.toLocaleString('fr-FR')} FCFA
+                                <span
+                                    className={
+                                        !selectedDelivery
+                                            ? 'text-slate-400 italic normal-case text-[9px] font-black'
+                                            : selectedDelivery === 'express'
+                                              ? 'text-orange-500 italic'
+                                              : 'text-green-500 italic'
+                                    }
+                                >
+                                    {selectedDelivery ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'À calculer'}
                                 </span>
                             </div>
                             <div className="flex justify-between items-end pt-4">

@@ -55,7 +55,7 @@ export default function AdminVendorsPage() {
 
                 // Fetch product counts per vendor
                 if (data && data.length > 0) {
-                    const ids = data.map(v => v.id)
+                    const ids = data.map((v: { id: string }) => v.id)
                     const { data: products } = await withTimeout(supabase
                         .from('products')
                         .select('seller_id')

@@ -72,20 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         let cancelled = false
 
         const init = async () => {
-            // DEBUG: vérifier les cookies et getSession avant safeGetUser
-            const sbCookies = document.cookie.split(';').filter(c => c.trim().startsWith('sb-'))
-            console.log('[AuthProvider] sb-* cookies:', sbCookies.length, sbCookies.map(c => c.trim().split('=')[0]))
-
-            try {
-                const sessionResult = await supabase.auth.getSession()
-                console.log('[AuthProvider] getSession:', sessionResult?.data?.session ? 'HAS SESSION' : 'NULL', sessionResult?.error?.message || '')
-            } catch (e: any) {
-                console.log('[AuthProvider] getSession THREW:', e?.message)
-            }
-
             try {
                 const { user: currentUser, status } = await safeGetUser(supabase)
-                console.log('[AuthProvider] safeGetUser:', status, currentUser ? currentUser.id.substring(0, 8) : 'null')
                 if (cancelled) return
 
                 if (status === 'ok') {
@@ -96,11 +84,10 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
                 } else if (status === 'no-user') {
                     setUser(null)
                     setProfile(null)
-                } else {
-                    console.warn('[AuthProvider] safeGetUser error status:', status)
                 }
-            } catch (e: any) {
-                console.log('[AuthProvider] init catch:', e?.message)
+                // timeout / network-error / unknown-error : ne pas vider l'utilisateur (évite fausse déconnexion)
+            } catch {
+                // idem : on ne force pas la déconnexion
             } finally {
                 if (!cancelled) setLoading(false)
             }
@@ -109,8 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         init()
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange(
-            async (event: string, session: any) => {
-                console.log('[AuthProvider] onAuthStateChange:', event, session?.user ? session.user.id.substring(0, 8) : 'no-user')
+            async (_event: string, session: any) => {
                 if (cancelled) return
 
                 const sessionUser = session?.user ?? null

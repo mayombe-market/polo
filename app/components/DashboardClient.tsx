@@ -155,8 +155,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     .from('orders')
                     .select('vendor_payout, total_amount, items, payout_status')
                     .eq('payout_status', 'paid')
-                const vendorOrders = (allOrders || []).filter(order =>
-                    order.items?.some((item: any) => item.seller_id === user.id)
+                const vendorOrders = (allOrders || []).filter((order: { items?: { seller_id?: string }[] }) =>
+                    order.items?.some((item: { seller_id?: string }) => item.seller_id === user.id)
                 )
                 const revenue = vendorOrders.reduce((acc: number, o: any) =>
                     acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0

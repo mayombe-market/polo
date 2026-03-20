@@ -569,8 +569,8 @@ const supabase = getSupabaseBrowserClient()
       .on('postgres_changes', {
         event: 'UPDATE', schema: 'public', table: 'orders',
         filter: `id=eq.${orderId}`,
-      }, (payload) => {
-        const s = (payload.new as any).status
+      }, (payload: { new: { status?: string } }) => {
+        const s = payload.new?.status
         if (s === 'confirmed') {
           try {
             const ctx = new AudioContext(); const now = ctx.currentTime

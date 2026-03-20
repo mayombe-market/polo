@@ -153,44 +153,48 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
 
         setLoading(true)
         try {
-            // Récupérer le token pour les appels directs
-            const { data: { session } } = await supabase.auth.getSession()
-            const accessToken = session?.access_token
-            if (!accessToken) throw new Error('Session expirée. Rafraîchissez la page.')
-
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-            const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-
-            // Upload via fetch direct (contourne le blocage interne du client JS)
-            const uploadFile = async (file: File, path: string): Promise<string> => {
-                const formData = new FormData()
-                formData.append('', file, file.name)
-
-                const res = await fetch(`${supabaseUrl}/storage/v1/object/products/${path}`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${accessToken}`,
-                        'apikey': supabaseKey,
-                    },
-                    body: formData,
-                })
-                if (!res.ok) {
-                    const err = await res.text()
-                    throw new Error(`Upload échoué: ${err}`)
+            const extFromFile = (file: File): string => {
+                const fromName = file.name.split('.').pop()?.toLowerCase()
+                if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fromName)) {
+                    return fromName === 'jpeg' ? 'jpg' : fromName
                 }
-                return `${supabaseUrl}/storage/v1/object/public/products/${path}`
+                if (file.type === 'image/png') return 'png'
+                if (file.type === 'image/webp') return 'webp'
+                if (file.type === 'image/gif') return 'gif'
+                return 'jpg'
             }
 
-            // Upload main image
-            const mainName = `${sellerId}/${Date.now()}-main`
-            const mainUrl = await uploadFile(mainImage!, mainName)
+            const contentTypeForFile = (file: File, ext: string): string => {
+                if (file.type && file.type.startsWith('image/')) return file.type
+                if (ext === 'png') return 'image/png'
+                if (ext === 'webp') return 'image/webp'
+                if (ext === 'gif') return 'image/gif'
+                return 'image/jpeg'
+            }
 
-            // Upload gallery
-            const galleryUrls = []
+            const uploadFile = async (file: File, basePath: string): Promise<string> => {
+                const ext = extFromFile(file)
+                const path = `${basePath}.${ext}`
+                const contentType = contentTypeForFile(file, ext)
+
+                const { error } = await supabase.storage.from('products').upload(path, file, {
+                    contentType,
+                    upsert: false,
+                })
+                if (error) {
+                    throw new Error(`Upload échoué: ${error.message}`)
+                }
+                const { data } = supabase.storage.from('products').getPublicUrl(path)
+                return data.publicUrl
+            }
+
+            const ts = Date.now()
+            const mainUrl = await uploadFile(mainImage!, `${sellerId}/${ts}-main`)
+
+            const galleryUrls: string[] = []
             for (let i = 0; i < gallery.length; i++) {
                 if (gallery[i]) {
-                    const fileName = `${sellerId}/${Date.now()}-gallery-${i}`
-                    galleryUrls.push(await uploadFile(gallery[i]!, fileName))
+                    galleryUrls.push(await uploadFile(gallery[i]!, `${sellerId}/${ts}-gallery-${i}`))
                 }
             }
 

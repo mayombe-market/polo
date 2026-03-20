@@ -43,7 +43,7 @@ export default function AdminProducts() {
                 setProducts(data)
 
                 // Fetch seller names
-                const sellerIds = [...new Set(data.map(p => p.seller_id).filter(Boolean))]
+                const sellerIds = [...new Set(data.map((p: { seller_id?: string }) => p.seller_id).filter(Boolean))]
                 if (sellerIds.length > 0) {
                     const { data: profiles } = await withTimeout(supabase
                         .from('profiles')

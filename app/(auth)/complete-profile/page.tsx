@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
+import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -22,6 +23,7 @@ export default function CompleteProfilePage() {
     const [role, setRole] = useState<'buyer' | 'vendor'>('buyer')
     const [shopName, setShopName] = useState('')
     const [vendorConfirmed, setVendorConfirmed] = useState(false)
+    const [city, setCity] = useState('')
     const [termsAccepted, setTermsAccepted] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -54,14 +56,11 @@ export default function CompleteProfilePage() {
 
     // Réagir au user détecté par AuthProvider (une seule source de vérité)
     useEffect(() => {
-        console.log('[complete-profile]', { authLoading, authUser: authUser?.id?.substring(0, 8) || null, processed: processedRef.current, localUser: !!user })
-
         if (processedRef.current) return
 
         // Si on a le user → afficher le formulaire IMMÉDIATEMENT
         if (authUser?.id) {
             processedRef.current = true
-            console.log('[complete-profile] user found, showing form immediately')
             setUser(authUser)
 
             // Vérifier en arrière-plan si le profil est déjà complété (avec timeout)
@@ -70,23 +69,31 @@ export default function CompleteProfilePage() {
                     const result = await Promise.race([
                         supabase
                             .from('profiles')
-                            .select('first_name, role')
+                            .select('first_name, role, city')
                             .eq('id', authUser.id)
                             .maybeSingle(),
                         new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
                     ])
 
                     const profile = result && 'data' in result ? result.data : null
-                    console.log('[complete-profile] profile check:', profile?.first_name || 'no profile')
 
                     if (profile?.first_name) {
-                        const dest = profile.role === 'vendor' ? '/vendor/dashboard'
-                            : profile.role === 'admin' ? '/admin'
-                            : '/account/dashboard'
-                        try { router.replace(dest) } catch { /* navigation aborted */ }
+                        const dest =
+                            profile.role === 'vendor'
+                                ? '/vendor/dashboard'
+                                : profile.role === 'admin'
+                                  ? '/admin'
+                                  : profile.role === 'logistician'
+                                    ? '/logistician/dashboard'
+                                    : '/account/dashboard'
+                        try {
+                            router.replace(dest)
+                        } catch {
+                            /* navigation aborted */
+                        }
                     }
-                } catch (e: any) {
-                    console.log('[complete-profile] profile check failed:', e?.message)
+                } catch {
+                    /* profil non lisible : rester sur le formulaire */
                 }
             }
 
@@ -96,7 +103,6 @@ export default function CompleteProfilePage() {
 
         // Seulement si le chargement est terminé ET pas de user → échec
         if (!authLoading && !authUser?.id) {
-            console.log('[complete-profile] → sessionFailed')
             setSessionFailed(true)
         }
     }, [authUser, authLoading, supabase, router]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -141,6 +147,12 @@ export default function CompleteProfilePage() {
             return
         }
 
+        if (!city.trim()) {
+            setError('Veuillez sélectionner votre ville.')
+            setLoading(false)
+            return
+        }
+
         if (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) {
             setError('Veuillez remplir le nom de votre boutique et confirmer votre statut de vendeur.')
             setLoading(false)
@@ -149,8 +161,6 @@ export default function CompleteProfilePage() {
 
         try {
             const fullPhone = `${selectedCountry.dial}${phoneNumber}`
-
-            console.log('[complete-profile] submitting profile for', user.id.substring(0, 8))
 
             // Lire le token directement depuis les cookies (supabase.auth.getSession() bloque)
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
@@ -166,8 +176,6 @@ export default function CompleteProfilePage() {
 
             if (!rawCookie) throw new Error('Session expirée — cookie introuvable')
 
-            console.log('[complete-profile] raw cookie (first 50):', rawCookie.substring(0, 50))
-
             // Décoder le cookie — format: "base64-<base64url encoded JSON>"
             let accessToken: string
             try {
@@ -182,20 +190,17 @@ export default function CompleteProfilePage() {
                 const decoded = atob(b64)
                 const session = JSON.parse(decoded)
                 accessToken = session.access_token
-                console.log('[complete-profile] token decoded OK')
             } catch (e1) {
                 // Fallback: JSON direct ou URL-encoded
                 try {
                     const session = JSON.parse(decodeURIComponent(rawCookie))
                     accessToken = session.access_token
                 } catch {
-                    console.log('[complete-profile] decode failed:', (e1 as any)?.message)
                     throw new Error('Session expirée — cookie illisible')
                 }
             }
 
             if (!accessToken) throw new Error('Session expirée — pas de token')
-            console.log('[complete-profile] token found, sending to PostgREST')
 
             const profileData = {
                 id: user.id,
@@ -204,6 +209,7 @@ export default function CompleteProfilePage() {
                 last_name: lastName.trim(),
                 full_name: `${firstName.trim()} ${lastName.trim()}`,
                 phone: fullPhone,
+                city: city.trim(),
                 country: selectedCountry.code,
                 role,
                 ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),
@@ -222,11 +228,8 @@ export default function CompleteProfilePage() {
                 body: JSON.stringify(profileData),
             })
 
-            console.log('[complete-profile] fetch result:', res.status, res.statusText)
-
             if (!res.ok) {
                 const errBody = await res.text()
-                console.log('[complete-profile] fetch error body:', errBody)
                 throw new Error(`Erreur ${res.status}: ${errBody}`)
             }
 
@@ -407,6 +410,29 @@ export default function CompleteProfilePage() {
                                 required
                             />
                         </div>
+                    </div>
+
+                    {/* VILLE (livraison / logistique) */}
+                    <div>
+                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
+                            Ville *
+                        </label>
+                        <select
+                            value={city}
+                            onChange={(e) => setCity(e.target.value)}
+                            className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white"
+                            required
+                        >
+                            <option value="">Choisissez votre ville</option>
+                            {DELIVERY_CITY_LIST.map((c) => (
+                                <option key={c} value={c}>
+                                    {c}
+                                </option>
+                            ))}
+                        </select>
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
+                            Utilisée pour la livraison et pour détecter les envois inter-villes.
+                        </p>
                     </div>
 
                     {/* TÉLÉPHONE AVEC SÉLECTEUR DE PAYS */}
@@ -616,7 +642,13 @@ export default function CompleteProfilePage() {
                     {/* BOUTON VALIDER */}
                     <button
                         type="submit"
-                        disabled={loading || !termsAccepted || (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) || !isPhoneValid}
+                        disabled={
+                            loading ||
+                            !termsAccepted ||
+                            !city.trim() ||
+                            (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) ||
+                            !isPhoneValid
+                        }
                         className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {loading ? (

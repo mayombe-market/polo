@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useCart } from '@/hooks/userCart'
 import { safeGetUser } from '@/lib/supabase-utils'
@@ -20,11 +20,14 @@ import WaitingValidationStep from '@/app/components/checkout/WaitingValidationSt
 import CashDeliveryStep from '@/app/components/checkout/CashDeliveryStep'
 import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
 import { DELIVERY_FEES } from '@/lib/checkoutSchema'
+import { useAuth } from '@/hooks/useAuth'
+import { isLocalDelivery, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
 
 type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
 
 export default function CartPage() {
     const { cart, total, itemCount, updateQuantity, removeFromCart, clearCart, loading } = useCart()
+    const { profile } = useAuth()
 
     // Auth
     const [isAuthOpen, setIsAuthOpen] = useState(false)
@@ -48,6 +51,40 @@ export default function CartPage() {
     const grandTotal = total + deliveryFee
 
     const supabase = getSupabaseBrowserClient()
+
+    const buyerCity = profile?.city?.trim() || ''
+    const sellerIds = useMemo(
+        () => [...new Set(cart.map((i) => i.seller_id).filter(Boolean))] as string[],
+        [cart]
+    )
+    const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
+
+    useEffect(() => {
+        if (sellerIds.length === 0) {
+            setSellerCities({})
+            return
+        }
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
+            if (cancelled || !data) return
+            const map: Record<string, string | null> = {}
+            for (const row of data as { id: string; city: string | null }[]) {
+                map[row.id] = row.city ?? null
+            }
+            setSellerCities(map)
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [supabase, sellerIds])
+
+    const hasInterUrbanDelivery =
+        buyerCity &&
+        sellerIds.some((sid) => {
+            const vc = sellerCities[sid]
+            return vc && !isLocalDelivery(buyerCity, vc)
+        })
 
     // Check user on first interaction (avec timeout)
     const checkUser = async () => {
@@ -93,7 +130,7 @@ export default function CartPage() {
         setStep('delivery_mode')
     }
 
-    const handleDeliverySelect = (mode: 'standard' | 'express' | null) => {
+    const handleDeliverySelect = (mode: 'standard' | 'express') => {
         setDeliveryMode(mode)
         setStep('payment_method')
     }
@@ -108,10 +145,16 @@ export default function CartPage() {
     }
 
     const handleTransactionIdSubmit = async (id: string) => {
+        if (!deliveryMode) {
+            setOrderError('Choisissez un mode de livraison.')
+            return
+        }
         setTransactionId(id)
         setSaving(true)
         setOrderError('')
         try {
+            const fee = DELIVERY_FEES[deliveryMode]
+            const amount = total + fee
             const items = cart.map(item => ({
                 id: item.product_id,
                 name: item.name,
@@ -128,10 +171,10 @@ export default function CartPage() {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: grandTotal,
+                total_amount: amount,
                 transaction_id: id,
-                delivery_mode: deliveryMode || 'standard',
-                delivery_fee: deliveryFee,
+                delivery_mode: deliveryMode,
+                delivery_fee: fee,
             })
 
             if (result.error) {
@@ -151,9 +194,15 @@ export default function CartPage() {
     }
 
     const handleCashConfirm = async (deliveryInfo: { name: string; phone: string; quarter: string; address: string }) => {
+        if (!deliveryMode) {
+            setOrderError('Choisissez un mode de livraison.')
+            return
+        }
         setSaving(true)
         setOrderError('')
         try {
+            const fee = DELIVERY_FEES[deliveryMode]
+            const amount = total + fee
             const items = cart.map(item => ({
                 id: item.product_id,
                 name: item.name,
@@ -170,12 +219,12 @@ export default function CartPage() {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: grandTotal,
+                total_amount: amount,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
-                delivery_mode: deliveryMode || 'standard',
-                delivery_fee: deliveryFee,
+                delivery_mode: deliveryMode,
+                delivery_fee: fee,
             })
 
             if (result.error) {
@@ -299,6 +348,15 @@ export default function CartPage() {
                             <div className="bg-white dark:bg-slate-800 p-8 rounded-[2.5rem] shadow-xl border border-slate-100 dark:border-slate-700 sticky top-10">
                                 <h3 className="font-black uppercase tracking-widest text-xs text-slate-400 mb-6">Résumé de la commande</h3>
 
+                                {hasInterUrbanDelivery && (
+                                    <div
+                                        className="mb-6 p-4 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50 dark:bg-amber-950/30 text-[11px] font-bold text-amber-900 dark:text-amber-200 leading-snug"
+                                        role="status"
+                                    >
+                                        🚚 {INTER_URBAN_DELIVERY_HINT}
+                                    </div>
+                                )}
+
                                 <div className="space-y-4 mb-8">
                                     <div className="flex justify-between text-slate-500 dark:text-slate-400 font-bold">
                                         <span>Articles ({itemCount})</span>
@@ -306,12 +364,26 @@ export default function CartPage() {
                                     </div>
                                     <div className="flex justify-between text-slate-500 dark:text-slate-400 font-bold">
                                         <span>Livraison</span>
-                                        <span className="text-green-600 uppercase text-xs">Gratuit</span>
+                                        {deliveryMode ? (
+                                            <span className="text-slate-700 dark:text-slate-200 text-right text-xs font-black">
+                                                {deliveryFee.toLocaleString('fr-FR')} FCFA
+                                                <span className="block text-[9px] font-bold text-slate-400 normal-case">
+                                                    {deliveryMode === 'express' ? 'Express' : 'Standard'}
+                                                </span>
+                                            </span>
+                                        ) : (
+                                            <span className="text-slate-400 dark:text-slate-500 italic text-xs font-black">À calculer</span>
+                                        )}
                                     </div>
                                     <div className="border-t dark:border-slate-700 pt-4 flex justify-between items-end">
                                         <span className="font-black uppercase italic text-sm dark:text-slate-300">Total</span>
-                                        <span className="font-black text-3xl text-black dark:text-white leading-none">{total.toLocaleString('fr-FR')} FCFA</span>
+                                        <span className="font-black text-3xl text-black dark:text-white leading-none">{grandTotal.toLocaleString('fr-FR')} FCFA</span>
                                     </div>
+                                    {!deliveryMode && (
+                                        <p className="text-[9px] text-slate-400 font-bold text-center leading-tight">
+                                            Frais ajoutés après choix du mode dans la commande
+                                        </p>
+                                    )}
                                 </div>
 
                                 <button
@@ -362,11 +434,11 @@ export default function CartPage() {
                         <div className="text-center mb-4">
                             <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
-                            {deliveryMode && deliveryFee > 0 && (
-                                <p className="text-[9px] font-bold text-slate-400 mt-1">
-                                    ({total.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F livraison)
-                                </p>
-                            )}
+                            <p className="text-[9px] font-bold text-slate-400 mt-1">
+                                {deliveryMode
+                                    ? `${total.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F livraison`
+                                    : `${total.toLocaleString('fr-FR')} F articles — livraison à calculer`}
+                            </p>
                         </div>
 
                         <StepIndicator activeStep={getStepIndex()} />

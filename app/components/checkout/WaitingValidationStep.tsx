@@ -41,8 +41,8 @@ export default function WaitingValidationStep({ orderId, orderData, transactionI
                 schema: 'public',
                 table: 'orders',
                 filter: `id=eq.${orderId}`,
-            }, (payload) => {
-                const newStatus = (payload.new as any).status
+            }, (payload: { new: Record<string, unknown> }) => {
+                const newStatus = (payload.new as { status?: string }).status
                 if (newStatus === 'confirmed') {
                     playSuccessSound()
                     onValidated()

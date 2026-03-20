@@ -3,6 +3,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createNotification } from '@/app/actions/notifications'
+import { VendorVerificationSubmitSchema } from '@/lib/vendorVerificationSchema'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -46,23 +47,25 @@ export async function submitVerification(input: {
     if (profile?.verification_status === 'pending') return { error: 'Une demande est déjà en cours de traitement' }
     if (profile?.verification_status === 'verified') return { error: 'Votre compte est déjà vérifié' }
 
-    // Validation basique
-    if (!input.shopPhotoUrl || !input.cniPhotoUrl) return { error: 'Les photos sont obligatoires' }
-    if (!input.cniName.trim() || !input.momoName.trim()) return { error: 'Les noms sont obligatoires' }
-    if (!input.momoNumber.trim()) return { error: 'Le numéro Mobile Money est obligatoire' }
-    if (!['MTN', 'Airtel'].includes(input.momoOperator)) return { error: 'Opérateur invalide' }
+    const parsed = VendorVerificationSubmitSchema.safeParse(input)
+    if (!parsed.success) {
+        const first = parsed.error.flatten().fieldErrors
+        const msg = Object.values(first).flat()[0] || 'Données invalides'
+        return { error: msg }
+    }
+    const payload = parsed.data
 
     // Insérer la demande
     const { error: insertError } = await supabase
         .from('vendor_verifications')
         .insert({
             vendor_id: user.id,
-            shop_photo_url: input.shopPhotoUrl,
-            cni_photo_url: input.cniPhotoUrl,
-            cni_name: input.cniName.trim(),
-            momo_name: input.momoName.trim(),
-            momo_number: input.momoNumber.trim(),
-            momo_operator: input.momoOperator,
+            shop_photo_url: payload.shopPhotoUrl,
+            cni_photo_url: payload.cniPhotoUrl,
+            cni_name: payload.cniName,
+            momo_name: payload.momoName,
+            momo_number: payload.momoNumber,
+            momo_operator: payload.momoOperator,
         })
 
     if (insertError) return { error: insertError.message }

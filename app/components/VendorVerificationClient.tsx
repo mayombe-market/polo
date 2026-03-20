@@ -9,17 +9,36 @@ import { Shield, Upload, Camera, CreditCard, CheckCircle, Clock, XCircle, ArrowL
 import { toast } from 'sonner'
 import { submitVerification } from '@/app/actions/verifications'
 
-const supabase = getSupabaseBrowserClient()
-
-
 interface Props {
     user: any
     profile: any
     existingVerification: any
 }
 
+const BUCKET = 'vendor-verifications'
+
+function extFromFile(file: File): string {
+    const fromName = file.name.split('.').pop()?.toLowerCase()
+    if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fromName)) {
+        return fromName === 'jpeg' ? 'jpg' : fromName
+    }
+    if (file.type === 'image/png') return 'png'
+    if (file.type === 'image/webp') return 'webp'
+    if (file.type === 'image/gif') return 'gif'
+    return 'jpg'
+}
+
+function contentTypeForFile(file: File, ext: string): string {
+    if (file.type && file.type.startsWith('image/')) return file.type
+    if (ext === 'png') return 'image/png'
+    if (ext === 'webp') return 'image/webp'
+    if (ext === 'gif') return 'image/gif'
+    return 'image/jpeg'
+}
+
 export default function VendorVerificationClient({ user, profile, existingVerification }: Props) {
     const router = useRouter()
+    const supabase = getSupabaseBrowserClient()
     const status = profile?.verification_status || 'unverified'
 
     // Formulaire
@@ -53,17 +72,27 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         }
     }
 
-    const uploadImage = async (file: File, path: string): Promise<string | null> => {
-        const { error } = await supabase.storage
-            .from('avatars')
-            .upload(path, file, { upsert: true })
+    const uploadImage = async (file: File, basePath: string): Promise<string | null> => {
+        const ext = extFromFile(file)
+        const path = `${basePath}.${ext}`
+        const contentType = contentTypeForFile(file, ext)
+
+        const { error } = await supabase.storage.from(BUCKET).upload(path, file, {
+            contentType,
+            upsert: true,
+        })
 
         if (error) {
             console.error('Upload error:', error)
+            toast.error(
+                error.message.includes('Bucket not found')
+                    ? 'Bucket Storage « vendor-verifications » manquant. Créez-le dans Supabase (voir supabase-storage-vendor-verifications.sql).'
+                    : `Upload : ${error.message}`
+            )
             return null
         }
 
-        const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
         return data.publicUrl
     }
 
@@ -76,8 +105,9 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             toast.error('Les noms CNI et Mobile Money sont obligatoires')
             return
         }
-        if (!momoNumber.trim()) {
-            toast.error('Le numéro Mobile Money est obligatoire')
+        const momoDigits = momoNumber.replace(/\D/g, '')
+        if (momoDigits.length !== 9) {
+            toast.error('Le numéro Mobile Money doit contenir 9 chiffres (sans +242)')
             return
         }
 
@@ -85,15 +115,9 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         try {
             const timestamp = Date.now()
 
-            // Upload les 2 photos
-            const shopPhotoUrl = await uploadImage(
-                shopPhoto,
-                `verifications/${user.id}/${timestamp}-shop.${shopPhoto.name.split('.').pop()}`
-            )
-            const cniPhotoUrl = await uploadImage(
-                cniPhoto,
-                `verifications/${user.id}/${timestamp}-cni.${cniPhoto.name.split('.').pop()}`
-            )
+            // Upload les 2 photos (bucket dédié KYC + contentType explicite)
+            const shopPhotoUrl = await uploadImage(shopPhoto, `verifications/${user.id}/${timestamp}-shop`)
+            const cniPhotoUrl = await uploadImage(cniPhoto, `verifications/${user.id}/${timestamp}-cni`)
 
             if (!shopPhotoUrl || !cniPhotoUrl) {
                 toast.error('Erreur lors de l\'upload des photos. Réessayez.')
@@ -105,7 +129,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                 cniPhotoUrl,
                 cniName: cniName.trim(),
                 momoName: momoName.trim(),
-                momoNumber: momoNumber.trim(),
+                momoNumber: momoDigits,
                 momoOperator,
             })
 

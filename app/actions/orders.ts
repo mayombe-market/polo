@@ -185,6 +185,11 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
     // Si c'est un abonnement → activer le plan vendeur automatiquement
     if (order.order_type === 'subscription' && order.subscription_plan_id) {
+        if (!order.user_id) {
+            await supabase.from('orders').update({ status: 'pending' }).eq('id', orderId)
+            return { error: 'Commande d’abonnement sans vendeur (user_id manquant).' }
+        }
+
         const billing = (order.subscription_billing || 'monthly') as 'monthly' | 'yearly'
 
         // Récupérer la date de fin actuelle pour le calcul de renouvellement
@@ -199,23 +204,25 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
             billing
         )
 
-        const { data: updatedProfile, error: planError } = await supabase
-            .from('profiles')
-            .update({
-                subscription_plan: order.subscription_plan_id,
-                subscription_start_date: new Date().toISOString(),
-                subscription_end_date: newEndDate,
-                subscription_billing: billing,
-                updated_at: new Date().toISOString()
-            })
-            .eq('id', order.user_id)
-            .select('subscription_plan')
-            .single()
+        // RPC SECURITY DEFINER : contourne les échecs RLS sur profiles.update pour un autre utilisateur
+        const { data: subscriptionUpdated, error: planError } = await supabase.rpc(
+            'admin_update_vendor_subscription',
+            {
+                p_user_id: order.user_id,
+                p_subscription_plan: order.subscription_plan_id,
+                p_subscription_billing: billing,
+                p_subscription_start_date: new Date().toISOString(),
+                p_subscription_end_date: newEndDate,
+            }
+        )
 
-        if (planError || updatedProfile?.subscription_plan !== order.subscription_plan_id) {
-            // Rollback : remettre la commande en pending pour que l'admin puisse réessayer
+        if (planError || !subscriptionUpdated) {
+            console.error('[adminConfirmPayment] activation abonnement:', planError?.message || 'RPC false (profil introuvable ?)')
             await supabase.from('orders').update({ status: 'pending' }).eq('id', orderId)
-            return { error: 'L\'activation du plan a échoué (vérifiez les policies RLS sur profiles). Réessayez.' }
+            return {
+                error: planError?.message
+                    || 'L\'activation du plan a échoué. Exécutez le script SQL supabase-profiles-rls-and-subscription-rpc.sql dans Supabase, puis réessayez.',
+            }
         }
     }
 
@@ -295,12 +302,44 @@ export async function adminRejectOrder(orderId: string) {
         p_order_id: orderId,
     })
 
-    if (rpcError) return { error: rpcError.message }
-    if (!rejected) return { error: 'Cette commande a déjà été traitée par un autre admin.' }
+    if (rpcError) {
+        console.error('[adminRejectOrder] RPC admin_reject_order (base de données):', rpcError.message)
+        return { error: rpcError.message }
+    }
+    if (!rejected) {
+        console.warn('[adminRejectOrder] rejet refusé (déjà traitée ou pas pending):', orderId)
+        return { error: 'Cette commande a déjà été traitée par un autre admin.' }
+    }
+
+    console.info('[adminRejectOrder] commande rejetée en base:', orderId)
 
     if (orderData?.customer_email) {
         const rejProdNames = (orderData.items || []).map((i: any) => i.name).join(', ')
-        sendOrderStatusEmail(orderData.customer_email, orderData.customer_name, orderId, 'rejected', undefined, orderData.delivery_mode, rejProdNames).catch(() => {})
+        const buyerMail = sendOrderStatusEmail(
+            orderData.customer_email,
+            orderData.customer_name,
+            orderId,
+            'rejected',
+            undefined,
+            orderData.delivery_mode,
+            rejProdNames
+        )
+        buyerMail
+            .then((r) => {
+                if (r?.error) {
+                    console.error('[adminRejectOrder] email acheteur (Resend / config):', r.error, {
+                        orderId,
+                        to: orderData.customer_email,
+                    })
+                } else {
+                    console.info('[adminRejectOrder] email acheteur (rejet) envoyé:', orderId)
+                }
+            })
+            .catch((e) => {
+                console.error('[adminRejectOrder] email acheteur exception:', e)
+            })
+    } else {
+        console.warn('[adminRejectOrder] pas d’email acheteur — skip mail client:', orderId)
     }
 
     // Emails vendeurs (une commande peut concerner plusieurs vendeurs)
@@ -310,10 +349,19 @@ export async function adminRejectOrder(orderId: string) {
         vendorIds = [orderData.user_id]
     }
     if (vendorIds.length > 0) {
-        const { data: vendorProfiles } = await supabase
+        const { data: vendorProfiles, error: vendorProfilesError } = await supabase
             .from('profiles')
             .select('email')
             .in('id', vendorIds)
+
+        if (vendorProfilesError) {
+            console.error('[adminRejectOrder] lecture emails vendeurs (Supabase / RLS):', vendorProfilesError.message, {
+                orderId,
+                vendorIds,
+            })
+        } else if (!vendorProfiles?.length) {
+            console.warn('[adminRejectOrder] aucun profil vendeur trouvé pour les emails:', { orderId, vendorIds })
+        }
 
         const seen = new Set<string>()
         for (const row of vendorProfiles || []) {
@@ -322,8 +370,20 @@ export async function adminRejectOrder(orderId: string) {
             const key = em.toLowerCase()
             if (seen.has(key)) continue
             seen.add(key)
-            sendOrderRejectedVendorEmail(em).catch(() => {})
+            sendOrderRejectedVendorEmail(em)
+                .then((r) => {
+                    if (r?.error) {
+                        console.error('[adminRejectOrder] email vendeur (Resend / config):', r.error, { orderId, to: em })
+                    } else {
+                        console.info('[adminRejectOrder] email vendeur (rejet) envoyé:', orderId, em)
+                    }
+                })
+                .catch((e) => {
+                    console.error('[adminRejectOrder] email vendeur exception:', e, { orderId, to: em })
+                })
         }
+    } else {
+        console.warn('[adminRejectOrder] aucun vendeur à notifier (items sans seller_id):', orderId)
     }
 
     // Notifier l'acheteur
@@ -864,19 +924,23 @@ export async function adminCancelSubscription(orderId: string) {
 
     if (!order) return { error: 'Commande introuvable' }
     if (order.order_type !== 'subscription') return { error: 'Cette commande n\'est pas un abonnement' }
+    if (!order.user_id) return { error: 'Commande sans vendeur associé (user_id manquant).' }
 
-    // Remettre le profil vendeur en plan gratuit
-    const { error: profileError } = await supabase
-        .from('profiles')
-        .update({
-            subscription_plan: null,
-            subscription_start_date: null,
-            subscription_end_date: null,
-            subscription_billing: null,
-        })
-        .eq('id', order.user_id)
+    const { data: cleared, error: profileError } = await supabase.rpc('admin_update_vendor_subscription', {
+        p_user_id: order.user_id,
+        p_subscription_plan: null,
+        p_subscription_billing: null,
+        p_subscription_start_date: null,
+        p_subscription_end_date: null,
+    })
 
-    if (profileError) return { error: profileError.message }
+    if (profileError) {
+        console.error('[adminCancelSubscription] RPC profil:', profileError.message)
+        return { error: profileError.message }
+    }
+    if (!cleared) {
+        return { error: 'Impossible de réinitialiser l’abonnement (profil vendeur introuvable).' }
+    }
 
     // Marquer la commande comme rejetée
     await supabase

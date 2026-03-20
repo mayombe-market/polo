@@ -200,9 +200,10 @@ export async function sendOrderStatusEmail(
             `,
         })
         return { success: true }
-    } catch (error) {
-        console.error('Erreur envoi email statut:', error)
-        return { error: 'Erreur envoi email' }
+    } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error)
+        console.error('[sendOrderStatusEmail] Resend:', detail)
+        return { error: `Erreur envoi email: ${detail}` }
     }
 }
 
@@ -234,9 +235,10 @@ export async function sendOrderRejectedVendorEmail(vendorEmail: string) {
             `,
         })
         return { success: true }
-    } catch (error) {
-        console.error('Erreur envoi email rejet vendeur:', error)
-        return { error: 'Erreur envoi email' }
+    } catch (error: unknown) {
+        const detail = error instanceof Error ? error.message : String(error)
+        console.error('[sendOrderRejectedVendorEmail] Resend:', detail, { to: vendorEmail })
+        return { error: `Erreur envoi email: ${detail}` }
     }
 }
 

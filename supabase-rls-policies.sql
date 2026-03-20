@@ -12,13 +12,23 @@ ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Profils publics en lecture" ON profiles
     FOR SELECT USING (true);
 
--- Un utilisateur ne peut modifier QUE son propre profil
+-- Un utilisateur ne peut modifier QUE son propre profil (WITH CHECK explicite)
+-- Note : activation abonnement par admin côté app → RPC admin_update_vendor_subscription
+--         (voir supabase-profiles-rls-and-subscription-rpc.sql) pour contourner tout conflit RLS.
 CREATE POLICY "Modifier son propre profil" ON profiles
-    FOR UPDATE USING (auth.uid() = id);
+    FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
 
 -- Un admin peut modifier tous les profils (abonnements, rôles, etc.)
 CREATE POLICY "Admin modifie tous les profils" ON profiles
-    FOR UPDATE USING (
+    FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    )
+    WITH CHECK (
         EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
     );
 

@@ -360,6 +360,22 @@ export async function createOrder(input: {
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
 
+    // ═══ PROFIL ACHETEUR : ville + téléphone obligatoires pour commander ═══
+    const { data: buyerProfile } = await supabase
+        .from('profiles')
+        .select('city, phone, whatsapp_number')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    const profileCity = buyerProfile?.city?.trim()
+    const profilePhone = (buyerProfile?.phone?.trim() || buyerProfile?.whatsapp_number?.trim()) ?? ''
+    if (!profileCity || !profilePhone) {
+        return {
+            error: 'Complétez votre ville et votre numéro de téléphone dans votre profil (Mon compte → Profil) avant de passer commande.',
+            code: 'profile_incomplete',
+        }
+    }
+
     // ═══ VALIDATION DES INPUTS ═══
     const VALID_PAYMENT_METHODS = ['mobile_money', 'airtel_money', 'cash']
     if (!VALID_PAYMENT_METHODS.includes(input.payment_method)) {

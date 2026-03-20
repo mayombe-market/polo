@@ -56,15 +56,29 @@ export async function getLogisticianDeliveries() {
         if (sellerId) {
             const { data } = await supabase
                 .from('profiles')
-                .select('full_name, phone')
+                .select('full_name, phone, whatsapp_number, city, district, landmark, shop_name, store_name')
                 .eq('id', sellerId)
                 .single()
             sellerProfile = data
         }
+        const sp = sellerProfile as {
+            full_name?: string | null
+            phone?: string | null
+            whatsapp_number?: string | null
+            city?: string | null
+            district?: string | null
+            landmark?: string | null
+            shop_name?: string | null
+            store_name?: string | null
+        } | null
+        const sellerPhone = sp?.phone?.trim() || sp?.whatsapp_number?.trim() || ''
         return {
             ...order,
-            seller_name: sellerProfile?.full_name || 'Vendeur',
-            seller_phone: sellerProfile?.phone || '',
+            seller_name: sp?.full_name || sp?.shop_name || sp?.store_name || 'Vendeur',
+            seller_phone: sellerPhone,
+            seller_city: sp?.city || '',
+            seller_district: sp?.district || '',
+            seller_landmark: sp?.landmark || '',
         }
     }))
 

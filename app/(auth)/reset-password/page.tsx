@@ -1,9 +1,10 @@
 'use client'
 
-import { Suspense, useEffect, useState, useCallback } from 'react'
+import { Suspense, useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
 function PasswordFields({
     password,
@@ -79,7 +80,8 @@ function PasswordFields({
 function ResetPasswordForm() {
     const router = useRouter()
     const searchParams = useSearchParams()
-    const supabase = getSupabaseBrowserClient()
+    /** Primitive pour éviter de recréer l’effet à chaque render (référence instable de useSearchParams). */
+    const recoveryCode = searchParams.get('code')
 
     const [status, setStatus] = useState<'checking' | 'ready' | 'invalid'>('checking')
     const [password, setPassword] = useState('')
@@ -88,47 +90,118 @@ function ResetPasswordForm() {
     const [error, setError] = useState('')
     const [done, setDone] = useState(false)
 
-    const establishSession = useCallback(async () => {
-        const code = searchParams.get('code')
-        if (code) {
-            const { error: exErr } = await supabase.auth.exchangeCodeForSession(code)
-            if (exErr) return false
-            if (typeof window !== 'undefined') {
-                window.history.replaceState(null, '', window.location.pathname)
-            }
-            return true
-        }
-
-        const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : ''
-        if (hash) {
-            const params = new URLSearchParams(hash)
-            const access_token = params.get('access_token')
-            const refresh_token = params.get('refresh_token')
-            if (access_token && refresh_token) {
-                const { error: sErr } = await supabase.auth.setSession({ access_token, refresh_token })
-                if (sErr) return false
-                window.history.replaceState(null, '', window.location.pathname)
-                return true
-            }
-        }
-
-        const {
-            data: { session },
-        } = await supabase.auth.getSession()
-        return !!session
-    }, [searchParams, supabase])
+    const resolvedRef = useRef(false)
 
     useEffect(() => {
+        const supabase = getSupabaseBrowserClient()
         let cancelled = false
-        ;(async () => {
-            const ok = await establishSession()
-            if (cancelled) return
-            setStatus(ok ? 'ready' : 'invalid')
+        resolvedRef.current = false
+
+        const stripSensitiveFromUrl = () => {
+            if (typeof window === 'undefined') return
+            window.history.replaceState(null, '', window.location.pathname)
+        }
+
+        const markReady = () => {
+            if (cancelled || resolvedRef.current) return
+            resolvedRef.current = true
+            setStatus('ready')
+        }
+
+        const markInvalid = () => {
+            if (cancelled || resolvedRef.current) return
+            resolvedRef.current = true
+            setStatus('invalid')
+        }
+
+        const sessionFromEvent = (event: AuthChangeEvent, session: Session | null) => {
+            if (!session) return
+            // Lien e-mail : PASSWORD_RECOVERY / SIGNED_IN ; rechargement avec session déjà stockée : INITIAL_SESSION
+            if (
+                event === 'PASSWORD_RECOVERY' ||
+                event === 'SIGNED_IN' ||
+                event === 'TOKEN_REFRESHED' ||
+                event === 'INITIAL_SESSION'
+            ) {
+                markReady()
+                if (event !== 'INITIAL_SESSION') {
+                    stripSensitiveFromUrl()
+                }
+            }
+        }
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(sessionFromEvent)
+
+        const tryEstablish = async (): Promise<boolean> => {
+            if (recoveryCode) {
+                const { error: exErr } = await supabase.auth.exchangeCodeForSession(recoveryCode)
+                if (!exErr) {
+                    stripSensitiveFromUrl()
+                    return true
+                }
+                // Code peut être déjà échangé (detectSessionInUrl / double appel)
+                const {
+                    data: { session },
+                } = await supabase.auth.getSession()
+                if (session) {
+                    stripSensitiveFromUrl()
+                    return true
+                }
+                return false
+            }
+
+            const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : ''
+            if (hash) {
+                const params = new URLSearchParams(hash)
+                const access_token = params.get('access_token')
+                const refresh_token = params.get('refresh_token')
+                if (access_token && refresh_token) {
+                    const { error: sErr } = await supabase.auth.setSession({ access_token, refresh_token })
+                    if (sErr) return false
+                    stripSensitiveFromUrl()
+                    return true
+                }
+            }
+
+            const {
+                data: { session },
+            } = await supabase.auth.getSession()
+            return !!session
+        }
+
+        void (async () => {
+            const ok = await tryEstablish()
+            if (cancelled || resolvedRef.current) return
+            if (ok) {
+                markReady()
+                return
+            }
+
+            const {
+                data: { session: s2 },
+            } = await supabase.auth.getSession()
+            if (cancelled || resolvedRef.current) return
+            if (s2) {
+                markReady()
+                return
+            }
+
+            // Laisser le temps à detectSessionInUrl / événements auth de finir (évite faux « invalide »)
+            await new Promise((r) => setTimeout(r, 1600))
+            if (cancelled || resolvedRef.current) return
+
+            const {
+                data: { session: s3 },
+            } = await supabase.auth.getSession()
+            if (s3) markReady()
+            else markInvalid()
         })()
+
         return () => {
             cancelled = true
+            subscription.unsubscribe()
         }
-    }, [establishSession])
+    }, [recoveryCode])
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
@@ -144,7 +217,8 @@ function ResetPasswordForm() {
 
         setLoading(true)
         try {
-            const { error: upErr } = await supabase.auth.updateUser({ password })
+            const client = getSupabaseBrowserClient()
+            const { error: upErr } = await client.auth.updateUser({ password })
             if (upErr) throw upErr
             setDone(true)
             setTimeout(() => router.push('/'), 2500)

@@ -46,7 +46,19 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
         setDeliveries(prev => {
             const exists = prev.find(d => d.id === updated.id)
             if (exists) {
-                return prev.map(d => d.id === updated.id ? { ...d, ...updated } : d)
+                return prev.map(d => {
+                    if (d.id !== updated.id) return d
+                    const u = updated as Record<string, unknown>
+                    return {
+                        ...d,
+                        ...updated,
+                        seller_name: (u.seller_name as string | undefined) ?? d.seller_name,
+                        seller_phone: (u.seller_phone as string | undefined) ?? d.seller_phone,
+                        seller_city: (u.seller_city as string | undefined) ?? d.seller_city,
+                        seller_district: (u.seller_district as string | undefined) ?? d.seller_district,
+                        seller_landmark: (u.seller_landmark as string | undefined) ?? d.seller_landmark,
+                    }
+                })
             }
             const productName = updated.items?.[0]?.name || 'Produit'
             const dlvLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
@@ -63,7 +75,10 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
         const dlvLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
         playDeliverySound()
         toast.success(`Nouvelle course — ${dlvLabel}`, { description: `${productName} · ${newOrder.customer_name} · ${newOrder.district || newOrder.city}`, duration: 8000 })
-        setDeliveries(prev => [newOrder, ...prev])
+        void (async () => {
+            const { deliveries: data } = await getLogisticianDeliveries()
+            setDeliveries(data)
+        })()
     }, [user.id])
 
     const active = deliveries.filter(d => d.status === 'shipped' || d.status === 'picked_up')
@@ -231,8 +246,10 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                         <span className="text-[#F0ECE2] text-sm font-bold">📍 Récupérer chez le vendeur</span>
                     </div>
                     <p className="text-[#F0ECE2] text-sm font-semibold">{d.seller_name || 'Vendeur'}</p>
-                    <p className="text-gray-500 text-xs">{d.district || 'Quartier'}</p>
-                    <p className="text-gray-600 text-xs mb-2.5">{d.landmark || ''}</p>
+                    <p className="text-gray-500 text-xs">
+                        {[d.seller_city, d.seller_district].filter(Boolean).join(', ') || 'Adresse vendeur non renseignée'}
+                    </p>
+                    <p className="text-gray-600 text-xs mb-2.5">{d.seller_landmark || ''}</p>
                     {d.seller_phone && (
                         <a href={`tel:${d.seller_phone}`}
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-green-500/10 border border-green-500/15 text-green-400 text-xs font-semibold no-underline">
@@ -388,7 +405,9 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                             </div>
 
                             <div className="flex gap-3 pt-2.5 border-t border-white/[0.04] text-gray-600 text-[11px]">
-                                <span className="flex items-center gap-1"><MapPin size={10} /> {d.district || d.city}</span>
+                                <span className="flex items-center gap-1 min-w-0 truncate" title="Livraison client">
+                                    <MapPin size={10} /> {d.city}{d.district ? ` · ${d.district}` : ''}
+                                </span>
                                 <span className="flex items-center gap-1"><Clock size={10} /> {new Date(d.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</span>
                                 <span className="ml-auto text-amber-500 font-bold">{fmt(d.total_amount)} F</span>
                             </div>

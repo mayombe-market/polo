@@ -10,6 +10,8 @@ interface UserProfile {
     first_name: string | null
     last_name: string | null
     city: string | null
+    /** Téléphone principal (colonne phone ou whatsapp_number) */
+    phone: string | null
 }
 
 interface AuthContextType {
@@ -29,6 +31,7 @@ const DEFAULT_PROFILE: UserProfile = {
     first_name: null,
     last_name: null,
     city: null,
+    phone: null,
 }
 
 export function AuthProvider({ children }: { children: ReactNode }): React.JSX.Element {
@@ -42,17 +45,21 @@ export function AuthProvider({ children }: { children: ReactNode }): React.JSX.E
         try {
             const { data } = await supabase
                 .from('profiles')
-                .select('role, avatar_url, first_name, last_name, city')
+                .select('role, avatar_url, first_name, last_name, city, phone, whatsapp_number')
                 .eq('id', userId)
                 .maybeSingle()
 
             if (data) {
+                const phoneVal = (data as { phone?: string | null; whatsapp_number?: string | null }).phone?.trim()
+                    || (data as { whatsapp_number?: string | null }).whatsapp_number?.trim()
+                    || null
                 setProfile({
                     role: data.role || null,
                     avatar_url: data.avatar_url || null,
                     first_name: data.first_name || null,
                     last_name: data.last_name || null,
                     city: data.city || null,
+                    phone: phoneVal,
                 })
             } else {
                 setProfile(DEFAULT_PROFILE)

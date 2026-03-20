@@ -4,8 +4,11 @@ import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { DELIVERY_FEES } from '@/lib/checkoutSchema'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { ArrowRight } from 'lucide-react'
 import AuthModal from './AuthModal'
+import CompleteProfileGateModal from './CompleteProfileGateModal'
 import StepIndicator from './checkout/StepIndicator'
 import LocationStep from './checkout/LocationStep'
 import DeliveryModeStep from './checkout/DeliveryModeStep'
@@ -37,6 +40,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
+    const [profileGateOpen, setProfileGateOpen] = useState(false)
 
     const deliveryFee = DELIVERY_FEES[deliveryMode]
     const grandTotal = product.price + deliveryFee
@@ -50,9 +54,19 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     }
 
     // Ouvrir le modal
-    const handleMainClick = () => {
+    const handleMainClick = async () => {
         if (!user) {
             setIsAuthOpen(true)
+            return
+        }
+        const supabase = getSupabaseBrowserClient()
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('city, phone, whatsapp_number')
+            .eq('id', user.id)
+            .maybeSingle()
+        if (!isBuyerProfileCompleteForOrder(prof)) {
+            setProfileGateOpen(true)
             return
         }
         setIsModalOpen(true)
@@ -121,6 +135,9 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
             })
 
             if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                }
                 setOrderError(result.error)
                 return
             }
@@ -168,6 +185,9 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
             })
 
             if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                }
                 setOrderError(result.error)
                 return
             }
@@ -327,6 +347,8 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
             {/* MODAL DE CONNEXION */}
             <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
+
+            <CompleteProfileGateModal open={profileGateOpen} onClose={() => setProfileGateOpen(false)} />
         </div>
     )
 }

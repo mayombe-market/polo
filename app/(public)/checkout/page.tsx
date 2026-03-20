@@ -12,6 +12,8 @@ import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
+import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 
 const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
     full_name: '',
@@ -25,6 +27,7 @@ const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
 export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
     const [loadingProfile, setLoadingProfile] = useState(true)
+    const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [userEmail, setUserEmail] = useState('')
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
@@ -49,18 +52,19 @@ export default function CheckoutPage() {
             if (user) {
                 const { data: profile } = await withTimeout(supabase
                     .from('profiles')
-                    .select('full_name, whatsapp_number, city, district, landmark')
+                    .select('full_name, phone, whatsapp_number, city, district, landmark')
                     .eq('id', user.id)
                     .single())
 
                 if (profile) {
+                    const p = profile as { full_name?: string | null; phone?: string | null; whatsapp_number?: string | null; city?: string | null; district?: string | null; landmark?: string | null }
                     reset({
                         ...CHECKOUT_DEFAULTS,
-                        full_name: profile.full_name || '',
-                        phone: profile.whatsapp_number || '',
-                        city: profile.city || '',
-                        district: profile.district || '',
-                        landmark: profile.landmark || '',
+                        full_name: p.full_name || '',
+                        phone: p.phone?.trim() || p.whatsapp_number?.trim() || '',
+                        city: p.city || '',
+                        district: p.district || '',
+                        landmark: p.landmark || '',
                         payment_method: 'cod',
                     })
                 }
@@ -76,6 +80,19 @@ export default function CheckoutPage() {
 
         setLoading(true)
         try {
+            const { user } = await safeGetUser(supabase)
+            if (!user) {
+                alert('Connectez-vous pour finaliser la commande.')
+                return
+            }
+            const { data: prof } = await withTimeout(
+                supabase.from('profiles').select('city, phone, whatsapp_number').eq('id', user.id).maybeSingle()
+            )
+            if (!isBuyerProfileCompleteForOrder(prof)) {
+                setProfileGateOpen(true)
+                return
+            }
+
             const currentDeliveryFee = DELIVERY_FEES[formData.delivery_mode]
             const totalWithDelivery = total + currentDeliveryFee
 
@@ -102,7 +119,11 @@ export default function CheckoutPage() {
             })
 
             if (result.error) {
-                alert(result.error)
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                } else {
+                    alert(result.error)
+                }
                 return
             }
 
@@ -445,6 +466,8 @@ export default function CheckoutPage() {
                     </div>
                 </div>
             </div>
+
+            <CompleteProfileGateModal open={profileGateOpen} onClose={() => setProfileGateOpen(false)} />
         </div>
     )
 }

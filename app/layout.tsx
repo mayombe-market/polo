@@ -8,7 +8,13 @@ import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import SplashScreen from '@/app/components/SplashScreen'
 
-const inter = Inter({ subsets: ['latin'] })
+// preload: false évite l’avertissement navigateur quand le fichier préchargé ne correspond pas au sous-ensemble réellement peint (layout + splash).
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  adjustFontFallback: true,
+  preload: false,
+})
 
 export const viewport = {
   themeColor: '#f97316',
@@ -81,7 +87,7 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={inter.className}>
       {process.env.NEXT_PUBLIC_GA_ID && (
         <>
           <Script
@@ -99,7 +105,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </Script>
         </>
       )}
-      <body className={`${inter.className} m-0 p-0`}>
+      <body className="m-0 p-0">
         {/* SPLASH SCREEN PWA */}
         <SplashScreen />
 

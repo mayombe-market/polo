@@ -188,13 +188,14 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                 return data.publicUrl
             }
 
-            const ts = Date.now()
-            const mainUrl = await uploadFile(mainImage!, `${sellerId}/${ts}-main`)
+            // Préfixe vendeur + horodatage + UUID → pas de collision entre vendeurs ni entre deux uploads rapides
+            const uploadId = `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12)}`
+            const mainUrl = await uploadFile(mainImage!, `${sellerId}/${uploadId}-main`)
 
             const galleryUrls: string[] = []
             for (let i = 0; i < gallery.length; i++) {
                 if (gallery[i]) {
-                    galleryUrls.push(await uploadFile(gallery[i]!, `${sellerId}/${ts}-gallery-${i}`))
+                    galleryUrls.push(await uploadFile(gallery[i]!, `${sellerId}/${uploadId}-gallery-${i}`))
                 }
             }
 

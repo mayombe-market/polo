@@ -22,6 +22,8 @@ import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
 import { DELIVERY_FEES } from '@/lib/checkoutSchema'
 import { useAuth } from '@/hooks/useAuth'
 import { isLocalDelivery, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
+import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
+import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 
 type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
 
@@ -46,6 +48,7 @@ export default function CartPage() {
     const [orderData, setOrderData] = useState<any>(null)
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
+    const [profileGateOpen, setProfileGateOpen] = useState(false)
 
     const deliveryFee = deliveryMode ? DELIVERY_FEES[deliveryMode] : 0
     const grandTotal = total + deliveryFee
@@ -106,6 +109,15 @@ export default function CartPage() {
         const u = await checkUser()
         if (!u) {
             setIsAuthOpen(true)
+            return
+        }
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('city, phone, whatsapp_number')
+            .eq('id', u.id)
+            .maybeSingle()
+        if (!isBuyerProfileCompleteForOrder(prof)) {
+            setProfileGateOpen(true)
             return
         }
         setIsCheckoutOpen(true)
@@ -178,6 +190,9 @@ export default function CartPage() {
             })
 
             if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                }
                 setOrderError(result.error)
                 return
             }
@@ -228,6 +243,9 @@ export default function CartPage() {
             })
 
             if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                }
                 setOrderError(result.error)
                 return
             }
@@ -510,13 +528,23 @@ export default function CartPage() {
             <AuthModal isOpen={isAuthOpen} onClose={() => {
                 setIsAuthOpen(false)
                 // Re-check user after auth modal closes
-                checkUser().then(u => {
-                    if (u) {
-                        setIsCheckoutOpen(true)
-                        setStep('location')
+                checkUser().then(async (u) => {
+                    if (!u) return
+                    const { data: prof } = await supabase
+                        .from('profiles')
+                        .select('city, phone, whatsapp_number')
+                        .eq('id', u.id)
+                        .maybeSingle()
+                    if (!isBuyerProfileCompleteForOrder(prof)) {
+                        setProfileGateOpen(true)
+                        return
                     }
+                    setIsCheckoutOpen(true)
+                    setStep('location')
                 })
             }} />
+
+            <CompleteProfileGateModal open={profileGateOpen} onClose={() => setProfileGateOpen(false)} />
         </div>
     )
 }

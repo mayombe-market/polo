@@ -32,6 +32,15 @@ function nextWithSearchParams(
     return withRefreshedSessionCookies(sessionResponse, res)
 }
 
+/** Pages auth / recovery : COOP same-origin peut gêner certains flux (popup, redirects). Le CSP reste appliqué. */
+function isAuthRecoveryPath(pathname: string) {
+    return (
+        pathname === '/reset-password' ||
+        pathname === '/forgot-password' ||
+        pathname.startsWith('/auth/callback')
+    )
+}
+
 function applySecurityHeaders(pathname: string, response: NextResponse) {
     const cspHeader = `
         default-src 'self';
@@ -40,8 +49,9 @@ function applySecurityHeaders(pathname: string, response: NextResponse) {
         img-src 'self' data: blob: https://*.unsplash.com
         https://images.unsplash.com
         https://ui-avatars.com https://*.supabase.co https://www.googletagmanager.com;
-        font-src 'self' https://fonts.gstatic.com;
-        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://*.googletagmanager.com;
+        font-src 'self' data: blob: https://fonts.gstatic.com;
+        connect-src 'self' https://*.supabase.co wss://*.supabase.co https://www.google-analytics.com https://*.googletagmanager.com
+        https://challenges.cloudflare.com https://*.cloudflare.com;
         frame-ancestors 'none';
         base-uri 'self';
         form-action 'self';
@@ -53,7 +63,10 @@ function applySecurityHeaders(pathname: string, response: NextResponse) {
     response.headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains; preload')
     response.headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
     response.headers.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self), payment=(self)')
-    response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+    // COOP strict + redirects e-mail (Supabase / Cloudflare) : pas sur les pages de recovery
+    if (!isAuthRecoveryPath(pathname)) {
+        response.headers.set('Cross-Origin-Opener-Policy', 'same-origin')
+    }
     response.headers.set('Cross-Origin-Resource-Policy', 'cross-origin')
     response.headers.delete('Server')
     response.headers.delete('X-Powered-By')

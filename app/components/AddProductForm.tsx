@@ -1,5 +1,5 @@
 'use client'
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useCallback } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -154,6 +154,29 @@ export default function AddProductForm({
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
+    // ===== VALIDATION PAR ÉTAPE (useCallback + avant publishReadiness : évite TDZ / ReferenceError « ed » minifié) =====
+    const validateStep = useCallback((s: number): string | null => {
+        switch (s) {
+            case 1:
+                if (!name.trim()) return "Le nom du produit est requis."
+                if (!selectedCategory) return "Choisissez une catégorie."
+                if (!selectedSubcategory) return "Choisissez une sous-catégorie."
+                return null
+            case 2: {
+                const p = parseInt(price, 10)
+                if (!p || p < 100 || p > 100000000) return "Le prix doit être entre 100 et 100 000 000 FCFA."
+                if (hasStock && (!stockQuantity || parseInt(stockQuantity, 10) < 1)) return "La quantité en stock est requise."
+                return null
+            }
+            case 5:
+                if (!mainImage) return "L'image principale est obligatoire."
+                if (!gallery[0] || !gallery[1] || !gallery[2]) return "3 miniatures minimum sont obligatoires."
+                return null
+            default:
+                return null
+        }
+    }, [name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity, mainImage, gallery])
+
     useEffect(() => {
         if (!imageHint) return
         const t = setTimeout(() => setImageHint(null), 8000)
@@ -188,29 +211,7 @@ export default function AddProductForm({
             if (g) hints.push(g)
         }
         return { ok: hints.length === 0, hints }
-    }, [step, sellerId, isVendorAccount, verificationStatus, mainImage, gallery, name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity])
-
-    // ===== VALIDATION PAR ÉTAPE =====
-    const validateStep = (s: number): string | null => {
-        switch (s) {
-            case 1:
-                if (!name.trim()) return "Le nom du produit est requis."
-                if (!selectedCategory) return "Choisissez une catégorie."
-                if (!selectedSubcategory) return "Choisissez une sous-catégorie."
-                return null
-            case 2:
-                const p = parseInt(price)
-                if (!p || p < 100 || p > 100000000) return "Le prix doit être entre 100 et 100 000 000 FCFA."
-                if (hasStock && (!stockQuantity || parseInt(stockQuantity) < 1)) return "La quantité en stock est requise."
-                return null
-            case 5:
-                if (!mainImage) return "L'image principale est obligatoire."
-                if (!gallery[0] || !gallery[1] || !gallery[2]) return "3 miniatures minimum sont obligatoires."
-                return null
-            default:
-                return null
-        }
-    }
+    }, [step, sellerId, isVendorAccount, verificationStatus, mainImage, gallery, validateStep])
 
     const goNext = () => {
         const error = validateStep(step)

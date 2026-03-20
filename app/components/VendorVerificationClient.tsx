@@ -15,6 +15,7 @@ interface Props {
     existingVerification: any
 }
 
+/** Bucket Supabase + préfixe chemin : doit rester aligné avec supabase-storage-vendor-verifications.sql (RLS : verifications/{userId}/...) */
 const BUCKET = 'vendor-verifications'
 
 function extFromFile(file: File): string {

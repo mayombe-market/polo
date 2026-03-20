@@ -4,7 +4,18 @@ import { Suspense, useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { withTimeout } from '@/lib/withTimeout'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+
+const AUTH_WAIT_MS = 12_000
+const UPDATE_WAIT_MS = 25_000
+
+function authErrorMessage(err: unknown): string {
+    if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
+        return (err as { message: string }).message
+    }
+    return 'Impossible de mettre à jour le mot de passe.'
+}
 
 function PasswordFields({
     password,
@@ -218,13 +229,62 @@ function ResetPasswordForm() {
         setLoading(true)
         try {
             const client = getSupabaseBrowserClient()
-            const { error: upErr } = await client.auth.updateUser({ password })
-            if (upErr) throw upErr
+
+            // Session requise pour updateUser (session « recovery » après clic sur le lien e-mail).
+            let session: Session | null = null
+            try {
+                type GetSessionResult = Awaited<ReturnType<typeof client.auth.getSession>>
+                const { data, error: sessErr } = await withTimeout<GetSessionResult>(
+                    client.auth.getSession(),
+                    AUTH_WAIT_MS,
+                    'Impossible de vérifier la session (temps écoulé). Rafraîchissez la page ou redemandez un lien.'
+                )
+                if (sessErr) {
+                    console.error('[reset-password] getSession:', sessErr)
+                    setError(sessErr.message)
+                    return
+                }
+                session = data.session
+            } catch (e) {
+                console.error('[reset-password] getSession timeout:', e)
+                setError(authErrorMessage(e))
+                return
+            }
+
+            if (!session?.user) {
+                const msg =
+                    'Aucune session active. Le lien a peut-être expiré : redemandez un e-mail de réinitialisation.'
+                console.warn('[reset-password]', msg)
+                setError(msg)
+                return
+            }
+
+            console.debug('[reset-password] updateUser…', { userId: session.user.id })
+
+            try {
+                type UpdateUserResult = Awaited<ReturnType<typeof client.auth.updateUser>>
+                const { error: upErr } = await withTimeout<UpdateUserResult>(
+                    client.auth.updateUser({ password }),
+                    UPDATE_WAIT_MS,
+                    'La mise à jour prend trop de temps. Vérifiez la connexion ou réessayez dans un instant.'
+                )
+                if (upErr) {
+                    console.error('[reset-password] updateUser error:', upErr)
+                    setError(upErr.message || authErrorMessage(upErr))
+                    return
+                }
+            } catch (e) {
+                console.error('[reset-password] updateUser timeout:', e)
+                setError(authErrorMessage(e))
+                return
+            }
+
+            console.debug('[reset-password] mot de passe mis à jour')
             setDone(true)
             setTimeout(() => router.push('/'), 2500)
         } catch (err: unknown) {
-            const msg = err instanceof Error ? err.message : 'Impossible de mettre à jour le mot de passe.'
-            setError(msg)
+            console.error('[reset-password] exception:', err)
+            setError(authErrorMessage(err))
         } finally {
             setLoading(false)
         }

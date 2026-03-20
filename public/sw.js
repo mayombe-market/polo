@@ -4,6 +4,8 @@ const OFFLINE_URL = '/'
 // Routes that should NEVER be cached (auth-sensitive)
 const NO_CACHE_ROUTES = [
   '/auth',
+  '/reset-password',
+  '/forgot-password',
   '/complete-profile',
   '/vendor/dashboard',
   '/logistician/dashboard',

@@ -1,6 +1,11 @@
 /**
  * Politique CSP unique (évite deux en-têtes CSP qui s’intersectent et bloquent Cloudflare / polices).
  * Utilisée par middleware.ts uniquement — ne pas dupliquer dans next.config (voir next.config.mjs).
+ *
+ * Si la console affiche encore une CSP **sans** `'unsafe-eval'` alors que ce fichier l’inclut :
+ * un autre acteur (ex. règle Cloudflare « Transform » / page rules) ajoute un 2e en-tête CSP ;
+ * le navigateur applique l’intersection des deux → la politique la plus stricte gagne.
+ * Zod v4 est configuré en `jitless` (lib/zod-jitless.ts) pour ne pas dépendre de `eval` / `new Function`.
  */
 export function getContentSecurityPolicy(): string {
     return `

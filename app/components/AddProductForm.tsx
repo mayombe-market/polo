@@ -1,10 +1,10 @@
 'use client'
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
-    ChevronRight, ChevronLeft, Upload, X, Check,
+    ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
 } from 'lucide-react'
 
@@ -154,8 +154,12 @@ export default function AddProductForm({
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
-    // ===== VALIDATION PAR ÉTAPE (useCallback + avant publishReadiness : évite TDZ / ReferenceError « ed » minifié) =====
-    const validateStep = useCallback((s: number): string | null => {
+    /**
+     * function déclarée (hoisted dans le corps du composant) — évite ReferenceError
+     * « can't access lexical declaration before initialization » si le bundler réordonne
+     * ou si useMemo s’exécute avant un const validateStep.
+     */
+    function validateStep(s: number): string | null {
         switch (s) {
             case 1:
                 if (!name.trim()) return "Le nom du produit est requis."
@@ -175,7 +179,7 @@ export default function AddProductForm({
             default:
                 return null
         }
-    }, [name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity, mainImage, gallery])
+    }
 
     useEffect(() => {
         if (!imageHint) return
@@ -183,11 +187,11 @@ export default function AddProductForm({
         return () => clearTimeout(t)
     }, [imageHint])
 
-    /** Prêt à publier (étape 5) : vendeur, vérifié, images OK, session */
-    const publishReadiness = useMemo(() => {
-        if (step !== 5) {
-            return { ok: true as const, hints: [] as string[] }
-        }
+    /** Prêt à publier — calcul synchrone (pas de useMemo) pour éviter tout piège TDZ / deps */
+    let publishReadiness: { ok: boolean; hints: string[] }
+    if (step !== 5) {
+        publishReadiness = { ok: true, hints: [] }
+    } else {
         const hints: string[] = []
         if (!sellerId?.trim()) {
             hints.push('Session expirée ou incomplète — reconnectez-vous puis réessayez.')
@@ -210,8 +214,8 @@ export default function AddProductForm({
             const g = validateImageFile(f)
             if (g) hints.push(g)
         }
-        return { ok: hints.length === 0, hints }
-    }, [step, sellerId, isVendorAccount, verificationStatus, mainImage, gallery, validateStep])
+        publishReadiness = { ok: hints.length === 0, hints }
+    }
 
     const goNext = () => {
         const error = validateStep(step)
@@ -906,13 +910,5 @@ export default function AddProductForm({
                 )}
             </div>
         </div>
-    )
-}
-
-function Plus({ size, className }: { size: number; className?: string }) {
-    return (
-        <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-        </svg>
     )
 }

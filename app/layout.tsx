@@ -7,6 +7,7 @@ import Script from 'next/script'
 import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
 import OfflineBanner from '@/app/components/OfflineBanner'
 import SplashScreen from '@/app/components/SplashScreen'
+import { ZodClientInit } from '@/app/components/ZodClientInit'
 
 // Pas de <link rel="preload"> sur le .woff2 : toute route (dont /reset-password) hérite de la même
 // police via <html className>, donc pas de ressource « préchargée mais jamais utilisée » sur les pages légères.
@@ -108,6 +109,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </>
       )}
       <body className="m-0 p-0">
+        <ZodClientInit />
         {/* SPLASH SCREEN PWA */}
         <SplashScreen />
 

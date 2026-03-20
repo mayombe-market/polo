@@ -1,3 +1,4 @@
+import '@/lib/zod-jitless'
 import { z } from 'zod'
 
 /** Message unique pour téléphone ou ID de transaction (paiement Mobile Money / Airtel). */

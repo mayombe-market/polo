@@ -1,3 +1,4 @@
+import '@/lib/zod-jitless'
 import { z } from 'zod'
 import { zodPhone10Digits } from '@/lib/phonePaymentValidation'
 

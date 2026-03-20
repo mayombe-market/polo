@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { digitsOnly, isExactly10Digits, EXACTLY_10_DIGITS_MESSAGE } from '@/lib/phonePaymentValidation'
 
 const FIELDS = [
     { key: 'name', label: 'Nom complet', placeholder: 'Ex: Jean Makaya', icon: '👤', type: 'text' as const },
@@ -19,12 +20,19 @@ interface CashDeliveryStepProps {
 
 export default function CashDeliveryStep({ total, onConfirm, onBack, loading, serverError }: CashDeliveryStepProps) {
     const [form, setForm] = useState({ name: '', phone: '', quarter: '', address: '' })
+    const [fieldError, setFieldError] = useState('')
 
     const isReady = FIELDS.every(f => form[f.key as keyof typeof form].trim())
 
     const handleSubmit = () => {
         if (!isReady || loading) return
-        onConfirm(form)
+        const phoneDigits = digitsOnly(form.phone)
+        if (!isExactly10Digits(phoneDigits)) {
+            setFieldError(EXACTLY_10_DIGITS_MESSAGE)
+            return
+        }
+        setFieldError('')
+        onConfirm({ ...form, phone: phoneDigits })
     }
 
     return (
@@ -46,13 +54,20 @@ export default function CashDeliveryStep({ total, onConfirm, onBack, loading, se
                         <input
                             type={f.type}
                             value={form[f.key as keyof typeof form]}
-                            onChange={e => setForm(prev => ({ ...prev, [f.key]: e.target.value }))}
+                            onChange={e => {
+                                setForm(prev => ({ ...prev, [f.key]: e.target.value }))
+                                if (f.key === 'phone') setFieldError('')
+                            }}
                             placeholder={f.placeholder}
                             className="w-full py-3.5 px-4 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-orange-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600"
                         />
                     </div>
                 ))}
             </div>
+
+            {fieldError && (
+                <p className="text-red-500 text-[10px] font-bold mb-3 px-1">{fieldError}</p>
+            )}
 
             {/* Montant */}
             <div className="bg-green-50 dark:bg-green-500/5 border border-green-200 dark:border-green-500/15 rounded-xl p-4 mb-5">

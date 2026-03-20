@@ -613,19 +613,19 @@ export default function AdminOrders() {
                                                 <input
                                                     type="text"
                                                     inputMode="numeric"
-                                                    maxLength={19}
+                                                    maxLength={13}
                                                     value={adminInputs[order.id] || ''}
                                                     onChange={e => {
-                                                        const clean = e.target.value.replace(/\D/g, '').slice(0, 15)
+                                                        const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
                                                         setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
                                                     }}
-                                                    placeholder="ID du SMS (15 chiffres)"
+                                                    placeholder="ID du SMS (10 chiffres)"
                                                     className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600"
                                                 />
                                             </div>
 
                                             {/* Indicateur de correspondance */}
-                                            {adminInputs[order.id]?.length === 15 && (
+                                            {adminInputs[order.id]?.length === 10 && (
                                                 <div className="mt-2">
                                                     {adminInputs[order.id] === order.transaction_id ? (
                                                         <p className="text-green-600 text-[10px] font-black uppercase">

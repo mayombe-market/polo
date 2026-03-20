@@ -590,11 +590,11 @@ const supabase = getSupabaseBrowserClient()
   }, [step, orderId])
 
   const digits = txCode.replace(/\D/g, '')
-  const isTxComplete = digits.length === 15
-  const formatTx = (v: string) => v.replace(/\D/g, '').slice(0, 15).replace(/(\d{3})(?=\d)/g, '$1 ')
+  const isTxComplete = digits.length === 10
+  const formatTx = (v: string) => v.replace(/\D/g, '').slice(0, 10).replace(/(\d{3})(?=\d)/g, '$1 ')
 
   const submitTransaction = async () => {
-    if (!isTxComplete) { setTxError('Le code doit contenir exactement 15 chiffres'); return }
+    if (!isTxComplete) { setTxError('Le code doit contenir exactement 10 chiffres'); return }
     setTxError(''); setLoading(true); setServerError('')
     try {
       const res = await createSubscriptionOrder({
@@ -825,7 +825,7 @@ const supabase = getSupabaseBrowserClient()
     )
   }
 
-  // ═══ SAISIE DU CODE TRANSACTION (15 chiffres) ═══
+  // ═══ SAISIE DU CODE TRANSACTION (10 chiffres) ═══
   if (step === 'txid') {
     return (
       <div>
@@ -848,11 +848,11 @@ const supabase = getSupabaseBrowserClient()
             Code de transaction
           </h2>
           <p style={{ color: "#888", fontSize: 11 }}>
-            Entrez l&apos;ID à 15 chiffres reçu par SMS
+            Entrez l&apos;ID à 10 chiffres reçu par SMS
           </p>
         </div>
 
-        {/* Input 15 chiffres */}
+        {/* Input 10 chiffres */}
         <div style={{ marginBottom: 20 }}>
           <div style={{
             borderRadius: 16, padding: 4,
@@ -864,8 +864,8 @@ const supabase = getSupabaseBrowserClient()
               value={formatTx(txCode)}
               onChange={e => { setTxCode(e.target.value); setTxError('') }}
               onKeyDown={e => e.key === 'Enter' && submitTransaction()}
-              placeholder="000 000 000 000 000"
-              maxLength={19}
+              placeholder="000 000 000 0"
+              maxLength={13}
               autoFocus
               style={{
                 width: "100%", padding: "16px 20px",
@@ -878,10 +878,10 @@ const supabase = getSupabaseBrowserClient()
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, padding: "0 4px" }}>
             {txError
               ? <span style={{ color: "#F87171", fontSize: 10, fontWeight: 700 }}>⚠ {txError}</span>
-              : <span style={{ color: "#888", fontSize: 10 }}>Format: 15 chiffres</span>
+              : <span style={{ color: "#888", fontSize: 10 }}>Format: 10 chiffres</span>
             }
             <span style={{ color: isTxComplete ? "#4ADE80" : "#888", fontSize: 10, fontWeight: 800 }}>
-              {digits.length}/15
+              {digits.length}/10
             </span>
           </div>
         </div>
@@ -970,7 +970,7 @@ const supabase = getSupabaseBrowserClient()
           <span style={{ fontSize: 14, flexShrink: 0 }}>⚠️</span>
           <p style={{ color: "#E8A838", fontSize: 11, fontWeight: 600, lineHeight: 1.6, margin: 0 }}>
             Effectuez le transfert <strong>avant</strong> de cliquer sur le bouton ci-dessous.
-            Vous aurez besoin du code de transaction (ID) de <strong>15 chiffres</strong> reçu par SMS.
+            Vous aurez besoin du code de transaction (ID) de <strong>10 chiffres</strong> reçu par SMS.
           </p>
         </div>
 

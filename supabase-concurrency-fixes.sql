@@ -32,14 +32,14 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- Verrou optimiste : confirme SEULEMENT si le statut est encore 'pending'
 -- Retourne le tracking_number généré, ou NULL si déjà confirmé
 
-CREATE OR REPLACE FUNCTION admin_confirm_order(
+CREATE OR REPLACE FUNCTION public.admin_confirm_order(
     p_order_id UUID,
     p_tracking_number TEXT
 ) RETURNS TEXT AS $$
 DECLARE
     rows_affected INT;
 BEGIN
-    UPDATE orders
+    UPDATE public.orders
     SET status = 'confirmed',
         tracking_number = p_tracking_number
     WHERE id = p_order_id
@@ -53,7 +53,11 @@ BEGIN
 
     RETURN p_tracking_number;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+REVOKE ALL ON FUNCTION public.admin_confirm_order(UUID, TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.admin_confirm_order(UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.admin_confirm_order(UUID, TEXT) TO service_role;
 
 
 -- ═══ 3. RPC ATOMIQUE POUR REJET DE COMMANDE ═══

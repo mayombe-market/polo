@@ -6,6 +6,7 @@ import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail } from '@/app/a
 import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { digitsOnly, isExactly10Digits } from '@/lib/phonePaymentValidation'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -158,9 +159,14 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
     if (order.status !== 'pending') return { error: `Impossible de confirmer : la commande est déjà "${order.status}".` }
 
     if (order.transaction_id && adminTransactionId) {
-        const clientId = order.transaction_id.replace(/\s/g, '')
-        const adminId = adminTransactionId.replace(/\s/g, '')
-        if (clientId !== adminId) {
+        const clientId = digitsOnly(order.transaction_id)
+        const adminId = digitsOnly(adminTransactionId)
+        if (!isExactly10Digits(adminId)) {
+            return { error: 'L\'ID saisi doit contenir exactement 10 chiffres.' }
+        }
+        // Commandes récentes : 10 chiffres. Anciennes entrées plus longues : comparer les 10 derniers chiffres.
+        const clientRef = clientId.length === 10 ? clientId : clientId.slice(-10)
+        if (clientRef !== adminId) {
             return { error: 'Les ID de transaction ne correspondent pas' }
         }
     }
@@ -394,11 +400,21 @@ export async function createOrder(input: {
     if (input.landmark && input.landmark.length > 255) {
         return { error: 'Point de repère trop long (max 255 caractères).' }
     }
-    if (input.transaction_id && input.transaction_id.length > 100) {
-        return { error: 'ID de transaction trop long (max 100 caractères).' }
+
+    const txDigits = input.transaction_id ? digitsOnly(input.transaction_id) : ''
+    const phoneDigits = input.phone ? digitsOnly(input.phone) : ''
+
+    if (['mobile_money', 'airtel_money'].includes(input.payment_method)) {
+        if (!isExactly10Digits(txDigits)) {
+            return { error: 'L\'ID de transaction doit contenir exactement 10 chiffres.' }
+        }
     }
-    if (input.phone && input.phone.length > 20) {
-        return { error: 'Numéro de téléphone invalide.' }
+    if (input.payment_method === 'cash') {
+        if (!isExactly10Digits(phoneDigits)) {
+            return { error: 'Le numéro de téléphone doit contenir exactement 10 chiffres.' }
+        }
+    } else if (phoneDigits.length > 0 && !isExactly10Digits(phoneDigits)) {
+        return { error: 'Le numéro de téléphone doit contenir exactement 10 chiffres.' }
     }
     if (!input.items || input.items.length === 0 || input.items.length > 50) {
         return { error: 'Panier invalide.' }
@@ -485,7 +501,7 @@ export async function createOrder(input: {
         user_id: user.id,
         customer_name: input.customer_name || user.email || 'Client',
         customer_email: user.email || null,
-        phone: input.phone || '',
+        phone: phoneDigits || input.phone || '',
         city: input.city,
         district: input.district,
         status: 'pending',
@@ -496,7 +512,7 @@ export async function createOrder(input: {
         commission_amount: totalCommission,
         vendor_payout: vendorPayout,
         payout_status: 'pending',
-        transaction_id: input.transaction_id || null,
+        transaction_id: ['mobile_money', 'airtel_money'].includes(input.payment_method) ? txDigits : null,
         landmark: input.landmark || null,
         delivery_mode: deliveryMode,
         delivery_fee: deliveryFee,
@@ -697,6 +713,11 @@ export async function createSubscriptionOrder(input: {
         .eq('id', user.id)
         .single()
 
+    const txDigits = digitsOnly(input.transaction_id)
+    if (!isExactly10Digits(txDigits)) {
+        return { error: 'L\'ID de transaction doit contenir exactement 10 chiffres.' }
+    }
+
     const { data: order, error } = await supabase.from('orders').insert([{
         user_id: user.id,
         customer_name: profile?.full_name || user.email || 'Vendeur',
@@ -719,7 +740,7 @@ export async function createSubscriptionOrder(input: {
         commission_amount: 0,
         vendor_payout: 0,
         payout_status: 'paid',
-        transaction_id: input.transaction_id,
+        transaction_id: txDigits,
         order_type: 'subscription',
         subscription_plan_id: input.planId,
         subscription_billing: input.billing,

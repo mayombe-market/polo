@@ -12,7 +12,8 @@ import {
     TrendingUp, Eye, Users, Copy, Check, Trash2,
     ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
-    Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag
+    Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
+    Crown, Sparkles
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -88,6 +89,18 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const isGrace = subscriptionStatus === 'grace'
     const totalDays = profile?.subscription_billing === 'yearly' ? 365 : 30
 
+    /** Même logique que BecomeVendorCta : masquer si plan payant actif ou legacy */
+    const planKey = String(currentPlan || '').toLowerCase()
+    const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit'
+    const vendorHasPaidCoverage =
+        !isFreeTier && (subscriptionStatus === 'active' || subscriptionStatus === 'legacy')
+    const showVendorPlanCta = !vendorHasPaidCoverage
+
+    const vendorPlanBtnStyle = {
+        background: 'linear-gradient(135deg, #E8A838 0%, #D4782F 100%)',
+        boxShadow: '0 6px 20px rgba(232,168,56,0.35)',
+    } as const
+
     const [showLimitWarning, setShowLimitWarning] = useState(false)
     const [showUpgradePricing, setShowUpgradePricing] = useState(false)
     const [showUpgradeCheckout, setShowUpgradeCheckout] = useState(false)
@@ -95,6 +108,18 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [upgradeSelectedPlan, setUpgradeSelectedPlan] = useState<any>(null)
 
     const supabase = getSupabaseBrowserClient()
+
+    // Lien depuis le header / CTA « Activer mon abonnement » : ?upgrade=1 → ouvrir les plans
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const params = new URLSearchParams(window.location.search)
+        if (params.get('upgrade') !== '1') return
+        setShowUpgradePricing(true)
+        params.delete('upgrade')
+        const q = params.toString()
+        const next = q ? `${window.location.pathname}?${q}` : window.location.pathname
+        window.history.replaceState(null, '', next)
+    }, [])
 
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
@@ -361,6 +386,24 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     })}
                 </nav>
 
+                {showVendorPlanCta && (
+                    <div className="px-3 pb-3 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setShowUpgradePricing(true)}
+                            title={sidebarOpen ? undefined : 'Activer mon abonnement'}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-white text-[9px] font-black uppercase tracking-wide shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                            style={vendorPlanBtnStyle}
+                        >
+                            <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                                <Crown size={sidebarOpen ? 16 : 18} strokeWidth={2.5} />
+                                {sidebarOpen && <Sparkles size={13} className="opacity-90" strokeWidth={2.5} />}
+                            </span>
+                            {sidebarOpen && <span className="leading-tight text-left">Activer mon abonnement</span>}
+                        </button>
+                    </div>
+                )}
+
                 {sidebarOpen && (
                     <div className="p-4 mx-3 mb-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
                         <div className="flex items-center gap-3">
@@ -406,6 +449,24 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 pb-24 md:pb-0 overflow-y-auto">
+                {/* CTA abonnement — mobile (menu en bas : bandeau sous le header de page) */}
+                {showVendorPlanCta && (
+                    <div className="md:hidden px-3 pt-3 pb-1">
+                        <button
+                            type="button"
+                            onClick={() => setShowUpgradePricing(true)}
+                            className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 px-4 text-white text-[10px] font-black uppercase tracking-wide shadow-lg transition-transform active:scale-[0.98]"
+                            style={vendorPlanBtnStyle}
+                        >
+                            <span className="inline-flex items-center gap-0.5 flex-shrink-0">
+                                <Crown size={17} strokeWidth={2.5} />
+                                <Sparkles size={14} className="opacity-90" strokeWidth={2.5} />
+                            </span>
+                            Activer mon abonnement
+                        </button>
+                    </div>
+                )}
+
                 {/* Bannière vérification */}
                 <VerificationBanner verificationStatus={profile?.verification_status} />
 

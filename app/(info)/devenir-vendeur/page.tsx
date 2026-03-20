@@ -87,6 +87,24 @@ export default function DevenirVendeurPage() {
         <p style={{ color: "#555", fontSize: 12, marginTop: 12 }}>
           Aucun frais d'inscription — Commencez avec le plan gratuit
         </p>
+        <p style={{ color: "#888", fontSize: 12, marginTop: 20 }}>
+          <span style={{ color: "#666" }}>Déjà vendeur ?</span>{' '}
+          <button
+            type="button"
+            onClick={() => router.push("/vendor/dashboard?upgrade=1")}
+            style={{
+              background: "none",
+              border: "none",
+              padding: 0,
+              cursor: "pointer",
+              color: "#E8A838",
+              fontWeight: 700,
+              textDecoration: "underline",
+            }}
+          >
+            Activer ou renouveler mon abonnement
+          </button>
+        </p>
       </div>
 
       {/* ══════════════ ÉTAPES ══════════════ */}

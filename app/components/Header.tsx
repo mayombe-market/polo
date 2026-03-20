@@ -13,6 +13,7 @@ import { Menu, X, Bell } from 'lucide-react'
 const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 import { getUnreadNotifCount } from '@/app/actions/notifications'
 import { useAuth } from '@/hooks/useAuth'
+import BecomeVendorCta from '@/app/components/BecomeVendorCta'
 import { useRealtime } from '@/hooks/useRealtime'
 
 export default function Header() {
@@ -113,6 +114,8 @@ export default function Header() {
                         </Link>
                     )}
 
+                    <BecomeVendorCta variant="header-desktop" />
+
                     <CartBadge />
 
                     <div className="relative group cursor-pointer">
@@ -196,6 +199,10 @@ export default function Header() {
                     </div>
 
                     <div className="flex flex-col gap-1">
+                        <div className="px-0 py-2">
+                            <BecomeVendorCta variant="header-mobile" onNavigate={() => setMobileMenuOpen(false)} />
+                        </div>
+
                         <button onClick={toggleDarkMode} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-left">
                             <span className="text-lg">{isDarkMode ? '☀️' : '🌙'}</span>
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{isDarkMode ? 'Mode clair' : 'Mode sombre'}</span>

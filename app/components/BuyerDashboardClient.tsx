@@ -24,6 +24,7 @@ import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
 import { getLoyaltyPoints } from '@/app/actions/ratings'
 import TripleRatingModal from '@/app/components/TripleRatingModal'
+import BecomeVendorCta from '@/app/components/BecomeVendorCta'
 import { useRouter } from 'next/navigation'
 
 type Page = 'home' | 'orders' | 'wishlist' | 'cart' | 'following' | 'messages' | 'notifs' | 'addresses' | 'profile' | 'settings'
@@ -442,6 +443,8 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                 </h1>
                 <p className="text-sm text-slate-400 font-bold mt-1">Voici votre espace personnel</p>
             </div>
+
+            <BecomeVendorCta variant="dashboard" />
 
             {/* Loyalty points banner */}
             {loyaltyPoints > 0 && (

@@ -45,13 +45,36 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Produits visibles par tous" ON products
     FOR SELECT USING (true);
 
--- Seul le vendeur propriétaire peut insérer ses produits
+-- Vendeur (rôle vendor) insère ses produits — aligné sur supabase-storage-products.sql
 CREATE POLICY "Vendeur insère ses produits" ON products
-    FOR INSERT WITH CHECK (auth.uid() = seller_id);
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        auth.uid() = seller_id
+        AND EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'vendor')
+    );
 
--- Seul le vendeur propriétaire peut modifier ses produits
 CREATE POLICY "Vendeur modifie ses produits" ON products
-    FOR UPDATE USING (auth.uid() = seller_id);
+    FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = seller_id)
+    WITH CHECK (auth.uid() = seller_id);
+
+-- Admin : back-office (voir supabase-storage-products.sql pour script complet)
+CREATE POLICY "Admin insère produits" ON products
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    );
+
+CREATE POLICY "Admin modifie tous les produits" ON products
+    FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
+    )
+    WITH CHECK (true);
 
 -- Seul le vendeur propriétaire ou un admin peut supprimer un produit
 CREATE POLICY "Vendeur ou admin supprime produit" ON products

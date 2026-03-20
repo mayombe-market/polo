@@ -615,7 +615,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Nouveau Produit</h2>
                                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1">Remplissez les informations</p>
                                 </div>
-                                <AddProductForm sellerId={user?.id} />
+                                <AddProductForm
+                                    sellerId={user?.id}
+                                    isVendorAccount={profile?.role === 'vendor'}
+                                    verificationStatus={profile?.verification_status}
+                                />
                             </>
                         )}
                         </>)}

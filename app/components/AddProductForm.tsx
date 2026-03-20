@@ -1,6 +1,5 @@
 'use client'
-import { useState, useMemo } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useMemo, useEffect } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -27,6 +26,66 @@ const mesChoix: Record<string, string[]> = {
     "Matériaux & BTP": ["Ciment & Fer", "Plomberie", "Électricité", "Peinture & Finition", "Outillage"],
 }
 
+/** Max 5 Mo — aligné UI + upload (évite chargements interminables) */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024
+
+function validateImageFile(file: File | null): string | null {
+    if (!file) return null
+    if (!file.type.startsWith('image/')) {
+        return `« ${file.name} » n'est pas une image (types acceptés : JPG, PNG, WebP, GIF).`
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+        const mb = (file.size / (1024 * 1024)).toFixed(1)
+        return `« ${file.name} » fait ${mb} Mo — maximum 5 Mo par image.`
+    }
+    return null
+}
+
+const UPLOAD_TIMEOUT_MS = 30_000
+
+const MSG_SLOW_UPLOAD =
+    'Connexion lente, veuillez réessayer avec une image plus légère.'
+
+const MSG_FRIENDLY_TECH =
+    'Oups, une petite erreur technique est survenue. Nos équipes sont prévenues. Réessayez dans un instant.'
+
+const UPLOAD_TIMEOUT_ERROR = '__UPLOAD_TIMEOUT__'
+
+function isTimeoutError(e: unknown): boolean {
+    return e instanceof Error && e.message === UPLOAD_TIMEOUT_ERROR
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+    return new Promise((resolve, reject) => {
+        const id = setTimeout(() => reject(new Error(UPLOAD_TIMEOUT_ERROR)), ms)
+        promise.then(
+            (v) => {
+                clearTimeout(id)
+                resolve(v)
+            },
+            (err) => {
+                clearTimeout(id)
+                reject(err)
+            }
+        )
+    })
+}
+
+function sleep(ms: number) {
+    return new Promise<void>((r) => setTimeout(r, ms))
+}
+
+/** Une tentative ; en cas d’échec (hors timeout), une 2e tentative après courte pause */
+async function runUploadWithRetry<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+        return await fn()
+    } catch (e) {
+        if (isTimeoutError(e)) throw e
+        await sleep(450)
+        return await fn()
+    }
+}
+
 const STEPS = [
     { id: 1, label: 'Infos', icon: Package },
     { id: 2, label: 'Prix & Stock', icon: Tag },
@@ -50,10 +109,24 @@ const presetColors = [
     { name: 'Beige', hex: '#D2B48C' },
 ]
 
-export default function AddProductForm({ sellerId }: { sellerId: string }) {
-    const router = useRouter()
+export type AddProductFormProps = {
+    sellerId?: string
+    /** Si false, le bouton Publier reste désactivé avec message d’aide */
+    isVendorAccount?: boolean
+    /** Requis côté serveur pour createProduct */
+    verificationStatus?: string | null
+}
+
+export default function AddProductForm({
+    sellerId,
+    isVendorAccount,
+    verificationStatus,
+}: AddProductFormProps) {
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
+    const [publishProgress, setPublishProgress] = useState(0)
+    const [publishLabel, setPublishLabel] = useState('')
+    const [imageHint, setImageHint] = useState<string | null>(null)
 
     // Step 1: Infos de base
     const [name, setName] = useState('')
@@ -80,6 +153,42 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+
+    useEffect(() => {
+        if (!imageHint) return
+        const t = setTimeout(() => setImageHint(null), 8000)
+        return () => clearTimeout(t)
+    }, [imageHint])
+
+    /** Prêt à publier (étape 5) : vendeur, vérifié, images OK, session */
+    const publishReadiness = useMemo(() => {
+        if (step !== 5) {
+            return { ok: true as const, hints: [] as string[] }
+        }
+        const hints: string[] = []
+        if (!sellerId?.trim()) {
+            hints.push('Session expirée ou incomplète — reconnectez-vous puis réessayez.')
+        }
+        if (isVendorAccount !== true) {
+            hints.push('Votre compte doit être en mode vendeur pour mettre un produit en ligne.')
+        }
+        if (verificationStatus != null && verificationStatus !== 'verified') {
+            hints.push('Terminez la vérification de votre boutique (menu Vérification) avant de publier.')
+        }
+        const stepErr = validateStep(5)
+        if (stepErr) hints.push(stepErr)
+        if (mainImage) {
+            const im = validateImageFile(mainImage)
+            if (im) hints.push(im)
+        }
+        for (let i = 0; i < gallery.length; i++) {
+            const f = gallery[i]
+            if (!f) continue
+            const g = validateImageFile(f)
+            if (g) hints.push(g)
+        }
+        return { ok: hints.length === 0, hints }
+    }, [step, sellerId, isVendorAccount, verificationStatus, mainImage, gallery, name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity])
 
     // ===== VALIDATION PAR ÉTAPE =====
     const validateStep = (s: number): string | null => {
@@ -139,91 +248,168 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
     const addFeature = () => setFeatures([...features, ''])
     const removeFeature = (idx: number) => setFeatures(features.filter((_, index) => index !== idx))
 
+    const reportTechnicalFailure = (context: string, err: unknown) => {
+        console.error('[AddProductForm][support]', context, err)
+        if (isTimeoutError(err)) {
+            alert(MSG_SLOW_UPLOAD)
+            return
+        }
+        alert(MSG_FRIENDLY_TECH)
+    }
+
+    const isActionableServerMessage = (msg: string) => {
+        const m = msg.toLowerCase()
+        return (
+            m.includes('vérifi') ||
+            m.includes('verification') ||
+            m.includes('limite') ||
+            m.includes('abonnement') ||
+            m.includes('plan') ||
+            m.includes('connecté') ||
+            m.includes('non connecté')
+        )
+    }
+
     // ===== SUBMIT =====
     const handleSubmit = async () => {
-        const error = validateStep(5)
-        if (error) { alert(error); return }
-
-        const MAX_SIZE = 5 * 1024 * 1024
-        const allFiles = [mainImage!, ...gallery.filter(Boolean)] as File[]
-        for (const file of allFiles) {
-            if (file.size > MAX_SIZE) { alert(`"${file.name}" dépasse 5 Mo.`); return }
-            if (!file.type.startsWith('image/')) { alert(`"${file.name}" n'est pas une image.`); return }
+        if (loading) return
+        if (!publishReadiness.ok) {
+            const first = publishReadiness.hints[0]
+            if (first) setImageHint(first)
+            return
         }
 
+        const extFromFile = (file: File): string => {
+            const fromName = file.name.split('.').pop()?.toLowerCase()
+            if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fromName)) {
+                return fromName === 'jpeg' ? 'jpg' : fromName
+            }
+            if (file.type === 'image/png') return 'png'
+            if (file.type === 'image/webp') return 'webp'
+            if (file.type === 'image/gif') return 'gif'
+            return 'jpg'
+        }
+
+        const contentTypeForFile = (file: File, ext: string): string => {
+            if (file.type && file.type.startsWith('image/')) return file.type
+            if (ext === 'png') return 'image/png'
+            if (ext === 'webp') return 'image/webp'
+            if (ext === 'gif') return 'image/gif'
+            return 'image/jpeg'
+        }
+
+        const uploadFileOnce = async (file: File, basePath: string): Promise<string> => {
+            const ext = extFromFile(file)
+            const path = `${basePath}.${ext}`
+            const contentType = contentTypeForFile(file, ext)
+
+            const { error: upErr } = await supabase.storage.from('products').upload(path, file, {
+                contentType,
+                upsert: false,
+            })
+            if (upErr) throw new Error(upErr.message)
+            const { data } = supabase.storage.from('products').getPublicUrl(path)
+            return data.publicUrl
+        }
+
+        const uploadFileTimedWithRetry = (file: File, basePath: string) =>
+            runUploadWithRetry(() => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS))
+
         setLoading(true)
+        setPublishProgress(5)
+        setPublishLabel('Préparation…')
+
         try {
-            const extFromFile = (file: File): string => {
-                const fromName = file.name.split('.').pop()?.toLowerCase()
-                if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fromName)) {
-                    return fromName === 'jpeg' ? 'jpg' : fromName
-                }
-                if (file.type === 'image/png') return 'png'
-                if (file.type === 'image/webp') return 'webp'
-                if (file.type === 'image/gif') return 'gif'
-                return 'jpg'
-            }
-
-            const contentTypeForFile = (file: File, ext: string): string => {
-                if (file.type && file.type.startsWith('image/')) return file.type
-                if (ext === 'png') return 'image/png'
-                if (ext === 'webp') return 'image/webp'
-                if (ext === 'gif') return 'image/gif'
-                return 'image/jpeg'
-            }
-
-            const uploadFile = async (file: File, basePath: string): Promise<string> => {
-                const ext = extFromFile(file)
-                const path = `${basePath}.${ext}`
-                const contentType = contentTypeForFile(file, ext)
-
-                const { error } = await supabase.storage.from('products').upload(path, file, {
-                    contentType,
-                    upsert: false,
-                })
-                if (error) {
-                    throw new Error(`Upload échoué: ${error.message}`)
-                }
-                const { data } = supabase.storage.from('products').getPublicUrl(path)
-                return data.publicUrl
-            }
-
-            // Préfixe vendeur + horodatage + UUID → pas de collision entre vendeurs ni entre deux uploads rapides
             const uploadId = `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12)}`
-            const mainUrl = await uploadFile(mainImage!, `${sellerId}/${uploadId}-main`)
+            const galleryFiles = gallery.filter(Boolean) as File[]
+            const totalUploads = 1 + galleryFiles.length
+            let completed = 0
+
+            const bumpUploadProgress = () => {
+                completed++
+                const pct = 5 + Math.round((completed / totalUploads) * 70)
+                setPublishProgress(Math.min(75, pct))
+                setPublishLabel(`Envoi des images… ${completed}/${totalUploads}`)
+            }
+
+            setPublishLabel('Envoi de l’image principale…')
+            let mainUrl: string
+            try {
+                mainUrl = await uploadFileTimedWithRetry(mainImage!, `${sellerId}/${uploadId}-main`)
+                bumpUploadProgress()
+            } catch (e: unknown) {
+                reportTechnicalFailure('upload_image_principale', e)
+                return
+            }
 
             const galleryUrls: string[] = []
-            for (let i = 0; i < gallery.length; i++) {
-                if (gallery[i]) {
-                    galleryUrls.push(await uploadFile(gallery[i]!, `${sellerId}/${uploadId}-gallery-${i}`))
+            try {
+                let gIdx = 0
+                for (let i = 0; i < gallery.length; i++) {
+                    if (!gallery[i]) continue
+                    setPublishLabel(`Photo galerie ${gIdx + 1}/${galleryFiles.length}…`)
+                    galleryUrls.push(
+                        await uploadFileTimedWithRetry(gallery[i]!, `${sellerId}/${uploadId}-gallery-${i}`)
+                    )
+                    bumpUploadProgress()
+                    gIdx++
                 }
+            } catch (e: unknown) {
+                reportTechnicalFailure('upload_galerie', e)
+                return
             }
 
-            // Insert product via server action (évite les problèmes RLS côté client)
-            const result = await serverCreateProduct({
-                name,
-                price: parseInt(price),
-                description,
-                category: selectedCategory,
-                subcategory: selectedSubcategory,
-                img: mainUrl,
-                images_gallery: galleryUrls,
-                has_stock: hasStock,
-                stock_quantity: hasStock ? parseInt(stockQuantity) : 0,
-                has_variants: hasVariants,
-                sizes: hasVariants ? sizes : [],
-                colors: hasVariants ? selectedColors : [],
-            })
+            setPublishProgress(82)
+            setPublishLabel('Enregistrement du produit…')
 
-            if (result.error) throw new Error(result.error)
+            let result: Awaited<ReturnType<typeof serverCreateProduct>>
+            try {
+                result = await serverCreateProduct({
+                    name,
+                    price: parseInt(price, 10),
+                    description,
+                    category: selectedCategory,
+                    subcategory: selectedSubcategory,
+                    img: mainUrl,
+                    images_gallery: galleryUrls,
+                    has_stock: hasStock,
+                    stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
+                    has_variants: hasVariants,
+                    sizes: hasVariants ? sizes : [],
+                    colors: hasVariants ? selectedColors : [],
+                })
+            } catch (e: unknown) {
+                reportTechnicalFailure('server_createProduct', e)
+                return
+            }
 
-            await revalidateProducts()
-            alert("Produit mis en ligne !")
-            // Recharger la page proprement au lieu de router.refresh() qui peut crasher
+            if (result.error) {
+                console.error('[AddProductForm][support] createProduct error:', result.error)
+                if (isActionableServerMessage(result.error)) {
+                    alert(result.error)
+                } else {
+                    alert(MSG_FRIENDLY_TECH)
+                }
+                return
+            }
+
+            setPublishProgress(95)
+            setPublishLabel('Actualisation du catalogue…')
+            try {
+                await revalidateProducts()
+            } catch (revErr) {
+                console.error('[AddProductForm] revalidateProducts:', revErr)
+            }
+
+            setPublishProgress(100)
+            setPublishLabel('Terminé !')
+            alert('Produit mis en ligne !')
             window.location.href = '/vendor/dashboard?tab=products'
-        } catch (err: any) {
-            alert("Erreur : " + (err.message || 'Impossible de publier le produit.'))
-        } finally { setLoading(false) }
+        } finally {
+            setLoading(false)
+            setPublishProgress(0)
+            setPublishLabel('')
+        }
     }
 
     // ===== PROGRESS BAR =====
@@ -554,6 +740,18 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Photos du produit</h3>
                             <p className="text-sm text-slate-400">Image principale + 3 miniatures minimum (max 5 Mo / image).</p>
+                            {imageHint && (
+                                <p className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
+                                    {imageHint}
+                                </p>
+                            )}
+                            {!publishReadiness.ok && publishReadiness.hints.length > 0 && !loading && (
+                                <ul className="mt-3 text-[11px] text-slate-500 dark:text-slate-400 space-y-1 list-disc list-inside">
+                                    {publishReadiness.hints.slice(0, 4).map((h, idx) => (
+                                        <li key={idx}>{h}</li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
 
                         {/* Main image */}
@@ -575,7 +773,21 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                                     <label className="flex flex-col items-center gap-2 cursor-pointer">
                                         <Upload size={32} className="text-slate-300" />
                                         <span className="text-[10px] font-black uppercase text-slate-400">Cliquez pour ajouter</span>
-                                        <input type="file" accept="image/*" onChange={e => setMainImage(e.target.files?.[0] || null)} className="hidden" />
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            onChange={(e) => {
+                                                const f = e.target.files?.[0] || null
+                                                const err = validateImageFile(f)
+                                                if (err) {
+                                                    setImageHint(err)
+                                                    e.target.value = ''
+                                                    return
+                                                }
+                                                setMainImage(f)
+                                            }}
+                                            className="hidden"
+                                        />
                                     </label>
                                 )}
                             </div>
@@ -601,7 +813,23 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                                         ) : (
                                             <label className="flex flex-col items-center gap-1 cursor-pointer">
                                                 <span className="text-xl text-slate-300">+</span>
-                                                <input type="file" accept="image/*" onChange={e => { const n = [...gallery]; n[i] = e.target.files?.[0] || null; setGallery(n) }} className="hidden" />
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    onChange={(e) => {
+                                                        const f = e.target.files?.[0] || null
+                                                        const err = validateImageFile(f)
+                                                        if (err) {
+                                                            setImageHint(err)
+                                                            e.target.value = ''
+                                                            return
+                                                        }
+                                                        const n = [...gallery]
+                                                        n[i] = f
+                                                        setGallery(n)
+                                                    }}
+                                                    className="hidden"
+                                                />
                                             </label>
                                         )}
                                     </div>
@@ -633,15 +861,31 @@ export default function AddProductForm({ sellerId }: { sellerId: string }) {
                         Suivant <ChevronRight size={16} />
                     </button>
                 ) : (
-                    <button
-                        type="button"
-                        onClick={handleSubmit}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-green-600 text-white font-black uppercase text-xs hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
-                    >
-                        {loading ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                        {loading ? 'Publication...' : 'Publier le produit'}
-                    </button>
+                    <div className="flex flex-col items-end gap-2 w-full max-w-md ml-auto">
+                        {loading && (
+                            <div className="w-full space-y-1.5">
+                                <div className="flex justify-between text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">
+                                    <span>{publishLabel || 'Publication…'}</span>
+                                    <span>{publishProgress}%</span>
+                                </div>
+                                <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                        className="h-full bg-green-500 rounded-full transition-[width] duration-300 ease-out"
+                                        style={{ width: `${Math.max(publishProgress, 3)}%` }}
+                                    />
+                                </div>
+                            </div>
+                        )}
+                        <button
+                            type="button"
+                            onClick={handleSubmit}
+                            disabled={loading || !publishReadiness.ok}
+                            className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-green-600 text-white font-black uppercase text-xs hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {loading ? <Loader2 size={16} className="animate-spin shrink-0" /> : <Check size={16} />}
+                            {loading ? (publishLabel || 'Publication…') : 'Publier le produit'}
+                        </button>
+                    </div>
                 )}
             </div>
         </div>

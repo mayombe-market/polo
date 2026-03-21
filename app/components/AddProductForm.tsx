@@ -1,4 +1,5 @@
 'use client'
+import type { Session } from '@supabase/supabase-js'
 import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
@@ -74,10 +75,18 @@ const mesChoix: Record<string, string[]> = {
 /** Max 5 Mo — aligné UI + upload (évite chargements interminables) */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 
+/** Safari / iOS : MIME parfois vide ou application/octet-stream malgré une photo valide */
+function looksLikeImageFileByName(file: File): boolean {
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? ''
+    return ['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif', 'bmp'].includes(ext)
+}
+
 function validateImageFile(file: File | null): string | null {
     if (!file) return null
-    if (!file.type.startsWith('image/')) {
-        return `« ${file.name} » n'est pas une image (types acceptés : JPG, PNG, WebP, GIF).`
+    const mimeOk = file.type.startsWith('image/')
+    const octetStream = file.type === 'application/octet-stream' || file.type === ''
+    if (!mimeOk && !(octetStream && looksLikeImageFileByName(file))) {
+        return `« ${file.name} » n'est pas une image (types acceptés : JPG, PNG, WebP, GIF, HEIC…).`
     }
     if (file.size > MAX_IMAGE_BYTES) {
         const mb = (file.size / (1024 * 1024)).toFixed(1)
@@ -95,7 +104,16 @@ const COMPRESS_TIMEOUT_MS = 60_000
 /** Action serveur createProduct — même plafond 120 s */
 const CREATE_PRODUCT_TIMEOUT_MS = 120_000
 
+/** Plafond getSession / refreshSession — sans ça, un réseau bloqué laisse « Vérification de la session » tourner indéfiniment */
+const SESSION_VERIFY_TIMEOUT_MS = 18_000
+
+/** Si le JWT expire dans plus de 2 min, on ne force pas refreshSession (moins d’appels réseau, moins de risques de blocage) */
+const SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS = 120_000
+
 const LOGIN_REDIRECT = `/?redirect=${encodeURIComponent('/vendor/dashboard?tab=products')}`
+
+const MSG_SESSION_VERIFY_TIMEOUT =
+    'La vérification de session a pris trop de temps (connexion lente ou coupée). Vérifiez le réseau et réessayez. Si ça continue, déconnectez-vous puis reconnectez-vous.'
 
 const MSG_SLOW_UPLOAD =
     'Connexion très lente : l’envoi d’une image a dépassé 2 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
@@ -202,29 +220,91 @@ function logStorageOrPostgrestError(context: string, err: unknown) {
 }
 
 /**
- * Avant upload : session locale + refresh JWT. Retourne l’UUID à utiliser pour les chemins Storage (doit = auth.uid() pour RLS).
+ * Avant upload : session locale + refresh JWT si bientôt expiré. Retourne l’UUID pour Storage (doit = auth.uid() pour RLS).
+ * Toutes les lectures auth passent par un timeout pour éviter un spinner infini si le réseau ou Supabase ne répond pas.
  */
 async function ensureSessionBeforePublish(
     supabase: ReturnType<typeof getSupabaseBrowserClient>,
     propSellerId?: string,
-): Promise<{ userId: string } | { redirect: true }> {
-    const { data: { session: initial }, error: initErr } = await supabase.auth.getSession()
-    if (initErr) {
-        console.error('[AddProductForm] getSession (initial):', initErr.message)
+): Promise<{ userId: string } | { redirect: true } | { abort: true }> {
+    type GetSessionBundle = { data: { session: Session | null }; error: { message: string } | null }
+
+    let initial: Session | null = null
+    try {
+        const { data, error: initErr } = (await withTimeout(
+            supabase.auth.getSession(),
+            SESSION_VERIFY_TIMEOUT_MS,
+        )) as GetSessionBundle
+        if (initErr) {
+            console.error('[AddProductForm] getSession (initial):', initErr.message)
+        }
+        initial = data.session
+    } catch (e: unknown) {
+        if (isTimeoutError(e)) {
+            console.error('[AddProductForm] getSession timeout (session gate)')
+            alert(MSG_SESSION_VERIFY_TIMEOUT)
+            return { abort: true }
+        }
+        throw e
     }
+
     if (!initial?.user?.id) {
         window.location.href = LOGIN_REDIRECT
         return { redirect: true }
     }
 
-    const { data: refreshed, error: refErr } = await supabase.auth.refreshSession()
-    if (refErr) {
-        console.warn('[AddProductForm] refreshSession:', refErr.message)
+    const expMs =
+        typeof initial.expires_at === 'number' && Number.isFinite(initial.expires_at)
+            ? initial.expires_at * 1000
+            : null
+    const shouldRefresh =
+        expMs == null || expMs < Date.now() + SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS
+
+    if (shouldRefresh) {
+        try {
+            const { error: refErr } = (await withTimeout(
+                supabase.auth.refreshSession(),
+                SESSION_VERIFY_TIMEOUT_MS,
+            )) as { error: { message: string } | null }
+            if (refErr) {
+                console.warn('[AddProductForm] refreshSession:', refErr.message)
+            }
+        } catch (e: unknown) {
+            if (isTimeoutError(e)) {
+                console.warn(
+                    '[AddProductForm] refreshSession timeout — poursuite si le jeton en mémoire est encore valide',
+                )
+            } else {
+                console.warn('[AddProductForm] refreshSession:', e)
+            }
+        }
     }
 
-    const { data: { session: after } } = await supabase.auth.getSession()
-    const userId = refreshed?.session?.user?.id ?? after?.user?.id ?? initial.user.id
-    if (!userId) {
+    let after: Session | null = initial
+    try {
+        const { data } = (await withTimeout(
+            supabase.auth.getSession(),
+            SESSION_VERIFY_TIMEOUT_MS,
+        )) as GetSessionBundle
+        if (data.session?.user?.id) {
+            after = data.session
+        }
+    } catch (e: unknown) {
+        if (isTimeoutError(e)) {
+            console.warn('[AddProductForm] getSession (after refresh) timeout — utilisation de la session déjà lue')
+        } else {
+            throw e
+        }
+    }
+
+    const userId = after?.user?.id ?? initial.user.id
+    const afterExp =
+        typeof after?.expires_at === 'number' && Number.isFinite(after.expires_at)
+            ? after.expires_at * 1000
+            : null
+    const tokenStillValid = afterExp == null || afterExp > Date.now() + 5_000
+
+    if (!userId || !tokenStillValid) {
         window.location.href = LOGIN_REDIRECT
         return { redirect: true }
     }
@@ -316,8 +396,27 @@ export default function AddProductForm({
     // Step 5: Images
     const [mainImage, setMainImage] = useState<File | null>(null)
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
+    /** Fallback si les props serveur (user.id) sont vides alors que la session navigateur existe */
+    const [sessionUserId, setSessionUserId] = useState<string | null>(null)
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+
+    useEffect(() => {
+        let cancelled = false
+        const syncSessionUser = () => {
+            void supabase.auth.getSession().then((res: { data: { session: Session | null } }) => {
+                if (!cancelled) setSessionUserId(res.data.session?.user?.id ?? null)
+            })
+        }
+        syncSessionUser()
+        const { data: sub } = supabase.auth.onAuthStateChange(() => {
+            syncSessionUser()
+        })
+        return () => {
+            cancelled = true
+            sub.subscription.unsubscribe()
+        }
+    }, [supabase])
 
     const validationCtx: ProductFormValidationContext = {
         name,
@@ -342,7 +441,8 @@ export default function AddProductForm({
         publishReadiness = { ok: true, hints: [] }
     } else {
         const hints: string[] = []
-        if (!sellerId?.trim()) {
+        const effectiveSellerId = sellerId?.trim() || sessionUserId?.trim()
+        if (!effectiveSellerId) {
             hints.push('Session expirée ou incomplète — reconnectez-vous puis réessayez.')
         }
         if (isVendorAccount !== true) {
@@ -449,7 +549,12 @@ export default function AddProductForm({
             m.includes('abonnement') ||
             m.includes('plan') ||
             m.includes('connecté') ||
-            m.includes('non connecté')
+            m.includes('non connecté') ||
+            m.includes('reconnectez') ||
+            m.includes('session') ||
+            m.includes('incohérent') ||
+            m.includes('expirée') ||
+            m.includes('expired')
         )
     }
 
@@ -464,12 +569,14 @@ export default function AddProductForm({
 
         const extFromFile = (file: File): string => {
             const fromName = file.name.split('.').pop()?.toLowerCase()
-            if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif'].includes(fromName)) {
-                return fromName === 'jpeg' ? 'jpg' : fromName
+            if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'heif'].includes(fromName)) {
+                if (fromName === 'jpeg') return 'jpg'
+                return fromName
             }
             if (file.type === 'image/png') return 'png'
             if (file.type === 'image/webp') return 'webp'
             if (file.type === 'image/gif') return 'gif'
+            if (file.type === 'image/heic' || file.type === 'image/heif') return 'heic'
             return 'jpg'
         }
 
@@ -478,6 +585,7 @@ export default function AddProductForm({
             if (ext === 'png') return 'image/png'
             if (ext === 'webp') return 'image/webp'
             if (ext === 'gif') return 'image/gif'
+            if (ext === 'heic' || ext === 'heif') return 'image/heic'
             return 'image/jpeg'
         }
 
@@ -529,12 +637,18 @@ export default function AddProductForm({
         setPublishProgress(5)
 
         try {
+            console.log('LOG 1: Début session')
             setPublishLabel('Vérification de la session…')
             const gate = await ensureSessionBeforePublish(supabase, sellerId)
-            if ('redirect' in gate) {
+            if ('redirect' in gate || 'abort' in gate) {
+                console.log(
+                    '[AddProductForm publish] Arrêt après session:',
+                    'redirect' in gate ? 'redirect login' : 'abort (timeout / erreur)',
+                )
                 return
             }
             const storageUserId = gate.userId
+            console.log('[AddProductForm publish] Session OK, storageUserId (8 premiers car.)', storageUserId.slice(0, 8) + '…')
 
             setPublishLabel('Préparation…')
 
@@ -555,39 +669,68 @@ export default function AddProductForm({
             let fileMain: File
             const galleryPrepared: { slotIndex: number; file: File }[] = []
             try {
+                console.log('LOG 2: Début compression image principale', {
+                    name: mainImage?.name,
+                    type: mainImage?.type,
+                    size: mainImage?.size,
+                })
                 fileMain = await safeCompress(mainImage!)
+                console.log('[AddProductForm publish] Compression principale terminée', {
+                    name: fileMain.name,
+                    type: fileMain.type,
+                    size: fileMain.size,
+                })
                 for (let i = 0; i < gallery.length; i++) {
                     const f = gallery[i]
                     if (!f) continue
+                    console.log(`[AddProductForm publish] Compression galerie slot ${i}`, {
+                        name: f.name,
+                        type: f.type,
+                        size: f.size,
+                    })
                     galleryPrepared.push({ slotIndex: i, file: await safeCompress(f) })
                 }
+                console.log('[AddProductForm publish] Toutes les compressions terminées', {
+                    gallerySlots: galleryPrepared.length,
+                })
             } catch (e: unknown) {
+                console.error('[AddProductForm publish] Échec dans le bloc compression (try interne)', e)
                 await reportTechnicalFailure('compression_images', e)
                 return
             }
 
+            console.log('LOG 3: Fin compression, début upload Storage', {
+                uploadId,
+                totalUploads,
+            })
             setPublishLabel('Envoi de l’image principale…')
             let mainUrl: string
             try {
                 mainUrl = await uploadFileTimedWithRetry(fileMain, `${storageUserId}/${uploadId}-main`)
                 bumpUploadProgress()
             } catch (e: unknown) {
+                console.error('[AddProductForm publish] Upload image principale échoué', e)
                 await reportTechnicalFailure('upload_image_principale', e)
                 return
             }
+
+            console.log('LOG 4: Upload réussi, URL:', mainUrl)
 
             const galleryUrls: string[] = []
             try {
                 let gIdx = 0
                 for (const { slotIndex, file: gFile } of galleryPrepared) {
                     setPublishLabel(`Photo galerie ${gIdx + 1}/${galleryFiles.length}…`)
+                    console.log(`[AddProductForm publish] Upload galerie ${gIdx + 1}/${galleryPrepared.length} slot ${slotIndex}`)
                     galleryUrls.push(
                         await uploadFileTimedWithRetry(gFile, `${storageUserId}/${uploadId}-gallery-${slotIndex}`)
                     )
+                    console.log(`[AddProductForm publish] Galerie ${gIdx + 1} OK, URL:`, galleryUrls[galleryUrls.length - 1])
                     bumpUploadProgress()
                     gIdx++
                 }
             } catch (e: unknown) {
+                console.error('[AddProductForm publish] Upload galerie échoué', e)
                 await reportTechnicalFailure('upload_galerie', e)
                 return
             }
@@ -597,6 +740,12 @@ export default function AddProductForm({
 
             let result: Awaited<ReturnType<typeof serverCreateProduct>>
             try {
+                console.log('LOG 5: Envoi vers serverCreateProduct', {
+                    name,
+                    price: parseInt(price, 10),
+                    galleryCount: galleryUrls.length,
+                    img: mainUrl,
+                })
                 result = await withTimeout(
                     serverCreateProduct({
                         name,
@@ -615,7 +764,11 @@ export default function AddProductForm({
                     }),
                     CREATE_PRODUCT_TIMEOUT_MS,
                 )
+                console.log('[AddProductForm publish] serverCreateProduct: réponse reçue', {
+                    hasError: 'error' in result && Boolean(result.error),
+                })
             } catch (e: unknown) {
+                console.error('[AddProductForm publish] serverCreateProduct: exception / timeout avant réponse', e)
                 await reportTechnicalFailure('server_createProduct', e)
                 return
             }
@@ -643,6 +796,7 @@ export default function AddProductForm({
                 return
             }
 
+            console.log('[AddProductForm publish] createProduct succès (réponse sans error) → revalidate + redirection')
             setPublishProgress(95)
             setPublishLabel('Finalisation…')
             // Ne pas bloquer la redirection si revalidatePath rame (évite spinner infini côté client)

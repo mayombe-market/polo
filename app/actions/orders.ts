@@ -958,15 +958,13 @@ export async function createProduct(input: {
         }
         if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
 
+        // Le seller_id en base est toujours `user.id` (jamais pris depuis le client) — pas d’usurpation possible.
+        // On log seulement si le client pensait être un autre UUID (cookies / onglets) sans bloquer la publication.
         if (input.expected_seller_id != null && input.expected_seller_id.trim() !== user.id) {
-            console.error('[createProduct] expected_seller_id !== auth.uid()', {
+            console.warn('[createProduct] expected_seller_id !== auth.uid() (on continue avec la session serveur)', {
                 expected: input.expected_seller_id,
                 actual: user.id,
             })
-            return {
-                error: 'Session incohérente. Reconnectez-vous et réessayez.',
-                diagnostic: { code: 'seller_mismatch', details: 'expected_seller_id' },
-            }
         }
 
         // ═══ Vérification de l'identité vendeur ═══

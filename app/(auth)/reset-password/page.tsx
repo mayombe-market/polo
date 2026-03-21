@@ -7,8 +7,13 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { withTimeout } from '@/lib/withTimeout'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 
-const AUTH_WAIT_MS = 12_000
-const UPDATE_WAIT_MS = 25_000
+/** getSession après recovery : réseaux lents / mobile. */
+const AUTH_WAIT_MS = 20_000
+/**
+ * updateUser vers GoTrue peut dépasser 25s (latence, Cloudflare, réseau instable).
+ * Ne pas confondre avec les timeouts middleware (inchangés).
+ */
+const UPDATE_WAIT_MS = 90_000
 
 function authErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
@@ -261,20 +266,41 @@ function ResetPasswordForm() {
 
             console.debug('[reset-password] updateUser…', { userId: session.user.id })
 
-            try {
-                type UpdateUserResult = Awaited<ReturnType<typeof client.auth.updateUser>>
-                const { error: upErr } = await withTimeout<UpdateUserResult>(
+            type UpdateUserResult = Awaited<ReturnType<typeof client.auth.updateUser>>
+            const timeoutMsg =
+                'La mise à jour prend trop de temps. Vérifiez la connexion ou réessayez dans un instant.'
+
+            const runUpdateUser = () =>
+                withTimeout<UpdateUserResult>(
                     client.auth.updateUser({ password }),
                     UPDATE_WAIT_MS,
-                    'La mise à jour prend trop de temps. Vérifiez la connexion ou réessayez dans un instant.'
+                    timeoutMsg
                 )
+
+            try {
+                let upErr: UpdateUserResult['error'] | undefined
+                try {
+                    const { error: e1 } = await runUpdateUser()
+                    upErr = e1
+                } catch (e) {
+                    const msg = e instanceof Error ? e.message : ''
+                    const isTimeout = msg === timeoutMsg || msg.toLowerCase().includes('trop de temps')
+                    if (isTimeout) {
+                        console.warn('[reset-password] updateUser timeout, nouvel essai dans 2s…')
+                        await new Promise((r) => setTimeout(r, 2000))
+                        const { error: e2 } = await runUpdateUser()
+                        upErr = e2
+                    } else {
+                        throw e
+                    }
+                }
                 if (upErr) {
                     console.error('[reset-password] updateUser error:', upErr)
                     setError(upErr.message || authErrorMessage(upErr))
                     return
                 }
             } catch (e) {
-                console.error('[reset-password] updateUser timeout:', e)
+                console.error('[reset-password] updateUser timeout ou erreur:', e)
                 setError(authErrorMessage(e))
                 return
             }

@@ -117,7 +117,9 @@ function ProfileClient({ profile, user }: any) {
             </div>
 
             <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Description de votre boutique</label>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">
+                    Slogan / accroche ({SHOP_DESCRIPTION_MAX_LENGTH} car. max)
+                </label>
                 <textarea
                     name="shop_description"
                     defaultValue={profile?.shop_description || ''}
@@ -128,26 +130,31 @@ function ProfileClient({ profile, user }: any) {
                             e.target.value.slice(0, SHOP_DESCRIPTION_MAX_LENGTH).length
                         )
                     }
-                    placeholder="Magasin spécialisé dans les vêtements de luxe..."
+                    placeholder="Une ligne sous le nom de ta boutique…"
                     className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border-none outline-none focus:ring-2 focus:ring-green-500 transition-all font-bold resize-none min-h-[4.5rem]"
                 />
                 <p className="text-[10px] text-slate-500 mt-1 px-2 text-right">
                     {shopDescLen}/{SHOP_DESCRIPTION_MAX_LENGTH}
                 </p>
-                <p className="text-[10px] text-slate-500 mt-1 px-2 italic">Slogan court — visible sur ta page publique et sur tes fiches produit.</p>
+                <p className="text-[10px] text-slate-500 mt-1 px-2">
+                    Sous le nom sur ta page boutique <strong>et</strong> sur les fiches produit.
+                </p>
             </div>
 
             {/* Bio / Description longue */}
             <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">À propos (texte long)</label>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Description (200 car. max)</label>
                 <textarea
                     name="bio"
                     defaultValue={profile?.bio}
                     placeholder="Décris ta boutique en quelques mots... Ex: Streetwear premium, livraison rapide à Brazzaville"
                     rows={3}
+                    maxLength={200}
                     className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border-none outline-none focus:ring-2 focus:ring-green-500 transition-all font-bold resize-none"
                 />
-                <p className="text-[10px] text-slate-500 mt-1 px-2 italic">Visible sur ton profil boutique. Max 200 caractères.</p>
+                <p className="text-[10px] text-slate-500 mt-1 px-2 italic">
+                    En dessous du slogan sur ta page boutique publique uniquement (pas sur les fiches produit).
+                </p>
             </div>
 
             <div>

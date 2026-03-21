@@ -1951,7 +1951,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 </div>
             </div>
 
-            {/* Shop info */}
+            {/* Textes boutique (ce que les clients voient en premier sur ta page) */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 space-y-5">
                 <h3 className="font-black uppercase text-sm dark:text-white">Informations boutique</h3>
 
@@ -1966,7 +1966,9 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 </div>
 
                 <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Description de votre boutique</label>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">
+                        Slogan / accroche ({SHOP_DESCRIPTION_MAX_LENGTH} car. max)
+                    </label>
                     <textarea
                         value={formData.shop_description}
                         maxLength={SHOP_DESCRIPTION_MAX_LENGTH}
@@ -1977,28 +1979,37 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                                 shop_description: e.target.value.slice(0, SHOP_DESCRIPTION_MAX_LENGTH),
                             }))
                         }
-                        placeholder="Magasin spécialisé dans les vêtements de luxe..."
+                        placeholder="Une ligne sous le nom de ta boutique…"
                         className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold text-sm resize-none min-h-[4.5rem]"
                     />
                     <p className="text-[10px] text-slate-400 mt-1 text-right">
                         {formData.shop_description.length}/{SHOP_DESCRIPTION_MAX_LENGTH}
                     </p>
-                    <p className="text-[10px] text-slate-500 mt-1">Slogan court, visible sur ta page boutique et sous ton nom sur les fiches produit.</p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                        Affiché <strong>sous le nom</strong> sur ta page boutique <strong>et</strong> sur les <strong>fiches produit</strong>.
+                    </p>
                 </div>
 
                 <div>
-                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Description</label>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Description (200 car. max)</label>
                     <textarea
                         value={formData.bio}
                         onChange={e => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                        placeholder="Décrivez votre boutique..."
+                        placeholder="Décrivez votre boutique plus en détail…"
                         rows={3}
                         maxLength={200}
                         className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold text-sm resize-none"
                     />
                     <p className="text-[10px] text-slate-400 mt-1 text-right">{formData.bio.length}/200</p>
+                    <p className="text-[10px] text-slate-500 mt-1">
+                        Affichée <strong>en dessous du slogan</strong> sur ta page boutique publique uniquement (pas sur les fiches produit).
+                    </p>
                 </div>
+            </div>
 
+            {/* Coordonnées + politiques + infos : regroupés en bas comme avant */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 space-y-5">
+                <h3 className="font-black uppercase text-sm dark:text-white">Coordonnées</h3>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Téléphone</label>

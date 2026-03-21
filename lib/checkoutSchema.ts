@@ -10,7 +10,7 @@ export const CheckoutSchema = z.object({
     landmark: z.string().optional(), // Le fameux "Point de repère"
     payment_method: z.enum(['cod', 'mobile_money']), // COD = Cash on Delivery
     // Pas de .default() : le total affiché doit rester « articles seuls » jusqu’au choix explicite du mode.
-    delivery_mode: z.enum(['standard', 'express'], {
+    delivery_mode: z.enum(['standard', 'express', 'inter_urban'], {
         message: 'Choisissez un mode de livraison',
     }),
 })
@@ -22,3 +22,13 @@ export const DELIVERY_FEES = {
     standard: 1000,
     express: 2000,
 } as const
+
+/** Forfait livraison inter-ville (acheteur et vendeur dans des villes différentes). */
+export const DELIVERY_FEE_INTER_URBAN = 3500
+
+export const INTER_URBAN_DELIVERY_TIMELINE =
+    'Livraison prévue sous 24h à 96h (max 4 jours)'
+
+/** Alerte affichée avant le choix du paiement (tunnel inter-ville). */
+export const INTER_URBAN_PRE_PAYMENT_ALERT =
+    'Attention : Vous vous apprêtez à acheter dans une ville différente. Les frais de livraison sont différents. Voulez-vous continuer ?'

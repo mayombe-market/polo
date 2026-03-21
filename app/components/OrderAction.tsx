@@ -3,7 +3,8 @@
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
-import { DELIVERY_FEES } from '@/lib/checkoutSchema'
+import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
+import { orderRequiresInterUrbanDelivery, orderCityToProfileCity } from '@/lib/deliveryLocation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { ArrowRight } from 'lucide-react'
@@ -12,6 +13,10 @@ import CompleteProfileGateModal from './CompleteProfileGateModal'
 import StepIndicator from './checkout/StepIndicator'
 import LocationStep from './checkout/LocationStep'
 import DeliveryModeStep from './checkout/DeliveryModeStep'
+import {
+    InterUrbanDeliveryInfoStep,
+    InterUrbanPrePaymentStep,
+} from './checkout/InterUrbanCheckoutSteps'
 import PaymentMethodStep from './checkout/PaymentMethodStep'
 import TransferInfoStep from './checkout/TransferInfoStep'
 import EnterTransactionIdStep from './checkout/EnterTransactionIdStep'
@@ -19,7 +24,18 @@ import WaitingValidationStep from './checkout/WaitingValidationStep'
 import CashDeliveryStep from './checkout/CashDeliveryStep'
 import OrderConfirmedStep from './checkout/OrderConfirmedStep'
 
-type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
+type Step =
+    | 'location'
+    | 'delivery_mode'
+    | 'inter_urban_info'
+    | 'inter_urban_confirm'
+    | 'payment_method'
+    | 'transfer_info'
+    | 'enter_id'
+    | 'waiting'
+    | 'cash_form'
+    | 'confirmed'
+    | 'rejected'
 
 interface OrderActionProps {
     product: any
@@ -37,18 +53,23 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     const [transactionId, setTransactionId] = useState('')
     const [orderId, setOrderId] = useState('')
     const [orderData, setOrderData] = useState<any>(null)
-    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | 'inter_urban' | null>(null)
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
 
-    const deliveryFee = DELIVERY_FEES[deliveryMode]
+    const deliveryFee =
+        deliveryMode === 'inter_urban'
+            ? DELIVERY_FEE_INTER_URBAN
+            : deliveryMode
+              ? DELIVERY_FEES[deliveryMode]
+              : 0
     const grandTotal = product.price + deliveryFee
 
     // Step indicator index (4 steps: Retrait, Livraison, Paiement, Confirmation)
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (step === 'delivery_mode') return 1
+        if (['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step)) return 1
         if (['confirmed', 'rejected'].includes(step)) return 3
         return 2
     }
@@ -69,6 +90,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
             setProfileGateOpen(true)
             return
         }
+        setDeliveryMode(null)
         setIsModalOpen(true)
         setStep('location')
     }
@@ -79,7 +101,7 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
         setStep('location')
         setCity('')
         setDistrict('')
-        setDeliveryMode('standard')
+        setDeliveryMode(null)
         setPaymentMethod('')
         setTransactionId('')
         setOrderId('')
@@ -87,10 +109,29 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
     }
 
     // Localisation confirmée
-    const handleLocationConfirm = (selectedCity: string, selectedDistrict: string) => {
+    const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
         setCity(selectedCity)
         setDistrict(selectedDistrict)
-        setStep('delivery_mode')
+
+        const supabase = getSupabaseBrowserClient()
+        if (user?.id) {
+            await supabase
+                .from('profiles')
+                .update({
+                    city: orderCityToProfileCity(selectedCity),
+                    district: selectedDistrict.trim(),
+                })
+                .eq('id', user.id)
+        }
+
+        const inter = orderRequiresInterUrbanDelivery(selectedCity, [shop?.city])
+        if (inter) {
+            setDeliveryMode('inter_urban')
+            setStep('inter_urban_info')
+        } else {
+            setDeliveryMode(null)
+            setStep('delivery_mode')
+        }
     }
 
     // Mode de livraison choisi
@@ -111,11 +152,19 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
     // Soumission du transaction ID (Mobile Money / Airtel)
     const handleTransactionIdSubmit = async (id: string) => {
+        if (!deliveryMode) {
+            setOrderError('Choisissez un mode de livraison.')
+            return
+        }
         setTransactionId(id)
         setSaving(true)
         setOrderError('')
 
         try {
+            const fee =
+                deliveryMode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[deliveryMode]
             const result = await createOrderAction({
                 items: [{
                     id: product.id,
@@ -128,10 +177,10 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: grandTotal,
+                total_amount: product.price + fee,
                 transaction_id: id,
                 delivery_mode: deliveryMode,
-                delivery_fee: deliveryFee,
+                delivery_fee: fee,
             })
 
             if (result.error) {
@@ -160,10 +209,18 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
     // Soumission du formulaire Cash
     const handleCashConfirm = async (deliveryInfo: { name: string; phone: string; quarter: string; address: string }) => {
+        if (!deliveryMode) {
+            setOrderError('Choisissez un mode de livraison.')
+            return
+        }
         setSaving(true)
         setOrderError('')
 
         try {
+            const fee =
+                deliveryMode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[deliveryMode]
             const result = await createOrderAction({
                 items: [{
                     id: product.id,
@@ -176,12 +233,12 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: grandTotal,
+                total_amount: product.price + fee,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
                 delivery_mode: deliveryMode,
-                delivery_fee: deliveryFee,
+                delivery_fee: fee,
             })
 
             if (result.error) {
@@ -256,9 +313,11 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                         <div className="text-center mb-4">
                             <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
-                            {step !== 'location' && step !== 'delivery_mode' && (
+                            {step !== 'location' &&
+                                !['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step) && (
                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                                    {product.price.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F livraison
+                                    {product.price.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F{' '}
+                                    {deliveryMode === 'inter_urban' ? 'livraison inter-ville' : 'livraison'}
                                 </p>
                             )}
                         </div>
@@ -280,10 +339,30 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                             />
                         )}
 
+                        {step === 'inter_urban_info' && (
+                            <InterUrbanDeliveryInfoStep
+                                onContinue={() => setStep('inter_urban_confirm')}
+                                onBack={() => {
+                                    setDeliveryMode(null)
+                                    setStep('location')
+                                }}
+                            />
+                        )}
+
+                        {step === 'inter_urban_confirm' && (
+                            <InterUrbanPrePaymentStep
+                                onConfirm={() => setStep('payment_method')}
+                                onBack={() => setStep('inter_urban_info')}
+                            />
+                        )}
+
                         {step === 'payment_method' && (
                             <PaymentMethodStep
                                 onSelect={handlePaymentSelect}
-                                onBack={() => setStep('delivery_mode')}
+                                onBack={() => {
+                                    if (deliveryMode === 'inter_urban') setStep('inter_urban_confirm')
+                                    else setStep('delivery_mode')
+                                }}
                             />
                         )}
 

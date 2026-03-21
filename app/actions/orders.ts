@@ -7,6 +7,8 @@ import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { digitsOnly, isExactly10Digits } from '@/lib/phonePaymentValidation'
+import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
+import { orderRequiresInterUrbanDelivery, orderCityToProfileCity } from '@/lib/deliveryLocation'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -531,10 +533,42 @@ export async function createOrder(input: {
         (sum, item) => sum + item.price * item.quantity, 0
     )
 
-    // Frais de livraison (validés côté serveur)
-    const VALID_DELIVERY_FEES: Record<string, number> = { standard: 1000, express: 2000 }
-    const deliveryMode = input.delivery_mode || 'standard'
-    const deliveryFee = VALID_DELIVERY_FEES[deliveryMode] ?? VALID_DELIVERY_FEES.standard
+    const sellerIds = [...new Set(validatedItems.map(item => item.seller_id).filter(Boolean))]
+    const { data: sellerProfiles } = await supabase
+        .from('profiles')
+        .select('id, subscription_plan, city')
+        .in('id', sellerIds)
+
+    const sellerCityList = sellerIds.map((sid) => {
+        const row = sellerProfiles?.find((p) => p.id === sid)
+        return row?.city ?? null
+    })
+    const interUrban = orderRequiresInterUrbanDelivery(input.city, sellerCityList)
+
+    // Frais de livraison (validés côté serveur — recalculés, jamais fiables seuls depuis le client)
+    const VALID_LOCAL_FEES: Record<string, number> = { standard: 1000, express: 2000 }
+    const feeInput = Number(input.delivery_fee)
+    const modeInput = (input.delivery_mode || 'standard').trim()
+
+    let deliveryMode: string
+    let deliveryFee: number
+
+    if (interUrban) {
+        deliveryMode = 'inter_urban'
+        deliveryFee = DELIVERY_FEE_INTER_URBAN
+        if (modeInput !== 'inter_urban' || feeInput !== DELIVERY_FEE_INTER_URBAN) {
+            return {
+                error: 'Frais de livraison invalides pour une commande inter-ville (forfait 3 500 F). Rafraîchissez la page.',
+            }
+        }
+    } else {
+        deliveryMode = modeInput === 'express' ? 'express' : 'standard'
+        deliveryFee = VALID_LOCAL_FEES[deliveryMode]
+        if (modeInput === 'inter_urban' || feeInput !== deliveryFee) {
+            return { error: 'Frais de livraison invalides. Rafraîchissez la page.' }
+        }
+    }
+
     const serverTotal = itemsTotal + deliveryFee
 
     // ═══ VÉRIFICATION DU STOCK AVANT COMMANDE ═══
@@ -546,12 +580,6 @@ export async function createOrder(input: {
     }
 
     // ═══ COMMISSION DYNAMIQUE PAR VENDEUR ═══
-    const sellerIds = [...new Set(validatedItems.map(item => item.seller_id).filter(Boolean))]
-    const { data: sellerProfiles } = await supabase
-        .from('profiles')
-        .select('id, subscription_plan')
-        .in('id', sellerIds)
-
     const sellerPlanMap = new Map((sellerProfiles || []).map(p => [p.id, p.subscription_plan || 'free']))
 
     let totalCommission = 0
@@ -603,6 +631,15 @@ export async function createOrder(input: {
 
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
+
+    // Synchroniser ville / quartier de livraison sur le profil acheteur (aligné sur la commande)
+    await supabase
+        .from('profiles')
+        .update({
+            city: orderCityToProfileCity(input.city),
+            district: input.district?.trim() || null,
+        })
+        .eq('id', user.id)
 
     return { order: JSON.parse(JSON.stringify(order)) }
 }

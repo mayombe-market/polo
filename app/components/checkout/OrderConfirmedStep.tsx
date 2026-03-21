@@ -78,8 +78,20 @@ export default function OrderConfirmedStep({ orderData, type, onClose }: OrderCo
                     )}
                     <div className="flex justify-between text-[10px] font-bold">
                         <span className="text-slate-400">Livraison</span>
-                        <span className={`font-black ${orderData.delivery_mode === 'express' ? 'text-orange-500' : 'text-green-500'}`}>
-                            {orderData.delivery_mode === 'express' ? '⚡ Express (3-6H)' : '📦 Standard (6-48H)'}
+                        <span
+                            className={`font-black ${
+                                orderData.delivery_mode === 'inter_urban'
+                                    ? 'text-amber-600 dark:text-amber-400'
+                                    : orderData.delivery_mode === 'express'
+                                      ? 'text-orange-500'
+                                      : 'text-green-500'
+                            }`}
+                        >
+                            {orderData.delivery_mode === 'inter_urban'
+                                ? '🚚 Inter-ville (24-96h)'
+                                : orderData.delivery_mode === 'express'
+                                  ? '⚡ Express (3-6H)'
+                                  : '📦 Standard (6-48H)'}
                         </span>
                     </div>
                     {orderData.delivery_fee != null && (

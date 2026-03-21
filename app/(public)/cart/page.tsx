@@ -13,19 +13,34 @@ import AuthModal from '@/app/components/AuthModal'
 import StepIndicator from '@/app/components/checkout/StepIndicator'
 import LocationStep from '@/app/components/checkout/LocationStep'
 import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
+import {
+    InterUrbanDeliveryInfoStep,
+    InterUrbanPrePaymentStep,
+} from '@/app/components/checkout/InterUrbanCheckoutSteps'
 import PaymentMethodStep from '@/app/components/checkout/PaymentMethodStep'
 import TransferInfoStep from '@/app/components/checkout/TransferInfoStep'
 import EnterTransactionIdStep from '@/app/components/checkout/EnterTransactionIdStep'
 import WaitingValidationStep from '@/app/components/checkout/WaitingValidationStep'
 import CashDeliveryStep from '@/app/components/checkout/CashDeliveryStep'
 import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
-import { DELIVERY_FEES } from '@/lib/checkoutSchema'
+import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { useAuth } from '@/hooks/useAuth'
-import { isLocalDelivery, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
+import { orderRequiresInterUrbanDelivery, orderCityToProfileCity, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 
-type Step = 'location' | 'delivery_mode' | 'payment_method' | 'transfer_info' | 'enter_id' | 'waiting' | 'cash_form' | 'confirmed' | 'rejected'
+type Step =
+    | 'location'
+    | 'delivery_mode'
+    | 'inter_urban_info'
+    | 'inter_urban_confirm'
+    | 'payment_method'
+    | 'transfer_info'
+    | 'enter_id'
+    | 'waiting'
+    | 'cash_form'
+    | 'confirmed'
+    | 'rejected'
 
 export default function CartPage() {
     const { cart, total, itemCount, updateQuantity, removeFromCart, clearCart, loading } = useCart()
@@ -41,7 +56,7 @@ export default function CartPage() {
     const [step, setStep] = useState<Step>('location')
     const [city, setCity] = useState('')
     const [district, setDistrict] = useState('')
-    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | null>(null)
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | 'inter_urban' | null>(null)
     const [paymentMethod, setPaymentMethod] = useState('')
     const [transactionId, setTransactionId] = useState('')
     const [orderId, setOrderId] = useState('')
@@ -50,7 +65,12 @@ export default function CartPage() {
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
 
-    const deliveryFee = deliveryMode ? DELIVERY_FEES[deliveryMode] : 0
+    const deliveryFee =
+        deliveryMode === 'inter_urban'
+            ? DELIVERY_FEE_INTER_URBAN
+            : deliveryMode
+              ? DELIVERY_FEES[deliveryMode]
+              : 0
     const grandTotal = total + deliveryFee
 
     const supabase = getSupabaseBrowserClient()
@@ -82,12 +102,13 @@ export default function CartPage() {
         }
     }, [supabase, sellerIds])
 
-    const hasInterUrbanDelivery =
+    const hasInterUrbanDelivery = Boolean(
         buyerCity &&
-        sellerIds.some((sid) => {
-            const vc = sellerCities[sid]
-            return vc && !isLocalDelivery(buyerCity, vc)
-        })
+            orderRequiresInterUrbanDelivery(
+                buyerCity,
+                sellerIds.map((sid) => sellerCities[sid])
+            )
+    )
 
     // Check user on first interaction (avec timeout)
     const checkUser = async () => {
@@ -100,7 +121,7 @@ export default function CartPage() {
 
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (step === 'delivery_mode') return 1
+        if (['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step)) return 1
         if (['confirmed', 'rejected'].includes(step)) return 3
         return 2
     }
@@ -136,10 +157,30 @@ export default function CartPage() {
         setOrderData(null)
     }
 
-    const handleLocationConfirm = (selectedCity: string, selectedDistrict: string) => {
+    const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
         setCity(selectedCity)
         setDistrict(selectedDistrict)
-        setStep('delivery_mode')
+
+        const u = await checkUser()
+        if (u) {
+            await supabase
+                .from('profiles')
+                .update({
+                    city: orderCityToProfileCity(selectedCity),
+                    district: selectedDistrict.trim(),
+                })
+                .eq('id', u.id)
+        }
+
+        const sellerCityValues = sellerIds.map((sid) => sellerCities[sid])
+        const inter = orderRequiresInterUrbanDelivery(selectedCity, sellerCityValues)
+        if (inter) {
+            setDeliveryMode('inter_urban')
+            setStep('inter_urban_info')
+        } else {
+            setDeliveryMode(null)
+            setStep('delivery_mode')
+        }
     }
 
     const handleDeliverySelect = (mode: 'standard' | 'express') => {
@@ -165,7 +206,10 @@ export default function CartPage() {
         setSaving(true)
         setOrderError('')
         try {
-            const fee = DELIVERY_FEES[deliveryMode]
+            const fee =
+                deliveryMode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[deliveryMode]
             const amount = total + fee
             const items = cart.map(item => ({
                 id: item.product_id,
@@ -216,7 +260,10 @@ export default function CartPage() {
         setSaving(true)
         setOrderError('')
         try {
-            const fee = DELIVERY_FEES[deliveryMode]
+            const fee =
+                deliveryMode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[deliveryMode]
             const amount = total + fee
             const items = cart.map(item => ({
                 id: item.product_id,
@@ -386,7 +433,11 @@ export default function CartPage() {
                                             <span className="text-slate-700 dark:text-slate-200 text-right text-xs font-black">
                                                 {deliveryFee.toLocaleString('fr-FR')} FCFA
                                                 <span className="block text-[9px] font-bold text-slate-400 normal-case">
-                                                    {deliveryMode === 'express' ? 'Express' : 'Standard'}
+                                                    {deliveryMode === 'inter_urban'
+                                                        ? 'Inter-ville'
+                                                        : deliveryMode === 'express'
+                                                          ? 'Express'
+                                                          : 'Standard'}
                                                 </span>
                                             </span>
                                         ) : (
@@ -454,7 +505,9 @@ export default function CartPage() {
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
                             <p className="text-[9px] font-bold text-slate-400 mt-1">
                                 {deliveryMode
-                                    ? `${total.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F livraison`
+                                    ? `${total.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F ${
+                                          deliveryMode === 'inter_urban' ? 'livraison inter-ville' : 'livraison'
+                                      }`
                                     : `${total.toLocaleString('fr-FR')} F articles — livraison à calculer`}
                             </p>
                         </div>
@@ -468,8 +521,29 @@ export default function CartPage() {
                         {step === 'delivery_mode' && (
                             <DeliveryModeStep onSelect={handleDeliverySelect} onBack={() => setStep('location')} />
                         )}
+                        {step === 'inter_urban_info' && (
+                            <InterUrbanDeliveryInfoStep
+                                onContinue={() => setStep('inter_urban_confirm')}
+                                onBack={() => {
+                                    setDeliveryMode(null)
+                                    setStep('location')
+                                }}
+                            />
+                        )}
+                        {step === 'inter_urban_confirm' && (
+                            <InterUrbanPrePaymentStep
+                                onConfirm={() => setStep('payment_method')}
+                                onBack={() => setStep('inter_urban_info')}
+                            />
+                        )}
                         {step === 'payment_method' && (
-                            <PaymentMethodStep onSelect={handlePaymentSelect} onBack={() => setStep('delivery_mode')} />
+                            <PaymentMethodStep
+                                onSelect={handlePaymentSelect}
+                                onBack={() => {
+                                    if (deliveryMode === 'inter_urban') setStep('inter_urban_confirm')
+                                    else setStep('delivery_mode')
+                                }}
+                            />
                         )}
                         {step === 'transfer_info' && (
                             <TransferInfoStep

@@ -2,12 +2,16 @@
 import { useState } from 'react'
 import Image from 'next/image'
 import { Upload, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
+import { updateProfile } from '@/app/actions/profile'
 
 function ProfileClient({ profile, user }: any) {
     const [loading, setLoading] = useState(false)
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
+    const [shopDescLen, setShopDescLen] = useState(() => (profile?.shop_description || '').length)
 
     const supabase = getSupabaseBrowserClient()
 
@@ -28,6 +32,13 @@ function ProfileClient({ profile, user }: any) {
         setLoading(true)
         const formData = new FormData(e.currentTarget)
 
+        const cityRaw = String(formData.get('city') || '').trim()
+        if (!cityRaw) {
+            toast.error('La ville est obligatoire.')
+            setLoading(false)
+            return
+        }
+
         let cover_url = coverPreview
 
         // Upload cover si nouveau fichier
@@ -44,22 +55,20 @@ function ProfileClient({ profile, user }: any) {
             }
         }
 
-        const { error } = await supabase
-            .from('profiles')
-            .update({
-                phone: formData.get('phone'),
-                city: formData.get('city'),
-                store_name: formData.get('store_name'),
-                bio: formData.get('bio'),
-                cover_url: cover_url || null,
-            })
-            .eq('id', user.id)
+        const result = await updateProfile({
+            phone: String(formData.get('phone') || ''),
+            city: cityRaw,
+            store_name: String(formData.get('store_name') || ''),
+            shop_description: String(formData.get('shop_description') || ''),
+            bio: String(formData.get('bio') || ''),
+            cover_url: cover_url || null,
+        })
 
-        if (error) {
-            console.error('Erreur update vendeur:', error)
-            alert("Erreur : " + error.message)
+        if (!result.success) {
+            console.error('Erreur update vendeur:', result.error)
+            toast.error('Erreur : ' + result.error)
         } else {
-            alert("Profil mis à jour ! Tes clients peuvent maintenant te contacter.")
+            toast.success('Description mise à jour !')
         }
         setLoading(false)
     }
@@ -107,9 +116,30 @@ function ProfileClient({ profile, user }: any) {
                 />
             </div>
 
-            {/* Bio / Description */}
             <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Description de ta boutique</label>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Description de votre boutique</label>
+                <textarea
+                    name="shop_description"
+                    defaultValue={profile?.shop_description || ''}
+                    maxLength={SHOP_DESCRIPTION_MAX_LENGTH}
+                    rows={2}
+                    onChange={(e) =>
+                        setShopDescLen(
+                            e.target.value.slice(0, SHOP_DESCRIPTION_MAX_LENGTH).length
+                        )
+                    }
+                    placeholder="Magasin spécialisé dans les vêtements de luxe..."
+                    className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border-none outline-none focus:ring-2 focus:ring-green-500 transition-all font-bold resize-none min-h-[4.5rem]"
+                />
+                <p className="text-[10px] text-slate-500 mt-1 px-2 text-right">
+                    {shopDescLen}/{SHOP_DESCRIPTION_MAX_LENGTH}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1 px-2 italic">Slogan court — visible sur ta page publique et sur tes fiches produit.</p>
+            </div>
+
+            {/* Bio / Description longue */}
+            <div>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">À propos (texte long)</label>
                 <textarea
                     name="bio"
                     defaultValue={profile?.bio}
@@ -132,9 +162,10 @@ function ProfileClient({ profile, user }: any) {
             </div>
 
             <div>
-                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Ta Ville</label>
+                <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 ml-2">Ta Ville *</label>
                 <select
                     name="city"
+                    required
                     defaultValue={profile?.city || 'brazzaville'}
                     className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-900 border-none outline-none focus:ring-2 focus:ring-green-500 transition-all font-bold appearance-none"
                 >

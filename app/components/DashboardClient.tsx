@@ -24,11 +24,13 @@ import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
+import { updateProfile } from '@/app/actions/profile'
 import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
 import { getSubscriptionStatus, getDaysRemaining } from '@/lib/subscription'
+import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -119,6 +121,20 @@ export default function DashboardClient({ products: initialProducts, profile, us
         const q = params.toString()
         const next = q ? `${window.location.pathname}?${q}` : window.location.pathname
         window.history.replaceState(null, '', next)
+    }, [])
+
+    // Liens /vendor/settings, /profile/edit, ?tab=settings → onglet Paramètres
+    useEffect(() => {
+        if (typeof window === 'undefined') return
+        const params = new URLSearchParams(window.location.search)
+        const tab = params.get('tab') as Page | null
+        const allowed: Page[] = [
+            'dashboard', 'products', 'add', 'orders', 'negotiations', 'messages',
+            'notifs', 'stats', 'wallet', 'shop', 'settings',
+        ]
+        if (tab && allowed.includes(tab)) {
+            setActivePage(tab)
+        }
     }, [])
 
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
@@ -1842,6 +1858,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     const [coverFile, setCoverFile] = useState<File | null>(null)
     const [formData, setFormData] = useState({
         store_name: profile?.store_name || profile?.shop_name || '',
+        shop_description: profile?.shop_description || '',
         bio: profile?.bio || '',
         phone: profile?.phone || '',
         city: profile?.city || 'brazzaville',
@@ -1857,6 +1874,10 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     }
 
     const handleSave = async () => {
+        if (!formData.city?.trim()) {
+            toast.error('La ville est obligatoire.')
+            return
+        }
         setSaving(true)
         try {
             let cover_url = coverPreview
@@ -1874,23 +1895,21 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 }
             }
 
-            const { error } = await supabase
-                .from('profiles')
-                .update({
-                    store_name: formData.store_name,
-                    bio: formData.bio,
-                    phone: formData.phone,
-                    city: formData.city,
-                    return_policy: formData.return_policy,
-                    shipping_info: formData.shipping_info,
-                    cover_url: cover_url || null,
-                })
-                .eq('id', user.id)
+            const result = await updateProfile({
+                store_name: formData.store_name,
+                shop_description: formData.shop_description,
+                bio: formData.bio,
+                phone: formData.phone,
+                city: formData.city,
+                return_policy: formData.return_policy,
+                shipping_info: formData.shipping_info,
+                cover_url: cover_url || null,
+            })
 
-            if (error) {
-                toast.error('Erreur : ' + error.message)
+            if (!result.success) {
+                toast.error('Erreur : ' + result.error)
             } else {
-                toast.success('Paramètres enregistrés !')
+                toast.success('Description mise à jour !')
             }
         } catch (err: any) {
             toast.error(err.message || 'Erreur sauvegarde')
@@ -1947,6 +1966,27 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 </div>
 
                 <div>
+                    <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Description de votre boutique</label>
+                    <textarea
+                        value={formData.shop_description}
+                        maxLength={SHOP_DESCRIPTION_MAX_LENGTH}
+                        rows={2}
+                        onChange={(e) =>
+                            setFormData((prev) => ({
+                                ...prev,
+                                shop_description: e.target.value.slice(0, SHOP_DESCRIPTION_MAX_LENGTH),
+                            }))
+                        }
+                        placeholder="Magasin spécialisé dans les vêtements de luxe..."
+                        className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold text-sm resize-none min-h-[4.5rem]"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-1 text-right">
+                        {formData.shop_description.length}/{SHOP_DESCRIPTION_MAX_LENGTH}
+                    </p>
+                    <p className="text-[10px] text-slate-500 mt-1">Slogan court, visible sur ta page boutique et sous ton nom sur les fiches produit.</p>
+                </div>
+
+                <div>
                     <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Description</label>
                     <textarea
                         value={formData.bio}
@@ -1970,8 +2010,9 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                         />
                     </div>
                     <div>
-                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Ville</label>
+                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Ville *</label>
                         <select
+                            required
                             value={formData.city}
                             onChange={e => setFormData(prev => ({ ...prev, city: e.target.value }))}
                             className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-orange-500 transition-all font-bold text-sm appearance-none"

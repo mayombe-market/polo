@@ -1,14 +1,23 @@
 'use client'
 
 import '@/lib/zod-jitless'
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { useForm, type DefaultValues } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { CheckoutSchema, CheckoutType, DELIVERY_FEES } from '@/lib/checkoutSchema'
+import {
+    CheckoutSchema,
+    CheckoutType,
+    DELIVERY_FEES,
+    DELIVERY_FEE_INTER_URBAN,
+    INTER_URBAN_DELIVERY_TIMELINE,
+    INTER_URBAN_PRE_PAYMENT_ALERT,
+} from '@/lib/checkoutSchema'
+import { orderRequiresInterUrbanDelivery, profileCityToCheckoutDisplay } from '@/lib/deliveryLocation'
+import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
@@ -35,15 +44,74 @@ export default function CheckoutPage() {
 
     const supabase = getSupabaseBrowserClient()
 
-    const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CheckoutType>({
+    const { register, handleSubmit, reset, watch, setValue, getValues, resetField, formState: { errors } } = useForm<CheckoutType>({
         resolver: zodResolver(CheckoutSchema),
         defaultValues: CHECKOUT_DEFAULTS,
     })
 
     const selectedPayment = watch('payment_method')
     const selectedDelivery = watch('delivery_mode')
+    const watchedCity = watch('city')
 
-    const deliveryFee = selectedDelivery ? (DELIVERY_FEES[selectedDelivery as keyof typeof DELIVERY_FEES] ?? 0) : 0
+    const sellerIds = useMemo(
+        () => [...new Set(cart.map((i) => i.seller_id).filter(Boolean))] as string[],
+        [cart]
+    )
+    const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
+
+    useEffect(() => {
+        if (sellerIds.length === 0) {
+            setSellerCities({})
+            return
+        }
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
+            if (cancelled || !data) return
+            const map: Record<string, string | null> = {}
+            for (const row of data as { id: string; city: string | null }[]) {
+                map[row.id] = row.city ?? null
+            }
+            setSellerCities(map)
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [supabase, sellerIds])
+
+    const checkoutInterUrban = useMemo(
+        () =>
+            orderRequiresInterUrbanDelivery(
+                watchedCity,
+                sellerIds.map((id) => sellerCities[id])
+            ),
+        [watchedCity, sellerIds, sellerCities]
+    )
+
+    const [interUrbanPayAck, setInterUrbanPayAck] = useState(false)
+
+    useEffect(() => {
+        if (checkoutInterUrban) {
+            setValue('delivery_mode', 'inter_urban')
+        }
+    }, [checkoutInterUrban, setValue])
+
+    useEffect(() => {
+        if (!checkoutInterUrban && getValues('delivery_mode') === 'inter_urban') {
+            resetField('delivery_mode')
+        }
+    }, [checkoutInterUrban, getValues, resetField])
+
+    useEffect(() => {
+        if (!checkoutInterUrban) setInterUrbanPayAck(false)
+    }, [checkoutInterUrban])
+
+    const deliveryFee =
+        selectedDelivery === 'inter_urban'
+            ? DELIVERY_FEE_INTER_URBAN
+            : selectedDelivery === 'standard' || selectedDelivery === 'express'
+              ? DELIVERY_FEES[selectedDelivery]
+              : 0
     const grandTotal = total + deliveryFee
 
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
@@ -63,7 +131,7 @@ export default function CheckoutPage() {
                         ...CHECKOUT_DEFAULTS,
                         full_name: p.full_name || '',
                         phone: p.phone?.trim() || p.whatsapp_number?.trim() || '',
-                        city: p.city || '',
+                        city: profileCityToCheckoutDisplay(p.city) || '',
                         district: p.district || '',
                         landmark: p.landmark || '',
                         payment_method: 'cod',
@@ -78,6 +146,10 @@ export default function CheckoutPage() {
 
     const onSubmit = async (formData: CheckoutType) => {
         if (cart.length === 0) return alert("Votre panier est vide")
+
+        if (checkoutInterUrban && !interUrbanPayAck) {
+            return
+        }
 
         setLoading(true)
         try {
@@ -94,7 +166,10 @@ export default function CheckoutPage() {
                 return
             }
 
-            const currentDeliveryFee = DELIVERY_FEES[formData.delivery_mode]
+            const currentDeliveryFee =
+                formData.delivery_mode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[formData.delivery_mode]
             const totalWithDelivery = total + currentDeliveryFee
 
             const items = cart.map(item => ({
@@ -188,7 +263,19 @@ export default function CheckoutPage() {
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1">
-                                    <input {...register('city')} placeholder="Ville" className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Ville *</label>
+                                    <select
+                                        {...register('city')}
+                                        required
+                                        className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500 appearance-none"
+                                    >
+                                        <option value="">Choisir…</option>
+                                        {DELIVERY_CITY_LIST.map((c) => (
+                                            <option key={c} value={c}>
+                                                {c}
+                                            </option>
+                                        ))}
+                                    </select>
                                     {errors.city && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.city.message}</p>}
                                 </div>
                                 <div className="space-y-1">
@@ -214,111 +301,129 @@ export default function CheckoutPage() {
                                 <Truck size={18} /> Mode de livraison
                             </div>
 
-                            {/* EXPRESS */}
-                            <button
-                                type="button"
-                                onClick={() => setValue('delivery_mode', 'express')}
-                                className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'express'
-                                    ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-500/5'
-                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center">
-                                        <Zap size={22} className="text-orange-500" />
+                            {checkoutInterUrban ? (
+                                <>
+                                    <input type="hidden" {...register('delivery_mode')} />
+                                    <div className="p-6 rounded-3xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30">
+                                        <p className="font-black text-lg text-amber-900 dark:text-amber-100 text-center italic">
+                                            {DELIVERY_FEE_INTER_URBAN.toLocaleString('fr-FR')} FCFA
+                                        </p>
+                                        <p className="text-[10px] font-black uppercase text-amber-800/90 dark:text-amber-200 text-center mt-2 tracking-wide">
+                                            Livraison inter-ville
+                                        </p>
+                                        <p className="text-[11px] font-bold text-amber-950/80 dark:text-amber-100/90 text-center mt-4 leading-relaxed">
+                                            {INTER_URBAN_DELIVERY_TIMELINE}
+                                        </p>
                                     </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-black uppercase text-xs italic">Express</p>
-                                            <span className="text-[8px] font-black bg-orange-100 dark:bg-orange-500/10 text-orange-600 px-2 py-0.5 rounded-full uppercase">Rapide</span>
+                                </>
+                            ) : (
+                                <>
+                                    {/* EXPRESS */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setValue('delivery_mode', 'express')}
+                                        className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'express'
+                                            ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-500/5'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-orange-500/10 rounded-2xl flex items-center justify-center">
+                                                <Zap size={22} className="text-orange-500" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-black uppercase text-xs italic">Express</p>
+                                                    <span className="text-[8px] font-black bg-orange-100 dark:bg-orange-500/10 text-orange-600 px-2 py-0.5 rounded-full uppercase">Rapide</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <Clock size={12} className="text-slate-400" />
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">3H — 6H · Livreur dédié</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <Clock size={12} className="text-slate-400" />
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase">3H — 6H · Livreur dédié</p>
+                                        <div className="text-right flex items-center gap-3">
+                                            <div>
+                                                <p className="font-black italic text-sm text-orange-500">{DELIVERY_FEES.express.toLocaleString('fr-FR')} F</p>
+                                            </div>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'express' ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                                {selectedDelivery === 'express' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="text-right flex items-center gap-3">
-                                    <div>
-                                        <p className="font-black italic text-sm text-orange-500">{DELIVERY_FEES.express.toLocaleString('fr-FR')} F</p>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'express' ? 'border-orange-500 bg-orange-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                                        {selectedDelivery === 'express' && <div className="w-2 h-2 bg-white rounded-full" />}
-                                    </div>
-                                </div>
-                            </button>
+                                    </button>
 
-                            {/* STANDARD */}
-                            <button
-                                type="button"
-                                onClick={() => setValue('delivery_mode', 'standard')}
-                                className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'standard'
-                                    ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5'
-                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
-                                    }`}
-                            >
-                                <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center">
-                                        <Package size={22} className="text-green-500" />
-                                    </div>
-                                    <div>
-                                        <div className="flex items-center gap-2">
-                                            <p className="font-black uppercase text-xs italic">Standard</p>
-                                            <span className="text-[8px] font-black bg-green-100 dark:bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full uppercase">Économique</span>
+                                    {/* STANDARD */}
+                                    <button
+                                        type="button"
+                                        onClick={() => setValue('delivery_mode', 'standard')}
+                                        className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'standard'
+                                            ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5'
+                                            : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                            }`}
+                                    >
+                                        <div className="flex items-center gap-4">
+                                            <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center">
+                                                <Package size={22} className="text-green-500" />
+                                            </div>
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <p className="font-black uppercase text-xs italic">Standard</p>
+                                                    <span className="text-[8px] font-black bg-green-100 dark:bg-green-500/10 text-green-600 px-2 py-0.5 rounded-full uppercase">Économique</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-1">
+                                                    <Clock size={12} className="text-slate-400" />
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">6H — 48H · Livraison groupée</p>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-1.5 mt-1">
-                                            <Clock size={12} className="text-slate-400" />
-                                            <p className="text-[10px] font-bold text-slate-500 uppercase">6H — 48H · Livraison groupée</p>
+                                        <div className="text-right flex items-center gap-3">
+                                            <div>
+                                                <p className="font-black italic text-sm text-green-500">{DELIVERY_FEES.standard.toLocaleString('fr-FR')} F</p>
+                                            </div>
+                                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'standard' ? 'border-green-500 bg-green-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                                {selectedDelivery === 'standard' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
-                                <div className="text-right flex items-center gap-3">
-                                    <div>
-                                        <p className="font-black italic text-sm text-green-500">{DELIVERY_FEES.standard.toLocaleString('fr-FR')} F</p>
-                                    </div>
-                                    <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'standard' ? 'border-green-500 bg-green-500' : 'border-slate-300 dark:border-slate-600'}`}>
-                                        {selectedDelivery === 'standard' && <div className="w-2 h-2 bg-white rounded-full" />}
-                                    </div>
-                                </div>
-                            </button>
+                                    </button>
 
-                            {/* Détails du mode sélectionné */}
-                            {selectedDelivery === 'express' && (
-                                <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-200 dark:border-orange-800/30 mt-2">
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">🏍️</span>
-                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Livreur dédié à votre commande</span>
+                                    {selectedDelivery === 'express' && (
+                                        <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-200 dark:border-orange-800/30 mt-2">
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">🏍️</span>
+                                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Livreur dédié à votre commande</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">📞</span>
+                                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Le livreur vous appelle avant d&apos;arriver</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">📍</span>
+                                                    <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Suivi en temps réel par SMS</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">📞</span>
-                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Le livreur vous appelle avant d&apos;arriver</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">📍</span>
-                                            <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Suivi en temps réel par SMS</span>
-                                        </div>
-                                    </div>
-                                </div>
-                            )}
+                                    )}
 
-                            {selectedDelivery === 'standard' && (
-                                <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800/30 mt-2">
-                                    <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">📦</span>
-                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Livraison groupée éco-responsable</span>
+                                    {selectedDelivery === 'standard' && (
+                                        <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800/30 mt-2">
+                                            <div className="flex flex-col gap-2">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">📦</span>
+                                                    <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Livraison groupée éco-responsable</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">📱</span>
+                                                    <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Notification SMS à la livraison</span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-sm">🕐</span>
+                                                    <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Créneau de livraison communiqué par SMS</span>
+                                                </div>
+                                            </div>
                                         </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">📱</span>
-                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Notification SMS à la livraison</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">🕐</span>
-                                            <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Créneau de livraison communiqué par SMS</span>
-                                        </div>
-                                    </div>
-                                </div>
+                                    )}
+                                </>
                             )}
 
                             {errors.delivery_mode && (
@@ -386,9 +491,31 @@ export default function CheckoutPage() {
                             )}
                         </div>
 
+                        {checkoutInterUrban && (
+                            <div
+                                className="p-6 rounded-[2rem] border-2 border-orange-400 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/40 space-y-4"
+                                role="alert"
+                            >
+                                <p className="text-[12px] font-bold text-orange-950 dark:text-orange-100 leading-relaxed text-center">
+                                    {INTER_URBAN_PRE_PAYMENT_ALERT}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setInterUrbanPayAck(true)}
+                                    className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${
+                                        interUrbanPayAck
+                                            ? 'bg-green-600 text-white'
+                                            : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'
+                                    }`}
+                                >
+                                    {interUrbanPayAck ? '✓ Continuer vers la commande' : 'Oui, continuer'}
+                                </button>
+                            </div>
+                        )}
+
                         <button
                             type="submit"
-                            disabled={loading || cart.length === 0}
+                            disabled={loading || cart.length === 0 || (checkoutInterUrban && !interUrbanPayAck)}
                             className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Confirmer la commande <ArrowRight size={20} /></>}
@@ -427,7 +554,9 @@ export default function CheckoutPage() {
                             </div>
                             <div className="flex justify-between text-[10px] font-bold uppercase">
                                 <span className="flex items-center gap-1.5 text-slate-400">
-                                    {selectedDelivery === 'express' ? (
+                                    {selectedDelivery === 'inter_urban' ? (
+                                        <span className="text-amber-600 dark:text-amber-400">Livraison inter-ville</span>
+                                    ) : selectedDelivery === 'express' ? (
                                         <><Zap size={12} className="text-orange-500" /> <span className="text-orange-500">Livraison Express</span></>
                                     ) : selectedDelivery === 'standard' ? (
                                         <><Package size={12} className="text-green-500" /> <span className="text-green-500">Livraison Standard</span></>
@@ -439,9 +568,11 @@ export default function CheckoutPage() {
                                     className={
                                         !selectedDelivery
                                             ? 'text-slate-400 italic normal-case text-[9px] font-black'
-                                            : selectedDelivery === 'express'
-                                              ? 'text-orange-500 italic'
-                                              : 'text-green-500 italic'
+                                            : selectedDelivery === 'inter_urban'
+                                              ? 'text-amber-600 dark:text-amber-400 italic'
+                                              : selectedDelivery === 'express'
+                                                ? 'text-orange-500 italic'
+                                                : 'text-green-500 italic'
                                     }
                                 >
                                     {selectedDelivery ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'À calculer'}

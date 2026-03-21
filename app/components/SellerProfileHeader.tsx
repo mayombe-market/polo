@@ -97,7 +97,14 @@ export default function SellerProfileHeader({
                     )}
                 </div>
 
-                {/* Bio */}
+                {/* Slogan boutique (court) */}
+                {profile?.shop_description?.trim() && (
+                    <p className="text-sm text-slate-600 dark:text-slate-300 max-w-lg mx-auto mt-2 font-semibold leading-snug">
+                        {profile.shop_description.trim()}
+                    </p>
+                )}
+
+                {/* Bio (description longue) */}
                 {profile?.bio && (
                     <p className="text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto mt-3 leading-relaxed">
                         {profile.bio}
@@ -110,7 +117,7 @@ export default function SellerProfileHeader({
                     <ShareButtons
                         title={storeName}
                         text={`Découvre la boutique ${storeName} sur Mayombe Market !`}
-                        url={typeof window !== 'undefined' ? `${window.location.origin}/seller/${profile?.id}` : ''}
+                        url={typeof window !== 'undefined' ? `${window.location.origin}/store/${profile?.id}` : ''}
                     />
                 </div>
             </div>

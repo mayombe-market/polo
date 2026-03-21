@@ -62,7 +62,7 @@ export default function ProductDetailPage() {
 
                 const shopRes = await withTimeout(supabase
                     .from('profiles')
-                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, subscription_plan, subscription_end_date, verification_status')
+                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status')
                     .eq('id', prod.seller_id)
                     .maybeSingle(), 8000)
 
@@ -162,7 +162,7 @@ export default function ProductDetailPage() {
 
                     {/* Shop banner */}
                     <Link
-                        href={`/seller/${product.seller_id}`}
+                        href={`/store/${product.seller_id}`}
                         className="flex items-center gap-3 p-3.5 rounded-[18px] bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.05] mb-5 group hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-all no-underline"
                     >
                         <div className="relative w-[46px] h-[46px] rounded-[15px] overflow-hidden flex-shrink-0 shadow-lg">
@@ -189,6 +189,11 @@ export default function ProductDetailPage() {
                                 <span className="text-slate-300 dark:text-slate-600 text-[8px]">●</span>
                                 <span className="text-amber-500 text-[11px]">★ {avgRating.toFixed(1)}</span>
                             </div>
+                            {shop?.shop_description?.trim() && (
+                                <p className="text-slate-500 dark:text-slate-400 text-[11px] leading-snug mt-1.5 line-clamp-2">
+                                    {shop.shop_description.trim()}
+                                </p>
+                            )}
                         </div>
                         <div className="flex items-center gap-2" onClick={e => e.preventDefault()}>
                             <MessageButton

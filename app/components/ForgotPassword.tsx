@@ -63,8 +63,15 @@ export default function ForgotPassword({ onEmailSent, onBack, compact }: ForgotP
             onEmailSent?.(email.trim())
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : 'Une erreur est survenue'
-            if (msg.toLowerCase().includes('rate limit')) {
-                setError('Trop de tentatives. Patientez quelques minutes.')
+            const low = msg.toLowerCase()
+            if (low.includes('rate limit') || low.includes('too many') || low.includes('429')) {
+                setError('Trop de demandes. Patientez quelques minutes avant de réessayer.')
+            } else if (low.includes('not authorized') || low.includes('email address not authorized')) {
+                console.error(
+                    '[ForgotPassword] E-mail non autorisé (SMTP Supabase par défaut : seuls les membres de l’org reçoivent les mails). Configure Authentication → SMTP personnalisé.',
+                    msg
+                )
+                setError('L’envoi du lien a échoué. Réessaie plus tard ou contacte le support.')
             } else {
                 setError(msg)
             }

@@ -22,10 +22,11 @@ export async function compressImageForUpload(file: File): Promise<File> {
     if (file.type === 'image/gif') return file
     if (file.size <= COMPRESS_IF_LARGER_THAN) return file
 
+    // useWebWorker: false — évite des blocages « spinner infini » sur certains Safari / onglets en arrière-plan
     let blob = await imageCompression(file, {
         maxSizeMB: 0.35,
         maxWidthOrHeight: MAX_SIDE,
-        useWebWorker: true,
+        useWebWorker: false,
         initialQuality: QUALITY,
         preserveExif: false,
     })
@@ -40,7 +41,7 @@ export async function compressImageForUpload(file: File): Promise<File> {
         blob = await imageCompression(asFile(blob), {
             maxSizeMB: 0.22,
             maxWidthOrHeight: 960,
-            useWebWorker: true,
+            useWebWorker: false,
             initialQuality: 0.52,
             preserveExif: false,
         })

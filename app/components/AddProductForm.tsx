@@ -92,8 +92,17 @@ function validateImageFile(file: File | null): string | null {
  */
 const UPLOAD_TIMEOUT_MS = 300_000
 
+/** Compression JPEG/PNG (évite fichiers lourds qui bloquent longtemps sur mobile) */
+const COMPRESS_TIMEOUT_MS = 60_000
+
+/** Action serveur createProduct — évite spinner infini si le réseau / Vercel ne répond pas */
+const CREATE_PRODUCT_TIMEOUT_MS = 90_000
+
 const MSG_SLOW_UPLOAD =
     'Connexion très lente : l’envoi d’une image a dépassé 5 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
+
+const MSG_SLOW_CREATE_PRODUCT =
+    'L’enregistrement du produit sur le serveur a pris trop de temps (connexion ou serveur lent). Réessayez dans un instant. Si le produit apparaît déjà dans votre liste, ne le publiez pas en double.'
 
 /** Fait avancer la barre pendant les opérations longues (compression / upload). */
 function startProgressPulse(
@@ -294,7 +303,14 @@ export default function AddProductForm({
             console.error(`[AddProductForm] Cause réelle — ${context}`, err)
         }
         if (isTimeoutError(err)) {
-            alert(MSG_SLOW_UPLOAD)
+            alert(context === 'server_createProduct' ? MSG_SLOW_CREATE_PRODUCT : MSG_SLOW_UPLOAD)
+            return
+        }
+        const msg = err instanceof Error ? err.message : String(err)
+        if (/row-level security|rls|policy|403|not authorized|jwt|storage/i.test(msg)) {
+            alert(
+                'Accès refusé au stockage ou à la base. Déconnectez-vous puis reconnectez-vous, ou vérifiez dans Supabase que les policies du bucket « products » sont bien appliquées (script supabase-storage-products.sql).',
+            )
             return
         }
         console.error('DEBUG UPLOAD:', err)
@@ -349,7 +365,8 @@ export default function AddProductForm({
 
             const { error: upErr } = await supabase.storage.from('products').upload(path, file, {
                 contentType,
-                upsert: false,
+                // true : si une 1re requête a réussi mais le client a timeout, la 2e tentative ne bloque pas sur « already exists »
+                upsert: true,
             })
             if (upErr) throw new Error(upErr.message)
             const { data } = supabase.storage.from('products').getPublicUrl(path)
@@ -373,6 +390,19 @@ export default function AddProductForm({
         setPublishProgress(5)
         setPublishLabel('Préparation…')
 
+        const safeCompress = async (file: File): Promise<File> => {
+            try {
+                return await withTimeout(compressImageForUpload(file), COMPRESS_TIMEOUT_MS)
+            } catch (e: unknown) {
+                if (isTimeoutError(e)) {
+                    console.warn('[AddProductForm] compression timeout, fichier original:', file.name)
+                } else {
+                    console.warn('[AddProductForm] compression échouée, fichier original:', file.name, e)
+                }
+                return file
+            }
+        }
+
         try {
             const uploadId = `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12)}`
             const galleryFiles = gallery.filter(Boolean) as File[]
@@ -386,10 +416,26 @@ export default function AddProductForm({
                 setPublishLabel(`Envoi des images… ${completed}/${totalUploads}`)
             }
 
+            setPublishProgress(8)
+            setPublishLabel('Optimisation des photos…')
+            let fileMain: File
+            const galleryPrepared: { slotIndex: number; file: File }[] = []
+            try {
+                fileMain = await safeCompress(mainImage!)
+                for (let i = 0; i < gallery.length; i++) {
+                    const f = gallery[i]
+                    if (!f) continue
+                    galleryPrepared.push({ slotIndex: i, file: await safeCompress(f) })
+                }
+            } catch (e: unknown) {
+                reportTechnicalFailure('compression_images', e)
+                return
+            }
+
             setPublishLabel('Envoi de l’image principale…')
             let mainUrl: string
             try {
-                mainUrl = await uploadFileTimedWithRetry(mainImage!, `${sellerId}/${uploadId}-main`)
+                mainUrl = await uploadFileTimedWithRetry(fileMain, `${sellerId}/${uploadId}-main`)
                 bumpUploadProgress()
             } catch (e: unknown) {
                 reportTechnicalFailure('upload_image_principale', e)
@@ -399,11 +445,10 @@ export default function AddProductForm({
             const galleryUrls: string[] = []
             try {
                 let gIdx = 0
-                for (let i = 0; i < gallery.length; i++) {
-                    if (!gallery[i]) continue
+                for (const { slotIndex, file: gFile } of galleryPrepared) {
                     setPublishLabel(`Photo galerie ${gIdx + 1}/${galleryFiles.length}…`)
                     galleryUrls.push(
-                        await uploadFileTimedWithRetry(gallery[i]!, `${sellerId}/${uploadId}-gallery-${i}`)
+                        await uploadFileTimedWithRetry(gFile, `${sellerId}/${uploadId}-gallery-${slotIndex}`)
                     )
                     bumpUploadProgress()
                     gIdx++
@@ -418,20 +463,23 @@ export default function AddProductForm({
 
             let result: Awaited<ReturnType<typeof serverCreateProduct>>
             try {
-                result = await serverCreateProduct({
-                    name,
-                    price: parseInt(price, 10),
-                    description,
-                    category: selectedCategory,
-                    subcategory: selectedSubcategory,
-                    img: mainUrl,
-                    images_gallery: galleryUrls,
-                    has_stock: hasStock,
-                    stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
-                    has_variants: hasVariantsPayload,
-                    sizes: hasVariantsPayload ? sizes : [],
-                    colors: hasVariantsPayload ? selectedColors : [],
-                })
+                result = await withTimeout(
+                    serverCreateProduct({
+                        name,
+                        price: parseInt(price, 10),
+                        description,
+                        category: selectedCategory,
+                        subcategory: selectedSubcategory,
+                        img: mainUrl,
+                        images_gallery: galleryUrls,
+                        has_stock: hasStock,
+                        stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
+                        has_variants: hasVariantsPayload,
+                        sizes: hasVariantsPayload ? sizes : [],
+                        colors: hasVariantsPayload ? selectedColors : [],
+                    }),
+                    CREATE_PRODUCT_TIMEOUT_MS,
+                )
             } catch (e: unknown) {
                 reportTechnicalFailure('server_createProduct', e)
                 return
@@ -455,12 +503,11 @@ export default function AddProductForm({
             }
 
             setPublishProgress(95)
-            setPublishLabel('Actualisation du catalogue…')
-            try {
-                await revalidateProducts()
-            } catch (revErr) {
+            setPublishLabel('Finalisation…')
+            // Ne pas bloquer la redirection si revalidatePath rame (évite spinner infini côté client)
+            void revalidateProducts().catch((revErr) => {
                 console.error('[AddProductForm] revalidateProducts:', revErr)
-            }
+            })
 
             setPublishProgress(100)
             setPublishLabel('Terminé !')

@@ -16,7 +16,7 @@ ALTER TABLE profiles ADD COLUMN IF NOT EXISTS loyalty_points int DEFAULT 0;
 -- 3. Table ratings (notation triple)
 CREATE TABLE IF NOT EXISTS ratings (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-    order_id uuid REFERENCES orders(id) UNIQUE NOT NULL,
+    order_id uuid REFERENCES orders(id) ON DELETE CASCADE UNIQUE NOT NULL,
     user_id uuid REFERENCES profiles(id) NOT NULL,
     vendor_rating int CHECK (vendor_rating BETWEEN 1 AND 5),
     vendor_tags text[] DEFAULT '{}',

@@ -7,13 +7,13 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
-    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown
+    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown, Trash2
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription } from '@/app/actions/orders'
+import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription, adminDeleteOrder } from '@/app/actions/orders'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -215,6 +215,27 @@ export default function AdminOrders() {
     }
 
     // Annuler un abonnement vendeur
+    const deleteOrderFromDb = async (orderId: string, label: string) => {
+        if (!confirm(
+            `Supprimer définitivement la commande ${label} ?\n\n` +
+            'La ligne sera retirée de la base de données (irréversible). Les notes liées seront aussi supprimées.'
+        )) return
+        setUpdating(orderId)
+        try {
+            const result = await adminDeleteOrder(orderId)
+            if (result.error) {
+                toast.error(result.error)
+                return
+            }
+            setOrders(prev => prev.filter(o => o.id !== orderId))
+            toast.success('Commande supprimée de la base')
+        } catch (err: any) {
+            toast.error('Erreur : ' + (err?.message || 'Impossible de supprimer'))
+        } finally {
+            setUpdating(null)
+        }
+    }
+
     const cancelSubscription = async (orderId: string) => {
         if (!confirm('Annuler cet abonnement ? Le vendeur repassera en plan gratuit.')) return
         setUpdating(orderId)
@@ -755,6 +776,16 @@ export default function AdminOrders() {
                                                 <Phone size={14} /> Appeler
                                             </a>
                                         )}
+
+                                        <button
+                                            type="button"
+                                            onClick={() => deleteOrderFromDb(order.id, formatOrderNumber(order))}
+                                            disabled={updating === order.id}
+                                            className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-900 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all disabled:opacity-50"
+                                        >
+                                            {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                            Supprimer de la BDD
+                                        </button>
                                     </div>
                                 </div>
                             )

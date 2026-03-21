@@ -110,6 +110,12 @@ CREATE POLICY "Admin modifie commandes" ON orders
         EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
     );
 
+-- Suppression réservée aux admins (nettoyage BDD — voir aussi ON DELETE CASCADE sur ratings)
+CREATE POLICY "Admin supprime commandes" ON orders
+    FOR DELETE USING (
+        EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+    );
+
 -- ========================
 -- TABLE : negotiations
 -- ========================

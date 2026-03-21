@@ -423,6 +423,44 @@ export async function adminReleaseFunds(orderId: string) {
     return { success: true }
 }
 
+/** Suppression définitive en base (admin uniquement). Exécuter supabase-admin-delete-order.sql si la suppression est refusée par RLS. */
+export async function adminDeleteOrder(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const { data: existing } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('id', orderId)
+        .maybeSingle()
+
+    if (!existing) return { error: 'Commande introuvable' }
+
+    const { error } = await supabase.from('orders').delete().eq('id', orderId)
+
+    if (error) {
+        console.error('[adminDeleteOrder]', error.message)
+        return {
+            error:
+                error.message.includes('policy') || error.code === '42501'
+                    ? 'Suppression refusée : exécutez le script SQL supabase-admin-delete-order.sql dans Supabase (policy + CASCADE sur ratings).'
+                    : error.message,
+        }
+    }
+
+    return { success: true }
+}
+
 // Créer une commande (appelé côté client via server action)
 export async function createOrder(input: {
     items: Array<{

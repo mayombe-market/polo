@@ -3,6 +3,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejectedVendorEmail } from '@/app/actions/emails'
+import { revalidateProductCatalog } from '@/app/actions/revalidate'
 import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
@@ -714,6 +715,13 @@ export async function deleteProduct(productId: string) {
         .eq('id', productId)
 
     if (error) return { error: error.message }
+
+    try {
+        revalidateProductCatalog(productId, product.seller_id)
+    } catch (revErr) {
+        console.error('[deleteProduct] revalidateProductCatalog:', revErr)
+    }
+
     return { success: true }
 }
 

@@ -1,7 +1,9 @@
 /**
- * Middleware Next.js + @supabase/ssr : rafraîchissement de session (getUser),
+ * Proxy Next.js 16 (ex-middleware) + @supabase/ssr : rafraîchissement de session (getUser),
  * protection des routes vendor / logistician / admin / account, CSP et anti-boucle _rc.
  * Les réponses redirect/next réutilisent les cookies de supabaseResponse pour ne pas perdre le refresh.
+ *
+ * @see https://nextjs.org/docs/messages/middleware-to-proxy
  */
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
@@ -69,7 +71,7 @@ function applySecurityHeaders(pathname: string, response: NextResponse) {
     }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
     const MAINTENANCE_ENABLED = false

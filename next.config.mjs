@@ -42,7 +42,7 @@ const nextConfig = {
                         key: 'Strict-Transport-Security',
                         value: 'max-age=63072000; includeSubDomains; preload',
                     },
-                    // CSP : uniquement dans middleware.ts (getContentSecurityPolicy) pour éviter
+                    // CSP : uniquement dans proxy.ts (getContentSecurityPolicy) pour éviter
                     // deux politiques qui s’intersectent et bloquent Cloudflare / polices self-hosted.
                     {
                         key: 'Cross-Origin-Opener-Policy',

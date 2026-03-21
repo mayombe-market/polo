@@ -717,7 +717,7 @@ export async function deleteProduct(productId: string) {
     if (error) return { error: error.message }
 
     try {
-        revalidateProductCatalog(productId, product.seller_id)
+        await revalidateProductCatalog(productId, product.seller_id)
     } catch (revErr) {
         console.error('[deleteProduct] revalidateProductCatalog:', revErr)
     }
@@ -939,15 +939,35 @@ export async function createProduct(input: {
     has_variants: boolean
     sizes: string[]
     colors: string[]
+    /** Doit être l’UUID auth actuel ; sinon refus (alignement client / serveur, anti usurpation seller_id). */
+    expected_seller_id?: string
 }): Promise<
     | { product: Record<string, unknown> }
     | { error: string; diagnostic?: CreateProductDiagnostic }
 > {
     try {
         const supabase = await getSupabase()
-        const { data: { user } } = await supabase.auth.getUser()
+        const { data: { user }, error: authErr } = await supabase.auth.getUser()
 
+        if (authErr) {
+            console.error('[createProduct] auth.getUser:', authErr.message)
+            return {
+                error: 'Session invalide ou expirée. Reconnectez-vous.',
+                diagnostic: { code: authErr.message, details: 'auth_getUser' },
+            }
+        }
         if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+        if (input.expected_seller_id != null && input.expected_seller_id.trim() !== user.id) {
+            console.error('[createProduct] expected_seller_id !== auth.uid()', {
+                expected: input.expected_seller_id,
+                actual: user.id,
+            })
+            return {
+                error: 'Session incohérente. Reconnectez-vous et réessayez.',
+                diagnostic: { code: 'seller_mismatch', details: 'expected_seller_id' },
+            }
+        }
 
         // ═══ Vérification de l'identité vendeur ═══
         const { data: profile, error: profileErr } = await supabase

@@ -86,20 +86,21 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-/**
- * Délai max par fichier (image principale ou une vignette).
- * Connexions lentes / mobile : 2 min suffisaient rarement pour 1 fichier vers Supabase Storage.
- */
-const UPLOAD_TIMEOUT_MS = 300_000
+/** Délai max par fichier upload Storage + action serveur (consigne sécurité : 120 s). */
+const UPLOAD_TIMEOUT_MS = 120_000
 
 /** Compression JPEG/PNG (évite fichiers lourds qui bloquent longtemps sur mobile) */
 const COMPRESS_TIMEOUT_MS = 60_000
 
-/** Action serveur createProduct — évite spinner infini si le réseau / Vercel ne répond pas */
-const CREATE_PRODUCT_TIMEOUT_MS = 90_000
+/** Action serveur createProduct — même plafond 120 s */
+const CREATE_PRODUCT_TIMEOUT_MS = 120_000
+
+const LOGIN_REDIRECT = `/?redirect=${encodeURIComponent('/vendor/dashboard?tab=products')}`
 
 const MSG_SLOW_UPLOAD =
-    'Connexion très lente : l’envoi d’une image a dépassé 5 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
+    'Connexion très lente : l’envoi d’une image a dépassé 2 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
+
+const MSG_SESSION_EXPIRED_RECONNECT = 'Session expirée, reconnexion en cours...'
 
 const MSG_SLOW_CREATE_PRODUCT =
     'L’enregistrement du produit sur le serveur a pris trop de temps (connexion ou serveur lent). Réessayez dans un instant. Si le produit apparaît déjà dans votre liste, ne le publiez pas en double.'
@@ -145,6 +146,112 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 function sleep(ms: number) {
     return new Promise<void>((r) => setTimeout(r, ms))
+}
+
+function isJwtExpiredOrPermissionDenied(msg: string): boolean {
+    const m = msg.toLowerCase()
+    return (
+        m.includes('jwt') ||
+        m.includes('expired') ||
+        m.includes('permission denied') ||
+        m.includes('not authorized') ||
+        m.includes('401') ||
+        m.includes('403') ||
+        m.includes('pgrst301') ||
+        m.includes('invalid_grant')
+    )
+}
+
+/** Erreurs retournées par @supabase/storage-js (nom approximatif selon version). */
+function isStorageLikeError(e: unknown): boolean {
+    if (!e || typeof e !== 'object') return false
+    const o = e as Record<string, unknown>
+    const name = String(o.name ?? '')
+    if (name.includes('Storage')) return true
+    if ('statusCode' in o && typeof o.statusCode === 'number') return true
+    return false
+}
+
+/** Erreur PostgREST / insert produit (code 5 car. typique). */
+function isPostgrestLikeObject(e: unknown): e is { message?: string; code?: string; details?: string; hint?: string } {
+    if (!e || typeof e !== 'object') return false
+    const c = (e as { code?: unknown }).code
+    return typeof c === 'string' && /^[0-9A-Z]{5}$/.test(c)
+}
+
+function logStorageOrPostgrestError(context: string, err: unknown) {
+    if (isStorageLikeError(err)) {
+        const o = err as Record<string, unknown>
+        console.error(`[AddProductForm] StorageApiError — ${context}`, {
+            message: o.message,
+            name: o.name,
+            statusCode: o.statusCode,
+            error: o.error,
+        })
+        return
+    }
+    if (isPostgrestLikeObject(err)) {
+        console.error(`[AddProductForm] PostgrestError — ${context}`, {
+            message: err.message,
+            code: err.code,
+            details: err.details,
+            hint: err.hint,
+        })
+        return
+    }
+}
+
+/**
+ * Avant upload : session locale + refresh JWT. Retourne l’UUID à utiliser pour les chemins Storage (doit = auth.uid() pour RLS).
+ */
+async function ensureSessionBeforePublish(
+    supabase: ReturnType<typeof getSupabaseBrowserClient>,
+    propSellerId?: string,
+): Promise<{ userId: string } | { redirect: true }> {
+    const { data: { session: initial }, error: initErr } = await supabase.auth.getSession()
+    if (initErr) {
+        console.error('[AddProductForm] getSession (initial):', initErr.message)
+    }
+    if (!initial?.user?.id) {
+        window.location.href = LOGIN_REDIRECT
+        return { redirect: true }
+    }
+
+    const { data: refreshed, error: refErr } = await supabase.auth.refreshSession()
+    if (refErr) {
+        console.warn('[AddProductForm] refreshSession:', refErr.message)
+    }
+
+    const { data: { session: after } } = await supabase.auth.getSession()
+    const userId = refreshed?.session?.user?.id ?? after?.user?.id ?? initial.user.id
+    if (!userId) {
+        window.location.href = LOGIN_REDIRECT
+        return { redirect: true }
+    }
+
+    if (sellerIdPropMismatch(propSellerId, userId)) {
+        console.warn('[AddProductForm] sellerId (prop) ≠ session.user.id — chemins Storage = session (RLS)')
+    }
+
+    return { userId }
+}
+
+/** Évite d’utiliser un sellerId obsolète passé en props si la session a changé. */
+function sellerIdPropMismatch(propId: string | undefined, sessionId: string): boolean {
+    return Boolean(propId && propId !== sessionId)
+}
+
+async function handleJwtOrPermissionRecovery(
+    supabase: ReturnType<typeof getSupabaseBrowserClient>,
+): Promise<void> {
+    alert(MSG_SESSION_EXPIRED_RECONNECT)
+    const { data, error } = await supabase.auth.refreshSession()
+    if (!error && data.session?.user) {
+        alert('Session renouvelée. Vous pouvez réessayer de publier votre produit.')
+        return
+    }
+    await supabase.auth.signOut({ scope: 'local' })
+    window.location.href = LOGIN_REDIRECT
 }
 
 /** Une tentative ; en cas d’échec (hors timeout), une 2e tentative après courte pause */
@@ -292,28 +399,44 @@ export default function AddProductForm({
     const addFeature = () => setFeatures([...features, ''])
     const removeFeature = (idx: number) => setFeatures(features.filter((_, index) => index !== idx))
 
-    const reportTechnicalFailure = (context: string, err: unknown) => {
+    const reportTechnicalFailure = async (context: string, err: unknown) => {
+        logStorageOrPostgrestError(context, err)
+
         if (err instanceof Error) {
             console.error(`[AddProductForm] Cause réelle — ${context}`, {
                 message: err.message,
                 name: err.name,
                 stack: err.stack,
             })
-        } else {
+        } else if (!isStorageLikeError(err) && !isPostgrestLikeObject(err)) {
             console.error(`[AddProductForm] Cause réelle — ${context}`, err)
         }
+
         if (isTimeoutError(err)) {
             alert(context === 'server_createProduct' ? MSG_SLOW_CREATE_PRODUCT : MSG_SLOW_UPLOAD)
             return
         }
-        const msg = err instanceof Error ? err.message : String(err)
-        if (/row-level security|rls|policy|403|not authorized|jwt|storage/i.test(msg)) {
+
+        const msg =
+            err instanceof Error
+                ? err.message
+                : typeof err === 'object' && err !== null && 'message' in err
+                  ? String((err as { message: unknown }).message)
+                  : String(err)
+
+        if (isJwtExpiredOrPermissionDenied(msg) || /permission denied|not authorized|\b403\b|\b401\b/i.test(msg)) {
+            await handleJwtOrPermissionRecovery(supabase)
+            return
+        }
+
+        if (/row-level security|\brls\b|policy|storage api/i.test(msg)) {
             alert(
-                'Accès refusé au stockage ou à la base. Déconnectez-vous puis reconnectez-vous, ou vérifiez dans Supabase que les policies du bucket « products » sont bien appliquées (script supabase-storage-products.sql).',
+                'Accès refusé au stockage ou à la base. Vérifiez les policies du bucket « products » (script supabase-storage-products.sql) ou reconnectez-vous.',
             )
             return
         }
-        console.error('DEBUG UPLOAD:', err)
+
+        console.error('[AddProductForm] DEBUG (non classé):', err)
         alert(MSG_FRIENDLY_TECH)
     }
 
@@ -360,15 +483,18 @@ export default function AddProductForm({
 
         const uploadFileOnce = async (file: File, basePath: string): Promise<string> => {
             const ext = extFromFile(file)
+            // basePath doit être `${authUserId}/…` — 1er segment = auth.uid() pour RLS Storage
             const path = `${basePath}.${ext}`
             const contentType = contentTypeForFile(file, ext)
 
             const { error: upErr } = await supabase.storage.from('products').upload(path, file, {
                 contentType,
-                // true : si une 1re requête a réussi mais le client a timeout, la 2e tentative ne bloque pas sur « already exists »
                 upsert: true,
             })
-            if (upErr) throw new Error(upErr.message)
+            if (upErr) {
+                logStorageOrPostgrestError('storage_upload', upErr)
+                throw upErr
+            }
             const { data } = supabase.storage.from('products').getPublicUrl(path)
             return data.publicUrl
         }
@@ -386,10 +512,6 @@ export default function AddProductForm({
             }
         }
 
-        setLoading(true)
-        setPublishProgress(5)
-        setPublishLabel('Préparation…')
-
         const safeCompress = async (file: File): Promise<File> => {
             try {
                 return await withTimeout(compressImageForUpload(file), COMPRESS_TIMEOUT_MS)
@@ -403,7 +525,19 @@ export default function AddProductForm({
             }
         }
 
+        setLoading(true)
+        setPublishProgress(5)
+
         try {
+            setPublishLabel('Vérification de la session…')
+            const gate = await ensureSessionBeforePublish(supabase, sellerId)
+            if ('redirect' in gate) {
+                return
+            }
+            const storageUserId = gate.userId
+
+            setPublishLabel('Préparation…')
+
             const uploadId = `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12)}`
             const galleryFiles = gallery.filter(Boolean) as File[]
             const totalUploads = 1 + galleryFiles.length
@@ -428,17 +562,17 @@ export default function AddProductForm({
                     galleryPrepared.push({ slotIndex: i, file: await safeCompress(f) })
                 }
             } catch (e: unknown) {
-                reportTechnicalFailure('compression_images', e)
+                await reportTechnicalFailure('compression_images', e)
                 return
             }
 
             setPublishLabel('Envoi de l’image principale…')
             let mainUrl: string
             try {
-                mainUrl = await uploadFileTimedWithRetry(fileMain, `${sellerId}/${uploadId}-main`)
+                mainUrl = await uploadFileTimedWithRetry(fileMain, `${storageUserId}/${uploadId}-main`)
                 bumpUploadProgress()
             } catch (e: unknown) {
-                reportTechnicalFailure('upload_image_principale', e)
+                await reportTechnicalFailure('upload_image_principale', e)
                 return
             }
 
@@ -448,13 +582,13 @@ export default function AddProductForm({
                 for (const { slotIndex, file: gFile } of galleryPrepared) {
                     setPublishLabel(`Photo galerie ${gIdx + 1}/${galleryFiles.length}…`)
                     galleryUrls.push(
-                        await uploadFileTimedWithRetry(gFile, `${sellerId}/${uploadId}-gallery-${slotIndex}`)
+                        await uploadFileTimedWithRetry(gFile, `${storageUserId}/${uploadId}-gallery-${slotIndex}`)
                     )
                     bumpUploadProgress()
                     gIdx++
                 }
             } catch (e: unknown) {
-                reportTechnicalFailure('upload_galerie', e)
+                await reportTechnicalFailure('upload_galerie', e)
                 return
             }
 
@@ -477,26 +611,33 @@ export default function AddProductForm({
                         has_variants: hasVariantsPayload,
                         sizes: hasVariantsPayload ? sizes : [],
                         colors: hasVariantsPayload ? selectedColors : [],
+                        expected_seller_id: storageUserId,
                     }),
                     CREATE_PRODUCT_TIMEOUT_MS,
                 )
             } catch (e: unknown) {
-                reportTechnicalFailure('server_createProduct', e)
+                await reportTechnicalFailure('server_createProduct', e)
                 return
             }
 
             if ('error' in result && result.error) {
                 const diag = result.diagnostic
-                console.error('[AddProductForm] Cause réelle (createProduct / Supabase)', {
+                console.error('[AddProductForm] PostgrestError — createProduct (réponse serveur)', {
                     message: result.error,
-                    codePostgrest: diag?.code,
+                    code: diag?.code,
                     details: diag?.details,
                     hint: diag?.hint,
                 })
+                if (
+                    isJwtExpiredOrPermissionDenied(result.error) ||
+                    (diag?.code && isJwtExpiredOrPermissionDenied(String(diag.code)))
+                ) {
+                    await handleJwtOrPermissionRecovery(supabase)
+                    return
+                }
                 if (isActionableServerMessage(result.error)) {
                     alert(result.error)
                 } else {
-                    console.error('DEBUG UPLOAD:', result.error, diag)
                     alert(MSG_FRIENDLY_TECH)
                 }
                 return

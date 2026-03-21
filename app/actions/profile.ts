@@ -114,3 +114,19 @@ export async function updateProfile(
 
     return { success: true }
 }
+
+const MANDATORY_CITY_CODES = ['brazzaville', 'pointe-noire'] as const
+
+/**
+ * Mise à jour sécurisée de la ville uniquement (même client Supabase + RLS que updateProfile).
+ * Utilisé par l’écran obligatoire /required-city.
+ */
+export async function saveMandatoryCity(
+    city: string
+): Promise<{ success: true } | { success: false; error: string }> {
+    const normalized = (city ?? '').trim().toLowerCase()
+    if (!MANDATORY_CITY_CODES.includes(normalized as (typeof MANDATORY_CITY_CODES)[number])) {
+        return { success: false, error: 'Ville invalide' }
+    }
+    return updateProfile({ city: normalized })
+}

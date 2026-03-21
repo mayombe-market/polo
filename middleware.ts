@@ -162,6 +162,43 @@ export async function middleware(request: NextRequest) {
         return res
     }
 
+    /** Ville obligatoire : pas sur onboarding / auth / cet écran. */
+    const isCityGateExempt = (p: string) =>
+        p.startsWith('/required-city') ||
+        p.startsWith('/complete-profile') ||
+        p.startsWith('/auth/callback') ||
+        p === '/reset-password' ||
+        p === '/forgot-password'
+
+    if (user && authStatus === 'ok' && !isCityGateExempt(pathname)) {
+        try {
+            const { data: cityRow } = await withTimeout(
+                supabase.from('profiles').select('city').eq('id', user.id).maybeSingle()
+            )
+            if (!cityRow?.city?.trim()) {
+                const dest = new URL('/required-city', request.url)
+                const nextRaw = pathname + (request.nextUrl.search || '')
+                if (nextRaw.length <= 2048) {
+                    dest.searchParams.set('next', nextRaw)
+                }
+                return finish(redirectWithSession(supabaseResponse, dest))
+            }
+        } catch (err: any) {
+            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
+                return finish(
+                    nextWithSearchParams(request, supabaseResponse, (u) =>
+                        u.searchParams.set('auth_error', 'city-check-timeout')
+                    )
+                )
+            }
+            return finish(
+                nextWithSearchParams(request, supabaseResponse, (u) =>
+                    u.searchParams.set('auth_error', 'city-check-error')
+                )
+            )
+        }
+    }
+
     if (pathname.startsWith('/vendor')) {
         if (!user && authStatus === 'no-user') {
             return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))

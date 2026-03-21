@@ -8,6 +8,9 @@
 --   • vendor-verifications → chemin verifications/{auth.uid()}/… (KYC)
 --
 -- Les anciens scripts séparés restent valides mais ce fichier les remplace.
+--
+-- Limite taille par fichier sur le bucket : voir `supabase-storage-products-bucket-limit.sql`
+-- si le Dashboard a fixé un file_size_limit trop bas.
 -- ═══════════════════════════════════════════════════════════════════════════
 
 -- ─── A) Buckets ────────────────────────────────────────────────────────────

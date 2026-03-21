@@ -80,11 +80,11 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-/** Délai max par fichier uploadé (connexions lentes / gros fichiers après compression). */
-const UPLOAD_TIMEOUT_MS = 60_000
+/** Délai max par fichier uploadé (connexions très difficiles). */
+const UPLOAD_TIMEOUT_MS = 120_000
 
 const MSG_SLOW_UPLOAD =
-    'Connexion très lente : l’envoi a dépassé 1 minute. Réessayez avec le Wi‑Fi ou des photos plus légères.'
+    'Connexion très lente : l’envoi a dépassé 2 minutes. Réessayez avec le Wi‑Fi ou réessayez plus tard.'
 
 /** Fait avancer la barre pendant les opérations longues (compression / upload). */
 function startProgressPulse(

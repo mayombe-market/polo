@@ -104,8 +104,12 @@ const COMPRESS_TIMEOUT_MS = 60_000
 /** Action serveur createProduct — même plafond 120 s */
 const CREATE_PRODUCT_TIMEOUT_MS = 120_000
 
-/** Plafond getSession / refreshSession — sans ça, un réseau bloqué laisse « Vérification de la session » tourner indéfiniment */
-const SESSION_VERIFY_TIMEOUT_MS = 18_000
+/** 1er essai getSession ; si le client Supabase est « coincé », on tente un repli localStorage + setSession */
+const SESSION_VERIFY_TIMEOUT_MS = 22_000
+
+const SESSION_RECOVER_SET_SESSION_TIMEOUT_MS = 25_000
+const SESSION_RECOVER_GET_USER_TIMEOUT_MS = 18_000
+const SESSION_SECOND_GETSESSION_TIMEOUT_MS = 12_000
 
 /** Si le JWT expire dans plus de 2 min, on ne force pas refreshSession (moins d’appels réseau, moins de risques de blocage) */
 const SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS = 120_000
@@ -113,7 +117,7 @@ const SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS = 120_000
 const LOGIN_REDIRECT = `/?redirect=${encodeURIComponent('/vendor/dashboard?tab=products')}`
 
 const MSG_SESSION_VERIFY_TIMEOUT =
-    'La vérification de session a pris trop de temps (connexion lente ou coupée). Vérifiez le réseau et réessayez. Si ça continue, déconnectez-vous puis reconnectez-vous.'
+    'La session n’a pas pu être lue à temps. Astuces : réessayez en navigation normale (pas « privée »), autre réseau/Wi‑Fi, ou déconnectez-vous puis reconnectez-vous. Si la console mentionne un cookie « __cf_bm » et domaine invalide, vérifiez chez Cloudflare que l’URL du site (avec ou sans www) correspond bien au domaine configuré.'
 
 const MSG_SLOW_UPLOAD =
     'Connexion très lente : l’envoi d’une image a dépassé 2 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
@@ -197,6 +201,102 @@ function isPostgrestLikeObject(e: unknown): e is { message?: string; code?: stri
     return typeof c === 'string' && /^[0-9A-Z]{5}$/.test(c)
 }
 
+type AuthGetSessionBundle = { data: { session: Session | null }; error: { message: string } | null }
+
+/** Jetons persistés par @supabase/gotrue-js (clé typique sb-<ref>-auth-token) */
+type PersistedSupabaseAuth = {
+    access_token?: string
+    refresh_token?: string
+    expires_at?: number
+    user?: { id?: string }
+}
+
+function readPersistedSupabaseAuthFromStorage(): PersistedSupabaseAuth | null {
+    if (typeof window === 'undefined' || !window.localStorage) return null
+    try {
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i)
+            if (!key || !key.startsWith('sb-') || !key.endsWith('-auth-token')) continue
+            const raw = localStorage.getItem(key)
+            if (!raw) continue
+            const j = JSON.parse(raw) as PersistedSupabaseAuth
+            if (j?.access_token && j?.refresh_token) return j
+        }
+    } catch (e) {
+        console.warn('[AddProductForm] lecture localStorage auth Supabase:', e)
+    }
+    return null
+}
+
+/**
+ * Quand getSession() ne se résout jamais (locks, extensions, souci Cloudflare…),
+ * réinjecter la session depuis le stockage local remet en général les bons headers sur storage.upload.
+ */
+async function recoverSessionAfterGetSessionHang(
+    supabase: ReturnType<typeof getSupabaseBrowserClient>,
+): Promise<Session | null> {
+    const persisted = readPersistedSupabaseAuthFromStorage()
+    if (persisted?.access_token && persisted?.refresh_token) {
+        try {
+            const { data, error } = (await withTimeout(
+                supabase.auth.setSession({
+                    access_token: persisted.access_token,
+                    refresh_token: persisted.refresh_token,
+                }),
+                SESSION_RECOVER_SET_SESSION_TIMEOUT_MS,
+            )) as { data: { session: Session | null }; error: { message: string } | null }
+            if (error) {
+                console.error('[AddProductForm] repli setSession:', error.message)
+            } else if (data.session?.user?.id) {
+                console.warn(
+                    '[AddProductForm] Session réhydratée via setSession (getSession était bloqué / trop lent)',
+                )
+                return data.session
+            }
+        } catch (e: unknown) {
+            if (isTimeoutError(e)) {
+                console.error('[AddProductForm] repli setSession: timeout')
+            } else {
+                console.error('[AddProductForm] repli setSession:', e)
+            }
+        }
+    } else {
+        console.warn(
+            '[AddProductForm] Pas de access_token + refresh_token dans localStorage — impossible setSession de repli',
+        )
+    }
+
+    try {
+        const { data, error } = (await withTimeout(
+            supabase.auth.getUser(),
+            SESSION_RECOVER_GET_USER_TIMEOUT_MS,
+        )) as { data: { user: Session['user'] | null }; error: { message: string } | null }
+        if (error) {
+            console.warn('[AddProductForm] repli getUser:', error.message)
+        }
+        if (data.user?.id) {
+            console.warn('[AddProductForm] getUser OK après échec getSession — nouvelle lecture getSession courte')
+            try {
+                const { data: d2 } = (await withTimeout(
+                    supabase.auth.getSession(),
+                    SESSION_SECOND_GETSESSION_TIMEOUT_MS,
+                )) as AuthGetSessionBundle
+                if (d2.session?.user?.id) return d2.session
+            } catch {
+                /* ignore */
+            }
+        }
+    } catch (e: unknown) {
+        if (isTimeoutError(e)) {
+            console.error('[AddProductForm] repli getUser: timeout')
+        } else {
+            console.error('[AddProductForm] repli getUser:', e)
+        }
+    }
+
+    return null
+}
+
 function logStorageOrPostgrestError(context: string, err: unknown) {
     if (isStorageLikeError(err)) {
         const o = err as Record<string, unknown>
@@ -227,25 +327,35 @@ async function ensureSessionBeforePublish(
     supabase: ReturnType<typeof getSupabaseBrowserClient>,
     propSellerId?: string,
 ): Promise<{ userId: string } | { redirect: true } | { abort: true }> {
-    type GetSessionBundle = { data: { session: Session | null }; error: { message: string } | null }
-
     let initial: Session | null = null
+    /** Après repli localStorage, le 2e getSession() peut aussi bloquer — on évite de rappeler inutilement */
+    let skipSecondGetSession = false
+
     try {
         const { data, error: initErr } = (await withTimeout(
             supabase.auth.getSession(),
             SESSION_VERIFY_TIMEOUT_MS,
-        )) as GetSessionBundle
+        )) as AuthGetSessionBundle
         if (initErr) {
             console.error('[AddProductForm] getSession (initial):', initErr.message)
         }
         initial = data.session
     } catch (e: unknown) {
         if (isTimeoutError(e)) {
-            console.error('[AddProductForm] getSession timeout (session gate)')
-            alert(MSG_SESSION_VERIFY_TIMEOUT)
-            return { abort: true }
+            console.error(
+                '[AddProductForm] getSession timeout (session gate) — repli setSession / getUser',
+            )
+            const recovered = await recoverSessionAfterGetSessionHang(supabase)
+            if (recovered?.user?.id) {
+                initial = recovered
+                skipSecondGetSession = true
+            } else {
+                alert(MSG_SESSION_VERIFY_TIMEOUT)
+                return { abort: true }
+            }
+        } else {
+            throw e
         }
-        throw e
     }
 
     if (!initial?.user?.id) {
@@ -260,7 +370,8 @@ async function ensureSessionBeforePublish(
     const shouldRefresh =
         expMs == null || expMs < Date.now() + SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS
 
-    if (shouldRefresh) {
+    // Après repli setSession, refreshSession peut rappeler des chemins qui re-bloquent — on évite si déjà réhydraté
+    if (shouldRefresh && !skipSecondGetSession) {
         try {
             const { error: refErr } = (await withTimeout(
                 supabase.auth.refreshSession(),
@@ -278,23 +389,35 @@ async function ensureSessionBeforePublish(
                 console.warn('[AddProductForm] refreshSession:', e)
             }
         }
+    } else if (shouldRefresh && skipSecondGetSession) {
+        console.warn(
+            '[AddProductForm] refreshSession ignoré (session récupérée après timeout getSession — évite nouveau blocage)',
+        )
     }
 
     let after: Session | null = initial
-    try {
-        const { data } = (await withTimeout(
-            supabase.auth.getSession(),
-            SESSION_VERIFY_TIMEOUT_MS,
-        )) as GetSessionBundle
-        if (data.session?.user?.id) {
-            after = data.session
+    if (!skipSecondGetSession) {
+        try {
+            const { data } = (await withTimeout(
+                supabase.auth.getSession(),
+                SESSION_SECOND_GETSESSION_TIMEOUT_MS,
+            )) as AuthGetSessionBundle
+            if (data.session?.user?.id) {
+                after = data.session
+            }
+        } catch (e: unknown) {
+            if (isTimeoutError(e)) {
+                console.warn(
+                    '[AddProductForm] getSession (after refresh) timeout — utilisation de la session déjà lue',
+                )
+            } else {
+                throw e
+            }
         }
-    } catch (e: unknown) {
-        if (isTimeoutError(e)) {
-            console.warn('[AddProductForm] getSession (after refresh) timeout — utilisation de la session déjà lue')
-        } else {
-            throw e
-        }
+    } else {
+        console.warn(
+            '[AddProductForm] 2e getSession ignoré (session obtenue via repli après blocage du 1er getSession)',
+        )
     }
 
     const userId = after?.user?.id ?? initial.user.id

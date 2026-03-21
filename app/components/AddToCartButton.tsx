@@ -30,10 +30,12 @@ export default function AddToCartButton({ product, selectedVariant }: Props) {
     const [status, setStatus] = useState<'idle' | 'added' | 'error'>('idle')
 
     const handleAdd = () => {
-        // 1. VÉRIFICATION DES VARIANTES
-        if (product.has_variants) {
-            const needsSize = product.sizes && product.sizes.length > 0 && !selectedVariant?.size
-            const needsColor = product.colors && product.colors.length > 0 && !selectedVariant?.color
+        // 1. VÉRIFICATION DES VARIANTES (priorité aux listes réelles, pas seulement has_variants)
+        const hasSizePicker = (product.sizes?.length ?? 0) > 0
+        const hasColorPicker = (product.colors?.length ?? 0) > 0
+        if (product.has_variants || hasSizePicker || hasColorPicker) {
+            const needsSize = hasSizePicker && !selectedVariant?.size
+            const needsColor = hasColorPicker && !selectedVariant?.color
 
             if (needsSize || needsColor) {
                 setStatus('error')

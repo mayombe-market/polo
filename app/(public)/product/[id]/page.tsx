@@ -19,6 +19,8 @@ import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import VerifiedBadge from '@/app/components/VerifiedBadge'
+import SizeGuideModal from '@/app/components/SizeGuideModal'
+import { getVariantColorHex } from '@/lib/productVariantsPresets'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -40,6 +42,7 @@ export default function ProductDetailPage() {
     const [liked, setLiked] = useState(false)
     const [negotiatedPrice, setNegotiatedPrice] = useState<number | null>(null)
     const [sellerExpired, setSellerExpired] = useState(false)
+    const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -290,52 +293,68 @@ export default function ProductDetailPage() {
 
                     <div className="h-px bg-slate-100 dark:bg-white/[0.04] mb-5" />
 
-                    {/* Color selector */}
-                    {product.has_variants && product.colors?.length > 0 && (
+                    {/* Couleurs : pastilles uniquement (pas de libellé texte côté client) */}
+                    {product.colors && product.colors.length > 0 && (
                         <div className="mb-5">
-                            <div className="flex items-center justify-between mb-2.5">
-                                <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold uppercase tracking-wider">Couleur</span>
-                                {selectedColor && <span className="text-sm font-semibold text-orange-400">{selectedColor}</span>}
-                            </div>
-                            <div className="flex gap-2 flex-wrap">
-                                {product.colors.map((color: string) => (
-                                    <button
-                                        key={color}
-                                        onClick={() => setSelectedColor(color)}
-                                        className={`px-5 py-2.5 rounded-xl border-2 text-[11px] font-bold uppercase transition-all ${
-                                            selectedColor === color
-                                                ? 'border-orange-500 bg-orange-500/10 text-orange-400'
-                                                : 'border-slate-200 dark:border-white/[0.08] text-slate-500 hover:border-orange-300'
-                                        }`}
-                                    >
-                                        {color}
-                                    </button>
-                                ))}
+                            <span className="sr-only">Couleur</span>
+                            <div className="flex gap-3 flex-wrap items-center">
+                                {product.colors.map((colorName: string) => {
+                                    const hex = getVariantColorHex(colorName) ?? '#94a3b8'
+                                    const isLight = hex.toUpperCase() === '#FFFFFF' || hex === '#fff'
+                                    const isDark = hex === '#171717' || hex === '#000000' || hex === '#000'
+                                    const selected = selectedColor === colorName
+                                    return (
+                                        <button
+                                            key={colorName}
+                                            type="button"
+                                            onClick={() => setSelectedColor(colorName)}
+                                            aria-label={colorName}
+                                            title={colorName}
+                                            className={`rounded-full p-0.5 transition-transform ${selected ? 'scale-110' : 'hover:scale-105'}`}
+                                        >
+                                            <span
+                                                className={`block w-11 h-11 rounded-full ${isLight ? 'border-2 border-slate-300 dark:border-slate-500' : ''} ${isDark ? 'border-2 border-slate-500 dark:border-slate-400' : ''} ${selected ? 'ring-4 ring-orange-500 ring-offset-2 ring-offset-white dark:ring-offset-[#0A0A12]' : 'ring-2 ring-transparent'}`}
+                                                style={{ backgroundColor: hex }}
+                                            />
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
 
-                    {/* Size selector */}
-                    {product.has_variants && product.sizes?.length > 0 && (
+                    {/* Tailles : cases carrées + guide */}
+                    {product.sizes && product.sizes.length > 0 && (
                         <div className="mb-5">
-                            <div className="flex items-center justify-between mb-2.5">
-                                <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold uppercase tracking-wider">Taille</span>
-                                {selectedSize && <span className="text-sm font-semibold text-orange-400">{selectedSize}</span>}
+                            <div className="flex justify-end mb-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setSizeGuideOpen(true)}
+                                    className="text-xs font-bold text-orange-500 hover:text-orange-600 underline underline-offset-2"
+                                >
+                                    Guide des tailles
+                                </button>
                             </div>
+                            <span className="sr-only">Taille</span>
                             <div className="flex gap-2 flex-wrap">
-                                {product.sizes.map((size: string) => (
-                                    <button
-                                        key={size}
-                                        onClick={() => setSelectedSize(size)}
-                                        className={`w-[50px] h-11 rounded-xl text-sm font-bold transition-all ${
-                                            selectedSize === size
-                                                ? 'border-2 border-orange-500 bg-orange-500/10 text-orange-400'
-                                                : 'border-[1.5px] border-slate-200 dark:border-white/[0.08] text-slate-500 hover:border-orange-300'
-                                        }`}
-                                    >
-                                        {size}
-                                    </button>
-                                ))}
+                                {product.sizes.map((size: string) => {
+                                    const selected = selectedSize === size
+                                    return (
+                                        <button
+                                            key={size}
+                                            type="button"
+                                            onClick={() => setSelectedSize(size)}
+                                            aria-pressed={selected}
+                                            className={`min-w-[48px] h-12 px-2 rounded-lg text-sm font-black flex items-center justify-center transition-all ${
+                                                selected
+                                                    ? 'border-[3px] border-orange-500 bg-orange-500/15 text-orange-600 dark:text-orange-400 shadow-sm'
+                                                    : 'border-2 border-slate-200 dark:border-white/[0.12] text-slate-700 dark:text-[#F0ECE2] hover:border-orange-300'
+                                            }`}
+                                        >
+                                            {size}
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
                     )}
@@ -409,18 +428,6 @@ export default function ProductDetailPage() {
                                     <span className="text-slate-600 dark:text-slate-300 text-[13px]">
                                         Stock : {product.stock_quantity > 0 ? `${product.stock_quantity} disponibles` : 'Rupture'}
                                     </span>
-                                </div>
-                            )}
-                            {product.has_variants && product.sizes?.length > 0 && (
-                                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                    <span className="text-orange-400 text-sm">✦</span>
-                                    <span className="text-slate-600 dark:text-slate-300 text-[13px]">Tailles : {product.sizes.join(', ')}</span>
-                                </div>
-                            )}
-                            {product.has_variants && product.colors?.length > 0 && (
-                                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                    <span className="text-orange-400 text-sm">✦</span>
-                                    <span className="text-slate-600 dark:text-slate-300 text-[13px]">Couleurs : {product.colors.join(', ')}</span>
                                 </div>
                             )}
                             {product.views_count > 0 && (
@@ -572,6 +579,8 @@ export default function ProductDetailPage() {
                 </div>
             </div>
             )}
+
+            <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />
         </div>
     )
 }

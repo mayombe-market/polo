@@ -5,6 +5,12 @@ import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { compressImageForUpload } from '@/lib/compressImageForUpload'
 import {
+    PRODUCT_VARIANT_COLORS,
+    CLOTHING_SIZES,
+    SHOE_SIZES,
+    type SizeKind,
+} from '@/lib/productVariantsPresets'
+import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
 } from 'lucide-react'
@@ -148,21 +154,6 @@ const STEPS = [
     { id: 5, label: 'Images', icon: ImageIcon },
 ]
 
-const presetColors = [
-    { name: 'Noir', hex: '#000000' },
-    { name: 'Blanc', hex: '#FFFFFF' },
-    { name: 'Rouge', hex: '#EF4444' },
-    { name: 'Bleu', hex: '#3B82F6' },
-    { name: 'Vert', hex: '#22C55E' },
-    { name: 'Jaune', hex: '#EAB308' },
-    { name: 'Rose', hex: '#EC4899' },
-    { name: 'Orange', hex: '#F97316' },
-    { name: 'Violet', hex: '#8B5CF6' },
-    { name: 'Gris', hex: '#6B7280' },
-    { name: 'Marron', hex: '#92400E' },
-    { name: 'Beige', hex: '#D2B48C' },
-]
-
 export type AddProductFormProps = {
     sellerId?: string
     /** Si false, le bouton Publier reste désactivé avec message d’aide */
@@ -176,9 +167,6 @@ export default function AddProductForm({
     isVendorAccount,
     verificationStatus,
 }: AddProductFormProps) {
-    // Test de survie : à chaque rendu (retirer en prod si trop verbeux)
-    console.log("Formulaire Produit initialisé")
-
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const [publishProgress, setPublishProgress] = useState(0)
@@ -196,11 +184,12 @@ export default function AddProductForm({
     const [hasStock, setHasStock] = useState(false)
     const [stockQuantity, setStockQuantity] = useState('')
 
-    // Step 3: Variantes
-    const [hasVariants, setHasVariants] = useState(false)
+    // Step 3: Variantes (tailles prédéfinies + couleurs swatch uniquement)
+    const [sizeKind, setSizeKind] = useState<SizeKind>('none')
     const [sizes, setSizes] = useState<string[]>([])
-    const [sizeInput, setSizeInput] = useState('')
     const [selectedColors, setSelectedColors] = useState<string[]>([])
+
+    const hasVariantsPayload = sizes.length > 0 || selectedColors.length > 0
 
     // Step 4: Détails
     const [features, setFeatures] = useState<string[]>([''])
@@ -266,21 +255,18 @@ export default function AddProductForm({
 
     const goBack = () => setStep(Math.max(step - 1, 1))
 
-    // ===== SIZES MANAGEMENT =====
-    const addSize = () => {
-        const s = sizeInput.trim()
-        if (s && !sizes.includes(s)) {
-            setSizes([...sizes, s])
-            setSizeInput('')
-        }
+    const setSizeKindAndReset = (kind: SizeKind) => {
+        setSizeKind(kind)
+        setSizes([])
     }
 
-    const removeSize = (s: string) => setSizes(sizes.filter(x => x !== s))
+    const togglePresetSize = (s: string) => {
+        setSizes((prev) => (prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]))
+    }
 
-    // ===== COLORS MANAGEMENT =====
-    const toggleColor = (colorName: string) => {
-        setSelectedColors(prev =>
-            prev.includes(colorName) ? prev.filter(c => c !== colorName) : [...prev, colorName]
+    const toggleVariantColor = (colorName: string) => {
+        setSelectedColors((prev) =>
+            prev.includes(colorName) ? prev.filter((c) => c !== colorName) : [...prev, colorName],
         )
     }
 
@@ -429,9 +415,9 @@ export default function AddProductForm({
                     images_gallery: galleryUrls,
                     has_stock: hasStock,
                     stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
-                    has_variants: hasVariants,
-                    sizes: hasVariants ? sizes : [],
-                    colors: hasVariants ? selectedColors : [],
+                    has_variants: hasVariantsPayload,
+                    sizes: hasVariantsPayload ? sizes : [],
+                    colors: hasVariantsPayload ? selectedColors : [],
                 })
             } catch (e: unknown) {
                 reportTechnicalFailure('server_createProduct', e)
@@ -651,98 +637,113 @@ export default function AddProductForm({
                     </div>
                 )}
 
-                {/* ===== STEP 3: VARIANTES ===== */}
+                {/* ===== STEP 3: VARIANTES (100 % clics, pas de saisie libre) ===== */}
                 {step === 3 && (
                     <div className="space-y-6 max-w-lg">
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Variantes</h3>
-                            <p className="text-sm text-slate-400">Tailles et couleurs disponibles (optionnel).</p>
+                            <p className="text-sm text-slate-400">
+                                Cochez les tailles et couleurs proposées. Laissez vide pour un produit sans variante (ex. électronique).
+                            </p>
                         </div>
 
-                        <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700">
-                            <label className="flex items-center justify-between cursor-pointer">
-                                <div>
-                                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Activer les variantes</span>
-                                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">Pour les articles avec tailles / couleurs</p>
-                                </div>
-                                <div className={`w-12 h-7 rounded-full transition-colors relative cursor-pointer ${hasVariants ? 'bg-orange-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setHasVariants(!hasVariants)}>
-                                    <div className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${hasVariants ? 'translate-x-5' : 'translate-x-0.5'}`} />
-                                </div>
-                            </label>
-                        </div>
-
-                        {hasVariants && (
-                            <>
-                                {/* Tailles */}
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Tailles</label>
-                                    <div className="flex gap-2 mb-3">
-                                        <input
-                                            value={sizeInput}
-                                            onChange={e => setSizeInput(e.target.value)}
-                                            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addSize() } }}
-                                            placeholder="Ex: S, M, L, XL..."
-                                            className="flex-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={addSize}
-                                            className="px-4 bg-orange-500 text-white rounded-xl font-black text-xs hover:bg-orange-600 transition-colors"
-                                        >
-                                            +
-                                        </button>
-                                    </div>
-                                    <div className="flex flex-wrap gap-2">
-                                        {sizes.map(s => (
-                                            <span key={s} className="flex items-center gap-1.5 bg-orange-100 dark:bg-orange-900/30 text-orange-600 px-3 py-1.5 rounded-xl text-xs font-black">
-                                                {s}
-                                                <button type="button" onClick={() => removeSize(s)} className="hover:text-red-500"><X size={12} /></button>
-                                            </span>
-                                        ))}
-                                        {sizes.length === 0 && <p className="text-[10px] text-slate-400 italic">Aucune taille ajoutée</p>}
-                                    </div>
-                                </div>
-
-                                {/* Couleurs */}
-                                <div>
-                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Couleurs</label>
-                                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-3">
-                                        {presetColors.map(color => {
-                                            const isSelected = selectedColors.includes(color.name)
-                                            return (
-                                                <button
-                                                    key={color.name}
-                                                    type="button"
-                                                    onClick={() => toggleColor(color.name)}
-                                                    className={`flex flex-col items-center gap-1.5 p-2 rounded-xl border-2 transition-all ${isSelected
-                                                        ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20 scale-105'
-                                                        : 'border-transparent hover:border-slate-200 dark:hover:border-slate-700'
-                                                        }`}
-                                                >
-                                                    <div
-                                                        className={`w-8 h-8 rounded-full border-2 ${color.hex === '#FFFFFF' ? 'border-slate-300' : 'border-transparent'} ${isSelected ? 'ring-2 ring-orange-400 ring-offset-2' : ''}`}
-                                                        style={{ backgroundColor: color.hex }}
-                                                    />
-                                                    <span className="text-[8px] font-bold text-slate-500">{color.name}</span>
-                                                </button>
-                                            )
-                                        })}
-                                    </div>
-                                    {selectedColors.length > 0 && (
-                                        <p className="text-[10px] text-orange-500 font-bold mt-3">
-                                            {selectedColors.length} couleur{selectedColors.length > 1 ? 's' : ''} : {selectedColors.join(', ')}
-                                        </p>
-                                    )}
-                                </div>
-                            </>
-                        )}
-
-                        {!hasVariants && (
-                            <div className="text-center py-8">
-                                <Palette size={32} className="mx-auto text-slate-200 dark:text-slate-600 mb-3" />
-                                <p className="text-xs text-slate-400 font-bold">Activez les variantes si votre produit existe en plusieurs tailles ou couleurs.</p>
+                        {/* Tailles : type puis cases prédéfinies */}
+                        <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-4">
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Tailles</span>
+                            <div className="flex flex-wrap gap-2">
+                                {([
+                                    { kind: 'none' as const, label: 'Sans taille' },
+                                    { kind: 'clothing' as const, label: 'Vêtements' },
+                                    { kind: 'shoes' as const, label: 'Chaussures' },
+                                ]).map(({ kind, label }) => (
+                                    <button
+                                        key={kind}
+                                        type="button"
+                                        onClick={() => setSizeKindAndReset(kind)}
+                                        className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${sizeKind === kind
+                                            ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
+                                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600 hover:border-orange-300'
+                                            }`}
+                                    >
+                                        {label}
+                                    </button>
+                                ))}
                             </div>
-                        )}
+                            {sizeKind === 'clothing' && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {CLOTHING_SIZES.map((s) => {
+                                        const on = sizes.includes(s)
+                                        return (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => togglePresetSize(s)}
+                                                className={`min-w-[48px] h-11 px-3 rounded-xl text-sm font-black transition-all ${on
+                                                    ? 'bg-orange-500 text-white ring-2 ring-orange-300 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-800'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-2 border-slate-200 dark:border-slate-600 hover:border-orange-400'
+                                                    }`}
+                                            >
+                                                {s}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                            {sizeKind === 'shoes' && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {SHOE_SIZES.map((s) => {
+                                        const on = sizes.includes(s)
+                                        return (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => togglePresetSize(s)}
+                                                className={`min-w-[48px] h-11 px-3 rounded-xl text-sm font-black transition-all ${on
+                                                    ? 'bg-orange-500 text-white ring-2 ring-orange-300 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-800'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-2 border-slate-200 dark:border-slate-600 hover:border-orange-400'
+                                                    }`}
+                                            >
+                                                {s}
+                                            </button>
+                                        )
+                                    })}
+                                </div>
+                            )}
+                            {sizeKind === 'none' && (
+                                <p className="text-[10px] text-slate-400 font-bold italic">Aucune taille ne sera affichée aux acheteurs.</p>
+                            )}
+                        </div>
+
+                        {/* Couleurs : pastilles uniquement (noms en accessibilité seulement) */}
+                        <div>
+                            <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Couleurs</span>
+                            <div className="grid grid-cols-6 sm:grid-cols-6 gap-3">
+                                {PRODUCT_VARIANT_COLORS.map((color) => {
+                                    const isSelected = selectedColors.includes(color.name)
+                                    return (
+                                        <button
+                                            key={color.name}
+                                            type="button"
+                                            onClick={() => toggleVariantColor(color.name)}
+                                            title={color.name}
+                                            aria-label={color.name}
+                                            aria-pressed={isSelected}
+                                            className={`flex justify-center p-1.5 rounded-full transition-all ${isSelected
+                                                ? 'ring-2 ring-orange-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-900 scale-110'
+                                                : 'hover:ring-2 hover:ring-slate-300 dark:hover:ring-slate-600'
+                                                }`}
+                                        >
+                                            <span
+                                                className={`w-10 h-10 rounded-full block ${color.hex === '#FFFFFF' ? 'border-2 border-slate-300' : color.hex === '#171717' ? 'border border-slate-600' : ''
+                                                    }`}
+                                                style={{ backgroundColor: color.hex }}
+                                            />
+                                        </button>
+                                    )
+                                })}
+                            </div>
+                            <p className="text-[10px] text-slate-400 mt-3">Sans sélection = la section couleur sera masquée pour les clients.</p>
+                        </div>
                     </div>
                 )}
 

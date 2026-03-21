@@ -86,11 +86,14 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-/** Délai max par fichier uploadé (connexions très difficiles). */
-const UPLOAD_TIMEOUT_MS = 120_000
+/**
+ * Délai max par fichier (image principale ou une vignette).
+ * Connexions lentes / mobile : 2 min suffisaient rarement pour 1 fichier vers Supabase Storage.
+ */
+const UPLOAD_TIMEOUT_MS = 300_000
 
 const MSG_SLOW_UPLOAD =
-    'Connexion très lente : l’envoi a dépassé 2 minutes. Réessayez avec le Wi‑Fi ou réessayez plus tard.'
+    'Connexion très lente : l’envoi d’une image a dépassé 5 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
 
 /** Fait avancer la barre pendant les opérations longues (compression / upload). */
 function startProgressPulse(
@@ -353,8 +356,18 @@ export default function AddProductForm({
             return data.publicUrl
         }
 
-        const uploadFileTimedWithRetry = (file: File, basePath: string) =>
-            runUploadWithRetry(() => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS))
+        /** Upload avec retry erreur réseau + 2e tentative si timeout (connexion très lente). */
+        const uploadFileTimedWithRetry = async (file: File, basePath: string): Promise<string> => {
+            const attempt = () =>
+                runUploadWithRetry(() => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS))
+            try {
+                return await attempt()
+            } catch (e: unknown) {
+                if (!isTimeoutError(e)) throw e
+                await sleep(2000)
+                return await attempt()
+            }
+        }
 
         setLoading(true)
         setPublishProgress(5)

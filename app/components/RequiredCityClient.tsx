@@ -43,7 +43,9 @@ export default function RequiredCityClient({ safeNext }: { safeNext: string }) {
                     Votre ville
                 </h1>
                 <p className="text-sm font-bold text-slate-600 dark:text-slate-300 text-center leading-relaxed mb-10 px-1">
-                    Pour mieux vous servir, merci de préciser votre ville de résidence.
+                    La livraison Mayombe Market est disponible à <strong className="text-slate-800 dark:text-white">Brazzaville</strong> et{' '}
+                    <strong className="text-slate-800 dark:text-white">Pointe-Noire</strong> uniquement. Choisissez votre ville — ce choix est{' '}
+                    <strong>obligatoire</strong> pour continuer.
                 </p>
 
                 <div className="flex flex-col gap-4">

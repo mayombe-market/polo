@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import RequiredCityClient from '@/app/components/RequiredCityClient'
 import { sanitizeInternalNext } from '@/lib/requiredCityNext'
+import { isValidServiceCity } from '@/lib/deliveryLocation'
 
 export default async function RequiredCityPage({
     searchParams,
@@ -44,7 +45,7 @@ export default async function RequiredCityPage({
 
     const { data: row } = await supabase.from('profiles').select('city').eq('id', user.id).maybeSingle()
 
-    if (row?.city?.trim()) {
+    if (isValidServiceCity(row?.city)) {
         redirect(safeNext)
     }
 

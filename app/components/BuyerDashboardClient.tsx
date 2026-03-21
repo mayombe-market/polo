@@ -217,6 +217,24 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         fetchAll().catch(() => setDataLoading(false))
     }, [user?.id])
 
+    useEffect(() => {
+        if (!user?.id) return
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible') return
+            supabase
+                .from('orders')
+                .select('*')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .then(({ data }: { data: any[] | null }) => {
+                    if (data) setOrders(data)
+                })
+                .catch(() => {})
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => document.removeEventListener('visibilitychange', onVisible)
+    }, [user?.id, supabase])
+
     // ===== REAL-TIME ORDERS =====
     useRealtime('order:update', (payload) => {
         if (!user?.id) return

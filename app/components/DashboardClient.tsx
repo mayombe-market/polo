@@ -230,6 +230,19 @@ export default function DashboardClient({ products: initialProducts, profile, us
         fetchData()
     }, [user?.id])
 
+    // Filet de sécu : si Realtime / RLS n’envoie pas l’UPDATE, recharger les commandes au retour sur l’onglet
+    useEffect(() => {
+        if (!user?.id) return
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible') return
+            getVendorOrders()
+                .then((r) => setOrders(r.orders || []))
+                .catch(() => {})
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => document.removeEventListener('visibilitychange', onVisible)
+    }, [user?.id])
+
     // Real-time orders
     useRealtime('order:insert', (payload) => {
         if (!user?.id) return

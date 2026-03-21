@@ -116,6 +116,26 @@ CREATE POLICY "Admin supprime commandes" ON orders
         EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
     );
 
+-- Vendeur : voir les commandes qui contiennent au moins une ligne avec seller_id = lui
+-- (nécessaire pour Realtime + getVendorOrders sous RLS — voir supabase-orders-vendor-realtime-sync.sql)
+DROP POLICY IF EXISTS "Vendeur voit commandes avec ses articles" ON orders;
+CREATE POLICY "Vendeur voit commandes avec ses articles" ON orders
+    FOR SELECT TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = auth.uid() AND p.role = 'vendor'
+        )
+        AND EXISTS (
+            SELECT 1
+            FROM jsonb_array_elements(COALESCE(items::jsonb, '[]'::jsonb)) AS elem
+            WHERE (elem->>'seller_id') IS NOT NULL
+              AND (elem->>'seller_id') = auth.uid()::text
+        )
+    );
+
+-- Realtime sur `orders` : exécuter supabase-orders-vendor-realtime-sync.sql (ADD TABLE idempotent)
+
 -- ========================
 -- TABLE : negotiations
 -- ========================

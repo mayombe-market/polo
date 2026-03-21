@@ -6,6 +6,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
 import { getContentSecurityPolicy } from '@/lib/content-security-policy'
+import { isValidServiceCity } from '@/lib/deliveryLocation'
 
 /** Conserve les cookies de session rafraîchis (setAll) sur une autre réponse. */
 function withRefreshedSessionCookies(sessionResponse: NextResponse, response: NextResponse) {
@@ -173,9 +174,12 @@ export async function middleware(request: NextRequest) {
     if (user && authStatus === 'ok' && !isCityGateExempt(pathname)) {
         try {
             const { data: cityRow } = await withTimeout(
-                supabase.from('profiles').select('city').eq('id', user.id).maybeSingle()
+                supabase.from('profiles').select('city, role').eq('id', user.id).maybeSingle()
             )
-            if (!cityRow?.city?.trim()) {
+            // Admin : pas bloqué (ville hors périmètre possible)
+            const skipCityGate = cityRow?.role === 'admin'
+            // Ville obligatoire = uniquement Brazzaville ou Pointe-Noire (codes normalisés)
+            if (!skipCityGate && !isValidServiceCity(cityRow?.city)) {
                 const dest = new URL('/required-city', request.url)
                 const nextRaw = pathname + (request.nextUrl.search || '')
                 if (nextRaw.length <= 2048) {

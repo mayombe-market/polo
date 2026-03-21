@@ -36,15 +36,22 @@ export async function createNotification(
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        await supabase.from('notifications').insert({
+        const { error } = await supabase.from('notifications').insert({
             user_id: userId,
             type,
             title,
             body,
             link: link || null,
         })
-    } catch {
-        // Ne jamais bloquer l'action principale
+        if (error) {
+            console.error('[createNotification] insert refusé ou erreur Supabase:', error.message, {
+                userId,
+                type,
+                callerId: user.id,
+            })
+        }
+    } catch (e) {
+        console.error('[createNotification] exception:', e)
     }
 }
 

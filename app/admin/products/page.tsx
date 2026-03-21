@@ -10,6 +10,7 @@ import {
 import { deleteProduct } from '@/app/actions/orders'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -90,7 +91,7 @@ export default function AdminProducts() {
             { header: 'Stock', accessor: (p: any) => p.stock_quantity || 0 },
             { header: 'Catégorie', accessor: (p: any) => p.category || '' },
             { header: 'Vendeur', accessor: (p: any) => sellers[p.seller_id] || '' },
-            { header: 'Date', accessor: (p: any) => new Date(p.created_at).toLocaleDateString('fr-FR') },
+            { header: 'Date et heure', accessor: (p: any) => formatAdminDateTime(p.created_at) },
         ], csvFilename('produits'))
     }
 

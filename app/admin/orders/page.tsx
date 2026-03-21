@@ -10,6 +10,7 @@ import {
     Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription } from '@/app/actions/orders'
@@ -100,18 +101,19 @@ export default function AdminOrders() {
     useRealtime('order:insert', (payload) => {
         const order = payload.new as any
         setOrders(prev => [order, ...prev])
+        const when = formatAdminDateTime(order.created_at)
         if (order.order_type === 'subscription') {
             toast.info('Nouvel abonnement vendeur', {
-                description: `${order.customer_name} — ${order.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                description: `${order.customer_name} — ${order.total_amount?.toLocaleString('fr-FR')} FCFA · ${when}`,
                 duration: 5000
             })
         } else {
             const productNames = order.items?.map((i: any) => i.name).join(', ') || 'Produit'
             const deliveryLabel = order.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-            const desc = `${order.customer_name} · ${productNames} · ${deliveryLabel} · ${order.total_amount?.toLocaleString('fr-FR')} FCFA`
+            const desc = `${order.customer_name} · ${productNames} · ${deliveryLabel} · ${order.total_amount?.toLocaleString('fr-FR')} FCFA · ${when}`
             playNewOrderSound()
             toast.success('Nouvelle commande !', { description: desc, duration: 10000 })
-            sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${order.customer_name}`)
+            sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${order.customer_name} · ${when}`)
         }
     })
 
@@ -309,7 +311,7 @@ export default function AdminOrders() {
             { header: 'Statut', accessor: (o: any) => getStatusDetails(o.status).label },
             { header: 'Paiement', accessor: (o: any) => getPaymentBadge(o.payment_method).label },
             { header: 'Tracking', accessor: (o: any) => o.tracking_number || '' },
-            { header: 'Date', accessor: (o: any) => new Date(o.created_at).toLocaleDateString('fr-FR') },
+            { header: 'Date et heure', accessor: (o: any) => formatAdminDateTime(o.created_at) },
         ], csvFilename('commandes'))
     }
 
@@ -475,7 +477,7 @@ export default function AdminOrders() {
                                             </div>
                                             <div>
                                                 <p className="text-[10px] font-black uppercase text-slate-400 leading-none">{formatOrderNumber(order)}</p>
-                                                <p className="text-[10px] font-bold text-slate-400 mt-1">{new Date(order.created_at).toLocaleDateString('fr-FR')} à {new Date(order.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}</p>
+                                                <p className="text-[10px] font-bold text-slate-400 mt-1">{formatAdminDateTime(order.created_at)}</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1.5">

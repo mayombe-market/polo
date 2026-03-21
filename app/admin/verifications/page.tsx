@@ -14,6 +14,7 @@ import {
     adminApproveVerification,
     adminRejectVerification,
 } from '@/app/actions/verifications'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -42,9 +43,15 @@ export default function AdminVerificationsPage() {
     }, [tab])
 
     // Realtime via shared channel
-    useRealtime('verification:insert', () => {
+    useRealtime('verification:insert', (payload) => {
         if (tab === 'pending') fetchVerifications()
-        toast.info('Nouvelle demande de vérification !')
+        const row = payload?.new ?? payload
+        const when = row?.created_at
+            ? formatAdminDateTime(row.created_at)
+            : formatAdminDateTime(new Date())
+        toast.info('Nouvelle demande de vérification !', {
+            description: `Reçue le ${when}`,
+        })
     }, [tab])
 
     const handleApprove = async (id: string) => {
@@ -170,8 +177,10 @@ export default function AdminVerificationsPage() {
 
                                 {getStatusBadge(v.status)}
 
-                                <div className="text-[10px] text-slate-400 flex-shrink-0">
-                                    {new Date(v.created_at).toLocaleDateString('fr-FR')}
+                                <div className="text-[10px] text-slate-400 flex-shrink-0 text-right leading-tight">
+                                    <span className="block font-semibold text-slate-500 dark:text-slate-300">
+                                        {formatAdminDateTime(v.created_at)}
+                                    </span>
                                 </div>
 
                                 {isExpanded ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
@@ -180,6 +189,10 @@ export default function AdminVerificationsPage() {
                             {/* Détails expandés */}
                             {isExpanded && (
                                 <div className="px-4 pb-4 space-y-4 border-t border-slate-100 dark:border-slate-800 pt-4">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                                        <Clock size={12} className="text-orange-500" />
+                                        Demande reçue le {formatAdminDateTime(v.created_at)}
+                                    </p>
                                     {/* Infos vendeur */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
                                         <div className="flex items-center gap-1 text-slate-400">

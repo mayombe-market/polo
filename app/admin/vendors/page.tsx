@@ -10,6 +10,7 @@ import {
 } from 'lucide-react'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -115,7 +116,7 @@ export default function AdminVendorsPage() {
             { header: 'Plan', accessor: (v: any) => v.subscription_plan || 'free' },
             { header: 'Vérification', accessor: (v: any) => v.verification_status || 'unverified' },
             { header: 'Produits', accessor: (v: any) => productCounts[v.id] || 0 },
-            { header: 'Date inscription', accessor: (v: any) => new Date(v.created_at).toLocaleDateString('fr-FR') },
+            { header: 'Date et heure inscription', accessor: (v: any) => formatAdminDateTime(v.created_at) },
         ], csvFilename('vendeurs'))
     }
 
@@ -255,7 +256,7 @@ export default function AdminVendorsPage() {
                                         )}
                                         <span className="flex items-center gap-0.5">
                                             <Calendar size={10} />
-                                            {new Date(vendor.created_at).toLocaleDateString('fr-FR')}
+                                            {formatAdminDateTime(vendor.created_at)}
                                         </span>
                                     </div>
                                 </div>

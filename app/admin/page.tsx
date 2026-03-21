@@ -10,6 +10,7 @@ import {
     ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -249,7 +250,7 @@ export default function AdminDashboard() {
                                             {(order.total_amount || 0).toLocaleString('fr-FR')} F
                                         </p>
                                         <p className="text-[10px] text-slate-400">
-                                            {new Date(order.created_at).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                                            {formatAdminDateTime(order.created_at)}
                                         </p>
                                     </div>
                                     <div className="flex-shrink-0">

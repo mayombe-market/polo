@@ -8,6 +8,7 @@ import {
     Megaphone, Search, Eye, EyeOff, Pencil, GripVertical
 } from 'lucide-react'
 import { getAds, createAd, updateAd, deleteAd, toggleAdActive } from '@/app/actions/ads'
+import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 // Supabase client uniquement pour l'upload d'images (Storage)
 const supabase = getSupabaseBrowserClient()
@@ -257,6 +258,7 @@ export default function AdminAds() {
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400">Titre</th>
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 hidden md:table-cell">Lien</th>
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400">Statut</th>
+                                    <th className="p-4 text-[10px] font-black uppercase text-slate-400 hidden lg:table-cell whitespace-nowrap">Créée le</th>
                                     <th className="p-4 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
                                 </tr>
                             </thead>
@@ -300,6 +302,11 @@ export default function AdminAds() {
                                             >
                                                 {ad.is_active !== false ? 'Active' : 'Inactive'}
                                             </button>
+                                        </td>
+                                        <td className="p-4 hidden lg:table-cell">
+                                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 whitespace-nowrap">
+                                                {formatAdminDateTime(ad.created_at)}
+                                            </span>
                                         </td>
                                         <td className="p-4 text-right">
                                             <div className="flex items-center justify-end gap-1">

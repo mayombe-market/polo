@@ -24,3 +24,13 @@ COMMENT ON COLUMN public.profiles.shop_name IS 'Nom commercial boutique (alias h
 COMMENT ON COLUMN public.profiles.store_name IS 'Nom boutique affiché (prioritaire côté app si renseigné)';
 COMMENT ON COLUMN public.profiles.shop_category IS 'Catégorie principale de la boutique (optionnel)';
 COMMENT ON COLUMN public.profiles.shop_description IS 'Description courte de la boutique (optionnel)';
+
+-- Paramètres vendeur (Dashboard → Paramètres) — évite erreur schema cache si absentes
+ALTER TABLE public.profiles
+    ADD COLUMN IF NOT EXISTS return_policy TEXT;
+
+ALTER TABLE public.profiles
+    ADD COLUMN IF NOT EXISTS shipping_info TEXT;
+
+ALTER TABLE public.profiles
+    ADD COLUMN IF NOT EXISTS bio TEXT;

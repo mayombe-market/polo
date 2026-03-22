@@ -1,7 +1,16 @@
 'use client'
 
+/**
+ * Page détail produit (client-only).
+ *
+ * Fiabilité premier chargement :
+ * - Pas d’appel Supabase au top-level du module : le client est créé dans l’effet, après hydratation.
+ * - `useParams().id` peut être instable au premier rendu : normalisation + chargement uniquement si id valide.
+ * - Erreurs Supabase distinguées : réseau / serveur → écran erreur + réessayer ; 0 ligne → introuvable.
+ * - `withRetry` (lib/supabase-browser) : au moins 4 tentatives totales (1 + 3 relances) sur les requêtes critiques.
+ */
 import { useEffect, useState } from 'react'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
@@ -22,17 +31,25 @@ import VerifiedBadge from '@/app/components/VerifiedBadge'
 import SizeGuideModal from '@/app/components/SizeGuideModal'
 import { getVariantColorHex } from '@/lib/productVariantsPresets'
 
-const supabase = getSupabaseBrowserClient()
-
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
+/** États de chargement explicites — jamais d’UI « produit » tant que `ready` n’est pas atteint. */
+type LoadPhase = 'loading' | 'ready' | 'not_found' | 'error'
+
 export default function ProductDetailPage() {
-    const { id } = useParams()
+    const params = useParams()
+    const rawId = params?.id
+    const productId = Array.isArray(rawId) ? rawId[0] : rawId
+
+    const [phase, setPhase] = useState<LoadPhase>('loading')
+    const [loadError, setLoadError] = useState<string | null>(null)
+    const [retryNonce, setRetryNonce] = useState(0)
+    const [reviewsRpcFailed, setReviewsRpcFailed] = useState(false)
+
     const [product, setProduct] = useState<any>(null)
     const [shop, setShop] = useState<any>(null)
     const [user, setUser] = useState<any>(null)
     const [reviews, setReviews] = useState<any[]>([])
-    const [loading, setLoading] = useState(true)
 
     const [selectedSize, setSelectedSize] = useState<string>('')
     const [selectedColor, setSelectedColor] = useState<string>('')
@@ -47,66 +64,207 @@ export default function ProductDetailPage() {
     useEffect(() => {
         let cancelled = false
 
-        const fetchData = async () => {
-            try {
-                // getUser avec timeout pour éviter les chargements infinis
-                const { user: currentUser } = await safeGetUser(supabase)
-                if (cancelled) return
-                setUser(currentUser)
-
-                const { data: prod, error: prodError } = await withTimeout(supabase.from('products').select('*').eq('id', id).single(), 8000)
-                if (cancelled) return
-                if (prodError || !prod) return
-
-                setProduct(prod)
-
-                const shopRes = await withTimeout(supabase
-                    .from('profiles')
-                    .select('full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status')
-                    .eq('id', prod.seller_id)
-                    .maybeSingle(), 8000)
-
-                if (cancelled) return
-                setShop(shopRes.data)
-                setFollowerCount(shopRes.data?.followers_count || 0)
-                // Vérifier si le vendeur est expiré
-                if (shopRes.data?.subscription_plan && shopRes.data.subscription_plan !== 'free') {
-                    setSellerExpired(isSubscriptionExpiredPastGrace(shopRes.data))
-                }
-
-                // Avis vérifiés via RPC SECURITY DEFINER (contourne RLS pour voir TOUS les avis)
-                const { data: productRatings, error: ratingsError } = await withTimeout(supabase.rpc('get_product_reviews', {
-                    p_product_id: id as string
-                }), 8000)
-                if (ratingsError) {
-                    console.error('Erreur RPC get_product_reviews:', ratingsError)
-                }
-
-                if (cancelled) return
-                setReviews(productRatings || [])
-            } catch (err) {
-                if (!cancelled) console.error('Erreur page produit:', err)
-            } finally {
-                if (!cancelled) setLoading(false)
+        // Id manquant au premier tick : on attend le prochain rendu (route dynamique) sans afficher « introuvable ».
+        if (!productId || typeof productId !== 'string' || !productId.trim()) {
+            setPhase('loading')
+            return () => {
+                cancelled = true
             }
         }
-        fetchData()
 
-        return () => { cancelled = true }
-    }, [id])
+        const load = async () => {
+            setPhase('loading')
+            setLoadError(null)
+            setReviewsRpcFailed(false)
 
-    if (loading) return (
-        <div className="min-h-screen flex items-center justify-center bg-white dark:bg-[#0A0A12]">
-            <div className="w-8 h-8 border-[3px] border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-        </div>
-    )
+            try {
+                // Client créé ici uniquement — évite course à l’hydratation avec singleton module-scope.
+                const supabase = getSupabaseBrowserClient()
 
-    if (!product) return (
-        <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4">
-            <p className="font-bold text-lg text-slate-900 dark:text-white">Produit introuvable</p>
-            <Link href="/" className="text-orange-400 text-sm font-semibold">← Retour au marché</Link>
-        </div>
-    )
+                const { user: currentUser } = await safeGetUser(supabase)
+                if (cancelled) return
+                setUser(currentUser ?? null)
+
+                /** Produit : PostgREST ne lève pas — on transforme erreur / ligne absente en contrôle explicite. */
+                const productOutcome = await withRetry(
+                    async () => {
+                        const r = await withTimeout(
+                            supabase.from('products').select('*').eq('id', productId.trim()).single(),
+                            8000,
+                        )
+                        if (r.error) {
+                            if (r.error.code === 'PGRST116') {
+                                return { kind: 'not_found' as const }
+                            }
+                            const err = new Error(r.error.message || 'Erreur Supabase (produits).')
+                            ;(err as Error & { code?: string }).code = r.error.code ?? undefined
+                            throw err
+                        }
+                        if (!r.data || typeof r.data !== 'object' || !(r.data as { id?: string }).id) {
+                            throw new Error('Réponse produit vide ou invalide.')
+                        }
+                        return { kind: 'ok' as const, row: r.data }
+                    },
+                    { label: 'product/[id] products.select', maxAttempts: 4 },
+                )
+
+                if (cancelled) return
+
+                if (productOutcome.kind === 'not_found') {
+                    setProduct(null)
+                    setShop(null)
+                    setReviews([])
+                    setPhase('not_found')
+                    return
+                }
+
+                const prod = productOutcome.row
+                setProduct(prod)
+
+                const shopRow = await withRetry(
+                    async () => {
+                        const r = await withTimeout(
+                            supabase
+                                .from('profiles')
+                                .select(
+                                    'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status',
+                                )
+                                .eq('id', prod.seller_id)
+                                .maybeSingle(),
+                            8000,
+                        )
+                        if (r.error) {
+                            throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
+                        }
+                        return r.data ?? null
+                    },
+                    { label: 'product/[id] profiles.maybeSingle', maxAttempts: 4 },
+                )
+
+                if (cancelled) return
+
+                setShop(shopRow)
+                setFollowerCount(shopRow?.followers_count ?? 0)
+                if (shopRow?.subscription_plan && shopRow.subscription_plan !== 'free') {
+                    setSellerExpired(isSubscriptionExpiredPastGrace(shopRow))
+                } else {
+                    setSellerExpired(false)
+                }
+
+                try {
+                    const productRatings = await withRetry(
+                        async () => {
+                            const { data, error } = await withTimeout(
+                                supabase.rpc('get_product_reviews', { p_product_id: productId.trim() }),
+                                8000,
+                            )
+                            if (error) {
+                                throw new Error(error.message || 'Erreur RPC get_product_reviews.')
+                            }
+                            return Array.isArray(data) ? data : []
+                        },
+                        { label: 'product/[id] get_product_reviews', maxAttempts: 4 },
+                    )
+                    if (cancelled) return
+                    setReviews(productRatings)
+                    setReviewsRpcFailed(false)
+                } catch (rpcErr) {
+                    console.error('[product page] Avis : échec après retries, liste vide.', rpcErr)
+                    if (!cancelled) {
+                        setReviews([])
+                        setReviewsRpcFailed(true)
+                    }
+                }
+
+                if (cancelled) return
+                setPhase('ready')
+            } catch (err) {
+                if (cancelled) return
+                const msg = err instanceof Error ? err.message : String(err)
+                console.error('[product page] Chargement bloqué :', err)
+                setLoadError(msg || 'Erreur inconnue lors du chargement.')
+                setProduct(null)
+                setPhase('error')
+            }
+        }
+
+        // Délai 0 ms : exécute le chargement après le cycle de rendu courant (hydratation / layout stable).
+        const timer = setTimeout(() => {
+            if (!cancelled) void load()
+        }, 0)
+
+        return () => {
+            cancelled = true
+            clearTimeout(timer)
+        }
+    }, [productId, retryNonce])
+
+    if (phase === 'loading') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4 px-6">
+                <div className="w-8 h-8 border-[3px] border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center font-medium">
+                    Chargement du produit…
+                </p>
+            </div>
+        )
+    }
+
+    if (phase === 'error') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4 px-6">
+                <p className="font-bold text-lg text-slate-900 dark:text-white text-center">Impossible de charger le produit</p>
+                {loadError && (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-md">{loadError}</p>
+                )}
+                <div className="flex flex-col sm:flex-row gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setRetryNonce((n) => n + 1)}
+                        className="px-6 py-3 rounded-2xl bg-orange-500 text-white text-sm font-bold hover:bg-orange-600 transition-colors"
+                    >
+                        Réessayer
+                    </button>
+                    <Link
+                        href="/"
+                        className="px-6 py-3 rounded-2xl border border-slate-200 dark:border-white/10 text-slate-700 dark:text-slate-200 text-sm font-semibold text-center hover:bg-slate-50 dark:hover:bg-white/5"
+                    >
+                        ← Retour au marché
+                    </Link>
+                </div>
+            </div>
+        )
+    }
+
+    if (phase === 'not_found') {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4 px-6">
+                <p className="font-bold text-lg text-slate-900 dark:text-white text-center">Produit introuvable</p>
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center max-w-sm">
+                    Aucune ligne ne correspond à cet identifiant (ou le produit a été retiré).
+                </p>
+                <Link href="/" className="text-orange-400 text-sm font-semibold">
+                    ← Retour au marché
+                </Link>
+            </div>
+        )
+    }
+
+    // `ready` : product est défini et validé dans l’effet.
+    if (phase !== 'ready' || !product) {
+        return (
+            <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4 px-6">
+                <p className="text-slate-600 dark:text-slate-300 text-sm">État incohérent, veuillez réessayer.</p>
+                <button
+                    type="button"
+                    onClick={() => setRetryNonce((n) => n + 1)}
+                    className="text-orange-500 font-semibold text-sm"
+                >
+                    Réessayer
+                </button>
+            </div>
+        )
+    }
 
     const avgRating = reviews.length > 0
         ? reviews.reduce((acc, rev) => acc + rev.rating, 0) / reviews.length
@@ -159,6 +317,15 @@ export default function ProductDetailPage() {
 
                 {/* ── CONTENT ── */}
                 <div className="px-5">
+                    {reviewsRpcFailed && (
+                        <div
+                            role="status"
+                            className="mb-4 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 text-[11px] text-amber-900 dark:text-amber-100 leading-snug"
+                        >
+                            Les avis n’ont pas pu être chargés après plusieurs tentatives. Le produit et la boutique
+                            s’affichent normalement.
+                        </div>
+                    )}
 
                     {/* Shop banner */}
                     <Link

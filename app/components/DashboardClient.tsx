@@ -1,11 +1,25 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+/**
+ * Dashboard vendeur — client lourd (navigation, commandes, produits, temps réel).
+ *
+ * Améliorations récentes (données async, fiabilité, pas de F5) :
+ * - **Chargement non bloquant** : le shell (sidebar + zones) reste utilisable ; commandes / stats async
+ *   affichent des états `loading` / `error` / `not_found` dédiés au lieu d’un écran vide silencieux.
+ * - **Retries réseau (≥ 3 relances)** : `withRetry` depuis `@/lib/supabase-browser` (4 tentatives au total)
+ *   sur `getVendorOrders`, `getSellerNegotiations`, et les requêtes Supabase directes (followers, CA).
+ * - **Erreurs explicites** : message + bouton « Réessayer » (incrémente `sellerDataRetryKey`) sans recharger la page.
+ * - **not_found** : pas d’utilisateur en props, ou session serveur sans rôle vendeur (`vendorId` absent après fetch).
+ * - **Données à jour sans refresh complet** : après suppression produit / MAJ statut commande, `router.refresh()`
+ *   resynchronise les props RSC ; `useEffect` ré-applique `initialProducts` quand le parent les renvoie.
+ */
+
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import {
     LayoutDashboard, Package, Plus, ShoppingCart, BarChart3,
     Wallet, Store, Settings, ChevronLeft, ChevronRight,
@@ -77,6 +91,19 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifs, setUnreadNotifs] = useState(0)
 
+    /** `loading` → premier fetch ; `ready` → OK ; `error` → échec critique (commandes) ; `not_found` → pas de user ou pas vendeur côté session. */
+    type SellerBootstrapPhase = 'loading' | 'ready' | 'error' | 'not_found'
+    const [sellerBootstrapPhase, setSellerBootstrapPhase] = useState<SellerBootstrapPhase>('loading')
+    const [sellerBootstrapMessage, setSellerBootstrapMessage] = useState<string>('')
+    const [sellerDataRetryKey, setSellerDataRetryKey] = useState(0)
+    /** Erreur dédiée négociations (ne bloque pas le reste du tableau de bord). */
+    const [negotiationsError, setNegotiationsError] = useState<string | null>(null)
+
+    /** Relance tous les fetchs vendeur sans `window.location.reload()` (incrémente la clé de l’effet). */
+    const refetchSellerDashboard = useCallback(() => {
+        setSellerDataRetryKey((k) => k + 1)
+    }, [])
+
     // ═══ Système d'abonnement & limites ═══
     const currentPlan = profile?.subscription_plan || 'free'
     const maxProducts = getPlanMaxProducts(currentPlan)
@@ -109,7 +136,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [upgradeBilling, setUpgradeBilling] = useState('monthly')
     const [upgradeSelectedPlan, setUpgradeSelectedPlan] = useState<any>(null)
 
-    const supabase = getSupabaseBrowserClient()
+    /** Singleton navigateur — `useMemo` évite de recréer le client à chaque rendu. */
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     // Lien depuis le header / CTA « Activer mon abonnement » : ?upgrade=1 → ouvrir les plans
     useEffect(() => {
@@ -179,23 +207,49 @@ export default function DashboardClient({ products: initialProducts, profile, us
         }
     }, [playNotificationSound])
 
-    // Fetch followers + revenue + orders
-    useEffect(() => {
-        if (!user?.id) return
-        const fetchData = async () => {
-            try {
-                const { count } = await supabase
+    /**
+     * Chargement agrégé vendeur : chaque bloc réseau est **indépendant** pour ne pas figer l’UI
+     * (échec abonnés ≠ écran commandes). `withRetry` garantit **4 tentatives** (1 + 3 relances) minimum.
+     */
+    const loadSellerDashboardData = useCallback(async () => {
+        if (!user?.id) {
+            setSellerBootstrapPhase('not_found')
+            setSellerBootstrapMessage('Session utilisateur introuvable. Reconnectez-vous.')
+            setOrdersLoading(false)
+            setNegotiationsLoading(false)
+            setNegotiationsError(null)
+            return
+        }
+
+        setSellerBootstrapPhase('loading')
+        setSellerBootstrapMessage('')
+        setNegotiationsError(null)
+        setOrdersLoading(true)
+        setNegotiationsLoading(true)
+
+        let vendorSessionOk = false
+
+        try {
+            await withRetry(async () => {
+                const { count, error } = await supabase
                     .from('seller_follows')
                     .select('*', { count: 'exact', head: true })
                     .eq('seller_id', user.id)
+                if (error) throw new Error(error.message)
                 setFollowerCount(count || 0)
-            } catch (err) { console.error("Erreur abonnés:", err) }
+            }, { label: 'DashboardClient seller_follows', maxAttempts: 4 })
+        } catch (err) {
+            console.error('Erreur abonnés:', err)
+            setFollowerCount(0)
+        }
 
-            try {
-                const { data: allOrders } = await supabase
+        try {
+            await withRetry(async () => {
+                const { data: allOrders, error } = await supabase
                     .from('orders')
                     .select('vendor_payout, total_amount, items, payout_status')
                     .eq('payout_status', 'paid')
+                if (error) throw new Error(error.message)
                 const vendorOrders = (allOrders || []).filter((order: { items?: { seller_id?: string }[] }) =>
                     order.items?.some((item: { seller_id?: string }) => item.seller_id === user.id)
                 )
@@ -203,39 +257,77 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0
                 )
                 setTotalRevenue(revenue)
-            } catch (err) { console.error("Erreur revenus:", err) }
-
-            try {
-                const result = await getVendorOrders()
-                setOrders(result.orders || [])
-            } catch (err) { console.error("Erreur commandes:", err) }
-            finally { setOrdersLoading(false) }
-
-            try {
-                const result = await getSellerNegotiations()
-                setNegotiations(result.negotiations || [])
-            } catch (err) { console.error("Erreur négociations:", err) }
-            finally { setNegotiationsLoading(false) }
-
-            try {
-                const result = await getUnreadCount()
-                setUnreadMessages(result.count || 0)
-            } catch (err) { console.error("Erreur messages:", err) }
-
-            try {
-                const count = await getUnreadNotifCount()
-                setUnreadNotifs(count)
-            } catch (err) { console.error("Erreur notifs:", err) }
+            }, { label: 'DashboardClient revenue', maxAttempts: 4 })
+        } catch (err) {
+            console.error('Erreur revenus:', err)
+            setTotalRevenue(0)
         }
-        fetchData()
-    }, [user?.id])
 
-    // Filet de sécu : si Realtime / RLS n’envoie pas l’UPDATE, recharger les commandes au retour sur l’onglet
+        try {
+            const result = await withRetry(() => getVendorOrders(), { label: 'DashboardClient getVendorOrders', maxAttempts: 4 })
+            setOrders(result.orders || [])
+            if (!result.vendorId) {
+                setSellerBootstrapPhase('not_found')
+                setSellerBootstrapMessage(
+                    'Ce compte n’est pas reconnu comme vendeur ou la session serveur a expiré. Reconnectez-vous ou rechargez la page depuis le menu.',
+                )
+            } else {
+                vendorSessionOk = true
+            }
+        } catch (err: any) {
+            setSellerBootstrapPhase('error')
+            setSellerBootstrapMessage(err?.message || 'Impossible de charger les commandes après plusieurs tentatives.')
+            setOrders([])
+        } finally {
+            setOrdersLoading(false)
+        }
+
+        try {
+            const result = await withRetry(() => getSellerNegotiations(), { label: 'DashboardClient getSellerNegotiations', maxAttempts: 4 })
+            setNegotiations(result.negotiations || [])
+        } catch (err: any) {
+            setNegotiations([])
+            setNegotiationsError(err?.message || 'Échec du chargement des négociations après plusieurs tentatives.')
+            console.error(err)
+        } finally {
+            setNegotiationsLoading(false)
+        }
+
+        try {
+            const result = await withRetry(() => getUnreadCount(), { label: 'DashboardClient getUnreadCount', maxAttempts: 4 })
+            setUnreadMessages(result.count || 0)
+        } catch (err) {
+            console.error('Erreur messages:', err)
+        }
+
+        try {
+            const count = await withRetry(() => getUnreadNotifCount(), { label: 'DashboardClient getUnreadNotifCount', maxAttempts: 4 })
+            setUnreadNotifs(count)
+        } catch (err) {
+            console.error('Erreur notifs:', err)
+        }
+
+        if (vendorSessionOk) {
+            setSellerBootstrapPhase('ready')
+            setSellerBootstrapMessage('')
+        }
+    }, [user?.id, sellerDataRetryKey, supabase])
+
+    useEffect(() => {
+        void loadSellerDashboardData()
+    }, [loadSellerDashboardData])
+
+    /** Quand le serveur renvoie une nouvelle liste (après `router.refresh()`), on fusionne sans F5 manuel. */
+    useEffect(() => {
+        setProducts(initialProducts || [])
+    }, [initialProducts])
+
+    // Filet de sécu : au retour sur l’onglet, même logique de **retry** que le chargement initial.
     useEffect(() => {
         if (!user?.id) return
         const onVisible = () => {
             if (document.visibilityState !== 'visible') return
-            getVendorOrders()
+            void withRetry(() => getVendorOrders(), { label: 'DashboardClient visibility refetch', maxAttempts: 4 })
                 .then((r) => setOrders(r.orders || []))
                 .catch(() => {})
         }
@@ -330,6 +422,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
             if (result.error) throw new Error(result.error)
             setProducts((prev: any[]) => prev.filter(p => p.id !== productId))
             toast.success('Produit supprimé')
+            /** Soft refresh Next.js : met à jour les props RSC (`initialProducts`, compteurs) sans rechargement complet du document. */
+            router.refresh()
         } catch (err: any) {
             toast.error(err.message || 'Erreur suppression')
         } finally { setDeleting(null) }
@@ -344,6 +438,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             if (newStatus === 'delivered') updateData.delivered_at = new Date().toISOString()
             setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...updateData } : o))
             toast.success('Statut mis à jour')
+            router.refresh()
         } catch (err: any) {
             toast.error(err.message || 'Erreur mise à jour')
         } finally { setUpdating(null) }
@@ -498,6 +593,45 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {/* Bannière vérification */}
                 <VerificationBanner verificationStatus={profile?.verification_status} />
+
+                {/* État global données vendeur : visible sur toutes les pages sans bloquer la navigation latérale. */}
+                {sellerBootstrapPhase === 'error' && (
+                    <div
+                        role="alert"
+                        className="mx-4 md:mx-8 mt-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm"
+                    >
+                        <div className="flex items-start gap-2 flex-1 text-red-800 dark:text-red-200">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <span className="font-bold">{sellerBootstrapMessage || 'Erreur lors du chargement des données vendeur.'}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={refetchSellerDashboard}
+                            className="shrink-0 rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase tracking-wide hover:bg-red-700 transition-colors"
+                        >
+                            Réessayer
+                        </button>
+                    </div>
+                )}
+                {sellerBootstrapPhase === 'not_found' && (
+                    <div
+                        role="status"
+                        className="mx-4 md:mx-8 mt-4 flex items-start gap-2 rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-900 dark:text-amber-100"
+                    >
+                        <Shield className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="font-black uppercase text-[10px] tracking-wide text-amber-700 dark:text-amber-300 mb-1">Accès ou session</p>
+                            <p className="font-bold">{sellerBootstrapMessage}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={refetchSellerDashboard}
+                            className="shrink-0 rounded-xl bg-amber-600 text-white px-4 py-2 text-[10px] font-black uppercase hover:bg-amber-700 transition-colors"
+                        >
+                            Réessayer
+                        </button>
+                    </div>
+                )}
 
                 {activePage === 'dashboard' && (
                     <DashboardHome
@@ -666,6 +800,19 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         updateStatus={updateStatus}
                         getStatusDetails={getStatusDetails}
                         currentVendorId={user?.id}
+                        ordersBlockState={
+                            !user?.id
+                                ? 'not_found'
+                                : ordersLoading
+                                  ? 'loading'
+                                  : sellerBootstrapPhase === 'error'
+                                    ? 'error'
+                                    : sellerBootstrapPhase === 'not_found'
+                                      ? 'not_found'
+                                      : 'ready'
+                        }
+                        ordersBlockMessage={sellerBootstrapMessage}
+                        onRetryOrders={refetchSellerDashboard}
                     />
                 )}
 
@@ -673,6 +820,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <NegotiationsPage
                         negotiations={negotiations}
                         negotiationsLoading={negotiationsLoading}
+                        negotiationsError={negotiationsError}
+                        onRetryNegotiations={refetchSellerDashboard}
                         onRespond={async (negotiationId: string, response: 'accepte' | 'refuse') => {
                             const result = await respondToNegotiation({ negotiationId, response })
                             if (result.error) {
@@ -1407,7 +1556,21 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
 // =====================================================================
 // ORDERS PAGE
 // =====================================================================
-function OrdersPage({ orders, ordersLoading, orderFilter, setOrderFilter, filteredOrders, updating, updateStatus, getStatusDetails, currentVendorId }: any) {
+function OrdersPage({
+    orders,
+    ordersLoading,
+    orderFilter,
+    setOrderFilter,
+    filteredOrders,
+    updating,
+    updateStatus,
+    getStatusDetails,
+    currentVendorId,
+    /** Agrège loading / erreur réseau / accès vendeur refusé — évite un spinner infini ou une liste vide trompeuse. */
+    ordersBlockState = 'ready',
+    ordersBlockMessage = '',
+    onRetryOrders,
+}: any) {
     return (
         <div className="p-4 md:p-8">
             <div className="mb-8">
@@ -1415,31 +1578,65 @@ function OrdersPage({ orders, ordersLoading, orderFilter, setOrderFilter, filter
                 <p className="text-sm text-slate-400 font-bold mt-1">{orders.length} commande{orders.length !== 1 ? 's' : ''} au total</p>
             </div>
 
-            {/* Filters */}
-            <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
-                {[
-                    { id: 'all', label: 'Toutes' },
-                    { id: 'confirmed', label: 'Confirmées' },
-                    { id: 'shipped', label: 'Expédiées' },
-                    { id: 'delivered', label: 'Livrées' }
-                ].map(f => (
-                    <button
-                        key={f.id}
-                        onClick={() => setOrderFilter(f.id)}
-                        className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase whitespace-nowrap transition-all border ${orderFilter === f.id
-                            ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
-                            : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                            }`}
-                    >
-                        {f.label}
-                    </button>
-                ))}
-            </div>
+            {/* Filters — masqués tant que les données commandes ne sont pas exploitables (UX plus claire). */}
+            {ordersBlockState === 'ready' && (
+                <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
+                    {[
+                        { id: 'all', label: 'Toutes' },
+                        { id: 'confirmed', label: 'Confirmées' },
+                        { id: 'shipped', label: 'Expédiées' },
+                        { id: 'delivered', label: 'Livrées' }
+                    ].map(f => (
+                        <button
+                            key={f.id}
+                            onClick={() => setOrderFilter(f.id)}
+                            className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase whitespace-nowrap transition-all border ${orderFilter === f.id
+                                ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20'
+                                : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                }`}
+                        >
+                            {f.label}
+                        </button>
+                    ))}
+                </div>
+            )}
 
-            {ordersLoading ? (
+            {ordersBlockState === 'loading' || ordersLoading ? (
                 <div className="py-20 text-center">
                     <Loader2 size={32} className="mx-auto animate-spin text-orange-500 mb-3" />
                     <p className="text-xs font-black uppercase text-slate-400">Chargement des commandes...</p>
+                </div>
+            ) : ordersBlockState === 'error' ? (
+                <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-red-100 dark:border-red-900/40 px-6">
+                    <AlertTriangle size={40} className="mx-auto text-red-400 mb-4" />
+                    <p className="text-xs font-black uppercase text-red-600 dark:text-red-400 mb-2">Erreur réseau ou serveur</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 max-w-md mx-auto">{ordersBlockMessage || 'Les commandes n’ont pas pu être chargées.'}</p>
+                    {onRetryOrders && (
+                        <button
+                            type="button"
+                            onClick={onRetryOrders}
+                            className="bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-orange-600 transition-colors"
+                        >
+                            Réessayer
+                        </button>
+                    )}
+                </div>
+            ) : ordersBlockState === 'not_found' ? (
+                <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-amber-100 dark:border-amber-900/40 px-6">
+                    <Shield size={40} className="mx-auto text-amber-400 mb-4" />
+                    <p className="text-xs font-black uppercase text-amber-700 dark:text-amber-300 mb-2">Accès commandes indisponible</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 max-w-md mx-auto">
+                        {ordersBlockMessage || 'Votre session ne permet pas de charger les commandes vendeur.'}
+                    </p>
+                    {onRetryOrders && (
+                        <button
+                            type="button"
+                            onClick={onRetryOrders}
+                            className="bg-amber-600 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-amber-700 transition-colors"
+                        >
+                            Réessayer
+                        </button>
+                    )}
                 </div>
             ) : filteredOrders.length > 0 ? (
                 <div className="space-y-4">
@@ -2121,9 +2318,11 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
 // =====================================================================
 // NEGOTIATIONS PAGE
 // =====================================================================
-function NegotiationsPage({ negotiations, negotiationsLoading, onRespond }: {
+function NegotiationsPage({ negotiations, negotiationsLoading, negotiationsError, onRetryNegotiations, onRespond }: {
     negotiations: any[]
     negotiationsLoading: boolean
+    negotiationsError?: string | null
+    onRetryNegotiations?: () => void
     onRespond: (negotiationId: string, response: 'accepte' | 'refuse') => Promise<void>
 }) {
     const [filter, setFilter] = useState('all')
@@ -2193,6 +2392,24 @@ function NegotiationsPage({ negotiations, negotiationsLoading, onRespond }: {
                     </button>
                 ))}
             </div>
+
+            {negotiationsError && !negotiationsLoading && (
+                <div
+                    role="alert"
+                    className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3"
+                >
+                    <p className="text-sm font-bold text-red-800 dark:text-red-200 flex-1">{negotiationsError}</p>
+                    {onRetryNegotiations && (
+                        <button
+                            type="button"
+                            onClick={onRetryNegotiations}
+                            className="shrink-0 rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase hover:bg-red-700 transition-colors"
+                        >
+                            Réessayer
+                        </button>
+                    )}
+                </div>
+            )}
 
             {negotiationsLoading ? (
                 <div className="py-20 text-center">

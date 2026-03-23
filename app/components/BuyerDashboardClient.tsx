@@ -1,10 +1,22 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+/**
+ * Espace acheteur — navigation, commandes, favoris, panier (hook), boutiques suivies, etc.
+ *
+ * Améliorations (async, résilience, pas de F5) :
+ * - **Chargement non bloquant** : barre latérale / navigation toujours cliquables ; les données Supabase / server actions
+ *   arrivent en parallèle avec états **loading / error / fallback** par zone critique.
+ * - **Retries (≥ 3 relances)** : `withRetry` depuis `@/lib/supabase-browser` → **4 tentatives** minimum sur chaque fetch réseau.
+ * - **Fallback `not_found`** : pas d’`user.id` → message + pas de requêtes inutiles.
+ * - **Sans refresh document** : `router.refresh()` après sauvegardes profil / adresse ; resync `initialProfile` via `useEffect` ;
+ *   rechargement commandes / fidélité après notation avec retries.
+ */
+
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useCart } from '@/hooks/userCart'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import {
     LayoutDashboard, Package, Heart, ShoppingCart, Store,
     Bell, MapPin, User, Settings, ChevronLeft, ChevronRight,
@@ -12,7 +24,7 @@ import {
     Clock, CheckCircle2, Truck, LogOut, Lock, Camera,
     Phone, Home, Navigation, ShieldCheck, AlertCircle,
     ArrowUpRight, BellRing, X, Moon, Sun, Globe,
-    Smartphone, Volume2, Tag, TruckIcon, MessageCircle
+    Smartphone, Volume2, Tag, TruckIcon, MessageCircle, RefreshCw, AlertTriangle
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -56,17 +68,33 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     const [profile, setProfile] = useState(initialProfile || {})
     const [address, setAddress] = useState({ city: '', district: '', landmark: '' })
     const [dataLoading, setDataLoading] = useState(true)
+    /** Erreur bloquante sur le flux « commandes » (affichée sur l’accueil + onglet commandes). */
+    const [ordersFetchError, setOrdersFetchError] = useState<string | null>(null)
+    /** Avertissements non bloquants (favoris, boutiques…) — l’UI reste utilisable. */
+    const [partialLoadWarnings, setPartialLoadWarnings] = useState<string[]>([])
+    /** Message dédié onglet « Boutiques suivies » (en plus du bandeau global partiel). */
+    const [followedShopsLoadError, setFollowedShopsLoadError] = useState<string | null>(null)
+    const [favoritesLoadError, setFavoritesLoadError] = useState<string | null>(null)
+    type BuyerBootstrapPhase = 'loading' | 'ready' | 'error' | 'not_found'
+    const [buyerBootstrapPhase, setBuyerBootstrapPhase] = useState<BuyerBootstrapPhase>('loading')
+    const [buyerBootstrapMessage, setBuyerBootstrapMessage] = useState('')
+    const [buyerDataRetryKey, setBuyerDataRetryKey] = useState(0)
     const [negotiations, setNegotiations] = useState<any[]>([])
+    const [negotiationsFetchError, setNegotiationsFetchError] = useState<string | null>(null)
     const [loyaltyPoints, setLoyaltyPoints] = useState(0)
     const [ratingOrder, setRatingOrder] = useState<any | null>(null)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifs, setUnreadNotifs] = useState(0)
     const [initialConvId, setInitialConvId] = useState<string | null>(null)
 
-    // Cart hook
-    const { cart, total, itemCount, updateQuantity, removeFromCart } = useCart()
+    // Cart hook — `loading` / `error` viennent du provider (sync serveur) ; affichés dans `BuyerCart`.
+    const { cart, total, itemCount, updateQuantity, removeFromCart, loading: cartLoading, error: cartError } = useCart()
 
-    const supabase = getSupabaseBrowserClient()
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+
+    const refetchBuyerDashboard = useCallback(() => {
+        setBuyerDataRetryKey((k) => k + 1)
+    }, [])
 
     // ===== DEEP LINK depuis MessageButton =====
     useEffect(() => {
@@ -138,7 +166,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 
     // Badges
     const activeOrdersCount = orders.filter(o => ['confirmed', 'shipped'].includes(o.status)).length
-    const recentNegotiations = negotiations.filter(n => n.status === 'accepte' || n.status === 'refuse').filter(n => Date.now() - new Date(n.updated_at || n.created_at).getTime() < 86400000 * 3)
     const getBadge = (id: Page): number | null => {
         if (id === 'orders' && activeOrdersCount > 0) return activeOrdersCount
         if (id === 'wishlist' && favorites.length > 0) return favorites.length
@@ -148,85 +175,161 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         return null
     }
 
-    // ===== FETCH ALL DATA =====
-    useEffect(() => {
-        if (!user?.id) return
-        const fetchAll = async () => {
-            // Orders
-            try {
-                const { data } = await supabase
+    /**
+     * Charge achats (commandes), favoris (produits), boutiques suivies, badges, profil livraison / points.
+     * Chaque bloc est isolé : un échec n’empêche pas les autres ; `withRetry` évite les faux négatifs réseau.
+     */
+    const loadBuyerDashboardData = useCallback(async () => {
+        if (!user?.id) {
+            setBuyerBootstrapPhase('not_found')
+            setBuyerBootstrapMessage('Connectez-vous pour voir vos commandes, favoris et panier synchronisé.')
+            setOrdersFetchError(null)
+            setPartialLoadWarnings([])
+            setFollowedShopsLoadError(null)
+            setFavoritesLoadError(null)
+            setNegotiationsFetchError(null)
+            setDataLoading(false)
+            setOrders([])
+            return
+        }
+
+        setBuyerBootstrapPhase('loading')
+        setBuyerBootstrapMessage('')
+        setOrdersFetchError(null)
+        setPartialLoadWarnings([])
+        setFollowedShopsLoadError(null)
+        setFavoritesLoadError(null)
+        setNegotiationsFetchError(null)
+        setDataLoading(true)
+
+        let ordersOk = false
+
+        try {
+            const rows = await withRetry(async () => {
+                const { data, error } = await supabase
                     .from('orders')
                     .select('*')
                     .eq('user_id', user.id)
                     .order('created_at', { ascending: false })
-                setOrders(data || [])
-            } catch (err) { console.error('Erreur commandes:', err) }
+                if (error) throw new Error(error.message)
+                return data
+            }, { label: 'BuyerDashboard orders', maxAttempts: 4 })
+            setOrders(rows || [])
+            ordersOk = true
+        } catch (err: any) {
+            console.error('Erreur commandes:', err)
+            setOrders([])
+            setOrdersFetchError(err?.message || 'Impossible de charger vos commandes.')
+            setBuyerBootstrapPhase('error')
+            setBuyerBootstrapMessage(err?.message || 'Échec du chargement des commandes après plusieurs tentatives.')
+        }
 
-            // Favorites
-            try {
-                const { data } = await supabase
+        try {
+            const data = await withRetry(async () => {
+                const { data: favs, error } = await supabase
                     .from('favorites')
                     .select('product_id, products(*)')
                     .eq('user_id', user.id)
-                if (data) setFavorites(data.map((f: any) => ({ ...f.products, fav_id: f.product_id })))
-            } catch (err) { console.error('Erreur favoris:', err) }
+                if (error) throw new Error(error.message)
+                return favs
+            }, { label: 'BuyerDashboard favorites', maxAttempts: 4 })
+            if (data) setFavorites(data.map((f: any) => ({ ...f.products, fav_id: f.product_id })).filter((p: any) => p?.id))
+        } catch (err: any) {
+            console.error('Erreur favoris:', err)
+            setFavorites([])
+            setFavoritesLoadError(err?.message || 'Impossible de charger vos favoris.')
+            setPartialLoadWarnings((w) => [...w, 'Favoris temporairement indisponibles.'])
+        }
 
-            // Followed shops
-            try {
-                const { data } = await supabase
+        try {
+            const data = await withRetry(async () => {
+                const { data: follows, error } = await supabase
                     .from('seller_follows')
                     .select('seller_id, profiles(id, store_name, shop_name, avatar_url, city, followers_count)')
                     .eq('follower_id', user.id)
-                if (data) setFollowedShops(data.map((f: any) => f.profiles).filter(Boolean))
-            } catch (err) { console.error('Erreur boutiques:', err) }
+                if (error) throw new Error(error.message)
+                return follows
+            }, { label: 'BuyerDashboard seller_follows', maxAttempts: 4 })
+            if (data) setFollowedShops(data.map((f: any) => f.profiles).filter(Boolean))
+        } catch (err: any) {
+            console.error('Erreur boutiques:', err)
+            setFollowedShops([])
+            setFollowedShopsLoadError(err?.message || 'Impossible de charger les boutiques suivies.')
+            setPartialLoadWarnings((w) => [...w, 'Boutiques suivies temporairement indisponibles.'])
+        }
 
-            // Negotiations
-            try {
-                const result = await getBuyerNegotiations()
-                setNegotiations(result.negotiations || [])
-            } catch (err) { console.error('Erreur négociations:', err) }
+        try {
+            const result = await withRetry(() => getBuyerNegotiations(), { label: 'BuyerDashboard getBuyerNegotiations', maxAttempts: 4 })
+            setNegotiations(result.negotiations || [])
+        } catch (err: any) {
+            console.error('Erreur négociations:', err)
+            setNegotiations([])
+            setNegotiationsFetchError(err?.message || 'Négociations indisponibles.')
+        }
 
-            // Unread messages
-            try {
-                const result = await getUnreadCount()
-                setUnreadMessages(result.count || 0)
-            } catch (err) { console.error('Erreur messages non-lus:', err) }
+        try {
+            const result = await withRetry(() => getUnreadCount(), { label: 'BuyerDashboard getUnreadCount', maxAttempts: 4 })
+            setUnreadMessages(result.count || 0)
+        } catch (err) {
+            console.error('Erreur messages non-lus:', err)
+        }
 
-            // Unread notifications
-            try {
-                const count = await getUnreadNotifCount()
-                setUnreadNotifs(count)
-            } catch (err) { console.error('Erreur notifs non-lues:', err) }
+        try {
+            const count = await withRetry(() => getUnreadNotifCount(), { label: 'BuyerDashboard getUnreadNotifCount', maxAttempts: 4 })
+            setUnreadNotifs(count)
+        } catch (err) {
+            console.error('Erreur notifs non-lues:', err)
+        }
 
-            // Address + loyalty points
-            try {
-                const { data } = await supabase
+        try {
+            const data = await withRetry(async () => {
+                const { data: prof, error } = await supabase
                     .from('profiles')
                     .select('city, district, landmark, loyalty_points')
                     .eq('id', user.id)
                     .single()
-                if (data) {
-                    setAddress({ city: data.city || '', district: data.district || '', landmark: data.landmark || '' })
-                    setLoyaltyPoints(data.loyalty_points || 0)
-                }
-            } catch (err) { console.error('Erreur adresse:', err) }
-
-            // Toujours arrêter le loading, même si des erreurs se sont produites
-            setDataLoading(false)
+                if (error) throw new Error(error.message)
+                return prof
+            }, { label: 'BuyerDashboard profile address', maxAttempts: 4 })
+            if (data) {
+                setAddress({ city: data.city || '', district: data.district || '', landmark: data.landmark || '' })
+                setLoyaltyPoints(data.loyalty_points || 0)
+            }
+        } catch (err) {
+            console.error('Erreur adresse / points:', err)
+            setPartialLoadWarnings((w) => [...w, 'Adresse et points fidélité non synchronisés.'])
         }
-        fetchAll().catch(() => setDataLoading(false))
-    }, [user?.id])
+
+        setDataLoading(false)
+        if (ordersOk) {
+            setBuyerBootstrapPhase('ready')
+            setBuyerBootstrapMessage('')
+        }
+    }, [user?.id, buyerDataRetryKey, supabase])
+
+    useEffect(() => {
+        void loadBuyerDashboardData()
+    }, [loadBuyerDashboardData])
+
+    /** Garde le profil aligné sur les props RSC après `router.refresh()` (sans rechargement complet). */
+    useEffect(() => {
+        setProfile(initialProfile || {})
+    }, [initialProfile])
 
     useEffect(() => {
         if (!user?.id) return
         const onVisible = () => {
             if (document.visibilityState !== 'visible') return
-            supabase
-                .from('orders')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .then(({ data }: { data: any[] | null }) => {
+            void withRetry(async () => {
+                const { data, error } = await supabase
+                    .from('orders')
+                    .select('*')
+                    .eq('user_id', user.id)
+                    .order('created_at', { ascending: false })
+                if (error) throw new Error(error.message)
+                return data
+            }, { label: 'BuyerDashboard visibility orders', maxAttempts: 4 })
+                .then((data) => {
                     if (data) setOrders(data)
                 })
                 .catch(() => {})
@@ -383,11 +486,114 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 
             {/* ===== MAIN CONTENT ===== */}
             <main className="flex-1 pb-24 md:pb-0 overflow-y-auto">
-                {activePage === 'home' && <BuyerHome user={user} profile={profile} orders={orders} favorites={favorites} followedShops={followedShops} cartCount={itemCount} onNavigate={setActivePage} dataLoading={dataLoading} loyaltyPoints={loyaltyPoints} onConfirmReception={(order: any) => setRatingOrder(order)} />}
-                {activePage === 'orders' && <BuyerOrders orders={orders} onConfirmReception={(order) => setRatingOrder(order)} />}
-                {activePage === 'wishlist' && <BuyerWishlist favorites={favorites} setFavorites={setFavorites} userId={user?.id} />}
-                {activePage === 'cart' && <BuyerCart cart={cart} total={total} itemCount={itemCount} updateQuantity={updateQuantity} removeFromCart={removeFromCart} />}
-                {activePage === 'following' && <FollowingPage shops={followedShops} />}
+                {/* États globaux : n’occupent pas tout l’écran — navigation latérale reste utilisable. */}
+                {buyerBootstrapPhase === 'error' && ordersFetchError && (
+                    <div role="alert" className="mx-4 md:mx-8 mt-4 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3 text-sm">
+                        <div className="flex items-start gap-2 flex-1 text-red-800 dark:text-red-200">
+                            <AlertTriangle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                            <span className="font-bold">{buyerBootstrapMessage || ordersFetchError}</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={refetchBuyerDashboard}
+                            className="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase hover:bg-red-700"
+                        >
+                            <RefreshCw size={14} /> Réessayer
+                        </button>
+                    </div>
+                )}
+                {buyerBootstrapPhase === 'not_found' && (
+                    <div role="status" className="mx-4 md:mx-8 mt-4 flex items-start gap-2 rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3 text-sm text-amber-950 dark:text-amber-100">
+                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
+                        <div className="flex-1">
+                            <p className="font-black uppercase text-[10px] tracking-wide text-amber-800 dark:text-amber-300 mb-1">Session</p>
+                            <p className="font-bold">{buyerBootstrapMessage}</p>
+                        </div>
+                    </div>
+                )}
+                {partialLoadWarnings.length > 0 && buyerBootstrapPhase === 'ready' && (
+                    <div className="mx-4 md:mx-8 mt-4 space-y-2">
+                        {partialLoadWarnings.map((msg, i) => (
+                            <div
+                                key={i}
+                                className="flex items-center gap-2 rounded-2xl border border-amber-200/80 dark:border-amber-900/40 bg-amber-50/90 dark:bg-amber-950/20 px-4 py-2 text-[11px] font-bold text-amber-900 dark:text-amber-200"
+                            >
+                                <AlertCircle size={16} className="flex-shrink-0" />
+                                {msg}
+                                <button type="button" onClick={refetchBuyerDashboard} className="ml-auto text-[9px] font-black uppercase text-orange-600 hover:underline">
+                                    Actualiser
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                )}
+                {negotiationsFetchError && buyerBootstrapPhase === 'ready' && (
+                    <div className="mx-4 md:mx-8 mt-2 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 px-4 py-2 text-[11px] text-slate-600 dark:text-slate-300 flex items-center justify-between gap-2">
+                        <span>Négociations : {negotiationsFetchError}</span>
+                        <button type="button" onClick={refetchBuyerDashboard} className="text-[9px] font-black uppercase text-orange-500 hover:underline">
+                            Réessayer
+                        </button>
+                    </div>
+                )}
+
+                {activePage === 'home' && (
+                    <BuyerHome
+                        user={user}
+                        profile={profile}
+                        orders={orders}
+                        favorites={favorites}
+                        followedShops={followedShops}
+                        cartCount={itemCount}
+                        onNavigate={setActivePage}
+                        dataLoading={dataLoading}
+                        loyaltyPoints={loyaltyPoints}
+                        onConfirmReception={(order: any) => setRatingOrder(order)}
+                        ordersFetchError={ordersFetchError}
+                        buyerBootstrapPhase={buyerBootstrapPhase}
+                        partialLoadWarnings={partialLoadWarnings}
+                        onRetryData={refetchBuyerDashboard}
+                    />
+                )}
+                {activePage === 'orders' && (
+                    <BuyerOrders
+                        orders={orders}
+                        onConfirmReception={(order) => setRatingOrder(order)}
+                        ordersBlockState={
+                            !user?.id
+                                ? 'not_found'
+                                : dataLoading
+                                  ? 'loading'
+                                  : ordersFetchError
+                                    ? 'error'
+                                    : 'ready'
+                        }
+                        ordersBlockMessage={ordersFetchError || buyerBootstrapMessage}
+                        onRetryOrders={refetchBuyerDashboard}
+                    />
+                )}
+                {activePage === 'wishlist' && (
+                    <BuyerWishlist
+                        favorites={favorites}
+                        setFavorites={setFavorites}
+                        userId={user?.id}
+                        favoritesLoadError={favoritesLoadError}
+                        onRetryFavorites={refetchBuyerDashboard}
+                    />
+                )}
+                {activePage === 'cart' && (
+                    <BuyerCart
+                        cart={cart}
+                        total={total}
+                        itemCount={itemCount}
+                        updateQuantity={updateQuantity}
+                        removeFromCart={removeFromCart}
+                        cartLoading={cartLoading}
+                        cartError={cartError}
+                    />
+                )}
+                {activePage === 'following' && (
+                    <FollowingPage shops={followedShops} shopsLoadError={followedShopsLoadError} onRetryShops={refetchBuyerDashboard} />
+                )}
                 {activePage === 'messages' && <MessagesPanel userId={user?.id} initialConversationId={initialConvId} />}
                 {activePage === 'notifs' && <NotificationsPage userId={user?.id} onUnreadChange={setUnreadNotifs} />}
                 {activePage === 'addresses' && <AddressesPage address={address} setAddress={setAddress} userId={user?.id} />}
@@ -401,16 +607,29 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                     order={ratingOrder}
                     onClose={() => setRatingOrder(null)}
                     onComplete={async () => {
-                        // Refresh orders to reflect client_confirmed
-                        const { data } = await supabase
-                            .from('orders')
-                            .select('*')
-                            .eq('user_id', user.id)
-                            .order('created_at', { ascending: false })
-                        if (data) setOrders(data)
-                        // Refresh loyalty points
-                        const pts = await getLoyaltyPoints()
-                        setLoyaltyPoints(pts.points || 0)
+                        if (!user?.id) return
+                        try {
+                            const rows = await withRetry(async () => {
+                                const { data, error } = await supabase
+                                    .from('orders')
+                                    .select('*')
+                                    .eq('user_id', user.id)
+                                    .order('created_at', { ascending: false })
+                                if (error) throw new Error(error.message)
+                                return data
+                            }, { label: 'BuyerDashboard post-rating orders', maxAttempts: 4 })
+                            if (rows) setOrders(rows)
+                        } catch (e) {
+                            console.error(e)
+                        }
+                        try {
+                            const pts = await withRetry(() => getLoyaltyPoints(), { label: 'BuyerDashboard post-rating loyalty', maxAttempts: 4 })
+                            setLoyaltyPoints(pts.points || 0)
+                        } catch (e) {
+                            console.error(e)
+                        }
+                        /** Met à jour le profil / données serveur affichées ailleurs sans rechargement du document. */
+                        router.refresh()
                     }}
                 />
             )}
@@ -421,7 +640,23 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
 // =====================================================================
 // BUYER HOME
 // =====================================================================
-function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount, onNavigate, dataLoading, loyaltyPoints = 0, onConfirmReception }: any) {
+function BuyerHome({
+    user,
+    profile,
+    orders,
+    favorites,
+    followedShops,
+    cartCount,
+    onNavigate,
+    dataLoading,
+    loyaltyPoints = 0,
+    onConfirmReception,
+    /** Erreur commandes — doublon visuel acceptable pour l’accueil (résumé). */
+    ordersFetchError,
+    buyerBootstrapPhase,
+    partialLoadWarnings,
+    onRetryData,
+}: any) {
     const activeOrders = orders.filter((o: any) => ['confirmed', 'shipped', 'picked_up'].includes(o.status))
     const needsConfirmation = orders.filter((o: any) => o.status === 'delivered' && !o.client_confirmed)
 
@@ -461,6 +696,39 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                 </h1>
                 <p className="text-sm text-slate-400 font-bold mt-1">Voici votre espace personnel</p>
             </div>
+
+            {/* Skeleton léger : le shell est déjà visible ; on évite un flash « tout vide » pendant les fetchs. */}
+            {dataLoading && (
+                <div className="space-y-4 animate-pulse" aria-busy="true" aria-label="Chargement">
+                    <div className="h-24 rounded-3xl bg-slate-200/80 dark:bg-slate-800/80" />
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+                        {[1, 2, 3, 4].map((i) => (
+                            <div key={i} className="h-28 rounded-3xl bg-slate-200/80 dark:bg-slate-800/80" />
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {ordersFetchError && !dataLoading && buyerBootstrapPhase === 'error' && onRetryData && (
+                <div className="rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/20 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <p className="text-sm font-bold text-red-800 dark:text-red-200 flex-1">{ordersFetchError}</p>
+                    <button
+                        type="button"
+                        onClick={onRetryData}
+                        className="inline-flex items-center gap-2 rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase"
+                    >
+                        <RefreshCw size={14} /> Réessayer
+                    </button>
+                </div>
+            )}
+
+            {partialLoadWarnings?.length > 0 && !dataLoading && (
+                <ul className="text-[11px] text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
+                    {partialLoadWarnings.map((w: string, idx: number) => (
+                        <li key={idx}>{w}</li>
+                    ))}
+                </ul>
+            )}
 
             <BecomeVendorCta variant="dashboard" />
 
@@ -509,7 +777,8 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                 </div>
             )}
 
-            {/* Stats grid */}
+            {/* Stats + commandes en cours : masqués pendant le premier chargement (déjà représentés par le skeleton). */}
+            {!dataLoading && (
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {quickStats.map((stat, i) => {
                     const Icon = stat.icon
@@ -525,9 +794,10 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
                     )
                 })}
             </div>
+            )}
 
             {/* Active orders */}
-            {activeOrders.length > 0 && (
+            {!dataLoading && activeOrders.length > 0 && (
                 <div>
                     <div className="flex items-center justify-between mb-4">
                         <h3 className="font-black uppercase text-sm dark:text-white">Commandes en cours</h3>
@@ -604,7 +874,19 @@ function BuyerHome({ user, profile, orders, favorites, followedShops, cartCount,
 // =====================================================================
 // ORDERS PAGE
 // =====================================================================
-function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmReception: (order: any) => void }) {
+function BuyerOrders({
+    orders,
+    onConfirmReception,
+    ordersBlockState = 'ready',
+    ordersBlockMessage = '',
+    onRetryOrders,
+}: {
+    orders: any[]
+    onConfirmReception: (order: any) => void
+    ordersBlockState?: 'loading' | 'ready' | 'error' | 'not_found'
+    ordersBlockMessage?: string
+    onRetryOrders?: () => void
+}) {
     const [tab, setTab] = useState('all')
 
     const needsConfirmation = orders.filter(o => o.status === 'delivered' && !o.client_confirmed)
@@ -643,7 +925,7 @@ function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmR
                 <p className="text-sm text-slate-400 font-bold mt-1">Suivez vos achats en temps réel</p>
             </div>
 
-            {/* Tabs */}
+            {ordersBlockState === 'ready' && (
             <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
                 {tabs.map(t => (
                     <button key={t.id} onClick={() => setTab(t.id)} className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase whitespace-nowrap transition-all border flex items-center gap-2 ${tab === t.id
@@ -655,8 +937,31 @@ function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmR
                     </button>
                 ))}
             </div>
+            )}
 
-            {filtered.length > 0 ? (
+            {ordersBlockState === 'loading' ? (
+                <div className="py-20 text-center">
+                    <Loader2 size={32} className="mx-auto animate-spin text-orange-500 mb-3" />
+                    <p className="text-xs font-black uppercase text-slate-400">Chargement de vos commandes…</p>
+                </div>
+            ) : ordersBlockState === 'error' ? (
+                <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-red-100 dark:border-red-900/40 px-6">
+                    <AlertTriangle size={40} className="mx-auto text-red-400 mb-4" />
+                    <p className="text-xs font-black uppercase text-red-600 dark:text-red-400 mb-2">Impossible de charger les commandes</p>
+                    <p className="text-sm text-slate-600 dark:text-slate-300 mb-6 max-w-md mx-auto">{ordersBlockMessage}</p>
+                    {onRetryOrders && (
+                        <button type="button" onClick={onRetryOrders} className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-orange-600">
+                            <RefreshCw size={14} /> Réessayer
+                        </button>
+                    )}
+                </div>
+            ) : ordersBlockState === 'not_found' ? (
+                <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-amber-100 dark:border-amber-900/40 px-6">
+                    <AlertCircle size={40} className="mx-auto text-amber-400 mb-4" />
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-4">{ordersBlockMessage || 'Connectez-vous pour voir vos commandes.'}</p>
+                    <Link href="/login" className="inline-block bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs">Se connecter</Link>
+                </div>
+            ) : filtered.length > 0 ? (
                 <div className="space-y-4">
                     {filtered.map((order: any) => {
                         const st = statusMap[order.status] || statusMap.pending
@@ -747,17 +1052,38 @@ function BuyerOrders({ orders, onConfirmReception }: { orders: any[]; onConfirmR
 // =====================================================================
 // WISHLIST
 // =====================================================================
-function BuyerWishlist({ favorites, setFavorites, userId }: { favorites: any[]; setFavorites: any; userId: string }) {
+function BuyerWishlist({
+    favorites,
+    setFavorites,
+    userId,
+    favoritesLoadError,
+    onRetryFavorites,
+}: {
+    favorites: any[]
+    setFavorites: any
+    userId?: string
+    favoritesLoadError?: string | null
+    onRetryFavorites?: () => void
+}) {
     const [removing, setRemoving] = useState<string | null>(null)
-    const supabase = getSupabaseBrowserClient()
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
     const removeFav = async (productId: string) => {
+        if (!userId) {
+            toast.error('Session requise')
+            return
+        }
         setRemoving(productId)
         try {
-            await supabase.from('favorites').delete().eq('user_id', userId).eq('product_id', productId)
+            await withRetry(async () => {
+                const { error } = await supabase.from('favorites').delete().eq('user_id', userId).eq('product_id', productId)
+                if (error) throw new Error(error.message)
+            }, { label: 'BuyerWishlist removeFav', maxAttempts: 4 })
             setFavorites((prev: any[]) => prev.filter(f => f.id !== productId))
             toast.success('Retiré des favoris')
-        } catch (err) { toast.error('Erreur') }
+        } catch (err) {
+            toast.error('Erreur')
+        }
         finally { setRemoving(null) }
     }
 
@@ -768,7 +1094,24 @@ function BuyerWishlist({ favorites, setFavorites, userId }: { favorites: any[]; 
                 <p className="text-sm text-slate-400 font-bold mt-1">{favorites.length} articles sauvegardés</p>
             </div>
 
-            {favorites.length > 0 ? (
+            {favoritesLoadError && (
+                <div role="alert" className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-4 py-3">
+                    <p className="text-sm font-bold text-red-800 dark:text-red-200 flex-1">{favoritesLoadError}</p>
+                    {onRetryFavorites && (
+                        <button type="button" onClick={onRetryFavorites} className="inline-flex items-center gap-2 shrink-0 rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase">
+                            <RefreshCw size={14} /> Réessayer
+                        </button>
+                    )}
+                </div>
+            )}
+
+            {!userId ? (
+                <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+                    <Heart size={48} className="mx-auto text-slate-200 dark:text-slate-600 mb-4" />
+                    <p className="text-sm font-black uppercase italic text-slate-400 mb-4">Connectez-vous pour voir vos favoris</p>
+                    <Link href="/login" className="inline-block bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs">Se connecter</Link>
+                </div>
+            ) : favorites.length > 0 ? (
                 <div className="space-y-3">
                     {favorites.map((item: any) => (
                         <div key={item.id} className={`flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all ${item.has_stock && item.stock_quantity <= 0 ? 'opacity-50' : ''}`}>
@@ -811,7 +1154,16 @@ function BuyerWishlist({ favorites, setFavorites, userId }: { favorites: any[]; 
 // =====================================================================
 // CART
 // =====================================================================
-function BuyerCart({ cart, total, itemCount, updateQuantity, removeFromCart }: any) {
+function BuyerCart({
+    cart,
+    total,
+    itemCount,
+    updateQuantity,
+    removeFromCart,
+    cartLoading,
+    cartError,
+}: any) {
+    const router = useRouter()
     return (
         <div className="p-4 md:p-8">
             <div className="mb-6">
@@ -819,7 +1171,25 @@ function BuyerCart({ cart, total, itemCount, updateQuantity, removeFromCart }: a
                 <p className="text-sm text-slate-400 font-bold mt-1">{itemCount} article{itemCount !== 1 ? 's' : ''}</p>
             </div>
 
-            {cart.length > 0 ? (
+            {cartLoading && cart.length === 0 ? (
+                <div className="py-20 text-center">
+                    <Loader2 size={32} className="mx-auto animate-spin text-orange-500 mb-3" />
+                    <p className="text-xs font-black uppercase text-slate-400">Synchronisation du panier…</p>
+                </div>
+            ) : cartError ? (
+                <div className="py-16 text-center bg-white dark:bg-slate-900 rounded-3xl border border-red-100 dark:border-red-900/40 px-6">
+                    <AlertTriangle className="mx-auto text-red-400 mb-4" size={40} />
+                    <p className="text-sm font-bold text-slate-600 dark:text-slate-300 mb-4">{cartError}</p>
+                    <button
+                        type="button"
+                        onClick={() => router.refresh()}
+                        className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px] hover:bg-orange-600"
+                    >
+                        <RefreshCw size={14} /> Réessayer
+                    </button>
+                    <p className="text-[10px] text-slate-400 mt-4 font-bold">Actualisation douce Next.js — pas de rechargement complet du navigateur.</p>
+                </div>
+            ) : cart.length > 0 ? (
                 <>
                     <div className="space-y-3 mb-6">
                         {cart.map((item: any) => (
@@ -888,13 +1258,32 @@ function BuyerCart({ cart, total, itemCount, updateQuantity, removeFromCart }: a
 // =====================================================================
 // FOLLOWING SHOPS
 // =====================================================================
-function FollowingPage({ shops }: { shops: any[] }) {
+function FollowingPage({
+    shops,
+    shopsLoadError,
+    onRetryShops,
+}: {
+    shops: any[]
+    shopsLoadError?: string | null
+    onRetryShops?: () => void
+}) {
     return (
         <div className="p-4 md:p-8">
             <div className="mb-6">
                 <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Boutiques suivies</h2>
                 <p className="text-sm text-slate-400 font-bold mt-1">{shops.length} boutique{shops.length !== 1 ? 's' : ''}</p>
             </div>
+
+            {shopsLoadError && (
+                <div role="alert" className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3 rounded-2xl border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-4 py-3">
+                    <p className="text-sm font-bold text-amber-900 dark:text-amber-100 flex-1">{shopsLoadError}</p>
+                    {onRetryShops && (
+                        <button type="button" onClick={onRetryShops} className="inline-flex items-center gap-2 shrink-0 rounded-xl bg-amber-600 text-white px-4 py-2 text-[10px] font-black uppercase">
+                            <RefreshCw size={14} /> Réessayer
+                        </button>
+                    )}
+                </div>
+            )}
 
             {shops.length > 0 ? (
                 <div className="space-y-4">
@@ -941,6 +1330,7 @@ function FollowingPage({ shops }: { shops: any[] }) {
 function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnreadChange?: (n: number) => void }) {
     const [notifs, setNotifs] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [notifLoadError, setNotifLoadError] = useState<string | null>(null)
     const router = useRouter()
 
     const typeIcons: Record<string, { icon: any; color: string }> = {
@@ -953,12 +1343,23 @@ function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnre
         new_message: { icon: MessageCircle, color: 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' },
     }
 
-    useEffect(() => {
-        getNotifications(50).then(result => {
+    const loadNotifs = useCallback(async () => {
+        setLoading(true)
+        setNotifLoadError(null)
+        try {
+            const result = await withRetry(() => getNotifications(50), { label: 'BuyerNotifications getNotifications', maxAttempts: 4 })
             setNotifs(result.notifications || [])
+        } catch (e: any) {
+            setNotifLoadError(e?.message || 'Impossible de charger les notifications.')
+            setNotifs([])
+        } finally {
             setLoading(false)
-        })
+        }
     }, [])
+
+    useEffect(() => {
+        void loadNotifs()
+    }, [loadNotifs])
 
     // Realtime: listen for new notifications
     useRealtime('notification:insert', (payload) => {
@@ -984,16 +1385,37 @@ function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnre
 
     const unreadCount = notifs.filter(n => !n.is_read).length
 
-    if (loading) {
+    if (loading && notifs.length === 0) {
         return (
-            <div className="p-4 md:p-8 flex items-center justify-center py-20">
+            <div className="p-4 md:p-8 flex flex-col items-center justify-center py-20 gap-3">
                 <Loader2 size={24} className="animate-spin text-orange-500" />
+                <p className="text-[10px] font-black uppercase text-slate-400">Chargement…</p>
+            </div>
+        )
+    }
+
+    if (notifLoadError && notifs.length === 0) {
+        return (
+            <div className="p-4 md:p-8 flex flex-col items-center justify-center py-20 gap-4 max-w-md mx-auto text-center">
+                <AlertTriangle className="text-red-400" size={40} />
+                <p className="text-sm font-bold text-slate-600 dark:text-slate-300">{notifLoadError}</p>
+                <button type="button" onClick={() => void loadNotifs()} className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-[10px]">
+                    <RefreshCw size={14} /> Réessayer
+                </button>
             </div>
         )
     }
 
     return (
         <div className="p-4 md:p-8">
+            {notifLoadError && notifs.length > 0 && (
+                <div className="mb-4 flex items-center justify-between gap-2 rounded-2xl border border-amber-200 bg-amber-50 dark:bg-amber-950/30 px-4 py-2 text-[11px] font-bold text-amber-900 dark:text-amber-100">
+                    <span>{notifLoadError}</span>
+                    <button type="button" className="text-[9px] font-black uppercase text-orange-600" onClick={() => void loadNotifs()}>
+                        Actualiser
+                    </button>
+                </div>
+            )}
             <div className="flex items-center justify-between mb-6">
                 <div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Notifications</h2>
@@ -1048,24 +1470,34 @@ function NotificationsPage({ userId, onUnreadChange }: { userId?: string; onUnre
 // =====================================================================
 // ADDRESSES
 // =====================================================================
-function AddressesPage({ address, setAddress, userId }: { address: any; setAddress: any; userId: string }) {
+function AddressesPage({ address, setAddress, userId }: { address: any; setAddress: any; userId?: string }) {
     const [updating, setUpdating] = useState(false)
     const [saved, setSaved] = useState(false)
-    const supabase = getSupabaseBrowserClient()
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+    const router = useRouter()
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!userId) {
+            toast.error('Session requise')
+            return
+        }
         setUpdating(true)
         setSaved(false)
         try {
-            const { error } = await supabase.from('profiles').update({
-                city: address.city, district: address.district, landmark: address.landmark, updated_at: new Date()
-            }).eq('id', userId)
-            if (error) throw error
+            await withRetry(async () => {
+                const { error } = await supabase.from('profiles').update({
+                    city: address.city, district: address.district, landmark: address.landmark, updated_at: new Date().toISOString(),
+                }).eq('id', userId)
+                if (error) throw new Error(error.message)
+            }, { label: 'AddressesPage save', maxAttempts: 4 })
             setSaved(true)
             toast.success('Adresse enregistrée')
             setTimeout(() => setSaved(false), 3000)
-        } catch (err) { toast.error("Erreur lors de l'enregistrement") }
+            router.refresh()
+        } catch (err) {
+            toast.error("Erreur lors de l'enregistrement")
+        }
         finally { setUpdating(false) }
     }
 
@@ -1118,38 +1550,56 @@ function AddressesPage({ address, setAddress, userId }: { address: any; setAddre
 // =====================================================================
 // PROFILE
 // =====================================================================
-function ProfilePage({ profile, setProfile, userId }: { profile: any; setProfile: any; userId: string }) {
+function ProfilePage({ profile, setProfile, userId }: { profile: any; setProfile: any; userId?: string }) {
     const [updating, setUpdating] = useState(false)
     const [uploading, setUploading] = useState(false)
-    const supabase = getSupabaseBrowserClient()
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+    const router = useRouter()
 
     const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0]
-        if (!file) return
+        if (!file || !userId) return
         setUploading(true)
         try {
             const fileExt = file.name.split('.').pop()
             const filePath = `${userId}-${Math.random()}.${fileExt}`
-            const { error: upErr } = await supabase.storage.from('avatars').upload(filePath, file)
-            if (upErr) throw upErr
+            await withRetry(async () => {
+                const { error: upErr } = await supabase.storage.from('avatars').upload(filePath, file)
+                if (upErr) throw new Error(upErr.message)
+            }, { label: 'ProfilePage avatar upload', maxAttempts: 4 })
             const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(filePath)
             setProfile((prev: any) => ({ ...prev, avatar_url: publicUrl }))
-            await supabase.from('profiles').upsert({ id: userId, avatar_url: publicUrl })
+            await withRetry(async () => {
+                const { error } = await supabase.from('profiles').upsert({ id: userId, avatar_url: publicUrl })
+                if (error) throw new Error(error.message)
+            }, { label: 'ProfilePage avatar upsert', maxAttempts: 4 })
             toast.success('Photo mise à jour')
-        } catch (err) { toast.error("Erreur lors de l'upload") }
+            router.refresh()
+        } catch (err) {
+            toast.error("Erreur lors de l'upload")
+        }
         finally { setUploading(false) }
     }
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (!userId) {
+            toast.error('Session requise')
+            return
+        }
         setUpdating(true)
         try {
-            const { error } = await supabase.from('profiles').upsert({
-                id: userId, full_name: profile.full_name, whatsapp_number: profile.whatsapp_number,
-            })
-            if (error) throw error
+            await withRetry(async () => {
+                const { error } = await supabase.from('profiles').upsert({
+                    id: userId, full_name: profile.full_name, whatsapp_number: profile.whatsapp_number,
+                })
+                if (error) throw new Error(error.message)
+            }, { label: 'ProfilePage upsert', maxAttempts: 4 })
             toast.success('Profil mis à jour')
-        } catch (err: any) { toast.error(err?.message || 'Erreur') }
+            router.refresh()
+        } catch (err: any) {
+            toast.error(err?.message || 'Erreur')
+        }
         finally { setUpdating(false) }
     }
 
@@ -1225,7 +1675,8 @@ function SettingsPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [newPassword, setNewPassword] = useState('')
     const [message, setMessage] = useState({ type: '', text: '' })
-    const supabase = getSupabaseBrowserClient()
+    const supabase = useMemo(() => getSupabaseBrowserClient(), [])
+    const router = useRouter()
 
     // Preferences stored in localStorage
     const [prefs, setPrefs] = useState({
@@ -1270,10 +1721,16 @@ function SettingsPage() {
         if (newPassword.length < 8) return setMessage({ type: 'error', text: 'Le mot de passe doit faire au moins 8 caractères.' })
         setUpdating(true)
         try {
-            const { error } = await supabase.auth.updateUser({ password: newPassword })
-            if (error) setMessage({ type: 'error', text: error.message })
-            else { setMessage({ type: 'success', text: 'Mot de passe mis à jour !' }); setNewPassword('') }
-        } catch { setMessage({ type: 'error', text: 'Erreur réseau' }) }
+            await withRetry(async () => {
+                const { error } = await supabase.auth.updateUser({ password: newPassword })
+                if (error) throw new Error(error.message)
+            }, { label: 'SettingsPage updatePassword', maxAttempts: 4 })
+            setMessage({ type: 'success', text: 'Mot de passe mis à jour !' })
+            setNewPassword('')
+            router.refresh()
+        } catch (e: any) {
+            setMessage({ type: 'error', text: e?.message || 'Erreur réseau' })
+        }
         finally { setUpdating(false) }
     }
 

@@ -1,6 +1,21 @@
 'use client'
+
+/**
+ * Formulaire multi-étapes « Nouveau produit » (vendeur).
+ *
+ * Stabilité & robustesse (résumé des choix d’implémentation) :
+ * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
+ * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
+ *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
+ * - **Uploads Storage** : boucle jusqu’à 4 tentatives sur erreurs réseau (`runWithNetworkRetries`) + une 2e vague complète
+ *   si timeout ; fichiers envoyés **séquentiellement** pour limiter la saturation réseau et les effets de bord.
+ * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
+ *   renvoyée dans `{ error: string }` (évite doublons involontaires).
+ * - **Feedback** : libellés d’étape (`publishLabel`) + barre de progression ; entrées fichier désactivées pendant `loading`.
+ * - Session / compression / erreurs JWT : logique inchangée fonctionnellement, documentée dans les helpers existants.
+ */
 import type { Session } from '@supabase/supabase-js'
-import { useState, useMemo, useEffect, type Dispatch, type SetStateAction } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -98,6 +113,12 @@ function validateImageFile(file: File | null): string | null {
 /** Délai max par fichier upload Storage + action serveur (consigne sécurité : 120 s). */
 const UPLOAD_TIMEOUT_MS = 120_000
 
+/** 1 tentative + minimum 3 relances sur erreurs réseau / Storage (hors timeout). */
+const UPLOAD_NETWORK_MAX_ATTEMPTS = 4
+
+/** 1 tentative + 3 relances si l’action serveur expire (timeout). */
+const CREATE_PRODUCT_MAX_ATTEMPTS = 4
+
 /** Compression JPEG/PNG (évite fichiers lourds qui bloquent longtemps sur mobile) */
 const COMPRESS_TIMEOUT_MS = 60_000
 
@@ -127,20 +148,6 @@ const MSG_SESSION_EXPIRED_RECONNECT = 'Session expirée, reconnexion en cours...
 const MSG_SLOW_CREATE_PRODUCT =
     'L’enregistrement du produit sur le serveur a pris trop de temps (connexion ou serveur lent). Réessayez dans un instant. Si le produit apparaît déjà dans votre liste, ne le publiez pas en double.'
 
-/** Fait avancer la barre pendant les opérations longues (compression / upload). */
-function startProgressPulse(
-    setProgress: Dispatch<SetStateAction<number>>,
-    ceiling: number,
-    options?: { step?: number; intervalMs?: number },
-): () => void {
-    const step = options?.step ?? 0.42
-    const intervalMs = options?.intervalMs ?? 320
-    const id = setInterval(() => {
-        setProgress((p) => (p < ceiling - 0.2 ? Math.min(ceiling - 0.35, p + step) : p))
-    }, intervalMs)
-    return () => clearInterval(id)
-}
-
 const MSG_FRIENDLY_TECH =
     'Oups, une petite erreur technique est survenue. Nos équipes sont prévenues. Réessayez dans un instant.'
 
@@ -168,6 +175,54 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 function sleep(ms: number) {
     return new Promise<void>((r) => setTimeout(r, ms))
+}
+
+/**
+ * Retries réseau pour Storage : au moins 3 relances après le 1er échec.
+ * Les timeouts (`__UPLOAD_TIMEOUT__`) sont remontés tout de suite pour la logique « 2e vague » en amont.
+ */
+async function runWithNetworkRetries<T>(fn: () => Promise<T>, logLabel: string): Promise<T> {
+    let last: unknown
+    for (let attempt = 1; attempt <= UPLOAD_NETWORK_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await fn()
+        } catch (e) {
+            last = e
+            if (isTimeoutError(e)) throw e
+            if (attempt >= UPLOAD_NETWORK_MAX_ATTEMPTS) break
+            const wait = 380 * attempt
+            console.warn(
+                `[AddProductForm] ${logLabel} — échec ${attempt}/${UPLOAD_NETWORK_MAX_ATTEMPTS}, nouvel essai dans ${wait}ms`,
+                e,
+            )
+            await sleep(wait)
+        }
+    }
+    throw last instanceof Error ? last : new Error(String(last))
+}
+
+/**
+ * `createProduct` via Server Action : nouvelles tentatives uniquement sur timeout réseau (pas sur erreur métier renvoyée dans `{ error }`).
+ */
+async function callCreateProductWithRetries(
+    payload: Parameters<typeof serverCreateProduct>[0],
+): Promise<Awaited<ReturnType<typeof serverCreateProduct>>> {
+    let last: unknown
+    for (let attempt = 1; attempt <= CREATE_PRODUCT_MAX_ATTEMPTS; attempt++) {
+        try {
+            return await withTimeout(serverCreateProduct(payload), CREATE_PRODUCT_TIMEOUT_MS)
+        } catch (e) {
+            last = e
+            if (!isTimeoutError(e)) throw e
+            if (attempt >= CREATE_PRODUCT_MAX_ATTEMPTS) break
+            const wait = 500 * attempt
+            console.warn(
+                `[AddProductForm] createProduct timeout — tentative ${attempt}/${CREATE_PRODUCT_MAX_ATTEMPTS}, attente ${wait}ms`,
+            )
+            await sleep(wait)
+        }
+    }
+    throw last instanceof Error ? last : new Error(String(last))
 }
 
 function isJwtExpiredOrPermissionDenied(msg: string): boolean {
@@ -457,17 +512,6 @@ async function handleJwtOrPermissionRecovery(
     window.location.href = LOGIN_REDIRECT
 }
 
-/** Une tentative ; en cas d’échec (hors timeout), une 2e tentative après courte pause */
-async function runUploadWithRetry<T>(fn: () => Promise<T>): Promise<T> {
-    try {
-        return await fn()
-    } catch (e) {
-        if (isTimeoutError(e)) throw e
-        await sleep(450)
-        return await fn()
-    }
-}
-
 const STEPS = [
     { id: 1, label: 'Infos', icon: Package },
     { id: 2, label: 'Prix & Stock', icon: Tag },
@@ -489,6 +533,14 @@ export default function AddProductForm({
     isVendorAccount,
     verificationStatus,
 }: AddProductFormProps) {
+    /**
+     * Anti-course / double envoi :
+     * - `publishingLockRef` : verrou synchrone (avant le prochain rendu de `loading`), empêche deux clics rapides.
+     * - `publishRunIdRef` : si une logique async devait se chevaucher, on n’applique plus le `finally` (UI) que pour le run courant.
+     */
+    const publishingLockRef = useRef(false)
+    const publishRunIdRef = useRef(0)
+
     const [step, setStep] = useState(1)
     const [loading, setLoading] = useState(false)
     const [publishProgress, setPublishProgress] = useState(0)
@@ -683,12 +735,17 @@ export default function AddProductForm({
 
     // ===== SUBMIT =====
     const handleSubmit = async () => {
-        if (loading) return
+        if (loading || publishingLockRef.current) return
         if (!publishReadiness.ok) {
             const first = publishReadiness.hints[0]
             if (first) setImageHint(first)
             return
         }
+
+        publishingLockRef.current = true
+        const runId = ++publishRunIdRef.current
+        /** Si `runId` ne correspond plus au ref, un autre envoi a pris le relais — ne pas toucher à l’UI globale. */
+        const ownsPublishUi = () => publishRunIdRef.current === runId
 
         const extFromFile = (file: File): string => {
             const fromName = file.name.split('.').pop()?.toLowerCase()
@@ -730,16 +787,23 @@ export default function AddProductForm({
             return data.publicUrl
         }
 
-        /** Upload avec retry erreur réseau + 2e tentative si timeout (connexion très lente). */
+        /**
+         * Upload Storage : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout (connexion très lente).
+         * Les fichiers sont envoyés séquentiellement (pas en parallèle) pour limiter la charge et les races côté client.
+         */
         const uploadFileTimedWithRetry = async (file: File, basePath: string): Promise<string> => {
-            const attempt = () =>
-                runUploadWithRetry(() => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS))
+            const shortLabel = basePath.split('/').pop() ?? 'fichier'
+            const oneWave = () =>
+                runWithNetworkRetries(
+                    () => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS),
+                    `storage.upload ${shortLabel}`,
+                )
             try {
-                return await attempt()
+                return await oneWave()
             } catch (e: unknown) {
                 if (!isTimeoutError(e)) throw e
                 await sleep(2000)
-                return await attempt()
+                return await oneWave()
             }
         }
 
@@ -760,18 +824,13 @@ export default function AddProductForm({
         setPublishProgress(5)
 
         try {
-            console.log('LOG 1: Début session')
             setPublishLabel('Vérification de la session…')
             const gate = await ensureSessionBeforePublish(supabase, sellerId)
+            if (!ownsPublishUi()) return
             if ('redirect' in gate || 'abort' in gate) {
-                console.log(
-                    '[AddProductForm publish] Arrêt après session:',
-                    'redirect' in gate ? 'redirect login' : 'abort (timeout / erreur)',
-                )
                 return
             }
             const storageUserId = gate.userId
-            console.log('[AddProductForm publish] Session OK, storageUserId (8 premiers car.)', storageUserId.slice(0, 8) + '…')
 
             setPublishLabel('Préparation…')
 
@@ -792,68 +851,45 @@ export default function AddProductForm({
             let fileMain: File
             const galleryPrepared: { slotIndex: number; file: File }[] = []
             try {
-                console.log('LOG 2: Début compression image principale', {
-                    name: mainImage?.name,
-                    type: mainImage?.type,
-                    size: mainImage?.size,
-                })
+                setPublishLabel('Optimisation de l’image principale…')
                 fileMain = await safeCompress(mainImage!)
-                console.log('[AddProductForm publish] Compression principale terminée', {
-                    name: fileMain.name,
-                    type: fileMain.type,
-                    size: fileMain.size,
-                })
+                if (!ownsPublishUi()) return
                 for (let i = 0; i < gallery.length; i++) {
                     const f = gallery[i]
                     if (!f) continue
-                    console.log(`[AddProductForm publish] Compression galerie slot ${i}`, {
-                        name: f.name,
-                        type: f.type,
-                        size: f.size,
-                    })
+                    setPublishLabel(`Optimisation photo galerie (${i + 1})…`)
                     galleryPrepared.push({ slotIndex: i, file: await safeCompress(f) })
+                    if (!ownsPublishUi()) return
                 }
-                console.log('[AddProductForm publish] Toutes les compressions terminées', {
-                    gallerySlots: galleryPrepared.length,
-                })
             } catch (e: unknown) {
-                console.error('[AddProductForm publish] Échec dans le bloc compression (try interne)', e)
                 await reportTechnicalFailure('compression_images', e)
                 return
             }
 
-            console.log('LOG 3: Fin compression, début upload Storage', {
-                uploadId,
-                totalUploads,
-            })
             setPublishLabel('Envoi de l’image principale…')
             let mainUrl: string
             try {
                 mainUrl = await uploadFileTimedWithRetry(fileMain, `${storageUserId}/${uploadId}-main`)
+                if (!ownsPublishUi()) return
                 bumpUploadProgress()
             } catch (e: unknown) {
-                console.error('[AddProductForm publish] Upload image principale échoué', e)
                 await reportTechnicalFailure('upload_image_principale', e)
                 return
             }
-
-            console.log('LOG 4: Upload réussi, URL:', mainUrl)
 
             const galleryUrls: string[] = []
             try {
                 let gIdx = 0
                 for (const { slotIndex, file: gFile } of galleryPrepared) {
-                    setPublishLabel(`Photo galerie ${gIdx + 1}/${galleryFiles.length}…`)
-                    console.log(`[AddProductForm publish] Upload galerie ${gIdx + 1}/${galleryPrepared.length} slot ${slotIndex}`)
+                    setPublishLabel(`Envoi galerie ${gIdx + 1}/${galleryFiles.length}…`)
                     galleryUrls.push(
                         await uploadFileTimedWithRetry(gFile, `${storageUserId}/${uploadId}-gallery-${slotIndex}`)
                     )
-                    console.log(`[AddProductForm publish] Galerie ${gIdx + 1} OK, URL:`, galleryUrls[galleryUrls.length - 1])
+                    if (!ownsPublishUi()) return
                     bumpUploadProgress()
                     gIdx++
                 }
             } catch (e: unknown) {
-                console.error('[AddProductForm publish] Upload galerie échoué', e)
                 await reportTechnicalFailure('upload_galerie', e)
                 return
             }
@@ -863,35 +899,23 @@ export default function AddProductForm({
 
             let result: Awaited<ReturnType<typeof serverCreateProduct>>
             try {
-                console.log('LOG 5: Envoi vers serverCreateProduct', {
+                result = await callCreateProductWithRetries({
                     name,
                     price: parseInt(price, 10),
-                    galleryCount: galleryUrls.length,
+                    description,
+                    category: selectedCategory,
+                    subcategory: selectedSubcategory,
                     img: mainUrl,
+                    images_gallery: galleryUrls,
+                    has_stock: hasStock,
+                    stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
+                    has_variants: hasVariantsPayload,
+                    sizes: hasVariantsPayload ? sizes : [],
+                    colors: hasVariantsPayload ? selectedColors : [],
+                    expected_seller_id: storageUserId,
                 })
-                result = await withTimeout(
-                    serverCreateProduct({
-                        name,
-                        price: parseInt(price, 10),
-                        description,
-                        category: selectedCategory,
-                        subcategory: selectedSubcategory,
-                        img: mainUrl,
-                        images_gallery: galleryUrls,
-                        has_stock: hasStock,
-                        stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
-                        has_variants: hasVariantsPayload,
-                        sizes: hasVariantsPayload ? sizes : [],
-                        colors: hasVariantsPayload ? selectedColors : [],
-                        expected_seller_id: storageUserId,
-                    }),
-                    CREATE_PRODUCT_TIMEOUT_MS,
-                )
-                console.log('[AddProductForm publish] serverCreateProduct: réponse reçue', {
-                    hasError: 'error' in result && Boolean(result.error),
-                })
+                if (!ownsPublishUi()) return
             } catch (e: unknown) {
-                console.error('[AddProductForm publish] serverCreateProduct: exception / timeout avant réponse', e)
                 await reportTechnicalFailure('server_createProduct', e)
                 return
             }
@@ -919,7 +943,6 @@ export default function AddProductForm({
                 return
             }
 
-            console.log('[AddProductForm publish] createProduct succès (réponse sans error) → revalidate + redirection')
             setPublishProgress(95)
             setPublishLabel('Finalisation…')
             // Ne pas bloquer la redirection si revalidatePath rame (évite spinner infini côté client)
@@ -932,9 +955,13 @@ export default function AddProductForm({
             alert('Produit mis en ligne !')
             window.location.href = '/vendor/dashboard?tab=products'
         } finally {
-            setLoading(false)
-            setPublishProgress(0)
-            setPublishLabel('')
+            // Déverrouiller et réinitialiser la barre uniquement pour l’envoi actif (évite d’écraser un 2e envoi).
+            if (ownsPublishUi()) {
+                publishingLockRef.current = false
+                setLoading(false)
+                setPublishProgress(0)
+                setPublishLabel('')
+            }
         }
     }
 
@@ -954,7 +981,7 @@ export default function AddProductForm({
                             <button
                                 key={s.id}
                                 onClick={() => {
-                                    if (s.id < step) setStep(s.id)
+                                    if (!loading && s.id < step) setStep(s.id)
                                 }}
                                 className="flex flex-col items-center gap-1 relative"
                             >
@@ -1277,7 +1304,7 @@ export default function AddProductForm({
 
                 {/* ===== STEP 5: IMAGES ===== */}
                 {step === 5 && (
-                    <div className="space-y-6">
+                    <div className="space-y-6" aria-busy={loading} data-publish-in-progress={loading || undefined}>
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Photos du produit</h3>
                             <p className="text-sm text-slate-400">Image principale + 3 miniatures minimum (max 5 Mo / image).</p>
@@ -1317,6 +1344,7 @@ export default function AddProductForm({
                                         <input
                                             type="file"
                                             accept="image/*"
+                                            disabled={loading}
                                             onChange={(e) => {
                                                 const f = e.target.files?.[0] || null
                                                 const err = validateImageFile(f)
@@ -1357,6 +1385,7 @@ export default function AddProductForm({
                                                 <input
                                                     type="file"
                                                     accept="image/*"
+                                                    disabled={loading}
                                                     onChange={(e) => {
                                                         const f = e.target.files?.[0] || null
                                                         const err = validateImageFile(f)
@@ -1387,7 +1416,8 @@ export default function AddProductForm({
                     <button
                         type="button"
                         onClick={goBack}
-                        className="flex items-center gap-2 px-6 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500 font-black uppercase text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                        disabled={loading}
+                        className="flex items-center gap-2 px-6 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 text-slate-500 font-black uppercase text-xs hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                     >
                         <ChevronLeft size={16} /> Retour
                     </button>
@@ -1397,7 +1427,8 @@ export default function AddProductForm({
                     <button
                         type="button"
                         onClick={goNext}
-                        className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-orange-500 text-white font-black uppercase text-xs hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20"
+                        disabled={loading}
+                        className="flex items-center gap-2 px-8 py-3 rounded-2xl bg-orange-500 text-white font-black uppercase text-xs hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 disabled:pointer-events-none"
                     >
                         Suivant <ChevronRight size={16} />
                     </button>

@@ -939,6 +939,11 @@ export async function createProduct(input: {
     has_variants: boolean
     sizes: string[]
     colors: string[]
+    /**
+     * Métadonnées immobilier (jsonb `products.listing_extras`).
+     * Requiert la migration `supabase-products-listing-extras.sql`.
+     */
+    listing_extras?: Record<string, unknown> | null
     /** Doit être l’UUID auth actuel ; sinon refus (alignement client / serveur, anti usurpation seller_id). */
     expected_seller_id?: string
 }): Promise<
@@ -1010,10 +1015,29 @@ export async function createProduct(input: {
             }
         }
 
+        const rawExtras = input.listing_extras
+        const isRealEstateV1 =
+            rawExtras != null &&
+            typeof rawExtras === 'object' &&
+            !Array.isArray(rawExtras) &&
+            (rawExtras as { version?: number }).version === 1
+
+        const priceNum = Number(input.price)
+        if (!Number.isFinite(priceNum)) {
+            return { error: 'Prix invalide.' }
+        }
+        if (isRealEstateV1) {
+            if (priceNum < 0) {
+                return { error: 'Prix invalide pour une annonce immobilière.' }
+            }
+        } else if (priceNum < 100) {
+            return { error: 'Le prix doit être d’au moins 100 FCFA.' }
+        }
+
         // Payload explicite (évite toute clé inconnue issue d’un spread)
         const row = {
             name: input.name,
-            price: input.price,
+            price: Math.round(priceNum),
             description: input.description ?? '',
             category: input.category,
             subcategory: input.subcategory,
@@ -1025,6 +1049,10 @@ export async function createProduct(input: {
             sizes: Array.isArray(input.sizes) ? input.sizes : [],
             colors: Array.isArray(input.colors) ? input.colors : [],
             seller_id: user.id,
+            listing_extras:
+                rawExtras != null && typeof rawExtras === 'object' && !Array.isArray(rawExtras)
+                    ? rawExtras
+                    : {},
         }
 
         const { data: product, error } = await supabase

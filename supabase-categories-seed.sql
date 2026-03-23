@@ -80,12 +80,11 @@ INSERT INTO sub_category (name, category_uuid) SELECT 'Pâtisseries traditionnel
 INSERT INTO sub_category (name, category_uuid) SELECT 'Sur commande', id FROM category WHERE name = 'Pâtisserie & Traiteur';
 INSERT INTO sub_category (name, category_uuid) SELECT 'Plats traiteur', id FROM category WHERE name = 'Pâtisserie & Traiteur';
 
--- Immobilier
-INSERT INTO sub_category (name, category_uuid) SELECT 'Appartements', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_uuid) SELECT 'Maisons', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_uuid) SELECT 'Terrains', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_uuid) SELECT 'Locaux commerciaux', id FROM category WHERE name = 'Immobilier';
-INSERT INTO sub_category (name, category_uuid) SELECT 'Chambres meublées', id FROM category WHERE name = 'Immobilier';
+-- Immobilier (sous-rayons stratégie Congo + vente/location)
+INSERT INTO sub_category (name, category_uuid) SELECT 'Terrains & Parcelles', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Maisons & Villas (Vente)', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Locations (Maisons, Studios, Chambres)', id FROM category WHERE name = 'Immobilier';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Commerces & Bureaux (Magasins à louer)', id FROM category WHERE name = 'Immobilier';
 
 -- Alimentation & Boissons
 INSERT INTO sub_category (name, category_uuid) SELECT 'Vivres frais', id FROM category WHERE name = 'Alimentation & Boissons';

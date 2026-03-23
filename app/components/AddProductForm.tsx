@@ -27,6 +27,12 @@ import {
     type SizeKind,
 } from '@/lib/productVariantsPresets'
 import {
+    IMMOBILIER_CATEGORY,
+    IMMOBILIER_SUBCATEGORIES,
+    buildListingExtrasV1,
+    subcategoryNeedsSurface,
+} from '@/lib/realEstateListing'
+import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
 } from 'lucide-react'
@@ -41,13 +47,42 @@ export type ProductFormValidationContext = {
     stockQuantity: string
     mainImage: File | null
     gallery: (File | null)[]
+    isRealEstate: boolean
+    rePriceNegotiable: boolean
+    rePriceOnRequest: boolean
+    reCity: string
+    reDistrict: string
+    reStreet: string
+    reSurfaceValue: string
+    reSurfaceUnit: 'm2' | 'ares'
+    reRooms: string
+    reBedrooms: string
+    rePropertyCondition: string
+    reLandLegalStatus: string
 }
 
 /**
  * Validation par étape — **globale**, chargée avec le module (pas dans le composant).
  */
 function validateProductStep(s: number, ctx: ProductFormValidationContext): string | null {
-    const { name, selectedCategory, selectedSubcategory, price, hasStock, stockQuantity, mainImage, gallery } = ctx
+    const {
+        name,
+        selectedCategory,
+        selectedSubcategory,
+        price,
+        hasStock,
+        stockQuantity,
+        mainImage,
+        gallery,
+        isRealEstate,
+        rePriceNegotiable,
+        rePriceOnRequest,
+        reCity,
+        reDistrict,
+        reSurfaceValue,
+        rePropertyCondition,
+        reLandLegalStatus,
+    } = ctx
     switch (s) {
         case 1:
             if (!name.trim()) return "Le nom du produit est requis."
@@ -55,9 +90,32 @@ function validateProductStep(s: number, ctx: ProductFormValidationContext): stri
             if (!selectedSubcategory) return "Choisissez une sous-catégorie."
             return null
         case 2: {
+            if (isRealEstate) {
+                if (hasStock) return "Le stock ne s’applique pas aux annonces immobilières — désactivez « Gérer le stock »."
+                if (rePriceOnRequest || rePriceNegotiable) {
+                    return null
+                }
+                const p = parseInt(price, 10)
+                if (!p || p < 100 || p > 100000000) {
+                    return "Indiquez un prix entre 100 et 100 000 000 FCFA, ou cochez « Prix négociable » / « Sur demande »."
+                }
+                return null
+            }
             const p = parseInt(price, 10)
             if (!p || p < 100 || p > 100000000) return "Le prix doit être entre 100 et 100 000 000 FCFA."
             if (hasStock && (!stockQuantity || parseInt(stockQuantity, 10) < 1)) return "La quantité en stock est requise."
+            return null
+        }
+        case 4: {
+            if (!isRealEstate) return null
+            if (!reCity.trim()) return "Indiquez la ville."
+            if (!reDistrict.trim()) return "Indiquez le quartier (ex. Bacongo, Poto-Poto…)."
+            if (!rePropertyCondition.trim()) return "Indiquez l’état du bien."
+            if (!reLandLegalStatus.trim()) return "Indiquez le statut du terrain / document (titre foncier, arrêté…)."
+            if (subcategoryNeedsSurface(selectedSubcategory)) {
+                const s = parseFloat(reSurfaceValue.replace(',', '.'))
+                if (!Number.isFinite(s) || s <= 0) return "La surface (m² ou ares) est requise pour Terrains & Parcelles."
+            }
             return null
         }
         case 5:
@@ -76,7 +134,7 @@ const mesChoix: Record<string, string[]> = {
     "Électroménager": ["Cuisinières & Fours", "Réfrigérateurs & Congélateurs", "Micro-ondes", "Lave-linge", "Climatiseurs & Ventilateurs", "Petit électroménager"],
     "Maison & Déco": ["Salons & Canapés", "Lits & Matelas", "Meubles", "Décoration", "Salle de bain", "Cuisine & Arts de la table"],
     "Pâtisserie & Traiteur": ["Gâteaux", "Viennoiseries", "Pâtisseries traditionnelles", "Sur commande", "Plats traiteur"],
-    "Immobilier": ["Appartements", "Maisons", "Terrains", "Locaux commerciaux", "Chambres meublées"],
+    "Immobilier": [...IMMOBILIER_SUBCATEGORIES],
     "Alimentation & Boissons": ["Vivres frais", "Vivres secs", "Boissons", "Épicerie fine", "Produits locaux"],
     "Auto & Moto": ["Voitures", "Motos & Scooters", "Pièces détachées", "Accessoires auto"],
     "Bébé & Enfants": ["Vêtements enfants", "Jouets", "Poussettes & Accessoires", "Alimentation bébé"],
@@ -86,6 +144,22 @@ const mesChoix: Record<string, string[]> = {
     "Agriculture & Élevage": ["Semences & Plants", "Engrais & Produits phyto", "Outils agricoles", "Animaux & Bétail"],
     "Matériaux & BTP": ["Ciment & Fer", "Plomberie", "Électricité", "Peinture & Finition", "Outillage"],
 }
+
+const RE_PROPERTY_CONDITIONS = [
+    'Neuf / récent',
+    'Bon état',
+    'À rénover',
+    'En construction',
+    'Autre / voir description',
+] as const
+
+const RE_LAND_LEGAL_OPTIONS = [
+    'Titre foncier',
+    'Arrêté',
+    'Attestation de vente',
+    'Titre / document en cours',
+    'Non précisé — à vérifier avec l’annonceur',
+] as const
 
 /** Max 5 Mo — aligné UI + upload (évite chargements interminables) */
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024
@@ -565,6 +639,21 @@ export default function AddProductForm({
 
     const hasVariantsPayload = sizes.length > 0 || selectedColors.length > 0
 
+    // Immobilier (étape 2 : prix / options ; étape 4 : localisation & juridique)
+    const [reOfferType, setReOfferType] = useState<'vente' | 'location'>('vente')
+    const [rePriceNegotiable, setRePriceNegotiable] = useState(false)
+    const [rePriceOnRequest, setRePriceOnRequest] = useState(false)
+    const [reCity, setReCity] = useState('')
+    const [reDistrict, setReDistrict] = useState('')
+    const [reStreet, setReStreet] = useState('')
+    const [reSurfaceValue, setReSurfaceValue] = useState('')
+    const [reSurfaceUnit, setReSurfaceUnit] = useState<'m2' | 'ares'>('m2')
+    const [reRooms, setReRooms] = useState('')
+    const [reBedrooms, setReBedrooms] = useState('')
+    const [rePropertyCondition, setRePropertyCondition] = useState('')
+    const [reLandLegalStatus, setReLandLegalStatus] = useState('')
+    const [reLegalNotes, setReLegalNotes] = useState('')
+
     // Step 4: Détails
     const [features, setFeatures] = useState<string[]>([''])
 
@@ -593,6 +682,18 @@ export default function AddProductForm({
         }
     }, [supabase])
 
+    const isRealEstate = selectedCategory === IMMOBILIER_CATEGORY
+
+    useEffect(() => {
+        if (selectedCategory === IMMOBILIER_CATEGORY) {
+            setHasStock(false)
+            setStockQuantity('')
+            setSizeKind('none')
+            setSizes([])
+            setSelectedColors([])
+        }
+    }, [selectedCategory])
+
     const validationCtx: ProductFormValidationContext = {
         name,
         selectedCategory,
@@ -602,6 +703,18 @@ export default function AddProductForm({
         stockQuantity,
         mainImage,
         gallery,
+        isRealEstate,
+        rePriceNegotiable,
+        rePriceOnRequest,
+        reCity,
+        reDistrict,
+        reStreet,
+        reSurfaceValue,
+        reSurfaceUnit,
+        reRooms,
+        reBedrooms,
+        rePropertyCondition,
+        reLandLegalStatus,
     }
 
     useEffect(() => {
@@ -897,21 +1010,51 @@ export default function AddProductForm({
             setPublishProgress(82)
             setPublishLabel('Enregistrement du produit…')
 
+            const publishAsRealEstate = selectedCategory === IMMOBILIER_CATEGORY
+            const parsedPrice = parseInt(price, 10)
+            let priceToSend = Number.isFinite(parsedPrice) ? parsedPrice : 0
+            if (publishAsRealEstate) {
+                if (rePriceOnRequest || (rePriceNegotiable && (!priceToSend || priceToSend < 100))) {
+                    priceToSend = 0
+                }
+            }
+
+            const surfaceNum = parseFloat(reSurfaceValue.replace(',', '.'))
+            const listingExtrasPayload = publishAsRealEstate
+                ? buildListingExtrasV1({
+                      offerType: reOfferType,
+                      priceNegotiable: rePriceNegotiable,
+                      priceOnRequest: rePriceOnRequest,
+                      city: reCity,
+                      district: reDistrict,
+                      street: reStreet.trim() || undefined,
+                      surfaceValue:
+                          Number.isFinite(surfaceNum) && surfaceNum > 0 ? surfaceNum : undefined,
+                      surfaceUnit: reSurfaceUnit,
+                      rooms: reRooms.trim() !== '' ? parseInt(reRooms, 10) : undefined,
+                      bedrooms: reBedrooms.trim() !== '' ? parseInt(reBedrooms, 10) : undefined,
+                      propertyCondition: rePropertyCondition,
+                      landLegalStatus: reLandLegalStatus,
+                      legalNotes: reLegalNotes.trim() || undefined,
+                  })
+                : undefined
+
             let result: Awaited<ReturnType<typeof serverCreateProduct>>
             try {
                 result = await callCreateProductWithRetries({
                     name,
-                    price: parseInt(price, 10),
+                    price: priceToSend,
                     description,
                     category: selectedCategory,
                     subcategory: selectedSubcategory,
                     img: mainUrl,
                     images_gallery: galleryUrls,
-                    has_stock: hasStock,
-                    stock_quantity: hasStock ? parseInt(stockQuantity, 10) : 0,
-                    has_variants: hasVariantsPayload,
-                    sizes: hasVariantsPayload ? sizes : [],
-                    colors: hasVariantsPayload ? selectedColors : [],
+                    has_stock: publishAsRealEstate ? false : hasStock,
+                    stock_quantity: publishAsRealEstate ? 0 : hasStock ? parseInt(stockQuantity, 10) : 0,
+                    has_variants: publishAsRealEstate ? false : hasVariantsPayload,
+                    sizes: publishAsRealEstate || !hasVariantsPayload ? [] : sizes,
+                    colors: publishAsRealEstate || !hasVariantsPayload ? [] : selectedColors,
+                    listing_extras: listingExtrasPayload as Record<string, unknown> | undefined,
                     expected_seller_id: storageUserId,
                 })
                 if (!ownsPublishUi()) return
@@ -1024,7 +1167,11 @@ export default function AddProductForm({
                             <input
                                 value={name}
                                 onChange={e => setName(e.target.value)}
-                                placeholder="Ex: Perruque brésilienne..."
+                                placeholder={
+                                    isRealEstate
+                                        ? 'Ex : Terrain 500 m² — Bacongo, Brazzaville'
+                                        : 'Ex: Perruque brésilienne...'
+                                }
                                 className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 border border-transparent focus:border-orange-400"
                             />
                         </div>
@@ -1092,29 +1239,97 @@ export default function AddProductForm({
                 {step === 2 && (
                     <div className="space-y-6 max-w-lg">
                         <div>
-                            <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Prix & Stock</h3>
-                            <p className="text-sm text-slate-400">Définissez le prix et la disponibilité.</p>
+                            <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">
+                                {isRealEstate ? 'Prix annonce immobilière' : 'Prix & Stock'}
+                            </h3>
+                            <p className="text-sm text-slate-400">
+                                {isRealEstate
+                                    ? 'Les détails (quartier, surface, statut foncier) sont à l’étape « Détails ».'
+                                    : 'Définissez le prix et la disponibilité.'}
+                            </p>
                         </div>
 
+                        {isRealEstate && (
+                            <div className="p-5 bg-amber-50 dark:bg-amber-950/20 rounded-2xl border border-amber-200 dark:border-amber-800/40 space-y-4">
+                                <span className="text-[10px] font-black uppercase text-amber-800 dark:text-amber-300 tracking-widest">
+                                    Type d’offre
+                                </span>
+                                <div className="flex flex-wrap gap-2">
+                                    {(['vente', 'location'] as const).map((t) => (
+                                        <button
+                                            key={t}
+                                            type="button"
+                                            onClick={() => setReOfferType(t)}
+                                            className={`px-4 py-2.5 rounded-xl text-xs font-black uppercase transition-all ${
+                                                reOfferType === t
+                                                    ? 'bg-orange-500 text-white shadow-md'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-600'
+                                            }`}
+                                        >
+                                            {t === 'vente' ? 'Vente' : 'Location'}
+                                        </button>
+                                    ))}
+                                </div>
+                                <label className="flex items-center gap-3 cursor-pointer text-sm font-bold text-slate-700 dark:text-slate-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={rePriceNegotiable}
+                                        onChange={(e) => {
+                                            setRePriceNegotiable(e.target.checked)
+                                            if (e.target.checked) setRePriceOnRequest(false)
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-300 text-orange-500"
+                                    />
+                                    Prix négociable / à débattre
+                                </label>
+                                <label className="flex items-center gap-3 cursor-pointer text-sm font-bold text-slate-700 dark:text-slate-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={rePriceOnRequest}
+                                        onChange={(e) => {
+                                            setRePriceOnRequest(e.target.checked)
+                                            if (e.target.checked) {
+                                                setRePriceNegotiable(false)
+                                                setPrice('0')
+                                            }
+                                        }}
+                                        className="w-4 h-4 rounded border-slate-300 text-orange-500"
+                                    />
+                                    Prix sur demande (masque le montant sur la fiche)
+                                </label>
+                            </div>
+                        )}
+
                         <div>
-                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Prix (FCFA)</label>
+                            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                {isRealEstate && (rePriceOnRequest || rePriceNegotiable)
+                                    ? 'Prix affiché (FCFA) — optionnel si négociable / sur demande'
+                                    : 'Prix (FCFA)'}
+                            </label>
                             <div className="relative">
                                 <input
                                     type="number"
                                     value={price}
                                     onChange={e => setPrice(e.target.value)}
-                                    placeholder="Ex: 15000"
-                                    className="w-full p-4 pr-20 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-2xl font-black"
+                                    placeholder={isRealEstate ? '0 ou montant' : 'Ex: 15000'}
+                                    disabled={isRealEstate && rePriceOnRequest}
+                                    className="w-full p-4 pr-20 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-2xl font-black disabled:opacity-50"
                                 />
                                 <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">FCFA</span>
                             </div>
-                            {price && parseInt(price) >= 100 && (
+                            {!isRealEstate && price && parseInt(price) >= 100 && (
                                 <p className="text-[10px] text-green-600 font-bold mt-2">
                                     Votre part : {Math.round(parseInt(price) * 0.9).toLocaleString('fr-FR')} FCFA (90%)
                                 </p>
                             )}
+                            {isRealEstate && parseInt(price, 10) >= 100 && !rePriceOnRequest && (
+                                <p className="text-[10px] text-green-600 font-bold mt-2">
+                                    Votre part : {Math.round(parseInt(price, 10) * 0.9).toLocaleString('fr-FR')} FCFA (90%)
+                                </p>
+                            )}
                         </div>
 
+                        {!isRealEstate && (
                         <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-4">
                             <label className="flex items-center justify-between cursor-pointer">
                                 <div>
@@ -1139,6 +1354,7 @@ export default function AddProductForm({
                                 </div>
                             )}
                         </div>
+                        )}
                     </div>
                 )}
 
@@ -1148,11 +1364,21 @@ export default function AddProductForm({
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Variantes</h3>
                             <p className="text-sm text-slate-400">
-                                Cochez les tailles et couleurs proposées. Laissez vide pour un produit sans variante (ex. électronique).
+                                {isRealEstate
+                                    ? 'Les annonces immobilières n’utilisent pas les variantes taille/couleur. Passez à l’étape suivante.'
+                                    : 'Cochez les tailles et couleurs proposées. Laissez vide pour un produit sans variante (ex. électronique).'}
                             </p>
                         </div>
 
+                        {isRealEstate && (
+                            <div className="p-5 rounded-2xl bg-slate-100 dark:bg-slate-800/80 border border-dashed border-slate-300 dark:border-slate-600 text-center text-sm text-slate-500 dark:text-slate-400 font-bold">
+                                Étape sans action pour l’immobilier — cliquez sur « Suivant ».
+                            </div>
+                        )}
+
                         {/* Tailles : type puis cases prédéfinies */}
+                        {!isRealEstate && (
+                        <>
                         <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-4">
                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest block">Tailles</span>
                             <div className="flex flex-wrap gap-2">
@@ -1249,6 +1475,8 @@ export default function AddProductForm({
                             </div>
                             <p className="text-[10px] text-slate-400 mt-3">Sans sélection = la section couleur sera masquée pour les clients.</p>
                         </div>
+                        </>
+                        )}
                     </div>
                 )}
 
@@ -1256,9 +1484,163 @@ export default function AddProductForm({
                 {step === 4 && (
                     <div className="space-y-6 max-w-lg">
                         <div>
-                            <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Détails du produit</h3>
-                            <p className="text-sm text-slate-400">Ajoutez des caractéristiques clés (optionnel).</p>
+                            <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">
+                                {isRealEstate ? 'Localisation & bien' : 'Détails du produit'}
+                            </h3>
+                            <p className="text-sm text-slate-400">
+                                {isRealEstate
+                                    ? 'Informations affichées sur la fiche annonce (confiance & recherche).'
+                                    : 'Ajoutez des caractéristiques clés (optionnel).'}
+                            </p>
                         </div>
+
+                        {isRealEstate && (
+                            <div className="space-y-4 p-5 rounded-2xl border border-amber-200 dark:border-amber-800/50 bg-amber-50/40 dark:bg-amber-950/15">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Ville *
+                                        </label>
+                                        <input
+                                            value={reCity}
+                                            onChange={(e) => setReCity(e.target.value)}
+                                            placeholder="Ex : Brazzaville"
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Quartier *
+                                        </label>
+                                        <input
+                                            value={reDistrict}
+                                            onChange={(e) => setReDistrict(e.target.value)}
+                                            placeholder="Ex : Bacongo, Poto-Poto…"
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                        Rue / repère (optionnel)
+                                    </label>
+                                    <input
+                                        value={reStreet}
+                                        onChange={(e) => setReStreet(e.target.value)}
+                                        placeholder="Ex : près de la pharmacie…"
+                                        className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                    />
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Surface {subcategoryNeedsSurface(selectedSubcategory) ? '*' : ''}
+                                        </label>
+                                        <input
+                                            type="text"
+                                            inputMode="decimal"
+                                            value={reSurfaceValue}
+                                            onChange={(e) => setReSurfaceValue(e.target.value)}
+                                            placeholder="Ex : 250"
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Unité
+                                        </label>
+                                        <select
+                                            value={reSurfaceUnit}
+                                            onChange={(e) => setReSurfaceUnit(e.target.value as 'm2' | 'ares')}
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm font-bold"
+                                        >
+                                            <option value="m2">m²</option>
+                                            <option value="ares">Ares</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Pièces
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={reRooms}
+                                            onChange={(e) => setReRooms(e.target.value)}
+                                            placeholder="—"
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                            Chambres
+                                        </label>
+                                        <input
+                                            type="number"
+                                            min={0}
+                                            value={reBedrooms}
+                                            onChange={(e) => setReBedrooms(e.target.value)}
+                                            placeholder="—"
+                                            className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                        État du bien *
+                                    </label>
+                                    <select
+                                        value={rePropertyCondition}
+                                        onChange={(e) => setRePropertyCondition(e.target.value)}
+                                        className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm font-bold"
+                                    >
+                                        <option value="">— Choisir —</option>
+                                        {RE_PROPERTY_CONDITIONS.map((o) => (
+                                            <option key={o} value={o}>
+                                                {o}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                        Statut foncier / document *
+                                    </label>
+                                    <select
+                                        value={reLandLegalStatus}
+                                        onChange={(e) => setReLandLegalStatus(e.target.value)}
+                                        className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm font-bold"
+                                    >
+                                        <option value="">— Choisir —</option>
+                                        {RE_LAND_LEGAL_OPTIONS.map((o) => (
+                                            <option key={o} value={o}>
+                                                {o}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">
+                                        Précisions juridiques (optionnel)
+                                    </label>
+                                    <textarea
+                                        value={reLegalNotes}
+                                        onChange={(e) => setReLegalNotes(e.target.value)}
+                                        rows={3}
+                                        placeholder="Ex : copie titre disponible sur demande…"
+                                        className="w-full p-3 rounded-xl bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm resize-none"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {isRealEstate && (
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                Points complémentaires (optionnel)
+                            </p>
+                        )}
 
                         <div className="space-y-3">
                             {features.map((feat, i) => (

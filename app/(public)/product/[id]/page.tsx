@@ -30,6 +30,12 @@ import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import VerifiedBadge from '@/app/components/VerifiedBadge'
 import SizeGuideModal from '@/app/components/SizeGuideModal'
 import { getVariantColorHex } from '@/lib/productVariantsPresets'
+import {
+    isRealEstateProduct,
+    parseListingExtras,
+    formatRealEstatePriceLabel,
+} from '@/lib/realEstateListing'
+import RealEstateListingDetails from '@/app/components/RealEstateListingDetails'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
@@ -278,6 +284,14 @@ export default function ProductDetailPage() {
     const effectivePrice = negotiatedPrice ?? basePrice
     const total = effectivePrice * qty
 
+    const realEstateExtras = isRealEstateProduct(product)
+        ? parseListingExtras(product.listing_extras)
+        : null
+    const sharePriceText = formatRealEstatePriceLabel(Number(product.price), realEstateExtras)
+    const showNegotiationBlock =
+        !isRealEstateProduct(product) ||
+        (Number(basePrice) >= 100 && !realEstateExtras?.priceOnRequest)
+
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
         const count = reviews.filter((r: any) => r.rating === stars).length
         const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0
@@ -297,7 +311,9 @@ export default function ProductDetailPage() {
                     >
                         <ArrowLeft size={18} />
                     </Link>
-                    <span className="text-slate-400 text-[13px] font-semibold">Détail produit</span>
+                    <span className="text-slate-400 text-[13px] font-semibold">
+                        {realEstateExtras ? 'Annonce' : 'Détail produit'}
+                    </span>
                     <button
                         onClick={() => setLiked(!liked)}
                         className={`w-10 h-10 rounded-[14px] border flex items-center justify-center transition-all duration-300 ${
@@ -382,6 +398,8 @@ export default function ProductDetailPage() {
                         </span>
                     )}
 
+                    {realEstateExtras && <RealEstateListingDetails extras={realEstateExtras} />}
+
                     {/* Product name */}
                     <h1 className="text-2xl font-extrabold text-slate-900 dark:text-[#F0ECE2] leading-tight mb-1.5 tracking-tight">
                         {product.name}
@@ -402,7 +420,7 @@ export default function ProductDetailPage() {
                     {/* Share buttons */}
                     <ShareButtons
                         title={product.name}
-                        text={`Découvre ${product.name} à ${fmt(product.price)} FCFA sur Mayombe Market !`}
+                        text={`Découvre ${product.name} — ${sharePriceText} sur Mayombe Market !`}
                         url={typeof window !== 'undefined' ? `${window.location.origin}/product/${product.id}` : ''}
                     />
 
@@ -421,16 +439,23 @@ export default function ProductDetailPage() {
                         </div>
                     )}
 
-                    {/* Price + négociation */}
-                    <div className="mb-4">
-                        <NegotiationAction
-                            initialPrice={Number(basePrice)}
-                            product={product}
-                            user={user}
-                            shop={shop}
-                            onNegotiatedPrice={(price) => setNegotiatedPrice(price)}
-                        />
-                    </div>
+                    {/* Price + négociation (masqué si immobilier « sur demande » ou sans prix chiffré) */}
+                    {showNegotiationBlock && (
+                        <div className="mb-4">
+                            <NegotiationAction
+                                initialPrice={Number(basePrice)}
+                                product={product}
+                                user={user}
+                                shop={shop}
+                                onNegotiatedPrice={(price) => setNegotiatedPrice(price)}
+                            />
+                        </div>
+                    )}
+                    {isRealEstateProduct(product) && !showNegotiationBlock && (
+                        <p className="mb-4 text-sm font-bold text-amber-700 dark:text-amber-300">
+                            {sharePriceText} — contactez l’annonceur via le bouton message.
+                        </p>
+                    )}
 
                     {/* Stock badge */}
                     {product.has_stock && (
@@ -531,7 +556,8 @@ export default function ProductDetailPage() {
                         </div>
                     )}
 
-                    {/* Quantity selector */}
+                    {/* Quantity selector — masqué pour annonces immobilières */}
+                    {!isRealEstateProduct(product) && (
                     <div className="mb-5">
                         <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold uppercase tracking-wider block mb-2.5">Quantité</span>
                         <div className="inline-flex items-center rounded-[14px] border-[1.5px] border-slate-200 dark:border-white/[0.08] overflow-hidden">
@@ -554,6 +580,7 @@ export default function ProductDetailPage() {
                             </button>
                         </div>
                     </div>
+                    )}
 
                     <div className="h-px bg-slate-100 dark:bg-white/[0.04] mb-5" />
 
@@ -728,6 +755,15 @@ export default function ProductDetailPage() {
                 <div className="sticky bottom-0 w-full bg-red-50 dark:bg-red-900/20 backdrop-blur-xl border-t border-red-200 dark:border-red-800 px-5 py-4 pb-6 z-40 text-center">
                     <p className="text-red-600 dark:text-red-400 text-sm font-bold">Ce vendeur est actuellement inactif.</p>
                     <p className="text-red-400 dark:text-red-500 text-xs mt-1">Ce produit n'est pas disponible pour le moment.</p>
+                </div>
+            ) : isRealEstateProduct(product) ? (
+                <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-amber-200/60 dark:border-amber-800/40 px-5 py-3.5 pb-6 flex flex-col gap-2 z-40">
+                    <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 font-semibold">
+                        Annonce immobilière — échangez avec l’annonceur pour visiter ou négocier.
+                    </p>
+                    <div className="flex justify-center w-full" onClick={(e) => e.stopPropagation()}>
+                        <MessageButton sellerId={product.seller_id} productId={product.id} user={user} />
+                    </div>
                 </div>
             ) : (
             <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40">

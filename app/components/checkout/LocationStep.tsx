@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { INTER_URBAN_AT_LOCATION_WARNING } from '@/lib/deliveryLocation'
 import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 
 const LOCATIONS = DELIVERY_LOCATIONS
@@ -8,10 +9,13 @@ const LOCATIONS = DELIVERY_LOCATIONS
 interface LocationStepProps {
     onConfirm: (city: string, district: string) => void
     onClose: () => void
+    /** Dès qu’une ville est sélectionnée, indique si la livraison sera inter-ville (alerte avant le quartier). */
+    isInterUrbanForCity?: (displayCity: string) => boolean
 }
 
-export default function LocationStep({ onConfirm, onClose }: LocationStepProps) {
+export default function LocationStep({ onConfirm, onClose, isInterUrbanForCity }: LocationStepProps) {
     const [city, setCity] = useState('')
+    const showInterUrbanWarning = Boolean(city && isInterUrbanForCity?.(city))
 
     return (
         <div className="animate-fadeIn">
@@ -43,6 +47,19 @@ export default function LocationStep({ onConfirm, onClose }: LocationStepProps) 
             {/* Choix du quartier */}
             {city && (
                 <div className="animate-fadeIn">
+                    {showInterUrbanWarning && (
+                        <div
+                            className="mb-4 p-3.5 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-left"
+                            role="alert"
+                        >
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-200 mb-1.5">
+                                Inter-ville
+                            </p>
+                            <p className="text-[11px] font-bold text-amber-900 dark:text-amber-100 leading-snug">
+                                {INTER_URBAN_AT_LOCATION_WARNING}
+                            </p>
+                        </div>
+                    )}
                     <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] text-center mb-3">
                         Quartier de retrait à {city}
                     </p>

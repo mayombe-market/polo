@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
+import { orderCityToProfileCity } from '@/lib/deliveryLocation'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -209,7 +210,7 @@ export default function CompleteProfilePage() {
                 last_name: lastName.trim(),
                 full_name: `${firstName.trim()} ${lastName.trim()}`,
                 phone: fullPhone,
-                city: city.trim(),
+                city: orderCityToProfileCity(city.trim()),
                 country: selectedCountry.code,
                 role,
                 ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),

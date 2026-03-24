@@ -66,6 +66,8 @@ export default function ProductDetailPage() {
     const [negotiatedPrice, setNegotiatedPrice] = useState<number | null>(null)
     const [sellerExpired, setSellerExpired] = useState(false)
     const [sizeGuideOpen, setSizeGuideOpen] = useState(false)
+    /** Pour masquer « Contacter » côté admin sur les annonces immo (messages reçus en admin). */
+    const [viewerIsAdmin, setViewerIsAdmin] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -90,6 +92,17 @@ export default function ProductDetailPage() {
                 const { user: currentUser } = await safeGetUser(supabase)
                 if (cancelled) return
                 setUser(currentUser ?? null)
+
+                if (currentUser?.id) {
+                    const { data: viewerProfile } = await supabase
+                        .from('profiles')
+                        .select('role')
+                        .eq('id', currentUser.id)
+                        .maybeSingle()
+                    if (!cancelled) setViewerIsAdmin(viewerProfile?.role === 'admin')
+                } else {
+                    setViewerIsAdmin(false)
+                }
 
                 /** Produit : PostgREST ne lève pas — on transforme erreur / ligne absente en contrôle explicite. */
                 const productOutcome = await withRetry(
@@ -383,6 +396,8 @@ export default function ProductDetailPage() {
                                 sellerId={product.seller_id}
                                 productId={product.id}
                                 user={user}
+                                realEstateContactAdmin={isRealEstateProduct(product)}
+                                viewerIsAdmin={viewerIsAdmin}
                             />
                             <FollowButton
                                 sellerId={product.seller_id}
@@ -453,7 +468,7 @@ export default function ProductDetailPage() {
                     )}
                     {isRealEstateProduct(product) && !showNegotiationBlock && (
                         <p className="mb-4 text-sm font-bold text-amber-700 dark:text-amber-300">
-                            {sharePriceText} — contactez l’annonceur via le bouton message.
+                            {sharePriceText} — contactez l’équipe Mayombe Market (administration) via le bouton message.
                         </p>
                     )}
 
@@ -759,10 +774,16 @@ export default function ProductDetailPage() {
             ) : isRealEstateProduct(product) ? (
                 <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-amber-200/60 dark:border-amber-800/40 px-5 py-3.5 pb-6 flex flex-col gap-2 z-40">
                     <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 font-semibold">
-                        Annonce immobilière — échangez avec l’annonceur pour visiter ou négocier.
+                        Annonce immobilière — écrivez à l’administration Mayombe Market pour une visite ou une mise en relation.
                     </p>
                     <div className="flex justify-center w-full" onClick={(e) => e.stopPropagation()}>
-                        <MessageButton sellerId={product.seller_id} productId={product.id} user={user} />
+                        <MessageButton
+                            sellerId={product.seller_id}
+                            productId={product.id}
+                            user={user}
+                            realEstateContactAdmin
+                            viewerIsAdmin={viewerIsAdmin}
+                        />
                     </div>
                 </div>
             ) : (

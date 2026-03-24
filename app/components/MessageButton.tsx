@@ -2,13 +2,23 @@
 
 import { useState } from 'react'
 import { MessageCircle, Loader2 } from 'lucide-react'
-import { getOrCreateConversation } from '@/app/actions/messages'
+import { getOrCreateConversation, getOrCreateRealEstateAdminConversation } from '@/app/actions/messages'
 import { useRouter } from 'next/navigation'
 
-const MessageButton = ({ sellerId, productId, user }: {
+const MessageButton = ({
+    sellerId,
+    productId,
+    user,
+    /** Immobilier : la conversation est créée avec un compte `role = admin`, pas l’annonceur. */
+    realEstateContactAdmin,
+    viewerIsAdmin,
+}: {
     sellerId: string
     productId?: string
     user: any
+    realEstateContactAdmin?: boolean
+    /** Masque le bouton pour les admins (ils reçoivent les demandes ailleurs). */
+    viewerIsAdmin?: boolean
 }) => {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
@@ -20,15 +30,26 @@ const MessageButton = ({ sellerId, productId, user }: {
         e.stopPropagation()
 
         if (!user) {
-            alert('Connectez-vous pour contacter le vendeur.')
+            alert(
+                realEstateContactAdmin
+                    ? 'Connectez-vous pour contacter l’équipe Mayombe Market.'
+                    : 'Connectez-vous pour contacter le vendeur.',
+            )
             return
         }
 
         if (isOwnProduct) return
 
+        if (realEstateContactAdmin && !productId) {
+            alert('Annonce invalide pour la messagerie.')
+            return
+        }
+
         setLoading(true)
         try {
-            const result = await getOrCreateConversation(sellerId, productId)
+            const result = realEstateContactAdmin
+                ? await getOrCreateRealEstateAdminConversation(productId!)
+                : await getOrCreateConversation(sellerId, productId)
 
             if (result.error) {
                 alert(result.error)
@@ -36,7 +57,6 @@ const MessageButton = ({ sellerId, productId, user }: {
             }
 
             if (result.conversation) {
-                // Rediriger vers le dashboard acheteur avec l'onglet messages
                 router.push(`/account/dashboard?tab=messages&conv=${result.conversation.id}`)
             }
         } catch (err) {
@@ -48,6 +68,8 @@ const MessageButton = ({ sellerId, productId, user }: {
     }
 
     if (isOwnProduct) return null
+
+    if (realEstateContactAdmin && viewerIsAdmin) return null
 
     return (
         <button

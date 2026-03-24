@@ -81,21 +81,29 @@ export default function CartPage() {
         [cart]
     )
     const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
+    /** False tant que les villes vendeurs du panier n’ont pas été chargées (évite un faux « inter-ville »). */
+    const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
 
     useEffect(() => {
         if (sellerIds.length === 0) {
             setSellerCities({})
+            setSellerCitiesReady(true)
             return
         }
+        setSellerCitiesReady(false)
         let cancelled = false
         ;(async () => {
             const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
-            if (cancelled || !data) return
+            if (cancelled) return
             const map: Record<string, string | null> = {}
-            for (const row of data as { id: string; city: string | null }[]) {
+            for (const sid of sellerIds) {
+                map[sid] = null
+            }
+            for (const row of (data || []) as { id: string; city: string | null }[]) {
                 map[row.id] = row.city ?? null
             }
             setSellerCities(map)
+            setSellerCitiesReady(true)
         })()
         return () => {
             cancelled = true
@@ -108,6 +116,15 @@ export default function CartPage() {
                 buyerCity,
                 sellerIds.map((sid) => sellerCities[sid])
             )
+    )
+
+    const isInterUrbanForSelectedCity = useCallback(
+        (displayCity: string) =>
+            orderRequiresInterUrbanDelivery(
+                displayCity,
+                sellerIds.map((sid) => sellerCities[sid])
+            ),
+        [sellerIds, sellerCities]
     )
 
     // Check user on first interaction (avec timeout)
@@ -158,6 +175,11 @@ export default function CartPage() {
     }
 
     const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
+        if (sellerIds.length > 0 && !sellerCitiesReady) {
+            alert('Chargement des informations vendeurs… Réessayez dans une seconde.')
+            return
+        }
+
         setCity(selectedCity)
         setDistrict(selectedDistrict)
 
@@ -457,9 +479,16 @@ export default function CartPage() {
 
                                 <button
                                     onClick={handleCheckout}
-                                    className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl uppercase text-xs tracking-[0.2em] shadow-lg shadow-orange-200 dark:shadow-none hover:bg-orange-600 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+                                    disabled={sellerIds.length > 0 && !sellerCitiesReady}
+                                    className="w-full bg-orange-500 text-white font-black py-5 rounded-2xl uppercase text-xs tracking-[0.2em] shadow-lg shadow-orange-200 dark:shadow-none hover:bg-orange-600 transition-all flex items-center justify-center gap-2 active:scale-[0.98] disabled:opacity-50 disabled:pointer-events-none"
                                 >
-                                    Passer la commande <ArrowRight size={16} />
+                                    {sellerIds.length > 0 && !sellerCitiesReady ? (
+                                        <>Préparation des frais…</>
+                                    ) : (
+                                        <>
+                                            Passer la commande <ArrowRight size={16} />
+                                        </>
+                                    )}
                                 </button>
 
                                 <p className="text-[10px] text-center text-slate-400 mt-6 font-bold uppercase tracking-widest">
@@ -516,7 +545,11 @@ export default function CartPage() {
 
                         {/* ÉTAPES */}
                         {step === 'location' && (
-                            <LocationStep onConfirm={handleLocationConfirm} onClose={closeCheckout} />
+                            <LocationStep
+                                onConfirm={handleLocationConfirm}
+                                onClose={closeCheckout}
+                                isInterUrbanForCity={isInterUrbanForSelectedCity}
+                            />
                         )}
                         {step === 'delivery_mode' && (
                             <DeliveryModeStep onSelect={handleDeliverySelect} onBack={() => setStep('location')} />

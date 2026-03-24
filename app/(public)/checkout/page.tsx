@@ -16,7 +16,11 @@ import {
     INTER_URBAN_DELIVERY_TIMELINE,
     INTER_URBAN_PRE_PAYMENT_ALERT,
 } from '@/lib/checkoutSchema'
-import { orderRequiresInterUrbanDelivery, profileCityToCheckoutDisplay } from '@/lib/deliveryLocation'
+import {
+    orderRequiresInterUrbanDelivery,
+    profileCityToCheckoutDisplay,
+    INTER_URBAN_AT_LOCATION_WARNING,
+} from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
@@ -58,21 +62,28 @@ export default function CheckoutPage() {
         [cart]
     )
     const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
+    const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
 
     useEffect(() => {
         if (sellerIds.length === 0) {
             setSellerCities({})
+            setSellerCitiesReady(true)
             return
         }
+        setSellerCitiesReady(false)
         let cancelled = false
         ;(async () => {
             const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
-            if (cancelled || !data) return
+            if (cancelled) return
             const map: Record<string, string | null> = {}
-            for (const row of data as { id: string; city: string | null }[]) {
+            for (const sid of sellerIds) {
+                map[sid] = null
+            }
+            for (const row of (data || []) as { id: string; city: string | null }[]) {
                 map[row.id] = row.city ?? null
             }
             setSellerCities(map)
+            setSellerCitiesReady(true)
         })()
         return () => {
             cancelled = true
@@ -146,6 +157,11 @@ export default function CheckoutPage() {
 
     const onSubmit = async (formData: CheckoutType) => {
         if (cart.length === 0) return alert("Votre panier est vide")
+
+        if (sellerIds.length > 0 && !sellerCitiesReady) {
+            alert('Chargement des informations vendeurs… Réessayez dans une seconde.')
+            return
+        }
 
         if (checkoutInterUrban && !interUrbanPayAck) {
             return
@@ -283,6 +299,20 @@ export default function CheckoutPage() {
                                     {errors.district && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.district.message}</p>}
                                 </div>
                             </div>
+
+                            {checkoutInterUrban && watchedCity ? (
+                                <div
+                                    className="p-4 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40"
+                                    role="alert"
+                                >
+                                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-800 dark:text-amber-200 mb-1">
+                                        Inter-ville
+                                    </p>
+                                    <p className="text-[11px] font-bold text-amber-900 dark:text-amber-100 leading-snug">
+                                        {INTER_URBAN_AT_LOCATION_WARNING}
+                                    </p>
+                                </div>
+                            ) : null}
 
                             <input {...register('landmark')} placeholder="Point de repère (ex: Derrière l'école...)" className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
 
@@ -515,7 +545,12 @@ export default function CheckoutPage() {
 
                         <button
                             type="submit"
-                            disabled={loading || cart.length === 0 || (checkoutInterUrban && !interUrbanPayAck)}
+                            disabled={
+                                loading ||
+                                cart.length === 0 ||
+                                (sellerIds.length > 0 && !sellerCitiesReady) ||
+                                (checkoutInterUrban && !interUrbanPayAck)
+                            }
                             className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Confirmer la commande <ArrowRight size={20} /></>}

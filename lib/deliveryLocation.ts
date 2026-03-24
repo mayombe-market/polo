@@ -60,21 +60,31 @@ export function isLocalDelivery(
 }
 
 /**
- * True si au moins un vendeur est dans une ville différente de la ville de livraison de l’acheteur,
- * ou si la ville d’un vendeur est inconnue (on applique alors le forfait inter-ville côté checkout).
+ * True si au moins un vendeur a une ville **connue** et **différente** de la ville de livraison.
+ * Si la ville d’un vendeur est vide / non renseignée, on ignore ce vendeur (pas d’inter-ville « par défaut »).
+ * Côté UI, attendre que les `city` vendeurs soient chargées depuis l’API : tant que la valeur est `undefined`,
+ * l’ancienne logique pouvait tout classer en inter-ville à tort.
  */
 export function orderRequiresInterUrbanDelivery(
     buyerDeliveryCity: string | null | undefined,
     sellerCities: (string | null | undefined)[]
 ): boolean {
     const bCanon = normalizeToServiceCityCode(buyerDeliveryCity)
-    const b = bCanon ?? normalizeCityName(buyerDeliveryCity).replace(/[\s_]+/g, '-')
-    if (!b) return false
+    const bFallback = normalizeCityName(buyerDeliveryCity).replace(/[\s_]+/g, '-')
+    if (!bCanon && !bFallback) return false
+
     for (const sc of sellerCities) {
         const sCanon = normalizeToServiceCityCode(sc)
-        const s = sCanon ?? normalizeCityName(sc).replace(/[\s_]+/g, '-')
-        if (!s) return true
-        if (s !== b) return true
+        const sFallback = normalizeCityName(sc ?? '').replace(/[\s_]+/g, '-')
+        if (!sCanon && !sFallback) continue
+
+        if (bCanon && sCanon) {
+            if (bCanon !== sCanon) return true
+            continue
+        }
+        const bKey = bCanon ?? bFallback
+        const sKey = sCanon ?? sFallback
+        if (bKey !== sKey) return true
     }
     return false
 }
@@ -99,3 +109,7 @@ export function profileCityToCheckoutDisplay(city: string | null | undefined): s
 /** Message UX résumé panier (inter-ville). */
 export const INTER_URBAN_DELIVERY_HINT =
     'Livraison inter-ville : forfait 3 500 FCFA, délais 24 h à 96 h. Vous confirmerez avant le paiement.'
+
+/** Alerte dès le choix de la ville au point de retrait (avant le quartier). */
+export const INTER_URBAN_AT_LOCATION_WARNING =
+    'Attention : cette commande est en livraison inter-ville. Forfait 3 500 FCFA, délais 24 h à 96 h. Vous pourrez confirmer à l’étape suivante.'

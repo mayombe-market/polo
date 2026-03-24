@@ -329,6 +329,9 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
                             <LocationStep
                                 onConfirm={handleLocationConfirm}
                                 onClose={closeModal}
+                                isInterUrbanForCity={(displayCity) =>
+                                    orderRequiresInterUrbanDelivery(displayCity, [shop?.city])
+                                }
                             />
                         )}
 

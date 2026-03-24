@@ -3,6 +3,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createNotification } from '@/app/actions/notifications'
+import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -59,6 +60,56 @@ export async function getOrCreateConversation(sellerId: string, productId?: stri
 
     if (error) return { error: error.message }
     return { success: true, conversation }
+}
+
+/**
+ * Immobilier : ouvre une conversation avec **un compte administrateur** (`profiles.role = 'admin'`),
+ * pas avec l’annonceur. Le premier admin (tri par `id`) sert de boîte de réception.
+ */
+export async function getOrCreateRealEstateAdminConversation(productId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    const { data: product, error: productError } = await supabase
+        .from('products')
+        .select('id, seller_id, category')
+        .eq('id', productId)
+        .single()
+
+    if (productError || !product) return { error: 'Annonce introuvable.' }
+
+    if ((product.category || '').trim() !== IMMOBILIER_CATEGORY) {
+        return { error: 'Cette annonce n’est pas une annonce immobilière.' }
+    }
+
+    if (user.id === product.seller_id) {
+        return { error: 'Vous ne pouvez pas vous envoyer un message à vous-même.' }
+    }
+
+    const { data: adminRow } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('role', 'admin')
+        .order('id', { ascending: true })
+        .limit(1)
+        .maybeSingle()
+
+    const adminId = adminRow?.id
+    if (!adminId) {
+        return {
+            error: 'Messagerie indisponible : aucun compte administrateur n’est configuré (rôle admin dans les profils).',
+        }
+    }
+
+    if (user.id === adminId) {
+        return {
+            error: 'En tant qu’administrateur, gérez les demandes depuis votre tableau de bord (messages).',
+        }
+    }
+
+    return getOrCreateConversation(adminId, productId)
 }
 
 // Envoyer un message

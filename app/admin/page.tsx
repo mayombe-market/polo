@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { withTimeout } from '@/lib/supabase-utils'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 import { useRealtime } from '@/hooks/useRealtime'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
@@ -72,7 +73,7 @@ export default function AdminDashboard() {
                 supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'logistician'),
                 supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'delivered').eq('payout_status', 'pending'),
                 supabase.from('orders').select('*').neq('order_type', 'subscription').order('created_at', { ascending: false }).limit(5),
-            ]), 15000)
+            ]), NETWORK_TIMEOUT_MS)
 
             const revenueToday = (ordersRes.data || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
 

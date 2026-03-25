@@ -42,6 +42,11 @@ export type ProductCardProps = {
      * Si `false` / omis, on déduit un état « pas encore prêt » à partir des champs obligatoires.
      */
     isLoading?: boolean
+    /**
+     * Premiers emplacements (ex. 10 premiers) : pas de squelette gris — cadre vide qui se remplit ;
+     * image en `loading="eager"` une fois les données là.
+     */
+    aboveFold?: boolean
 }
 
 const PLACEHOLDER_IMG = '/placeholder-image.svg'
@@ -58,6 +63,20 @@ function isProductDisplayReady(p: ProductCardProduct | null | undefined): boolea
 function resolveImageSrc(p: ProductCardProduct): string {
     const raw = (p.img || p.image_url || '').trim()
     return raw.length > 0 ? raw : PLACEHOLDER_IMG
+}
+
+/** Placeholder discret (réseau lent) : réserve l’espace sans bloc gris animé. */
+function ProductCardEmptyPlaceholder() {
+    return (
+        <div
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800"
+            aria-busy="true"
+            aria-label="Emplacement produit"
+        >
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-white dark:bg-slate-950 min-h-[140px]" />
+            <div className="mt-4 px-2 pb-2 h-14" />
+        </div>
+    )
 }
 
 /** Squelette : mêmes proportions que la carte finale pour éviter les CLS. */
@@ -97,7 +116,13 @@ function ProductCardPending() {
     )
 }
 
-function ProductCardInner({ product }: { product: ProductCardProduct }) {
+function ProductCardInner({
+    product,
+    aboveFold = false,
+}: {
+    product: ProductCardProduct
+    aboveFold?: boolean
+}) {
     const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
     const hasPromo = isPromoActive(product as Parameters<typeof isPromoActive>[0])
     const basePrice = typeof product.price === 'number' && Number.isFinite(product.price) ? product.price : 0
@@ -124,6 +149,7 @@ function ProductCardInner({ product }: { product: ProductCardProduct }) {
                     fill
                     sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
                     quality={70}
+                    loading={aboveFold ? 'eager' : undefined}
                     className="object-cover transition-transform duration-700 group-hover:scale-110"
                 />
 
@@ -193,28 +219,29 @@ function ProductCardInner({ product }: { product: ProductCardProduct }) {
     )
 }
 
-function ProductCard({ product, isLoading = false }: ProductCardProps) {
+function ProductCard({ product, isLoading = false, aboveFold = false }: ProductCardProps) {
     // 1) Chargement explicite côté parent
     if (isLoading) {
-        return <ProductCardSkeleton />
+        return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardSkeleton />
     }
 
     // 2) Objet absent
     if (product == null) {
-        return <ProductCardSkeleton />
+        return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardSkeleton />
     }
 
     // 3) Données encore incomplètes → pas de carte « vide » ni de lien invalide
     if (!isProductDisplayReady(product)) {
-        return <ProductCardPending />
+        return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardPending />
     }
 
     // 4) À ce stade id / name / price sont garantis pour l’affichage métier
-    return <ProductCardInner product={product} />
+    return <ProductCardInner product={product} aboveFold={aboveFold} />
 }
 
 const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
     if (prev.isLoading !== next.isLoading) return false
+    if (prev.aboveFold !== next.aboveFold) return false
     if (prev.isLoading || next.isLoading) return prev.isLoading === next.isLoading
 
     const a = prev.product

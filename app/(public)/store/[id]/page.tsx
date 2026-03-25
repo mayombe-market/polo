@@ -50,8 +50,9 @@ import SellerTabs from '@/app/components/SellerTabs'
 import SellerReviewsList from '@/app/components/SellerReviewsList'
 import { Loader2 } from 'lucide-react'
 
-/** Délai max par requête Supabase (ms). */
-const QUERY_TIMEOUT_MS = 10_000
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
+
+const QUERY_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
 /** 1 tentative initiale + 3 relances minimum. */
 const FETCH_MAX_ATTEMPTS = 4
@@ -387,8 +388,8 @@ export default function StorePublicPage() {
                         </div>
                     ) : products.length > 0 ? (
                         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                            {products.map((p: any) => (
-                                <ProductCard key={p.id} product={p} />
+                            {products.map((p: any, index: number) => (
+                                <ProductCard key={p.id} product={p} aboveFold={index < 10} />
                             ))}
                         </div>
                     ) : (

@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import BuyerDashboardClient from '@/app/components/BuyerDashboardClient'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 export default async function AccountDashboard() {
     const cookieStore = await cookies()
@@ -22,7 +23,9 @@ export default async function AccountDashboard() {
     try {
         const { data } = await Promise.race([
             supabase.auth.getUser(),
-            new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Auth timeout')), 5000)),
+            new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error('Auth timeout')), NETWORK_TIMEOUT_MS),
+            ),
         ])
         user = data?.user ?? null
     } catch {}

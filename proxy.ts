@@ -9,6 +9,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
 import { getContentSecurityPolicy } from '@/lib/content-security-policy'
 import { isValidServiceCity } from '@/lib/deliveryLocation'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** Conserve les cookies de session rafraîchis (setAll) sur une autre réponse. */
 function withRefreshedSessionCookies(sessionResponse: NextResponse, response: NextResponse) {
@@ -102,14 +103,14 @@ export async function proxy(request: NextRequest) {
                         request,
                     })
                     cookiesToSet.forEach(({ name, value, options }) =>
-                        supabaseResponse.cookies.set(name, value, { ...options, httpOnly: false })
+                        supabaseResponse.cookies.set(name, value, options ?? {})
                     )
                 },
             },
         }
     )
 
-    const withTimeout = <T,>(promise: PromiseLike<T>, ms = 5000): Promise<T> =>
+    const withTimeout = <T,>(promise: PromiseLike<T>, ms = NETWORK_TIMEOUT_MS): Promise<T> =>
         Promise.race([
             Promise.resolve(promise),
             new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Timeout')), ms)),
@@ -129,7 +130,7 @@ export async function proxy(request: NextRequest) {
         error?: Error
     }
 
-    const serverSafeGetUser = async (client: any, timeoutMs = 5000): Promise<ServerSafeGetUserResult> => {
+    const serverSafeGetUser = async (client: any, timeoutMs = NETWORK_TIMEOUT_MS): Promise<ServerSafeGetUserResult> => {
         const timeoutError = new Error('Auth timeout')
 
         try {
@@ -190,18 +191,11 @@ export async function proxy(request: NextRequest) {
                 return finish(redirectWithSession(supabaseResponse, dest))
             }
         } catch (err: any) {
+            // Réseau lent : ne pas bloquer la navigation avec ?auth_error=…
             if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
-                return finish(
-                    nextWithSearchParams(request, supabaseResponse, (u) =>
-                        u.searchParams.set('auth_error', 'city-check-timeout')
-                    )
-                )
+                return finish(supabaseResponse)
             }
-            return finish(
-                nextWithSearchParams(request, supabaseResponse, (u) =>
-                    u.searchParams.set('auth_error', 'city-check-error')
-                )
-            )
+            return finish(supabaseResponse)
         }
     }
 
@@ -211,6 +205,9 @@ export async function proxy(request: NextRequest) {
         }
 
         if (!user && authStatus !== 'no-user') {
+            if (authStatus === 'timeout' || authStatus === 'network-error') {
+                return finish(supabaseResponse)
+            }
             return finish(
                 nextWithSearchParams(request, supabaseResponse, (u) => u.searchParams.set('auth_error', authStatus))
             )
@@ -227,13 +224,9 @@ export async function proxy(request: NextRequest) {
                 return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))
         } catch (err: any) {
             if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
-                return finish(
-                    nextWithSearchParams(request, supabaseResponse, (u) =>
-                        u.searchParams.set('auth_error', 'profile-timeout')
-                    )
-                )
+                return finish(supabaseResponse)
             }
-            return finish(redirectWithSession(supabaseResponse, new URL('/?timeout=1', request.url)))
+            return finish(supabaseResponse)
         }
     }
 
@@ -243,6 +236,9 @@ export async function proxy(request: NextRequest) {
         }
 
         if (!user && authStatus !== 'no-user') {
+            if (authStatus === 'timeout' || authStatus === 'network-error') {
+                return finish(supabaseResponse)
+            }
             return finish(
                 nextWithSearchParams(request, supabaseResponse, (u) => u.searchParams.set('auth_error', authStatus))
             )
@@ -259,13 +255,9 @@ export async function proxy(request: NextRequest) {
                 return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))
         } catch (err: any) {
             if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
-                return finish(
-                    nextWithSearchParams(request, supabaseResponse, (u) =>
-                        u.searchParams.set('auth_error', 'profile-timeout')
-                    )
-                )
+                return finish(supabaseResponse)
             }
-            return finish(redirectWithSession(supabaseResponse, new URL('/?timeout=1', request.url)))
+            return finish(supabaseResponse)
         }
     }
 
@@ -275,6 +267,9 @@ export async function proxy(request: NextRequest) {
         }
 
         if (!user && authStatus !== 'no-user') {
+            if (authStatus === 'timeout' || authStatus === 'network-error') {
+                return finish(supabaseResponse)
+            }
             return finish(
                 nextWithSearchParams(request, supabaseResponse, (u) => u.searchParams.set('auth_error', authStatus))
             )
@@ -288,13 +283,9 @@ export async function proxy(request: NextRequest) {
                 return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))
         } catch (err: any) {
             if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
-                return finish(
-                    nextWithSearchParams(request, supabaseResponse, (u) =>
-                        u.searchParams.set('auth_error', 'profile-timeout')
-                    )
-                )
+                return finish(supabaseResponse)
             }
-            return finish(redirectWithSession(supabaseResponse, new URL('/?timeout=1', request.url)))
+            return finish(supabaseResponse)
         }
     }
 
@@ -304,6 +295,9 @@ export async function proxy(request: NextRequest) {
         }
 
         if (!user && authStatus !== 'no-user') {
+            if (authStatus === 'timeout' || authStatus === 'network-error') {
+                return finish(supabaseResponse)
+            }
             return finish(
                 nextWithSearchParams(request, supabaseResponse, (u) => u.searchParams.set('auth_error', authStatus))
             )

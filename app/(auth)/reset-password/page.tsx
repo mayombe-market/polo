@@ -6,9 +6,10 @@ import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { withTimeout } from '@/lib/withTimeout'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** getSession après recovery : réseaux lents / mobile. */
-const AUTH_WAIT_MS = 20_000
+const AUTH_WAIT_MS = NETWORK_TIMEOUT_MS
 /**
  * updateUser vers GoTrue peut dépasser 25s (latence, Cloudflare, réseau instable).
  * Ne pas confondre avec les timeouts middleware (inchangés).

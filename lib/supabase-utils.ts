@@ -12,6 +12,7 @@
  */
 
 import { withRetry, SUPABASE_FETCH_MIN_TOTAL_ATTEMPTS } from './supabase-browser'
+import { NETWORK_TIMEOUT_MS } from './networkTimeouts'
 
 // ─── Constantes & logging ───────────────────────────────────────────────────
 
@@ -193,10 +194,14 @@ export async function safeGetUser<UserType = any>(
  * préférer {@link withQueryTimeoutRetry}.
  *
  * @param queryPromise - Thenable Supabase (ou toute promesse)
- * @param timeoutMs - Délai max (défaut 10 s)
+ * @param timeoutMs - Délai max (défaut {@link NETWORK_TIMEOUT_MS})
  * @param label - Libellé pour les logs (défaut `withTimeout`)
  */
-export async function withTimeout<T = unknown>(queryPromise: PromiseLike<T>, timeoutMs = 10000, label = 'withTimeout'): Promise<T> {
+export async function withTimeout<T = unknown>(
+    queryPromise: PromiseLike<T>,
+    timeoutMs = NETWORK_TIMEOUT_MS,
+    label = 'withTimeout',
+): Promise<T> {
     try {
         return await Promise.race([
             Promise.resolve(queryPromise),
@@ -229,7 +234,7 @@ export interface WithQueryTimeoutRetryOptions {
  */
 export async function withQueryTimeoutRetry<T = unknown>(
     execute: () => PromiseLike<T>,
-    timeoutMs = 10000,
+    timeoutMs = NETWORK_TIMEOUT_MS,
     options?: WithQueryTimeoutRetryOptions,
 ): Promise<T> {
     const label = options?.label ?? 'withQueryTimeoutRetry'

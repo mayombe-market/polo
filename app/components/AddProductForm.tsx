@@ -36,6 +36,7 @@ import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
 } from 'lucide-react'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** Contexte minimal pour la validation (module-scope = pas de TDZ). */
 export type ProductFormValidationContext = {
@@ -184,8 +185,8 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-/** Délai max par fichier upload Storage + action serveur (consigne sécurité : 120 s). */
-const UPLOAD_TIMEOUT_MS = 120_000
+/** Délai max par fichier upload Storage + action serveur (aligné réseaux à forte latence). */
+const UPLOAD_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
 /** 1 tentative + minimum 3 relances sur erreurs réseau / Storage (hors timeout). */
 const UPLOAD_NETWORK_MAX_ATTEMPTS = 4
@@ -193,29 +194,26 @@ const UPLOAD_NETWORK_MAX_ATTEMPTS = 4
 /** 1 tentative + 3 relances si l’action serveur expire (timeout). */
 const CREATE_PRODUCT_MAX_ATTEMPTS = 4
 
-/** Compression JPEG/PNG (évite fichiers lourds qui bloquent longtemps sur mobile) */
-const COMPRESS_TIMEOUT_MS = 60_000
+/** Compression JPEG/PNG */
+const COMPRESS_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
-/** Action serveur createProduct — même plafond 120 s */
-const CREATE_PRODUCT_TIMEOUT_MS = 120_000
+/** Action serveur createProduct */
+const CREATE_PRODUCT_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
-/** 1er essai getSession ; si le client Supabase est « coincé », on tente un repli localStorage + setSession */
-const SESSION_VERIFY_TIMEOUT_MS = 22_000
+/** getSession / refresh — ne pas couper trop tôt sur réseau lent */
+const SESSION_VERIFY_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
-const SESSION_RECOVER_SET_SESSION_TIMEOUT_MS = 25_000
-const SESSION_RECOVER_GET_USER_TIMEOUT_MS = 18_000
-const SESSION_SECOND_GETSESSION_TIMEOUT_MS = 12_000
+const SESSION_RECOVER_SET_SESSION_TIMEOUT_MS = NETWORK_TIMEOUT_MS
+const SESSION_RECOVER_GET_USER_TIMEOUT_MS = NETWORK_TIMEOUT_MS
+const SESSION_SECOND_GETSESSION_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
 /** Si le JWT expire dans plus de 2 min, on ne force pas refreshSession (moins d’appels réseau, moins de risques de blocage) */
 const SESSION_REFRESH_ONLY_IF_EXPIRES_WITHIN_MS = 120_000
 
 const LOGIN_REDIRECT = `/?redirect=${encodeURIComponent('/vendor/dashboard?tab=products')}`
 
-const MSG_SESSION_VERIFY_TIMEOUT =
-    'La session n’a pas pu être lue à temps. Astuces : réessayez en navigation normale (pas « privée »), autre réseau/Wi‑Fi, ou déconnectez-vous puis reconnectez-vous. Si la console mentionne un cookie « __cf_bm » et domaine invalide, vérifiez chez Cloudflare que l’URL du site (avec ou sans www) correspond bien au domaine configuré.'
-
 const MSG_SLOW_UPLOAD =
-    'Connexion très lente : l’envoi d’une image a dépassé 2 minutes (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
+    'Connexion très lente : l’envoi d’une image a dépassé le délai imparti (après une nouvelle tentative automatique). Réessayez avec le Wi‑Fi, des photos plus légères, ou plus tard.'
 
 const MSG_SESSION_EXPIRED_RECONNECT = 'Session expirée, reconnexion en cours...'
 
@@ -455,7 +453,7 @@ function logStorageOrPostgrestError(context: string, err: unknown) {
 async function ensureSessionBeforePublish(
     supabase: ReturnType<typeof getSupabaseBrowserClient>,
     propSellerId?: string,
-): Promise<{ userId: string } | { redirect: true } | { abort: true }> {
+): Promise<{ userId: string } | { redirect: true }> {
     let initial: Session | null = null
     /** Après repli localStorage, le 2e getSession() peut aussi bloquer — on évite de rappeler inutilement */
     let skipSecondGetSession = false
@@ -479,8 +477,21 @@ async function ensureSessionBeforePublish(
                 initial = recovered
                 skipSecondGetSession = true
             } else {
-                alert(MSG_SESSION_VERIFY_TIMEOUT)
-                return { abort: true }
+                const fallbackId =
+                    (propSellerId && propSellerId.trim()) ||
+                    readPersistedSupabaseAuthFromStorage()?.user?.id ||
+                    ''
+                if (fallbackId) {
+                    console.warn(
+                        '[AddProductForm] getSession indisponible (timeout) — poursuite de la publication avec l’identifiant connu (réseau lent).',
+                    )
+                    return { userId: fallbackId }
+                }
+                console.warn(
+                    '[AddProductForm] getSession timeout sans identifiant de secours — redirection connexion.',
+                )
+                window.location.href = LOGIN_REDIRECT
+                return { redirect: true }
             }
         } else {
             throw e
@@ -940,7 +951,7 @@ export default function AddProductForm({
             setPublishLabel('Vérification de la session…')
             const gate = await ensureSessionBeforePublish(supabase, sellerId)
             if (!ownsPublishUi()) return
-            if ('redirect' in gate || 'abort' in gate) {
+            if ('redirect' in gate) {
                 return
             }
             const storageUserId = gate.userId

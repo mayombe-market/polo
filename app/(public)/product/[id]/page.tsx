@@ -110,7 +110,6 @@ export default function ProductDetailPage() {
                     async () => {
                         const r = await withTimeout(
                             supabase.from('products').select('*').eq('id', productId.trim()).single(),
-                            8000,
                         )
                         if (r.error) {
                             if (r.error.code === 'PGRST116') {
@@ -151,7 +150,6 @@ export default function ProductDetailPage() {
                                 )
                                 .eq('id', prod.seller_id)
                                 .maybeSingle(),
-                            8000,
                         )
                         if (r.error) {
                             throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
@@ -176,7 +174,6 @@ export default function ProductDetailPage() {
                         async () => {
                             const { data, error } = await withTimeout(
                                 supabase.rpc('get_product_reviews', { p_product_id: productId.trim() }),
-                                8000,
                             )
                             if (error) {
                                 throw new Error(error.message || 'Erreur RPC get_product_reviews.')

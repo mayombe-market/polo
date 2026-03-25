@@ -182,15 +182,18 @@ function SearchContent() {
                     <div className="flex-1">
                         {loading ? (
                             <div className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-busy="true" aria-label="Chargement des résultats">
-                                {Array.from({ length: 9 }).map((_, i) => (
+                                {Array.from({ length: 10 }).map((_, i) => (
+                                    <ProductCard key={`ph-${i}`} isLoading aboveFold />
+                                ))}
+                                {Array.from({ length: 8 }).map((_, i) => (
                                     <ProductCard key={`sk-${i}`} isLoading />
                                 ))}
                             </div>
                         ) : products.length > 0 ? (
                             <>
                                 <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-                                    {visibleProducts.map((product) => (
-                                        <ProductCard key={product.id} product={product} />
+                                    {visibleProducts.map((product, index) => (
+                                        <ProductCard key={product.id} product={product} aboveFold={index < 10} />
                                     ))}
                                 </div>
                                 {visibleCount < products.length && (

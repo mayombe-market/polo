@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { withTimeout } from '@/lib/supabase-utils'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import ForgotPassword from '@/app/components/ForgotPassword'
 
@@ -232,7 +233,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 const { data, error } = await withTimeout(supabase.auth.signInWithPassword({
                     email,
                     password,
-                }), 10000)
+                }), NETWORK_TIMEOUT_MS)
                 if (error) throw error
 
                 // Remember me
@@ -245,7 +246,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                         .from('profiles')
                         .select('role, full_name, first_name, shop_name, store_name')
                         .eq('id', data.user.id)
-                        .maybeSingle(), 5000)
+                        .maybeSingle(), NETWORK_TIMEOUT_MS)
                     profile = p
                 } catch {
                     // Profil pas encore créé ou timeout — on continue
@@ -268,7 +269,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                     options: {
                         emailRedirectTo: redirectUrl,
                     }
-                }), 10000)
+                }), NETWORK_TIMEOUT_MS)
                 if (error) throw error
 
                 if (data?.user?.identities?.length === 0) {

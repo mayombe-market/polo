@@ -76,6 +76,7 @@ export default function ClientHomePage({
                                 sizes="100vw"
                                 priority={index === 0}
                                 fetchPriority={index === 0 ? 'high' : 'low'}
+                                loading={index < 10 ? 'eager' : undefined}
                                 className="object-cover"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-8">
@@ -101,15 +102,16 @@ export default function ClientHomePage({
                                 className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
                             >
                                 <div className="relative overflow-hidden aspect-square w-full">
-                                    <Image
-                                        src={product.img || product.image_url || '/placeholder-image.svg'}
-                                        alt={product.name}
-                                        fill
-                                        sizes="(max-width: 768px) 50vw, 20vw"
-                                        priority={isLcpCandidate}
-                                        fetchPriority={isLcpCandidate ? 'high' : 'auto'}
-                                        className="object-cover group-hover:scale-110 transition-transform duration-500"
-                                    />
+                            <Image
+                                src={product.img || product.image_url || '/placeholder-image.svg'}
+                                alt={product.name}
+                                fill
+                                sizes="(max-width: 768px) 50vw, 20vw"
+                                priority={isLcpCandidate}
+                                fetchPriority={isLcpCandidate ? 'high' : 'auto'}
+                                loading={index < 10 ? 'eager' : undefined}
+                                className="object-cover group-hover:scale-110 transition-transform duration-500"
+                            />
                                     {hasPromo && (
                                         <div className="absolute top-0 left-0 bg-red-600 text-white font-black uppercase rounded-br-xl px-2.5 py-1.5 flex items-center gap-1 z-10">
                                             <span className="text-[8px]">🔥</span>
@@ -202,8 +204,8 @@ export default function ClientHomePage({
                         </Link>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {promoProducts.map((product: any) => (
-                            <ProductCard key={product.id} product={product} />
+                        {promoProducts.map((product: any, index: number) => (
+                            <ProductCard key={product.id} product={product} aboveFold={index < 10} />
                         ))}
                     </div>
                 </section>
@@ -229,8 +231,8 @@ export default function ClientHomePage({
                         </Link>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {newProducts.map((product) => (
-                            <ProductCard key={product.id} product={product} />
+                        {newProducts.map((product, index) => (
+                            <ProductCard key={product.id} product={product} aboveFold={index < 10} />
                         ))}
                     </div>
                 </section>
@@ -256,8 +258,8 @@ export default function ClientHomePage({
                         </Link>
                     </div>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {popularProducts.map((product) => (
-                            <ProductCard key={product.id} product={product} />
+                        {popularProducts.map((product, index) => (
+                            <ProductCard key={product.id} product={product} aboveFold={index < 10} />
                         ))}
                     </div>
                 </section>
@@ -284,6 +286,7 @@ export default function ClientHomePage({
                                     className="object-cover transition-transform duration-700 group-hover:scale-105"
                                     priority={catIndex === 0}
                                     fetchPriority={catIndex === 0 ? 'high' : 'low'}
+                                    loading={catIndex < 10 ? 'eager' : undefined}
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                             </Link>

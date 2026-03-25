@@ -85,6 +85,29 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    /** Un seul hôte canonique (apex) : évite www / apex mélangés et cookies Cloudflare (__cf_bm) incohérents. */
+    const canonicalHostname = (() => {
+        const base = process.env.NEXT_PUBLIC_SITE_URL?.trim()
+        if (base) {
+            try {
+                return new URL(base).hostname.toLowerCase()
+            } catch {
+                /* ignore */
+            }
+        }
+        return 'mayombe-market.com'
+    })()
+    const reqHost = request.headers.get('host')?.split(':')[0]?.toLowerCase()
+    if (reqHost === `www.${canonicalHostname}`) {
+        const dest = new URL(
+            `${request.nextUrl.pathname}${request.nextUrl.search}`,
+            `https://${canonicalHostname}`,
+        )
+        const res = NextResponse.redirect(dest, 308)
+        applySecurityHeaders(pathname, res)
+        return res
+    }
+
     let supabaseResponse = NextResponse.next({
         request,
     })

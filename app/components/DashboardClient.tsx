@@ -40,6 +40,7 @@ import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
 import { updateProfile } from '@/app/actions/profile'
 import { useRealtime } from '@/hooks/useRealtime'
+import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
@@ -893,9 +894,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         maxWidth: 560, margin: "0 auto", padding: "24px 16px",
                         minHeight: "100vh",
                         background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
-                        fontFamily: "'DM Sans', -apple-system, sans-serif",
+                        fontFamily: SYSTEM_FONT_STACK,
                     }}>
-                        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
                         <button
                             onClick={() => setShowUpgradePricing(false)}
                             style={{
@@ -931,9 +931,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         maxWidth: 560, margin: "0 auto", padding: "24px 16px",
                         minHeight: "100vh",
                         background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
-                        fontFamily: "'DM Sans', -apple-system, sans-serif",
+                        fontFamily: SYSTEM_FONT_STACK,
                     }}>
-                        <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
                         <SubscriptionCheckout
                             plan={upgradeSelectedPlan}
                             billing={upgradeBilling}

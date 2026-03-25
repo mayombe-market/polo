@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { createSubscriptionOrder } from '@/app/actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 
 const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n)
 
@@ -1072,11 +1073,10 @@ export default function SellerUpgradeSystem() {
     <div style={{
       minHeight: "100vh",
       background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
-      fontFamily: "'DM Sans', -apple-system, sans-serif",
+      fontFamily: SYSTEM_FONT_STACK,
       padding: "24px 16px",
       maxWidth: 560, margin: "0 auto",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
       {/* ── SIMULATED DASHBOARD ── */}
       {view === "dashboard" && (

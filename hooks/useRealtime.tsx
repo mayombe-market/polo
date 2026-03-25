@@ -43,7 +43,6 @@ function toRealtimeEvent(table: string, eventType: string): RealtimeEvent | null
 export function RealtimeProvider({ children }: { children: ReactNode }) {
     const { user, profile, supabase } = useAuth()
     const subscribersRef = useRef<SubscriberMap>(new Map())
-    const channelRef = useRef<any>(null)
 
     const dispatch = useCallback((event: RealtimeEvent, payload: any) => {
         const subs = subscribersRef.current.get(event)
@@ -66,7 +65,6 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         }
     }, [])
 
-    // Créer/détruire le canal quand user ou role change
     useEffect(() => {
         if (!user?.id || !profile?.role || !supabase) return
 
@@ -74,51 +72,122 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
         const userId = user.id
         const channelName = `rt-${role}-${userId}`
 
-        // Créer le handler générique
         const handleEvent = (payload: any) => {
             const event = toRealtimeEvent(payload.table, payload.eventType)
             if (event) dispatch(event, payload)
         }
 
-        // Configurer le canal selon le rôle
-        let channel = supabase.channel(channelName)
+        const throttledWarn = (() => {
+            let last = 0
+            return (msg: string) => {
+                const n = Date.now()
+                if (n - last < 120_000) return
+                last = n
+                console.warn('[Realtime]', msg)
+            }
+        })()
 
-        if (role === 'vendor') {
-            channel = channel
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleEvent)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
-        } else if (role === 'buyer' || role === 'client') {
-            channel = channel
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `user_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `user_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `buyer_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `buyer_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
-        } else if (role === 'admin') {
-            channel = channel
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleEvent)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendor_verifications' }, handleEvent)
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vendor_verifications' }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
-        } else if (role === 'logistician') {
-            channel = channel
-                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
-                .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+        let cancelled = false
+        let reconnectTimer: ReturnType<typeof setTimeout> | undefined
+        let reconnectPending = false
+        let attempt = 0
+        let activeChannel: ReturnType<typeof supabase.channel> | null = null
+
+        function buildChannel() {
+            let channel = supabase.channel(channelName)
+
+            if (role === 'vendor') {
+                channel = channel
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `seller_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+            } else if (role === 'buyer' || role === 'client') {
+                channel = channel
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `user_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `user_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'negotiations', filter: `buyer_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'negotiations', filter: `buyer_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+            } else if (role === 'admin') {
+                channel = channel
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'vendor_verifications' }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'vendor_verifications' }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+            } else if (role === 'logistician') {
+                channel = channel
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+            }
+
+            return channel
         }
 
-        channel.subscribe()
-        channelRef.current = channel
+        function clearReconnectTimer() {
+            if (reconnectTimer !== undefined) {
+                clearTimeout(reconnectTimer)
+                reconnectTimer = undefined
+            }
+        }
+
+        function scheduleReconnect(reason: string) {
+            if (cancelled || reconnectPending) return
+            reconnectPending = true
+            if (activeChannel) {
+                try {
+                    supabase.removeChannel(activeChannel)
+                } catch {
+                    /* noop */
+                }
+                activeChannel = null
+            }
+            const delay = Math.min(30_000, Math.round(1_500 * Math.pow(2, attempt)))
+            attempt = Math.min(attempt + 1, 12)
+            throttledWarn(`${reason} — reconnexion dans ~${Math.round(delay / 1000)}s`)
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = undefined
+                reconnectPending = false
+                connect()
+            }, delay)
+        }
+
+        function connect() {
+            if (cancelled) return
+            const channel = buildChannel()
+            activeChannel = channel
+
+            channel.subscribe((status: string, err?: Error) => {
+                if (cancelled) return
+                if (status === 'SUBSCRIBED') {
+                    attempt = 0
+                    return
+                }
+                if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                    scheduleReconnect(err?.message ?? status)
+                    return
+                }
+                if (status === 'CLOSED' && !reconnectPending) {
+                    scheduleReconnect('Canal fermé')
+                }
+            })
+        }
+
+        connect()
 
         return () => {
-            supabase.removeChannel(channel)
-            channelRef.current = null
+            cancelled = true
+            clearReconnectTimer()
+            reconnectPending = false
+            if (activeChannel) {
+                supabase.removeChannel(activeChannel)
+                activeChannel = null
+            }
         }
     }, [user?.id, profile?.role, supabase, dispatch])
 

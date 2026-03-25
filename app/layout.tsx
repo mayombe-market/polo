@@ -1,21 +1,10 @@
 import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind directives
-import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
-
-// Pas de <link rel="preload"> sur le .woff2 : toute route (dont /reset-password) hérite de la même
-// police via <html className>, donc pas de ressource « préchargée mais jamais utilisée » sur les pages légères.
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  adjustFontFallback: true,
-  preload: true,
-  fallback: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-})
 
 export const viewport = {
   themeColor: '#f97316',
@@ -89,32 +78,25 @@ export const metadata = {
   },
 }
 
-/** GA4 — ID = NEXT_PUBLIC_GA_ID (fichier .env.local ou variables d’hébergement). */
-const gaMeasurementId = (process.env.NEXT_PUBLIC_GA_ID ?? '').trim()
+const GA_MEASUREMENT_ID = 'G-SLRPK4NETV'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  console.log('DEBUG GA ID:', process.env.NEXT_PUBLIC_GA_ID)
-
   return (
-    <html lang="fr" className={inter.className}>
+    <html lang="fr" className="antialiased font-sans">
       <body className="m-0 p-0">
-        {gaMeasurementId ? (
-          <>
-            <Script
-              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
-              strategy="lazyOnload"
-              crossOrigin="anonymous"
-            />
-            <Script id="google-analytics" strategy="lazyOnload">
-              {`
+        <Script
+          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+          strategy="lazyOnload"
+          crossOrigin="anonymous"
+        />
+        <Script id="google-analytics" strategy="lazyOnload">
+          {`
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', '${gaMeasurementId}');
+              gtag('config', '${GA_MEASUREMENT_ID}');
             `}
-            </Script>
-          </>
-        ) : null}
+        </Script>
 
         {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
         <ZodClientInit />

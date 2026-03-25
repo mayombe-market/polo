@@ -16,7 +16,6 @@ export function getContentSecurityPolicy(): string {
             https://*.cloudflare.com
             https://static.cloudflareinsights.com;
         style-src 'self' 'unsafe-inline'
-            https://fonts.googleapis.com
             https://challenges.cloudflare.com;
         img-src 'self' data: blob:
             https://*.unsplash.com
@@ -25,7 +24,7 @@ export function getContentSecurityPolicy(): string {
             https://*.supabase.co
             https://www.googletagmanager.com
             https://challenges.cloudflare.com;
-        font-src 'self' data: blob: https://fonts.gstatic.com;
+        font-src 'self' data: blob:;
         connect-src 'self'
             https://*.supabase.co wss://*.supabase.co
             https://www.google-analytics.com https://*.googletagmanager.com

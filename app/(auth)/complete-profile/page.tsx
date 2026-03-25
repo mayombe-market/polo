@@ -8,6 +8,7 @@ import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSub
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { orderCityToProfileCity } from '@/lib/deliveryLocation'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
+import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -298,11 +299,10 @@ export default function CompleteProfilePage() {
             <div style={{
                 minHeight: "100vh",
                 background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
-                fontFamily: "'DM Sans', -apple-system, sans-serif",
+                fontFamily: SYSTEM_FONT_STACK,
                 padding: "24px 16px",
                 maxWidth: 560, margin: "0 auto",
             }}>
-                <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
                 <SubscriptionCheckout
                     plan={selectedPlan}
                     billing={billing}
@@ -323,11 +323,10 @@ export default function CompleteProfilePage() {
             <div style={{
                 minHeight: "100vh",
                 background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
-                fontFamily: "'DM Sans', -apple-system, sans-serif",
+                fontFamily: SYSTEM_FONT_STACK,
                 padding: "24px 16px",
                 maxWidth: 560, margin: "0 auto",
             }}>
-                <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
                 {/* Header */}
                 <div style={{ textAlign: "center", marginBottom: 20 }}>

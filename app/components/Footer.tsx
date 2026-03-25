@@ -7,6 +7,7 @@ import {
   AirtelMoneyLogo,
   MobileMoneyTrustLine,
 } from "@/app/components/MobileMoneyBranding";
+import { SYSTEM_FONT_STACK } from "@/lib/systemFontStack";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -84,12 +85,11 @@ export default function Footer() {
   return (
     <footer style={{
       background: "linear-gradient(180deg, #08080E, #060610)",
-      fontFamily: "'DM Sans', -apple-system, sans-serif",
+      fontFamily: SYSTEM_FONT_STACK,
       borderTop: "1px solid rgba(255,255,255,0.04)",
       position: "relative",
       overflow: "hidden",
     }}>
-      <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
 
       {/* Subtle gradient glow */}
       <div style={{

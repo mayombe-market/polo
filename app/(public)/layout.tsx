@@ -2,8 +2,8 @@ import { Suspense } from 'react'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
 import CategoryBar from '../components/CategoryBar'
-import ShopStoriesRow from '../components/ShopStoriesRow'
-import CookieConsent from '../components/CookieConsent'
+import DeferredShopStoriesRow from '../components/DeferredShopStoriesRow'
+import DeferredCookieConsent from '../components/DeferredCookieConsent'
 import { Toaster } from 'sonner'
 
 export default function PublicLayout({
@@ -24,15 +24,14 @@ export default function PublicLayout({
                 <CategoryBar />
             </Suspense>
 
-            {/* Stories row : avatars des boutiques cliquables */}
-            <ShopStoriesRow />
+            <DeferredShopStoriesRow />
 
             <main className="min-h-screen">
                 {children}
             </main>
 
             <Footer />
-            <CookieConsent />
+            <DeferredCookieConsent />
         </>
     )
 }

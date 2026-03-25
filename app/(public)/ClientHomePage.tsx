@@ -1,12 +1,11 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { useRouter } from 'next/navigation'
-import AuthModal from '@/app/components/AuthModal'
 import ProductCard from '@/app/components/ProductCard'
-import { Truck, Store, ArrowRight, Flame } from 'lucide-react'
+import { Truck, Store, ArrowRight } from 'lucide-react'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 interface ClientHomePageProps {
@@ -18,39 +17,67 @@ interface ClientHomePageProps {
     promoProducts: any[]
 }
 
-export default function ClientHomePage({ ads, topProducts, categories, newProducts, popularProducts, promoProducts }: ClientHomePageProps) {
-    const [showAuthModal, setShowAuthModal] = useState(false)
+export default function ClientHomePage({
+    ads,
+    topProducts,
+    categories,
+    newProducts,
+    popularProducts,
+    promoProducts,
+}: ClientHomePageProps) {
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const scrollContainerRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
+
+    const safeAds = useMemo(() => (Array.isArray(ads) ? ads : []), [ads])
+
     useEffect(() => {
-        if (ads.length <= 1) return
+        if (safeAds.length <= 1) return
         const interval = setInterval(() => {
-            setCurrentAdIndex((prev) => (prev + 1) % ads.length)
+            setCurrentAdIndex((prev) => (prev + 1) % safeAds.length)
         }, 5000)
         return () => clearInterval(interval)
-    }, [ads.length])
+    }, [safeAds.length])
 
     useEffect(() => {
         if (scrollContainerRef.current) {
             const container = scrollContainerRef.current
-            const scrollWidth = container.scrollWidth / (ads.length || 1)
+            const scrollWidth = container.scrollWidth / (safeAds.length || 1)
             container.scrollTo({ left: scrollWidth * currentAdIndex, behavior: 'smooth' })
         }
-    }, [currentAdIndex, ads.length])
+    }, [currentAdIndex, safeAds.length])
+
+    const onAdClick = useCallback(
+        (linkUrl: string | null | undefined) => {
+            if (linkUrl) router.push(linkUrl)
+        },
+        [router]
+    )
 
     return (
         <div className="space-y-16 pb-20 pt-10">
-            {/* ===================== SECTION ADS ===================== */}
+            {/* ===================== SECTION ADS (LCP : 1re bannière en priority) ===================== */}
             <section className="max-w-7xl mx-auto px-4 pt-8">
-                <div ref={scrollContainerRef} className="flex overflow-x-auto snap-x snap-mandatory gap-4 scrollbar-hide pb-4" style={{ scrollbarWidth: 'none' }}>
-                    {ads?.map((ad) => (
+                <div
+                    ref={scrollContainerRef}
+                    className="flex overflow-x-auto snap-x snap-mandatory gap-4 scrollbar-hide pb-4"
+                    style={{ scrollbarWidth: 'none' }}
+                >
+                    {safeAds.map((ad, index) => (
                         <div
                             key={ad.id}
                             className={`min-w-[100%] snap-center relative h-[250px] md:h-[400px] rounded-[2rem] overflow-hidden bg-slate-200 shadow-lg ${ad.link_url ? 'cursor-pointer' : ''}`}
-                            onClick={() => ad.link_url && router.push(ad.link_url)}
+                            onClick={() => onAdClick(ad.link_url)}
                         >
-                            <Image src={ad.img || '/placeholder-image.svg'} alt="" fill sizes="100vw" className="object-cover" />
+                            <Image
+                                src={ad.img || '/placeholder-image.svg'}
+                                alt={ad.title ? String(ad.title) : 'Bannière'}
+                                fill
+                                sizes="100vw"
+                                priority={index === 0}
+                                fetchPriority={index === 0 ? 'high' : 'low'}
+                                className="object-cover"
+                            />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-8">
                                 <h2 className="text-white text-3xl font-bold">{ad.title}</h2>
                             </div>
@@ -63,17 +90,26 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
             <section className="max-w-7xl mx-auto px-4">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8">🔥 Top 5 de la semaine</h2>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                    {topProducts?.map((product) => {
+                    {topProducts?.map((product, index) => {
                         const hasPromo = isPromoActive(product)
                         const promoPrice = hasPromo ? getPromoPrice(product) : product.price
+                        const isLcpCandidate = index === 0
                         return (
                             <Link
                                 href={`/product/${product.id}`}
                                 key={product.id}
                                 className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
                             >
-                                <div className="relative overflow-hidden aspect-square">
-                                    <Image src={product.img || product.image_url || '/placeholder-image.svg'} alt={product.name} fill sizes="(max-width: 768px) 50vw, 20vw" className="object-cover group-hover:scale-110 transition-transform duration-500" />
+                                <div className="relative overflow-hidden aspect-square w-full">
+                                    <Image
+                                        src={product.img || product.image_url || '/placeholder-image.svg'}
+                                        alt={product.name}
+                                        fill
+                                        sizes="(max-width: 768px) 50vw, 20vw"
+                                        priority={isLcpCandidate}
+                                        fetchPriority={isLcpCandidate ? 'high' : 'auto'}
+                                        className="object-cover group-hover:scale-110 transition-transform duration-500"
+                                    />
                                     {hasPromo && (
                                         <div className="absolute top-0 left-0 bg-red-600 text-white font-black uppercase rounded-br-xl px-2.5 py-1.5 flex items-center gap-1 z-10">
                                             <span className="text-[8px]">🔥</span>
@@ -85,8 +121,12 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                                     <h3 className="font-semibold text-sm dark:text-gray-200 truncate">{product.name}</h3>
                                     {hasPromo ? (
                                         <div>
-                                            <p className="text-slate-400 text-xs line-through">{product.price?.toLocaleString('fr-FR')} F</p>
-                                            <p className="text-red-500 font-bold text-sm">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
+                                            <p className="text-slate-400 text-xs line-through">
+                                                {product.price?.toLocaleString('fr-FR')} F
+                                            </p>
+                                            <p className="text-red-500 font-bold text-sm">
+                                                {promoPrice.toLocaleString('fr-FR')} FCFA
+                                            </p>
                                         </div>
                                     ) : (
                                         <p className="text-green-600 font-bold text-sm">
@@ -108,18 +148,29 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                             <Truck size={32} />
                         </div>
                         <div>
-                            <h3 className="font-black uppercase italic text-lg md:text-xl tracking-tighter">Livraison rapide</h3>
-                            <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-1">Brazzaville & Pointe-Noire</p>
+                            <h3 className="font-black uppercase italic text-lg md:text-xl tracking-tighter">
+                                Livraison rapide
+                            </h3>
+                            <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-1">
+                                Brazzaville & Pointe-Noire
+                            </p>
                         </div>
                     </div>
 
-                    <Link href="/vendor/dashboard" className="bg-gradient-to-br from-green-600 to-green-700 rounded-[2rem] p-8 md:p-10 flex items-center gap-6 text-white shadow-xl shadow-green-600/10 group">
+                    <Link
+                        href="/vendor/dashboard"
+                        className="bg-gradient-to-br from-green-600 to-green-700 rounded-[2rem] p-8 md:p-10 flex items-center gap-6 text-white shadow-xl shadow-green-600/10 group"
+                    >
                         <div className="bg-white/20 p-4 rounded-2xl flex-shrink-0">
                             <Store size={32} />
                         </div>
                         <div className="flex-1">
-                            <h3 className="font-black uppercase italic text-lg md:text-xl tracking-tighter">Vendez sur Mayombe</h3>
-                            <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-1">Ouvrez votre boutique gratuitement</p>
+                            <h3 className="font-black uppercase italic text-lg md:text-xl tracking-tighter">
+                                Vendez sur Mayombe
+                            </h3>
+                            <p className="text-white/80 text-xs font-bold uppercase tracking-widest mt-1">
+                                Ouvrez votre boutique gratuitement
+                            </p>
                         </div>
                         <ArrowRight size={24} className="group-hover:translate-x-2 transition-transform" />
                     </Link>
@@ -132,14 +183,21 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                     <div className="flex items-center justify-between mb-8">
                         <div>
                             <div className="flex items-center gap-2">
-                                <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Promotions</h2>
+                                <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">
+                                    Promotions
+                                </h2>
                                 <span className="bg-red-600 text-white text-[10px] font-black uppercase px-3 py-1 rounded-full animate-pulse">
                                     🔥 En cours
                                 </span>
                             </div>
-                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">Les meilleures offres du moment</p>
+                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">
+                                Les meilleures offres du moment
+                            </p>
                         </div>
-                        <Link href="/search" className="bg-red-50 dark:bg-red-500/10 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center gap-2">
+                        <Link
+                            href="/search"
+                            className="bg-red-50 dark:bg-red-500/10 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"
+                        >
                             Voir tout <ArrowRight size={12} />
                         </Link>
                     </div>
@@ -156,10 +214,17 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                 <section className="max-w-7xl mx-auto px-4">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Nouveautés</h2>
-                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">Les derniers produits ajoutés</p>
+                            <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">
+                                Nouveautés
+                            </h2>
+                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">
+                                Les derniers produits ajoutés
+                            </p>
                         </div>
-                        <Link href="/search" className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2">
+                        <Link
+                            href="/search"
+                            className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2"
+                        >
                             Voir tout <ArrowRight size={12} />
                         </Link>
                     </div>
@@ -176,10 +241,17 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                 <section className="max-w-7xl mx-auto px-4">
                     <div className="flex items-center justify-between mb-8">
                         <div>
-                            <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Les plus populaires</h2>
-                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">Les produits les plus consultés</p>
+                            <h2 className="text-3xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">
+                                Les plus populaires
+                            </h2>
+                            <p className="text-[10px] font-bold uppercase text-slate-400 tracking-[0.2em] mt-1">
+                                Les produits les plus consultés
+                            </p>
                         </div>
-                        <Link href="/search" className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2">
+                        <Link
+                            href="/search"
+                            className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2"
+                        >
                             Voir tout <ArrowRight size={12} />
                         </Link>
                     </div>
@@ -195,26 +267,29 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
             <section className="max-w-7xl mx-auto px-4">
                 <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-8 text-center">📂 Nos Catégories</h2>
                 <div className="grid md:grid-cols-3 gap-8">
-                    {categories?.map((cat) => (
+                    {categories?.map((cat, catIndex) => (
                         <div
                             key={cat.id}
                             className="relative group rounded-3xl overflow-hidden h-80 shadow-lg bg-slate-200 block"
                         >
                             <Link href={`/category/${encodeURIComponent(cat.name)}`} className="absolute inset-0 z-0">
                                 <Image
-                                    src={cat.img || 'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=800'}
+                                    src={
+                                        cat.img ||
+                                        'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=800'
+                                    }
                                     alt={cat.name}
                                     fill
                                     sizes="(max-width: 768px) 100vw, 33vw"
                                     className="object-cover transition-transform duration-700 group-hover:scale-105"
+                                    priority={catIndex === 0}
+                                    fetchPriority={catIndex === 0 ? 'high' : 'low'}
                                 />
-                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                             </Link>
 
                             <div className="absolute bottom-0 p-6 w-full z-10 pointer-events-none">
-                                <h3 className="text-2xl font-bold text-white mb-3">
-                                    {cat.name}
-                                </h3>
+                                <h3 className="text-2xl font-bold text-white mb-3">{cat.name}</h3>
 
                                 <div className="flex flex-wrap gap-2 pointer-events-auto">
                                     <Link
@@ -239,8 +314,6 @@ export default function ClientHomePage({ ads, topProducts, categories, newProduc
                     ))}
                 </div>
             </section>
-
-            <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
         </div>
     )
 }

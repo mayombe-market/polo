@@ -36,6 +36,7 @@ import {
     formatRealEstatePriceLabel,
 } from '@/lib/realEstateListing'
 import RealEstateListingDetails from '@/app/components/RealEstateListingDetails'
+import ProductDetailSkeleton from '@/app/components/skeletons/ProductDetailSkeleton'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
@@ -219,14 +220,7 @@ export default function ProductDetailPage() {
     }, [productId, retryNonce])
 
     if (phase === 'loading') {
-        return (
-            <div className="min-h-screen flex flex-col items-center justify-center bg-white dark:bg-[#0A0A12] gap-4 px-6">
-                <div className="w-8 h-8 border-[3px] border-orange-400/30 border-t-orange-400 rounded-full animate-spin" />
-                <p className="text-sm text-slate-500 dark:text-slate-400 text-center font-medium">
-                    Chargement du produit…
-                </p>
-            </div>
-        )
+        return <ProductDetailSkeleton />
     }
 
     if (phase === 'error') {

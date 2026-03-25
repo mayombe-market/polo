@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { searchProducts } from '@/lib/searchProducts'
 import { withTimeout } from '@/lib/supabase-utils'
-import { X, SlidersHorizontal, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, SlidersHorizontal, ChevronLeft, ChevronRight } from 'lucide-react'
 import ProductCard from '@/app/components/ProductCard'
 
 function SearchContent() {
@@ -181,9 +181,10 @@ function SearchContent() {
 
                     <div className="flex-1">
                         {loading ? (
-                            <div className="flex flex-col items-center justify-center py-32">
-                                <Loader2 className="animate-spin text-orange-500 mb-4" size={40} />
-                                <p className="font-black uppercase text-[10px] tracking-[0.3em] text-slate-400">Mayombe Loading...</p>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-6" aria-busy="true" aria-label="Chargement des résultats">
+                                {Array.from({ length: 9 }).map((_, i) => (
+                                    <ProductCard key={`sk-${i}`} isLoading />
+                                ))}
                             </div>
                         ) : products.length > 0 ? (
                             <>

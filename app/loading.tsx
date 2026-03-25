@@ -1,5 +1,5 @@
-import LoadingSpinner from '@/app/components/LoadingSpinner'
+import HomePageSkeleton from '@/app/components/skeletons/HomePageSkeleton'
 
 export default function Loading() {
-    return <LoadingSpinner />
+    return <HomePageSkeleton />
 }

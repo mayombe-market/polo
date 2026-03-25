@@ -16,7 +16,7 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { memo } from 'react'
-import { ShoppingBag, Eye, Loader2 } from 'lucide-react'
+import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 
@@ -70,15 +70,12 @@ function ProductCardSkeleton() {
         >
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800" />
             <div className="mt-4 px-2 pb-2 space-y-3">
-                <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded" />
-                <div className="h-4 w-[85%] bg-slate-200 dark:bg-slate-800 rounded" />
+                <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                <div className="h-4 w-[85%] bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
                 <div className="flex justify-between items-center mt-3">
-                    <div className="h-6 w-28 bg-slate-200 dark:bg-slate-800 rounded" />
-                    <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                    <div className="h-6 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                    <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
                 </div>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <Loader2 className="w-7 h-7 text-orange-400/80 animate-spin" aria-hidden />
             </div>
         </div>
     )
@@ -91,11 +88,10 @@ function ProductCardPending() {
             className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-dashed border-slate-200 dark:border-slate-700"
             aria-live="polite"
         >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                <Loader2 className="w-8 h-8 text-slate-300 dark:text-slate-600 animate-spin" aria-hidden />
-            </div>
-            <div className="mt-4 px-2 pb-2 text-center">
-                <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest">Chargement…</p>
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="mt-4 px-2 pb-2 space-y-2">
+                <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
+                <div className="h-3 w-32 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
             </div>
         </div>
     )

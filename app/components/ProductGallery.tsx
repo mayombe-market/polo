@@ -35,6 +35,7 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
                     sizes="(max-width: 640px) 100vw, 512px"
                     quality={80}
                     priority={priorityMain}
+                    fetchPriority={priorityMain ? 'high' : 'auto'}
                     className="object-cover transition-all duration-700 ease-in-out group-hover:scale-105"
                 />
 

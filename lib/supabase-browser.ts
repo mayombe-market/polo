@@ -38,6 +38,23 @@ import type { SupabaseClient } from '@supabase/supabase-js'
  */
 let browserClient: SupabaseClient | null = null
 
+/**
+ * Priorité réseau « high » sur les GET (Chrome / navigateurs compatibles) pour accélérer
+ * les lectures PostgREST critiques au premier affichage.
+ */
+function createBrowserFetch(): typeof fetch {
+    return (input: RequestInfo | URL, init?: RequestInit) => {
+        const method = (init?.method ?? 'GET').toString().toUpperCase()
+        if (method !== 'GET' || init?.priority != null) {
+            return fetch(input, init)
+        }
+        return fetch(input, {
+            ...init,
+            priority: 'high',
+        } as RequestInit)
+    }
+}
+
 function readPublicEnv(): { url: string; key: string } {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL
     const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -65,6 +82,9 @@ export function getSupabaseBrowserClient(): SupabaseClient {
     const { url, key } = readPublicEnv()
 
     browserClient = createBrowserClient(url, key, {
+        global: {
+            fetch: typeof window !== 'undefined' ? createBrowserFetch() : fetch,
+        },
         auth: {
             flowType: 'pkce',
             persistSession: true,

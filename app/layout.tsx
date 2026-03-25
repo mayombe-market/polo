@@ -4,10 +4,8 @@ import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
-import ServiceWorkerRegister from '@/app/components/ServiceWorkerRegister'
-import OfflineBanner from '@/app/components/OfflineBanner'
-import SplashScreen from '@/app/components/SplashScreen'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
+import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 
 // Pas de <link rel="preload"> sur le .woff2 : toute route (dont /reset-password) hérite de la même
 // police via <html className>, donc pas de ressource « préchargée mais jamais utilisée » sur les pages légères.
@@ -15,7 +13,7 @@ const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   adjustFontFallback: true,
-  preload: false,
+  preload: true,
   fallback: ['system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
 })
 
@@ -95,10 +93,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <>
           <Script
             src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
-            strategy="afterInteractive"
+            strategy="lazyOnload"
             crossOrigin="anonymous"
           />
-          <Script id="google-analytics" strategy="afterInteractive">
+          <Script id="google-analytics" strategy="lazyOnload">
             {`
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
@@ -109,10 +107,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </>
       )}
       <body className="m-0 p-0">
-        {/* Zod v4 : config({ jitless: true }) côté client (lib/zod-jitless.ts) — évite JIT / ReferenceError « ed » */}
+        {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
         <ZodClientInit />
-        {/* SPLASH SCREEN PWA */}
-        <SplashScreen />
 
         {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
         <header className="w-full h-4 sticky top-0 z-50 shadow-sm">
@@ -124,9 +120,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           }}></div>
         </header>
 
-        {/* SERVICE WORKER PWA + BANDEAUX OFFLINE/UPDATE */}
-        <ServiceWorkerRegister />
-        <OfflineBanner />
+        {/* PWA + offline : bundle chargé après hydratation (réduit TBT) */}
+        <DeferredPwaWidgets />
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>

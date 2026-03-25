@@ -69,7 +69,7 @@ function resolveImageSrc(p: ProductCardProduct): string {
 function ProductCardEmptyPlaceholder() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 shadow-sm dark:shadow-none"
             aria-busy="true"
             aria-label="Emplacement produit"
         >
@@ -83,7 +83,7 @@ function ProductCardEmptyPlaceholder() {
 function ProductCardSkeleton() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-transparent animate-pulse"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 animate-pulse"
             aria-busy="true"
             aria-label="Chargement du produit"
         >
@@ -104,7 +104,7 @@ function ProductCardSkeleton() {
 function ProductCardPending() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-dashed border-slate-200 dark:border-slate-700"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-dashed border-slate-200 dark:border-slate-600"
             aria-live="polite"
         >
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800 animate-pulse" />
@@ -135,7 +135,7 @@ function ProductCardInner({
     return (
         <Link
             href={`/product/${product.id}`}
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] border border-transparent hover:border-slate-100 dark:hover:border-slate-800 block"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 block"
         >
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800">
                 {/*
@@ -184,7 +184,7 @@ function ProductCardInner({
                         <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-1">
                             {categoryLabel}
                         </p>
-                        <h3 className="text-sm font-black uppercase tracking-tighter leading-tight dark:text-white line-clamp-1">
+                        <h3 className="text-sm font-black uppercase tracking-tighter leading-tight text-slate-900 dark:text-slate-50 line-clamp-1">
                             {displayName}
                         </h3>
                     </div>
@@ -193,19 +193,19 @@ function ProductCardInner({
                 <div className="mt-3 flex items-center justify-between">
                     {hasPromo ? (
                         <div>
-                            <p className="text-xs text-slate-400 line-through font-bold">
+                            <p className="text-xs text-slate-500 dark:text-slate-400 line-through font-bold">
                                 {basePrice.toLocaleString('fr-FR')} F
                             </p>
-                            <p className="text-lg font-black tracking-tighter text-red-500">
+                            <p className="text-lg font-black tracking-tighter text-red-600 dark:text-red-400">
                                 {promoPrice.toLocaleString('fr-FR')}{' '}
                                 <span className="text-[10px] ml-0.5">FCFA</span>
                             </p>
                             {timeRemaining ? (
-                                <p className="text-[9px] font-bold text-red-400 mt-0.5">Expire dans {timeRemaining}</p>
+                                <p className="text-[9px] font-bold text-red-500 dark:text-red-300 mt-0.5">Expire dans {timeRemaining}</p>
                             ) : null}
                         </div>
                     ) : (
-                        <p className="text-lg font-black tracking-tighter dark:text-white">
+                        <p className="text-lg font-black tracking-tighter text-slate-900 dark:text-slate-50">
                             {basePrice.toLocaleString('fr-FR')} <span className="text-[10px] ml-0.5">FCFA</span>
                         </p>
                     )}

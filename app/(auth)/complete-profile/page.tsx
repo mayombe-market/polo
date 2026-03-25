@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { orderCityToProfileCity } from '@/lib/deliveryLocation'
+import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -245,7 +246,7 @@ export default function CompleteProfilePage() {
             router.push('/account/dashboard')
 
         } catch (err: any) {
-            setError(err.message || 'Une erreur est survenue')
+            setError(translateAuthErrorMessage(String(err?.message || '')))
         } finally {
             setLoading(false)
         }
@@ -635,7 +636,7 @@ export default function CompleteProfilePage() {
 
                     {/* MESSAGE D'ERREUR */}
                     {error && (
-                        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 px-4 py-3 rounded-xl text-sm">
+                        <div className="bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800/60 text-red-800 dark:text-red-200 px-4 py-3 rounded-xl text-sm leading-snug">
                             {error}
                         </div>
                     )}

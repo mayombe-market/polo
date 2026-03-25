@@ -7,6 +7,8 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { withTimeout } from '@/lib/withTimeout'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
+import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
+import { PasswordPolicyChecklist } from '@/app/components/PasswordPolicyChecklist'
 
 /** getSession après recovery : réseaux lents / mobile. */
 const AUTH_WAIT_MS = NETWORK_TIMEOUT_MS
@@ -66,6 +68,7 @@ function PasswordFields({
                         {show1 ? '🙈' : '👁'}
                     </button>
                 </div>
+                <PasswordPolicyChecklist password={password} className="mt-2.5" />
             </div>
             <div>
                 <label className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
@@ -247,13 +250,13 @@ function ResetPasswordForm() {
                 )
                 if (sessErr) {
                     console.error('[reset-password] getSession:', sessErr)
-                    setError(sessErr.message)
+                    setError(translateAuthErrorMessage(sessErr.message))
                     return
                 }
                 session = data.session
             } catch (e) {
                 console.error('[reset-password] getSession timeout:', e)
-                setError(authErrorMessage(e))
+                setError(translateAuthErrorMessage(authErrorMessage(e)))
                 return
             }
 
@@ -297,12 +300,12 @@ function ResetPasswordForm() {
                 }
                 if (upErr) {
                     console.error('[reset-password] updateUser error:', upErr)
-                    setError(upErr.message || authErrorMessage(upErr))
+                    setError(translateAuthErrorMessage(upErr.message || ''))
                     return
                 }
             } catch (e) {
                 console.error('[reset-password] updateUser timeout ou erreur:', e)
-                setError(authErrorMessage(e))
+                setError(translateAuthErrorMessage(authErrorMessage(e)))
                 return
             }
 
@@ -311,7 +314,7 @@ function ResetPasswordForm() {
             setTimeout(() => router.push('/'), 2500)
         } catch (err: unknown) {
             console.error('[reset-password] exception:', err)
-            setError(authErrorMessage(err))
+            setError(translateAuthErrorMessage(authErrorMessage(err)))
         } finally {
             setLoading(false)
         }
@@ -396,7 +399,7 @@ function ResetPasswordForm() {
                     />
 
                     {error && (
-                        <p className="text-red-400 text-xs font-medium text-center bg-red-500/10 border border-red-500/20 rounded-xl py-2 px-3">
+                        <p className="text-red-200 text-xs font-medium text-center bg-red-950/50 border border-red-500/30 rounded-xl py-2 px-3 leading-snug">
                             {error}
                         </p>
                     )}

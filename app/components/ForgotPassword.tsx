@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import Link from 'next/link'
 
 function getResetRedirectUrl(): string {
@@ -73,7 +74,7 @@ export default function ForgotPassword({ onEmailSent, onBack, compact }: ForgotP
                 )
                 setError('L’envoi du lien a échoué. Réessaie plus tard ou contacte le support.')
             } else {
-                setError(msg)
+                setError(translateAuthErrorMessage(msg))
             }
             triggerShake()
         } finally {
@@ -152,7 +153,7 @@ export default function ForgotPassword({ onEmailSent, onBack, compact }: ForgotP
                     </div>
 
                     {error && (
-                        <p className="text-red-400 text-xs font-medium text-center bg-red-500/10 border border-red-500/20 rounded-xl py-2 px-3">
+                        <p className="text-red-200 text-xs font-medium text-center bg-red-950/50 border border-red-500/30 rounded-xl py-2 px-3 leading-snug">
                             {error}
                         </p>
                     )}

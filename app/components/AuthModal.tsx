@@ -5,6 +5,8 @@ import { withTimeout } from '@/lib/supabase-utils'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import ForgotPassword from '@/app/components/ForgotPassword'
+import { PasswordPolicyChecklist } from '@/app/components/PasswordPolicyChecklist'
+import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 
 // ═══════════════════════════════════════════════
 // TOAST NOTIFICATION
@@ -24,7 +26,7 @@ function Toast({ message, type, onClose }: { message: string; type: 'success' | 
 
     const config = {
         success: { icon: '✅', bg: 'bg-green-500/10', border: 'border-green-500/25', text: 'text-green-400' },
-        error: { icon: '❌', bg: 'bg-red-500/10', border: 'border-red-500/25', text: 'text-red-400' },
+        error: { icon: '❌', bg: 'bg-red-500/10', border: 'border-red-500/25', text: 'text-red-200' },
         info: { icon: 'ℹ️', bg: 'bg-blue-500/10', border: 'border-blue-500/25', text: 'text-blue-400' },
     }[type]
 
@@ -99,10 +101,16 @@ function SuccessScreen({ userName, onContinue }: { userName: string; onContinue:
 // ═══════════════════════════════════════════════
 // PASSWORD FIELD with toggle + strength indicator
 // ═══════════════════════════════════════════════
-function PasswordField({ value, onChange, onKeyDown }: {
+function PasswordField({
+    value,
+    onChange,
+    onKeyDown,
+    showPolicyChecklist,
+}: {
     value: string
     onChange: (v: string) => void
     onKeyDown: (e: React.KeyboardEvent) => void
+    showPolicyChecklist?: boolean
 }) {
     const [show, setShow] = useState(false)
 
@@ -145,6 +153,11 @@ function PasswordField({ value, onChange, onKeyDown }: {
                             }`}
                         />
                     ))}
+                </div>
+            )}
+            {showPolicyChecklist && (
+                <div className="mt-2.5 pt-2 border-t border-white/[0.06]">
+                    <PasswordPolicyChecklist password={value} />
                 </div>
             )}
         </div>
@@ -288,25 +301,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
         } catch (err: any) {
             console.error('Erreur auth:', err)
             const msg = (err?.message || '') as string
-
-            // Traduction des erreurs Supabase courantes
-            if (msg.includes('Email not confirmed')) {
-                setError('Email non confirmé. Vérifiez votre boîte mail (et les spams).')
-            } else if (msg.includes('Invalid login credentials')) {
-                setError('Email ou mot de passe incorrect.')
-            } else if (msg.includes('User already registered')) {
-                setError('Cet email est déjà utilisé. Connectez-vous.')
-            } else if (msg.includes('Password should be at least') || msg.includes('password')) {
-                setError('Le mot de passe doit contenir au moins 8 caractères.')
-            } else if (msg.includes('Error sending confirmation email') || msg.includes('error sending')) {
-                setError('Impossible d\'envoyer l\'email. Réessayez dans quelques minutes.')
-            } else if (msg.includes('rate limit') || msg.includes('too many requests')) {
-                setError('Trop de tentatives. Patientez quelques minutes.')
-            } else if (msg.includes('timeout') || msg.includes('Timeout')) {
-                setError('Connexion lente. Vérifiez votre réseau et réessayez.')
-            } else {
-                setError(msg || 'Une erreur est survenue')
-            }
+            setError(translateAuthErrorMessage(msg))
             triggerShake()
         } finally {
             setLoading(false)
@@ -379,9 +374,9 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
                         {/* Error message (login / signup uniquement) */}
                         {error && mode !== 'forgot' && (
-                            <div className="bg-red-500/[0.08] border border-red-500/20 rounded-xl px-3.5 py-2.5 mb-4 flex items-center gap-2 animate-auth-fadeDown">
+                            <div className="bg-red-950/50 dark:bg-red-950/60 border border-red-500/30 rounded-xl px-3.5 py-2.5 mb-4 flex items-center gap-2 animate-auth-fadeDown">
                                 <span className="text-sm">⚠️</span>
-                                <span className="text-red-400 text-[13px] font-medium">{error}</span>
+                                <span className="text-red-200 text-[13px] font-medium leading-snug">{error}</span>
                             </div>
                         )}
 
@@ -440,6 +435,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                                 value={password}
                                 onChange={v => { setPassword(v); if (error) setError('') }}
                                 onKeyDown={handleKeyDown}
+                                showPolicyChecklist={mode === 'signup'}
                             />
                         </div>
                         )}

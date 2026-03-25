@@ -2,6 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import {
+  MtnMomoLogo,
+  AirtelMoneyLogo,
+  MobileMoneyTrustLine,
+} from "@/app/components/MobileMoneyBranding";
 
 export default function Footer() {
   const [email, setEmail] = useState("");
@@ -75,8 +80,6 @@ export default function Footer() {
     { icon: "✅", text: "Vendeurs vérifiés", color: "#E8A838" },
     { icon: "🚚", text: "Livraison suivie", color: "#A855F7" },
   ];
-
-  const payments = ["💳 Visa", "💳 Mastercard", "📱 MTN MoMo", "📱 Airtel Money", "💵 Cash"];
 
   return (
     <footer style={{
@@ -324,7 +327,7 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Payment methods */}
+          {/* Paiements locaux (Mobile Money) */}
           <div>
             <h4 style={{
               color: "#F0ECE2", fontSize: 12, fontWeight: 800,
@@ -332,20 +335,23 @@ export default function Footer() {
               margin: "0 0 14px",
               display: "flex", alignItems: "center", gap: 8,
             }}>
-              <span style={{ fontSize: 14 }}>💳</span>
+              <span style={{ fontSize: 14 }}>📱</span>
               MOYENS DE PAIEMENT
             </h4>
-            <div className="footer-payment-pills" style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-              {payments.map(p => (
-                <span key={p} style={{
+            <div className="footer-payment-pills" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 10 }}>
+                <MtnMomoLogo className="h-9 w-auto" />
+                <AirtelMoneyLogo className="h-9 w-auto" />
+                <span style={{
                   padding: "6px 14px", borderRadius: 8,
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.04)",
-                  color: "#888", fontSize: 12, fontWeight: 500,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "#aaa", fontSize: 12, fontWeight: 600,
                 }}>
-                  {p}
+                  💵 Cash à la livraison
                 </span>
-              ))}
+              </div>
+              <MobileMoneyTrustLine className="text-[#9ca3af]" />
             </div>
           </div>
         </div>

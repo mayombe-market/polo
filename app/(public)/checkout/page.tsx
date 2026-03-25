@@ -28,6 +28,11 @@ import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
+import {
+    MtnMomoLogo,
+    AirtelMoneyLogo,
+    MobileMoneyTrustLine,
+} from '@/app/components/MobileMoneyBranding'
 
 const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
     full_name: '',
@@ -480,16 +485,21 @@ export default function CheckoutPage() {
                             </label>
 
                             {/* OPTION 2 : Mobile Money */}
-                            <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center text-white font-black italic text-lg">M</div>
+                            <label className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                <div className="flex flex-wrap items-center gap-3 min-w-0">
+                                    <div className="flex items-center gap-2 shrink-0">
+                                        <MtnMomoLogo className="h-8 w-[100px] sm:h-9" />
+                                        <AirtelMoneyLogo className="h-8 w-[110px] sm:h-9" />
+                                    </div>
                                     <div>
-                                        <p className="font-black uppercase text-xs italic">Mobile Money</p>
-                                        <p className="text-[9px] font-bold text-slate-500 uppercase">MTN MoMo / Airtel Money</p>
+                                        <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Mobile Money</p>
+                                        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase">MTN MoMo &amp; Airtel Money</p>
                                     </div>
                                 </div>
-                                <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5" />
+                                <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0 self-end sm:self-center" />
                             </label>
+
+                            <MobileMoneyTrustLine className="mt-1 text-slate-600 dark:text-slate-400" />
 
                             {/* INSTRUCTIONS MOMO */}
                             {selectedPayment === 'mobile_money' && (

@@ -1,11 +1,46 @@
+import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import Image from 'next/image'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
+import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
+
+function categoryTitleFromParam(rawId: string): string {
+    try {
+        const categoryName = decodeURIComponent(rawId).replace(/%26/g, '&')
+        return sanitizePageTitleSegment(categoryName, 60)
+    } catch {
+        return sanitizePageTitleSegment(rawId, 60)
+    }
+}
+
+export async function generateMetadata({
+    params,
+    searchParams,
+}: {
+    params: Promise<{ id: string }>
+    searchParams: Promise<{ sub?: string | string[] }>
+}): Promise<Metadata> {
+    const { id } = await params
+    const sp = await searchParams
+    const subRaw = sp.sub
+    const sub =
+        typeof subRaw === 'string' ? subRaw : Array.isArray(subRaw) ? (subRaw[0] ?? '') : ''
+    let title = categoryTitleFromParam(id)
+    if (sub) {
+        try {
+            const subName = decodeURIComponent(sub).replace(/%26/g, '&')
+            title = sanitizePageTitleSegment(`${title} — ${subName}`, 70)
+        } catch {
+            title = sanitizePageTitleSegment(`${title} — ${sub}`, 70)
+        }
+    }
+    return { title }
+}
 
 export default async function CategoryPage(props: any) {
     // 1. Gestion ultra-sécurisée des params

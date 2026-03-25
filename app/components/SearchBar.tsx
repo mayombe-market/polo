@@ -1,19 +1,31 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Search, X } from 'lucide-react'
+import { sanitizeSearchQueryForDisplay } from '@/lib/sanitizeUserDisplay'
 
 export default function SearchBar() {
     const router = useRouter()
+    const pathname = usePathname()
+    const searchParams = useSearchParams()
     const [query, setQuery] = useState('')
+
+    useEffect(() => {
+        if (pathname !== '/search') return
+        const q = searchParams.get('q')
+        if (q === null) {
+            setQuery('')
+            return
+        }
+        setQuery(sanitizeSearchQueryForDisplay(q))
+    }, [pathname, searchParams])
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault()
-        const trimmedQuery = query.trim()
+        const trimmedQuery = sanitizeSearchQueryForDisplay(query.trim(), 200)
 
         if (trimmedQuery) {
-            // On redirige vers la page /search avec le paramètre encodé
             router.push(`/search?q=${encodeURIComponent(trimmedQuery)}`)
         }
     }
@@ -32,7 +44,9 @@ export default function SearchBar() {
                 <input
                     type="text"
                     value={query}
-                    onChange={(e) => setQuery(e.target.value)}
+                    onChange={(e) => setQuery(sanitizeSearchQueryForDisplay(e.target.value, 200))}
+                    autoComplete="off"
+                    spellCheck={false}
                     placeholder="Chercher une perruque, un iPhone..."
                     className="w-full bg-slate-100 dark:bg-slate-900 border-2 border-transparent focus:border-orange-500/20 focus:bg-white dark:focus:bg-slate-800 rounded-2xl py-3 pl-12 pr-10 font-bold text-sm outline-none transition-all placeholder:text-slate-400 placeholder:font-medium"
                 />

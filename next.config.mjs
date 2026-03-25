@@ -18,6 +18,7 @@ const nextConfig = {
             {
                 source: '/(.*)',
                 headers: [
+                    // Audit sécurité : alignés avec proxy.ts (CSP reste uniquement côté proxy).
                     {
                         key: 'X-Frame-Options',
                         value: 'DENY',

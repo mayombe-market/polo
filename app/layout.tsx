@@ -89,32 +89,33 @@ export const metadata = {
   },
 }
 
-/** GA4 : uniquement en production pour ne pas polluer les stats en `next dev` / local. */
-const gaMeasurementId = process.env.NEXT_PUBLIC_GA_ID?.trim()
-const shouldLoadGoogleAnalytics =
-  process.env.NODE_ENV === 'production' && Boolean(gaMeasurementId)
+/** GA4 — ID = NEXT_PUBLIC_GA_ID (fichier .env.local ou variables d’hébergement). */
+const gaMeasurementId = (process.env.NEXT_PUBLIC_GA_ID ?? '').trim()
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  console.log('DEBUG GA ID:', process.env.NEXT_PUBLIC_GA_ID)
+
   return (
     <html lang="fr" className={inter.className}>
-      {shouldLoadGoogleAnalytics && gaMeasurementId && (
-        <>
-          <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
-            strategy="lazyOnload"
-            crossOrigin="anonymous"
-          />
-          <Script id="google-analytics" strategy="lazyOnload">
-            {`
+      <body className="m-0 p-0">
+        {gaMeasurementId ? (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
+              strategy="lazyOnload"
+              crossOrigin="anonymous"
+            />
+            <Script id="google-analytics" strategy="lazyOnload">
+              {`
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
               gtag('config', '${gaMeasurementId}');
             `}
-          </Script>
-        </>
-      )}
-      <body className="m-0 p-0">
+            </Script>
+          </>
+        ) : null}
+
         {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
         <ZodClientInit />
 

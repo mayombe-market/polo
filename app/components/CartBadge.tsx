@@ -8,11 +8,13 @@ export default function CartBadge() {
     const { itemCount } = useCart()
 
     return (
-        <Link href="/cart" className="relative p-2 hover:bg-slate-100 rounded-full transition-all group">
-            {/* L'icône du panier */}
+        <Link
+            href="/cart"
+            className="relative p-1.5 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-all group"
+        >
             <ShoppingBag
-                size={24}
-                className="text-slate-700 group-hover:text-orange-500 transition-colors"
+                size={20}
+                className="text-slate-700 dark:text-slate-200 group-hover:text-orange-500 transition-colors"
             />
 
             {/* Le petit rond orange avec le nombre */}

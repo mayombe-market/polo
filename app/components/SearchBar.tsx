@@ -5,7 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Search, X } from 'lucide-react'
 import { sanitizeSearchQueryForDisplay } from '@/lib/sanitizeUserDisplay'
 
-export default function SearchBar() {
+export default function SearchBar({ compact = false }: { compact?: boolean }) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -33,12 +33,13 @@ export default function SearchBar() {
     return (
         <form
             onSubmit={handleSearch}
-            className="relative w-full max-w-[400px] group"
+            className={`relative w-full ${compact ? 'max-w-[min(100%,380px)]' : 'max-w-[400px]'} group`}
         >
             <div className="relative flex items-center">
-                {/* L'icône Loupe */}
-                <div className="absolute left-4 text-slate-400 group-focus-within:text-orange-500 transition-colors">
-                    <Search size={18} />
+                <div
+                    className={`absolute text-slate-400 group-focus-within:text-orange-500 transition-colors ${compact ? 'left-3' : 'left-4'}`}
+                >
+                    <Search size={compact ? 15 : 18} />
                 </div>
 
                 <input
@@ -48,17 +49,20 @@ export default function SearchBar() {
                     autoComplete="off"
                     spellCheck={false}
                     placeholder="Chercher une perruque, un iPhone..."
-                    className="w-full bg-slate-100 dark:bg-slate-900 border-2 border-transparent focus:border-orange-500/20 focus:bg-white dark:focus:bg-slate-800 rounded-2xl py-3 pl-12 pr-10 font-bold text-sm outline-none transition-all placeholder:text-slate-400 placeholder:font-medium"
+                    className={`w-full bg-slate-100 dark:bg-slate-900 border-2 border-transparent focus:border-orange-500/20 focus:bg-white dark:focus:bg-slate-800 font-bold outline-none transition-all placeholder:text-slate-400 placeholder:font-medium ${
+                        compact
+                            ? 'rounded-xl py-2 pl-10 pr-9 text-xs'
+                            : 'rounded-2xl py-3 pl-12 pr-10 text-sm'
+                    }`}
                 />
 
-                {/* Bouton pour effacer rapidement */}
                 {query && (
                     <button
                         type="button"
                         onClick={() => setQuery('')}
-                        className="absolute right-3 p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors"
+                        className={`absolute hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full text-slate-400 transition-colors ${compact ? 'right-2 p-0.5' : 'right-3 p-1'}`}
                     >
-                        <X size={14} />
+                        <X size={compact ? 13 : 14} />
                     </button>
                 )}
             </div>

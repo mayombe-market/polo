@@ -86,26 +86,34 @@ export default function Header() {
 
     return (
         <header className="relative border-b bg-white dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-50 transition-colors shadow-sm">
-            <div className="flex items-center justify-between p-4 gap-4">
-                {/* 1. LOGO */}
-                <Link href="/" className="shrink-0">
-                    <Image src="/logo.png" alt="Logo" width={128} height={128} className="h-20 md:h-32 w-auto hover:scale-105 transition-transform" />
+            <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
+                {/* 1. LOGO — hauteur ~−30 % vs h-20 / h-32 */}
+                <Link href="/" className="shrink-0 flex items-center">
+                    <Image
+                        src="/logo.png"
+                        alt="Logo"
+                        width={128}
+                        height={128}
+                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform"
+                    />
                 </Link>
 
-                {/* 2. BARRE DE RECHERCHE — hidden on mobile */}
-                <div className="hidden md:block flex-1 max-w-xl">
-                    <SearchBar />
+                <div className="hidden md:flex flex-1 min-w-0 justify-center max-w-xl mx-2">
+                    <SearchBar compact />
                 </div>
 
-                {/* 3. NAVIGATION DROITE — hidden on mobile */}
-                <nav className="hidden md:flex items-center gap-5">
-                    <button onClick={toggleDarkMode} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all text-xl">
+                <nav className="hidden md:flex items-center gap-2.5 shrink-0">
+                    <button
+                        type="button"
+                        onClick={toggleDarkMode}
+                        className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all text-lg leading-none"
+                    >
                         {isDarkMode ? '☀️' : '🌙'}
                     </button>
 
                     {user && (
-                        <Link href={notifDashboardLink} className="relative p-2 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all">
-                            <Bell size={20} className="text-slate-600 dark:text-slate-300" />
+                        <Link href={notifDashboardLink} className="relative p-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-full transition-all">
+                            <Bell size={18} className="text-slate-600 dark:text-slate-300" />
                             {unreadNotifCount > 0 && (
                                 <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] font-black min-w-[18px] h-[18px] flex items-center justify-center rounded-full px-1">
                                     {unreadNotifCount > 99 ? '99+' : unreadNotifCount}
@@ -119,7 +127,9 @@ export default function Header() {
                     <CartBadge />
 
                     <div className="relative group cursor-pointer">
-                        <div className="w-9 h-9 border-2 border-gray-300 dark:border-slate-600 rounded-full flex items-center justify-center font-bold text-gray-500 dark:text-gray-400 group-hover:border-green-600 group-hover:text-green-600 transition-all">?</div>
+                        <div className="w-8 h-8 border-2 border-gray-300 dark:border-slate-600 rounded-full flex items-center justify-center text-sm font-bold text-gray-500 dark:text-gray-400 group-hover:border-green-600 group-hover:text-green-600 transition-all">
+                            ?
+                        </div>
                         <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-800 border border-gray-100 dark:border-slate-700 rounded-xl shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-300 z-50 overflow-hidden text-left">
                             <Link href="/faq" className="block px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-slate-700">🙋‍♂️ FAQ</Link>
                             <Link href="/guide-vendeur" className="block px-4 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-green-50 dark:hover:bg-slate-700">📖 Guide Vendeur</Link>
@@ -130,11 +140,12 @@ export default function Header() {
                     {user ? (
                         <div className="relative" ref={menuRef}>
                             <button
+                                type="button"
                                 onClick={() => setShowUserMenu(!showUserMenu)}
-                                className="relative w-10 h-10 rounded-full flex items-center justify-center border-2 border-white shadow-sm hover:scale-110 transition-transform overflow-hidden"
+                                className="relative w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-sm hover:scale-105 transition-transform overflow-hidden"
                             >
                                 {avatarUrl ? (
-                                    <Image src={avatarUrl} alt="Avatar" fill sizes="40px" className="object-cover" />
+                                    <Image src={avatarUrl} alt="Avatar" fill sizes="36px" className="object-cover" />
                                 ) : (
                                     <div className="w-full h-full bg-green-600 flex items-center justify-center text-white font-bold">
                                         {user.email?.[0]?.toUpperCase() || 'U'}
@@ -161,7 +172,11 @@ export default function Header() {
                             )}
                         </div>
                     ) : (
-                        <button onClick={() => setShowAuthModal(true)} className="bg-green-600 text-white px-6 py-2 rounded-full font-bold hover:bg-green-700 transition shadow-md text-sm">
+                        <button
+                            type="button"
+                            onClick={() => setShowAuthModal(true)}
+                            className="bg-green-600 text-white px-4 py-1.5 rounded-full font-bold hover:bg-green-700 transition shadow-md text-xs"
+                        >
                             Connexion
                         </button>
                     )}
@@ -195,7 +210,7 @@ export default function Header() {
                 <div className="md:hidden border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pb-4">
                     {/* Search */}
                     <div className="py-3">
-                        <SearchBar />
+                        <SearchBar compact />
                     </div>
 
                     <div className="flex flex-col gap-1">

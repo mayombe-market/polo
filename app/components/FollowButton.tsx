@@ -66,13 +66,14 @@ export default function FollowButton({ sellerId, onFollowChange }: FollowButtonP
         }
     }
 
-    if (checking) return <div className="h-10 w-28 bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full" />
+    if (checking) return <div className="h-10 min-w-[7.5rem] bg-slate-100 dark:bg-slate-800 animate-pulse rounded-full" />
 
     return (
         <button
+            type="button"
             onClick={handleToggle}
             disabled={loading}
-            className={`flex items-center gap-2 px-6 py-2.5 rounded-full font-black uppercase text-[10px] tracking-widest transition-all shadow-sm border ${isFollowing
+            className={`inline-flex items-center justify-center gap-2 min-h-10 px-5 py-2 rounded-full font-black uppercase text-[10px] tracking-widest transition-all shadow-sm border ${isFollowing
                 ? 'bg-orange-500 text-white border-orange-600 shadow-orange-500/20'
                 : 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800'
                 }`}

@@ -89,13 +89,18 @@ export const metadata = {
   },
 }
 
+/** GA4 : uniquement en production pour ne pas polluer les stats en `next dev` / local. */
+const gaMeasurementId = process.env.NEXT_PUBLIC_GA_ID?.trim()
+const shouldLoadGoogleAnalytics =
+  process.env.NODE_ENV === 'production' && Boolean(gaMeasurementId)
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className={inter.className}>
-      {process.env.NEXT_PUBLIC_GA_ID && (
+      {shouldLoadGoogleAnalytics && gaMeasurementId && (
         <>
           <Script
-            src={`https://www.googletagmanager.com/gtag/js?id=${process.env.NEXT_PUBLIC_GA_ID}`}
+            src={`https://www.googletagmanager.com/gtag/js?id=${gaMeasurementId}`}
             strategy="lazyOnload"
             crossOrigin="anonymous"
           />
@@ -104,7 +109,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               window.dataLayer = window.dataLayer || [];
               function gtag(){dataLayer.push(arguments);}
               gtag('js', new Date());
-              gtag('config', '${process.env.NEXT_PUBLIC_GA_ID}');
+              gtag('config', '${gaMeasurementId}');
             `}
           </Script>
         </>

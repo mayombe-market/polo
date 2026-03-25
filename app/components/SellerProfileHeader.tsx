@@ -111,14 +111,18 @@ export default function SellerProfileHeader({
                     </p>
                 )}
 
-                {/* Follow + Share buttons */}
-                <div className="flex justify-center items-center gap-3 mt-4 flex-wrap">
-                    <FollowButton sellerId={profile?.id} />
-                    <ShareButtons
-                        title={storeName}
-                        text={`Découvre la boutique ${storeName} sur Mayombe Market !`}
-                        url={typeof window !== 'undefined' ? `${window.location.origin}/store/${profile?.id}` : ''}
-                    />
+                <div className="flex flex-wrap justify-center items-center gap-2 sm:gap-3 mt-4">
+                    <div className="flex items-center min-h-10">
+                        <FollowButton sellerId={profile?.id} />
+                    </div>
+                    <div className="flex items-center">
+                        <ShareButtons
+                            title={storeName}
+                            text={`Découvre la boutique ${storeName} sur Mayombe Market !`}
+                            url={typeof window !== 'undefined' ? `${window.location.origin}/store/${profile?.id}` : ''}
+                            inline
+                        />
+                    </div>
                 </div>
             </div>
 

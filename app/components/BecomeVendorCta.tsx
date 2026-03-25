@@ -57,8 +57,8 @@ export default function BecomeVendorCta({ variant, onNavigate }: BecomeVendorCta
 
     const icon = (
         <span className="inline-flex items-center gap-0.5 flex-shrink-0">
-            <Crown size={variant === 'header-desktop' ? 15 : 17} strokeWidth={2.5} />
-            <Sparkles size={variant === 'header-desktop' ? 12 : 14} className="opacity-90" strokeWidth={2.5} />
+            <Crown size={variant === 'header-desktop' ? 13 : 17} strokeWidth={2.5} />
+            <Sparkles size={variant === 'header-desktop' ? 11 : 14} className="opacity-90" strokeWidth={2.5} />
         </span>
     )
 
@@ -69,7 +69,7 @@ export default function BecomeVendorCta({ variant, onNavigate }: BecomeVendorCta
             <Link
                 href={href}
                 {...clickProps}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-white text-xs font-black uppercase tracking-wide no-underline whitespace-nowrap transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-lg"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[10px] font-black uppercase tracking-wide no-underline whitespace-nowrap transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-md"
                 style={{ background: BTN_GRADIENT, boxShadow: BTN_SHADOW }}
             >
                 {icon}

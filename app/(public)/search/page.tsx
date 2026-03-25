@@ -30,8 +30,33 @@ function SearchContent() {
         minPrice: searchParams.get('minPrice') || '',
         maxPrice: searchParams.get('maxPrice') || '',
         sort: searchParams.get('sort') || 'newest',
-        inStock: searchParams.get('inStock') === 'true'
+        inStock: searchParams.get('inStock') === 'true',
+        filter: searchParams.get('filter') || '',
     })
+
+    useEffect(() => {
+        const next = {
+            category: searchParams.get('category') || '',
+            minPrice: searchParams.get('minPrice') || '',
+            maxPrice: searchParams.get('maxPrice') || '',
+            sort: searchParams.get('sort') || 'newest',
+            inStock: searchParams.get('inStock') === 'true',
+            filter: searchParams.get('filter') || '',
+        }
+        setFilters((prev) => {
+            if (
+                prev.category === next.category &&
+                prev.minPrice === next.minPrice &&
+                prev.maxPrice === next.maxPrice &&
+                prev.sort === next.sort &&
+                prev.inStock === next.inStock &&
+                prev.filter === next.filter
+            ) {
+                return prev
+            }
+            return next
+        })
+    }, [searchParams.toString()])
 
     const fetchResults = async (page: number) => {
         setLoading(true)
@@ -68,8 +93,14 @@ function SearchContent() {
         setFilters(newFilters)
 
         const params = new URLSearchParams(searchParams.toString())
-        if (value) params.set(key, value.toString())
-        else params.delete(key)
+        if (key === 'inStock') {
+            if (value) params.set('inStock', 'true')
+            else params.delete('inStock')
+        } else if (value) {
+            params.set(key, value.toString())
+        } else {
+            params.delete(key)
+        }
         router.push(`/search?${params.toString()}`, { scroll: false })
     }
 
@@ -132,6 +163,7 @@ function SearchContent() {
                                     className="w-full bg-transparent font-bold text-sm outline-none cursor-pointer"
                                 >
                                     <option value="newest">Nouveautés</option>
+                                    <option value="popular">Plus populaires</option>
                                     <option value="price_asc">Prix croissant</option>
                                     <option value="price_desc">Prix décroissant</option>
                                 </select>
@@ -169,8 +201,17 @@ function SearchContent() {
 
                             <button
                                 onClick={() => {
-                                    setFilters({ category: '', minPrice: '', maxPrice: '', sort: 'newest', inStock: false })
-                                    router.push(`/search?q=${query}`)
+                                    setFilters({
+                                        category: '',
+                                        minPrice: '',
+                                        maxPrice: '',
+                                        sort: 'newest',
+                                        inStock: false,
+                                        filter: '',
+                                    })
+                                    const params = new URLSearchParams()
+                                    if (query.trim()) params.set('q', query.trim())
+                                    router.push(params.toString() ? `/search?${params.toString()}` : '/search')
                                 }}
                                 className="w-full py-3 text-[10px] font-black uppercase bg-white dark:bg-slate-800 text-red-500 rounded-xl flex items-center justify-center gap-2 hover:bg-red-500 hover:text-white transition-all"
                             >

@@ -197,7 +197,7 @@ export default function ClientHomePage({
                             </p>
                         </div>
                         <Link
-                            href="/search"
+                            href="/search?filter=promo"
                             className="bg-red-50 dark:bg-red-500/10 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-red-600 dark:text-red-400 hover:bg-red-600 hover:text-white transition-all flex items-center gap-2"
                         >
                             Voir tout <ArrowRight size={12} />
@@ -224,7 +224,7 @@ export default function ClientHomePage({
                             </p>
                         </div>
                         <Link
-                            href="/search"
+                            href="/search?sort=newest"
                             className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2"
                         >
                             Voir tout <ArrowRight size={12} />
@@ -251,7 +251,7 @@ export default function ClientHomePage({
                             </p>
                         </div>
                         <Link
-                            href="/search"
+                            href="/search?sort=popular"
                             className="bg-slate-100 dark:bg-slate-800 px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic text-slate-600 dark:text-slate-300 hover:bg-orange-500 hover:text-white transition-all flex items-center gap-2"
                         >
                             Voir tout <ArrowRight size={12} />

@@ -1,6 +1,7 @@
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 
 export const searchProducts = async (query: string, filters: any, page: number = 1) => {
     const supabase = getSupabaseBrowserClient()
@@ -33,12 +34,23 @@ export const searchProducts = async (query: string, filters: any, page: number =
         request = request.gt('stock_quantity', 0)
     }
 
+    // Filtre catalogue « promo » : prix réduit = promo active (pourcentage + date de fin), aligné page d’accueil — pas de colonne discount_price en base.
+    if (filters.filter === 'promo') {
+        request = request
+            .neq('category', IMMOBILIER_CATEGORY)
+            .gt('promo_percentage', 0)
+            .gt('promo_end_date', new Date().toISOString())
+    }
+
     // 3. LOGIQUE DE TRI
     if (filters.sort === 'price_asc') {
         request = request.order('price', { ascending: true })
     } else if (filters.sort === 'price_desc') {
         request = request.order('price', { ascending: false })
+    } else if (filters.sort === 'popular') {
+        request = request.order('views_count', { ascending: false, nullsFirst: false })
     } else {
+        // newest (défaut) + sort explicite ?sort=newest
         request = request.order('created_at', { ascending: false })
     }
 

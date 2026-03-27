@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
@@ -137,7 +137,7 @@ export default async function CategoryPage(props: any) {
                             return (
                                 <Link href={`/product/${p.id}`} key={p.id} className="group border border-slate-100 dark:border-slate-800 rounded-[2rem] overflow-hidden hover:shadow-2xl transition-all bg-white dark:bg-slate-800/50">
                                     <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
-                                        <Image
+                                        <CloudinaryImage
                                             src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.svg'}
                                             alt={p.name}
                                             fill

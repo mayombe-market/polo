@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { useRouter } from 'next/navigation'
 import ProductCard from '@/app/components/ProductCard'
 import { Truck, Store, ArrowRight } from 'lucide-react'
@@ -102,7 +103,7 @@ export default function ClientHomePage({
                                 className="bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block group"
                             >
                                 <div className="relative overflow-hidden aspect-square w-full">
-                            <Image
+                            <CloudinaryImage
                                 src={product.img || product.image_url || '/placeholder-image.svg'}
                                 alt={product.name}
                                 fill

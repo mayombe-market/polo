@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import NextImage from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Trash2, Plus, X, Image as ImageIcon, Loader2,
@@ -261,7 +261,7 @@ export default function AdminProducts() {
                                 {filteredProducts.map((p) => (
                                     <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/40">
                                         <td className="p-4">
-                                            <NextImage src={p.img || '/placeholder-image.svg'} alt={p.name || ''} width={48} height={48} className="w-12 h-12 rounded-xl object-cover border dark:border-slate-700" unoptimized />
+                                            <CloudinaryImage src={p.img || '/placeholder-image.svg'} alt={p.name || ''} width={48} height={48} className="w-12 h-12 rounded-xl object-cover border dark:border-slate-700" />
                                         </td>
                                         <td className="p-4">
                                             <p className="font-bold text-sm dark:text-white truncate max-w-[200px]">{p.name}</p>
@@ -306,7 +306,7 @@ export default function AdminProducts() {
                                 <div className="relative group">
                                     {formData.img ? (
                                         <div className="relative w-full h-48 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200">
-                                            <NextImage src={formData.img} alt="" fill className="object-cover" unoptimized />
+                                            <CloudinaryImage src={formData.img} alt="" fill className="object-cover" />
                                             <button type="button" onClick={() => setFormData({ ...formData, img: '' })} className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full"><X size={14} /></button>
                                         </div>
                                     ) : (

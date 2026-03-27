@@ -1,7 +1,7 @@
 'use client'
 
 import { memo, useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 
 function ProductGallery({ images, productName, priorityMain = false }: { images: string[], productName: string, priorityMain?: boolean }) {
     const normalizedImages = useMemo(() => (Array.isArray(images) ? images : []), [images])
@@ -27,7 +27,7 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
         <div className="space-y-6">
             {/* Image Principale - CORRECTION QUALITÉ OPTIMISÉE */}
             <div className="aspect-square rounded-[2.5rem] overflow-hidden bg-white border border-slate-100 shadow-sm group relative">
-                <Image
+                <CloudinaryImage
                     src={mainImg || firstImage}
                     alt={productName}
                     fill
@@ -60,7 +60,7 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
                                     : 'border-transparent hover:border-green-300 opacity-60 hover:opacity-100 hover:scale-105'
                                 }`}
                         >
-                            <Image
+                            <CloudinaryImage
                                 src={img}
                                 fill
                                 // 5 vignettes: ~20% de la largeur, mais cap visuel autour de ~96px

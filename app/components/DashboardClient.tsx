@@ -41,6 +41,7 @@ import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from
 import { updateProfile } from '@/app/actions/profile'
 import { useRealtime } from '@/hooks/useRealtime'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
@@ -1395,7 +1396,7 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                         return (
                         <div key={p.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden group hover:shadow-lg transition-all">
                             <div className="relative aspect-[4/3] bg-slate-100">
-                                <Image
+                                <CloudinaryImage
                                     src={p.img || p.image_url || '/placeholder-image.svg'}
                                     alt={p.name}
                                     fill
@@ -1679,7 +1680,7 @@ function OrdersPage({
                                 <div className="space-y-2 mb-4">
                                     {vendorItems.map((item: any, idx: number) => (
                                         <div key={idx} className="flex gap-3 items-center bg-slate-50 dark:bg-slate-800 p-3 rounded-2xl">
-                                            <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={40} height={40} className="w-10 h-10 object-cover rounded-xl" />
+                                            <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={40} height={40} className="w-10 h-10 object-cover rounded-xl" />
                                             <div className="flex-1">
                                                 <h3 className="text-xs font-black uppercase italic dark:text-white leading-tight">{item.name}</h3>
                                                 <p className="text-[10px] font-bold text-green-600">{item.price?.toLocaleString('fr-FR')} F x {item.quantity}</p>
@@ -1915,7 +1916,7 @@ function StatsPage({ orders, products, followerCount }: { orders: any[]; product
                                 <span className="w-8 h-8 rounded-xl bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600 font-black text-sm">
                                     {i + 1}
                                 </span>
-                                <Image
+                                <CloudinaryImage
                                     src={p.img || p.image_url || '/placeholder-image.svg'}
                                     alt={p.name}
                                     width={40}
@@ -2427,7 +2428,7 @@ function NegotiationsPage({ negotiations, negotiationsLoading, negotiationsError
                                 <div className="flex items-start gap-4">
                                     {/* Product image */}
                                     <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                        <Image src={productImg} alt={productName} width={64} height={64} className="w-full h-full object-cover" />
+                                        <CloudinaryImage src={productImg} alt={productName} width={64} height={64} className="w-full h-full object-cover" />
                                     </div>
 
                                     <div className="flex-1 min-w-0">

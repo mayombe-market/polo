@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
@@ -48,8 +48,8 @@ export default async function SubCategoryPage({ params }: { params: { id: string
                                 className="group bg-white dark:bg-slate-800 rounded-2xl overflow-hidden shadow-sm border dark:border-slate-700 hover:shadow-lg transition-all block"
                             >
                                 <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
-                                    <Image
-                                        src={product.img || '/placeholder-image.svg'}
+                                    <CloudinaryImage
+                                        src={product.img || product.image_url || '/placeholder-image.svg'}
                                         alt={product.name}
                                         fill
                                         sizes="(max-width: 768px) 50vw, 25vw"

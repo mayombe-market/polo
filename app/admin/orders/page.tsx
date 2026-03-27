@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react'
 import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
@@ -547,7 +548,7 @@ export default function AdminOrders() {
                                             <p className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em]">Articles</p>
                                             {order.items?.map((item: any, idx: number) => (
                                                 <div key={idx} className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
-                                                    <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
+                                                    <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
                                                     <div className="flex-1">
                                                         <h3 className="text-xs font-black uppercase italic leading-tight">{item.name}</h3>
                                                         <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F x {item.quantity}</p>

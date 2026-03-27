@@ -78,7 +78,7 @@ export const metadata = {
   },
 }
 
-const GA_MEASUREMENT_ID = 'G-SLRPK4NETV'
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-SLRPK4NETV'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

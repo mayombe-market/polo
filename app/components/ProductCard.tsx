@@ -14,7 +14,7 @@
  */
 
 import Link from 'next/link'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { memo } from 'react'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
@@ -142,7 +142,7 @@ function ProductCardInner({
                   key = id + src : si le parent met à jour l’URL d’image après le 1er rendu (ex. données async),
                   Next/Image remonte correctement sans exiger un refresh de page entière.
                 */}
-                <Image
+                <CloudinaryImage
                     key={`${product.id}-${imageSrc}`}
                     src={imageSrc}
                     alt={displayName}

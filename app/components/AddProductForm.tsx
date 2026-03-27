@@ -7,7 +7,7 @@
  * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
  * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
  *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
- * - **Uploads Storage** : boucle jusqu’à 4 tentatives sur erreurs réseau (`runWithNetworkRetries`) + une 2e vague complète
+ * - **Uploads Cloudinary** (`/api/upload`) : boucle jusqu’à 4 tentatives sur erreurs réseau (`runWithNetworkRetries`) + une 2e vague complète
  *   si timeout ; fichiers envoyés **séquentiellement** pour limiter la saturation réseau et les effets de bord.
  * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
  *   renvoyée dans `{ error: string }` (évite doublons involontaires).
@@ -828,9 +828,9 @@ export default function AddProductForm({
             return
         }
 
-        if (/row-level security|\brls\b|policy|storage api/i.test(msg)) {
+        if (/row-level security|\brls\b|policy|storage api|cloudinary/i.test(msg)) {
             alert(
-                'Accès refusé au stockage ou à la base. Vérifiez les policies du bucket « products » (script supabase-storage-products.sql) ou reconnectez-vous.',
+                'Accès refusé ou erreur d’envoi d’image. Vérifiez votre connexion, la configuration Cloudinary (serveur), ou reconnectez-vous.',
             )
             return
         }
@@ -871,56 +871,45 @@ export default function AddProductForm({
         /** Si `runId` ne correspond plus au ref, un autre envoi a pris le relais — ne pas toucher à l’UI globale. */
         const ownsPublishUi = () => publishRunIdRef.current === runId
 
-        const extFromFile = (file: File): string => {
-            const fromName = file.name.split('.').pop()?.toLowerCase()
-            if (fromName && ['png', 'jpg', 'jpeg', 'webp', 'gif', 'heic', 'heif'].includes(fromName)) {
-                if (fromName === 'jpeg') return 'jpg'
-                return fromName
-            }
-            if (file.type === 'image/png') return 'png'
-            if (file.type === 'image/webp') return 'webp'
-            if (file.type === 'image/gif') return 'gif'
-            if (file.type === 'image/heic' || file.type === 'image/heif') return 'heic'
-            return 'jpg'
-        }
-
-        const contentTypeForFile = (file: File, ext: string): string => {
-            if (file.type && file.type.startsWith('image/')) return file.type
-            if (ext === 'png') return 'image/png'
-            if (ext === 'webp') return 'image/webp'
-            if (ext === 'gif') return 'image/gif'
-            if (ext === 'heic' || ext === 'heif') return 'image/heic'
-            return 'image/jpeg'
-        }
-
-        const uploadFileOnce = async (file: File, basePath: string): Promise<string> => {
-            const ext = extFromFile(file)
-            // basePath doit être `${authUserId}/…` — 1er segment = auth.uid() pour RLS Storage
-            const path = `${basePath}.${ext}`
-            const contentType = contentTypeForFile(file, ext)
-
-            const { error: upErr } = await supabase.storage.from('products').upload(path, file, {
-                contentType,
-                upsert: true,
+        const fileToDataUri = (file: File): Promise<string> =>
+            new Promise((resolve, reject) => {
+                const r = new FileReader()
+                r.onload = () => resolve(r.result as string)
+                r.onerror = () => reject(new Error('Lecture du fichier image impossible.'))
+                r.readAsDataURL(file)
             })
-            if (upErr) {
-                logStorageOrPostgrestError('storage_upload', upErr)
-                throw upErr
+
+        const uploadFileOnce = async (file: File): Promise<string> => {
+            const image = await fileToDataUri(file)
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image }),
+            })
+            let body: { secure_url?: string; error?: string }
+            try {
+                body = await res.json()
+            } catch {
+                body = {}
             }
-            const { data } = supabase.storage.from('products').getPublicUrl(path)
-            return data.publicUrl
+            if (!res.ok) {
+                throw new Error(body.error || `Échec envoi image (${res.status})`)
+            }
+            if (!body.secure_url) {
+                throw new Error('Réponse serveur sans URL d’image.')
+            }
+            return body.secure_url
         }
 
         /**
-         * Upload Storage : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout (connexion très lente).
+         * Upload Cloudinary via `/api/upload` : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout (connexion très lente).
          * Les fichiers sont envoyés séquentiellement (pas en parallèle) pour limiter la charge et les races côté client.
          */
-        const uploadFileTimedWithRetry = async (file: File, basePath: string): Promise<string> => {
-            const shortLabel = basePath.split('/').pop() ?? 'fichier'
+        const uploadFileTimedWithRetry = async (file: File, label: string): Promise<string> => {
             const oneWave = () =>
                 runWithNetworkRetries(
-                    () => withTimeout(uploadFileOnce(file, basePath), UPLOAD_TIMEOUT_MS),
-                    `storage.upload ${shortLabel}`,
+                    () => withTimeout(uploadFileOnce(file), UPLOAD_TIMEOUT_MS),
+                    `cloudinary.upload ${label}`,
                 )
             try {
                 return await oneWave()
@@ -958,7 +947,6 @@ export default function AddProductForm({
 
             setPublishLabel('Préparation…')
 
-            const uploadId = `${Date.now()}-${typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2, 12)}`
             const galleryFiles = gallery.filter(Boolean) as File[]
             const totalUploads = 1 + galleryFiles.length
             let completed = 0
@@ -993,7 +981,7 @@ export default function AddProductForm({
             setPublishLabel('Envoi de l’image principale…')
             let mainUrl: string
             try {
-                mainUrl = await uploadFileTimedWithRetry(fileMain, `${storageUserId}/${uploadId}-main`)
+                mainUrl = await uploadFileTimedWithRetry(fileMain, 'principale')
                 if (!ownsPublishUi()) return
                 bumpUploadProgress()
             } catch (e: unknown) {
@@ -1007,7 +995,7 @@ export default function AddProductForm({
                 for (const { slotIndex, file: gFile } of galleryPrepared) {
                     setPublishLabel(`Envoi galerie ${gIdx + 1}/${galleryFiles.length}…`)
                     galleryUrls.push(
-                        await uploadFileTimedWithRetry(gFile, `${storageUserId}/${uploadId}-gallery-${slotIndex}`)
+                        await uploadFileTimedWithRetry(gFile, `galerie-${slotIndex}`)
                     )
                     if (!ownsPublishUi()) return
                     bumpUploadProgress()

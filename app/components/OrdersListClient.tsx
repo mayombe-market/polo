@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { Phone, Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -195,7 +195,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                         <p className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em]">Articles à préparer</p>
                                         {vendorItems.map((item: any, idx: number) => (
                                             <div key={idx} className="flex gap-4 items-center bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl">
-                                                <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
+                                                <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
                                                 <div className="flex-1">
                                                     <h3 className="text-xs font-black uppercase italic dark:text-white leading-tight">{item.name}</h3>
                                                     <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F x {item.quantity}</p>

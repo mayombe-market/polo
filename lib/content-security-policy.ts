@@ -22,6 +22,7 @@ export function getContentSecurityPolicy(): string {
             https://images.unsplash.com
             https://ui-avatars.com
             https://*.supabase.co
+            https://res.cloudinary.com
             https://www.googletagmanager.com
             https://challenges.cloudflare.com;
         font-src 'self' data: blob:;

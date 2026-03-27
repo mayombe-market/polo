@@ -14,6 +14,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import Link from 'next/link'
 import { useCart } from '@/hooks/userCart'
 import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
@@ -762,7 +763,7 @@ function BuyerHome({
                             <button key={order.id} onClick={() => onConfirmReception(order)}
                                 className="w-full flex items-center gap-3 p-3 bg-white dark:bg-slate-900 rounded-2xl border border-green-200/50 dark:border-green-800/30 hover:border-green-400 transition-all text-left">
                                 {order.items?.[0]?.img && (
-                                    <Image src={order.items[0].img} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
+                                    <CloudinaryImage src={order.items[0].img} alt="" width={40} height={40} className="w-10 h-10 rounded-xl object-cover flex-shrink-0" />
                                 )}
                                 <div className="flex-1 min-w-0">
                                     <p className="text-xs font-black dark:text-white truncate">{order.items?.[0]?.name || 'Commande'}</p>
@@ -813,7 +814,7 @@ function BuyerHome({
                                     <div className="flex items-center gap-4 mb-4">
                                         {firstItem?.img && (
                                             <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                                <Image src={firstItem.img} alt="" width={48} height={48} className="w-full h-full object-cover" />
+                                                <CloudinaryImage src={firstItem.img} alt="" width={48} height={48} className="w-full h-full object-cover" />
                                             </div>
                                         )}
                                         <div className="flex-1 min-w-0">
@@ -1009,7 +1010,7 @@ function BuyerOrders({
                                 <div className="flex flex-wrap gap-2 pt-4 border-t border-slate-100 dark:border-slate-800">
                                     {order.items?.map((item: any, idx: number) => (
                                         <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl">
-                                            <Image src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
+                                            <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
                                             <div>
                                                 <p className="text-[9px] font-black uppercase truncate max-w-[120px] dark:text-white">{item.name}</p>
                                                 <p className="text-[8px] text-slate-400 font-bold">x{item.quantity}</p>
@@ -1116,7 +1117,7 @@ function BuyerWishlist({
                     {favorites.map((item: any) => (
                         <div key={item.id} className={`flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 transition-all ${item.has_stock && item.stock_quantity <= 0 ? 'opacity-50' : ''}`}>
                             <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                <Image src={item.img || item.image_url || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
+                                <CloudinaryImage src={item.img || item.image_url || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
                             </div>
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-black dark:text-white truncate">{item.name}</p>
@@ -1195,7 +1196,7 @@ function BuyerCart({
                         {cart.map((item: any) => (
                             <div key={item.id} className="flex items-center gap-4 p-4 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
                                 <div className="w-16 h-16 rounded-2xl overflow-hidden bg-slate-100 flex-shrink-0">
-                                    <Image src={item.img || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
+                                    <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name} width={64} height={64} className="w-full h-full object-cover" />
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <p className="text-sm font-black dark:text-white truncate">{item.name}</p>

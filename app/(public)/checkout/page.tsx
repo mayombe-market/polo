@@ -2,7 +2,7 @@
 
 import '@/lib/zod-jitless'
 import { useEffect, useMemo, useState } from 'react'
-import Image from 'next/image'
+import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { useRouter } from 'next/navigation'
 import { useForm, type DefaultValues } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -579,7 +579,7 @@ export default function CheckoutPage() {
                             {cart.map((item) => (
                                 <div key={item.id} className="flex items-center gap-4 group">
                                     <div className="relative w-16 h-16 bg-slate-100 rounded-2xl overflow-hidden flex-shrink-0">
-                                        <Image src={item.img || '/placeholder-image.svg'} alt={item.name} fill className="object-cover" />
+                                        <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name} fill className="object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
                                         <h4 className="font-black uppercase italic text-[10px] truncate">{item.name}</h4>

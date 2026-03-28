@@ -25,7 +25,7 @@ function errorToMessage(err: unknown): string {
 
 export async function POST(req: Request) {
     // DEBUG — à retirer une fois résolu
-    console.log('[DEBUG ENV]', {
+    console.error('[DEBUG ENV]', {
         CLOUDINARY_URL: process.env.CLOUDINARY_URL ?? 'undefined',
         CLOUDINARY_CLOUD_NAME: process.env.CLOUDINARY_CLOUD_NAME ?? 'undefined',
         NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ?? 'undefined',

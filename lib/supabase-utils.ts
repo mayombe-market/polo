@@ -108,9 +108,17 @@ function classifyAuthSdkError(error: { message?: string; status?: number }): Saf
  * - **Ne retourne `user` non null que** lorsque la session est valide (`status === 'ok'`).
  * - Distingue `no-user` (réponse OK mais pas d’utilisateur) des erreurs SDK / timeout.
  */
+/** Délai par défaut plus tolérant (réseaux lents, CDN) — surchargeable via NEXT_PUBLIC_SUPABASE_GETUSER_TIMEOUT_MS (ex. 15000). */
+function defaultSafeGetUserTimeoutMs(): number {
+    if (typeof process === 'undefined' || !process.env) return 10000
+    const n = Number(process.env.NEXT_PUBLIC_SUPABASE_GETUSER_TIMEOUT_MS)
+    if (Number.isFinite(n) && n >= 4000 && n <= 60000) return Math.floor(n)
+    return 10000
+}
+
 export async function safeGetUser<UserType = any>(
     supabase: { auth: { getUser: () => Promise<unknown> } },
-    timeoutMs = 5000,
+    timeoutMs = defaultSafeGetUserTimeoutMs(),
 ): Promise<SafeGetUserResult<UserType>> {
     const context = 'safeGetUser'
     const maxAttempts = SUPABASE_FETCH_MIN_TOTAL_ATTEMPTS

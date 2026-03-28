@@ -47,6 +47,7 @@ export async function revalidateProductCatalog(productId: string, sellerId: stri
     revalidatePath('/category/[id]', 'page')
     revalidatePath('/sub_category/[id]', 'page')
     revalidatePath(`/product/${productId}`)
+    revalidatePath('/vendor/dashboard')
     if (sellerId) {
         revalidatePath(`/seller/${sellerId}`)
     }

@@ -1022,6 +1022,16 @@ export async function createProduct(input: {
             !Array.isArray(rawExtras) &&
             (rawExtras as { version?: number }).version === 1
 
+        const imgTrim = String(input.img ?? '').trim()
+        if (!imgTrim) {
+            return { error: 'Image principale manquante. Réessayez l’upload ou rafraîchissez la page.' }
+        }
+        if (!/^https?:\/\//i.test(imgTrim)) {
+            return {
+                error: "URL d'image principale invalide (attendu une URL https). Vérifiez l'upload Cloudinary.",
+            }
+        }
+
         const priceNum = Number(input.price)
         if (!Number.isFinite(priceNum)) {
             return { error: 'Prix invalide.' }
@@ -1041,7 +1051,7 @@ export async function createProduct(input: {
             description: input.description ?? '',
             category: input.category,
             subcategory: input.subcategory,
-            img: input.img,
+            img: imgTrim,
             images_gallery: Array.isArray(input.images_gallery) ? input.images_gallery : [],
             has_stock: Boolean(input.has_stock),
             stock_quantity: Number.isFinite(input.stock_quantity) ? input.stock_quantity : 0,
@@ -1078,7 +1088,17 @@ export async function createProduct(input: {
             }
         }
 
-        return { product: JSON.parse(JSON.stringify(product)) as Record<string, unknown> }
+        const productRecord = JSON.parse(JSON.stringify(product)) as Record<string, unknown>
+        const newId = typeof productRecord.id === 'string' ? productRecord.id : ''
+        if (newId && user.id) {
+            try {
+                await revalidateProductCatalog(newId, user.id)
+            } catch (revErr) {
+                console.error('[createProduct] revalidate après insert:', revErr)
+            }
+        }
+
+        return { product: productRecord }
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e)
         console.error('[createProduct] exception:', e)

@@ -16,17 +16,20 @@ function stripEnv(value: string | undefined): string {
 }
 
 /**
- * Identifiants Cloudinary : trio d’env vars, ou `CLOUDINARY_URL` parsée (aucune valeur en dur).
+ * Identifiants Cloudinary — **uniquement** variables serveur + `CLOUDINARY_URL`.
+ *
+ * Ne pas utiliser `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` ici : Next.js l’inline au **build** ;
+ * une ancienne valeur (ex. ancien cloud) reste alors figée dans le bundle → 401 permanent.
+ * `CLOUDINARY_CLOUD_NAME` est lue à l’exécution sur Vercel.
  */
 function readCredentials(): { cloud_name: string; api_key: string; api_secret: string } {
     const url = stripEnv(process.env.CLOUDINARY_URL)
-    const cloud_name =
-        stripEnv(process.env.CLOUDINARY_CLOUD_NAME) ||
-        stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
+    const cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
     const api_key = stripEnv(process.env.CLOUDINARY_API_KEY)
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
 
     if (cloud_name && api_key && api_secret) {
+        console.log('[cloudinaryRestUpload] cloud_name (CLOUDINARY_CLOUD_NAME):', cloud_name)
         return { cloud_name, api_key, api_secret }
     }
 
@@ -46,11 +49,12 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
         if (!cn || !key || !secret) {
             throw new Error('CLOUDINARY_URL incomplète.')
         }
+        console.log('[cloudinaryRestUpload] cloud_name (CLOUDINARY_URL):', cn)
         return { cloud_name: cn, api_key: key, api_secret: secret }
     }
 
     throw new Error(
-        'Cloudinary : définissez CLOUDINARY_CLOUD_NAME (ou NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME), CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET — ou uniquement CLOUDINARY_URL.',
+        'Cloudinary : côté serveur, définissez CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET (valeurs runtime Vercel), ou uniquement CLOUDINARY_URL. Ne pas compter sur NEXT_PUBLIC_* pour l’upload : il est figé au build.',
     )
 }
 
@@ -94,6 +98,10 @@ export async function uploadDataUriToCloudinary(dataUri: string): Promise<{ secu
     form.append('folder', 'products')
 
     const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud_name)}/auto/upload`
+
+    console.error('[cloudinaryRestUpload] cloud_name utilisé:', cloud_name)
+    console.error('[cloudinaryRestUpload] endpoint:', endpoint)
+    console.error('[cloudinaryRestUpload] api_key:', api_key)
 
     const res = await fetch(endpoint, {
         method: 'POST',

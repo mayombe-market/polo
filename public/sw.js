@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mayombe-v3'
+const CACHE_NAME = 'mayombe-v4'
 const OFFLINE_URL = '/'
 
 // Routes that should NEVER be cached (auth-sensitive)
@@ -70,6 +70,9 @@ self.addEventListener('fetch', (event) => {
 
   // Skip Supabase API calls and auth
   if (request.url.includes('supabase.co')) return
+
+  // Skip Cloudinary images (le fetch échoue dans le SW → affiche le placeholder)
+  if (request.url.includes('res.cloudinary.com')) return
 
   // Skip Chrome extensions
   if (request.url.startsWith('chrome-extension://')) return

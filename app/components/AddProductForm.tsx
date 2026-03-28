@@ -945,7 +945,6 @@ export default function AddProductForm({
         try {
             // TODO: rétablir ensureSessionBeforePublish une fois Cloudinary validé
             const storageUserId = sellerId || 'anonymous'
-            console.warn('[AddProductForm] session gate bypassed (debug Cloudinary)')
 
             setPublishLabel('Préparation…')
 

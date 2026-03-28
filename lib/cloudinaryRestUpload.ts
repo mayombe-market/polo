@@ -24,21 +24,15 @@ function stripEnv(value: string | undefined): string {
  */
 function readCredentials(): { cloud_name: string; api_key: string; api_secret: string } {
     const url = stripEnv(process.env.CLOUDINARY_URL)
-    const cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
+    const cloud_name =
+        stripEnv(process.env.CLOUDINARY_CLOUD_NAME) ||
+        stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
     const api_key = stripEnv(process.env.CLOUDINARY_API_KEY)
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
 
     if (cloud_name && api_key && api_secret) {
         console.log('[cloudinaryRestUpload] cloud_name (CLOUDINARY_CLOUD_NAME):', cloud_name)
         return { cloud_name, api_key, api_secret }
-    }
-
-    if (api_key && api_secret && !cloud_name && !url) {
-        throw new Error(
-            'Cloudinary : CLOUDINARY_CLOUD_NAME est absent sur ce déploiement. ' +
-                'Dans Vercel → Settings → Environment Variables, ajoutez CLOUDINARY_CLOUD_NAME = le nom du cloud (ex. dtfuyqlvo). ' +
-                'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ne remplace pas cette variable pour l’API upload.',
-        )
     }
 
     if (url) {

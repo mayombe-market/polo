@@ -27,11 +27,6 @@ function errorToMessage(err: unknown): string {
 
 export async function POST(req: Request) {
     try {
-        console.log('CLOUD NAME (NEXT_PUBLIC):', process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
-        console.log('CLOUD NAME (CLOUDINARY_CLOUD_NAME):', process.env.CLOUDINARY_CLOUD_NAME)
-        console.log('API KEY:', process.env.CLOUDINARY_API_KEY ? 'OK' : 'MISSING')
-        console.log('API SECRET:', process.env.CLOUDINARY_API_SECRET ? 'OK' : 'MISSING')
-
         let body: { image?: unknown }
         try {
             body = await req.json()
@@ -40,12 +35,6 @@ export async function POST(req: Request) {
         }
 
         const { image } = body
-
-        console.log('IMAGE TYPE:', typeof image)
-        console.log(
-            'IMAGE START:',
-            typeof image === 'string' ? image.slice(0, 50) : image,
-        )
 
         if (typeof image !== 'string' || !image.trim()) {
             return NextResponse.json({ error: 'No image provided' }, { status: 400 })
@@ -58,13 +47,6 @@ export async function POST(req: Request) {
                 { status: 400 },
             )
         }
-
-        console.log(
-            '[/api/upload] data URL reçu, longueur:',
-            trimmed.length,
-            '| préfixe:',
-            trimmed.slice(0, 40),
-        )
 
         const cld = getCloudinary()
         const uploaded = await cld.uploader.upload(trimmed, {
@@ -82,15 +64,10 @@ export async function POST(req: Request) {
             )
         }
 
-        console.log('[/api/upload] OK:', url)
         return NextResponse.json({ url })
     } catch (error: unknown) {
         const message = errorToMessage(error)
-        console.error('Cloudinary upload error FULL:', error)
-        if (error instanceof Error) {
-            console.error('Error message:', error.message)
-            console.error('Error stack:', error.stack)
-        }
+        console.error('[api/upload]', error)
         return NextResponse.json({ error: message }, { status: 500 })
     }
 }

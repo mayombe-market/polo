@@ -1,3 +1,7 @@
+import 'server-only'
+
+import 'server-only'
+
 import { v2 as cloudinary } from 'cloudinary'
 
 const cloudName = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME

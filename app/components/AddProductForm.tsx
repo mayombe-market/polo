@@ -7,8 +7,7 @@
  * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
  * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
  *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
- * - **Uploads Cloudinary** (`/api/upload`) : boucle jusqu’à 4 tentatives sur erreurs réseau (`runWithNetworkRetries`) + une 2e vague complète
- *   si timeout ; fichiers envoyés **séquentiellement** pour limiter la saturation réseau et les effets de bord.
+ * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` en base64 pur + `mimeType`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; envoi **séquentiel** des fichiers.
  * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
  *   renvoyée dans `{ error: string }` (évite doublons involontaires).
  * - **Feedback** : libellés d’étape (`publishLabel`) + barre de progression ; entrées fichier désactivées pendant `loading`.
@@ -871,20 +870,33 @@ export default function AddProductForm({
         /** Si `runId` ne correspond plus au ref, un autre envoi a pris le relais — ne pas toucher à l’UI globale. */
         const ownsPublishUi = () => publishRunIdRef.current === runId
 
-        const fileToDataUri = (file: File): Promise<string> =>
+        /** Data URL → payload JSON : base64 seul + type MIME (pas de clés Cloudinary côté navigateur). */
+        const fileToBase64JsonPayload = (file: File): Promise<{ image: string; mimeType: string }> =>
             new Promise((resolve, reject) => {
                 const r = new FileReader()
-                r.onload = () => resolve(r.result as string)
+                r.onload = () => {
+                    const dataUrl = String(r.result || '').trim()
+                    const sep = ';base64,'
+                    const i = dataUrl.indexOf(sep)
+                    if (!dataUrl.startsWith('data:') || i === -1) {
+                        reject(new Error('Encodage image invalide.'))
+                        return
+                    }
+                    const mimeType = dataUrl.slice(5, i)
+                    const image = dataUrl.slice(i + sep.length).replace(/\s/g, '')
+                    resolve({ mimeType, image })
+                }
                 r.onerror = () => reject(new Error('Lecture du fichier image impossible.'))
                 r.readAsDataURL(file)
             })
 
         const uploadFileOnce = async (file: File): Promise<string> => {
-            const image = await fileToDataUri(file)
+            const { image, mimeType } = await fileToBase64JsonPayload(file)
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image }),
+                credentials: 'same-origin',
+                body: JSON.stringify({ image, mimeType }),
             })
             let body: { secure_url?: string; error?: string }
             try {
@@ -902,14 +914,14 @@ export default function AddProductForm({
         }
 
         /**
-         * Upload Cloudinary via `/api/upload` : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout (connexion très lente).
+         * POST `/api/upload` (session requise) : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout.
          * Les fichiers sont envoyés séquentiellement (pas en parallèle) pour limiter la charge et les races côté client.
          */
         const uploadFileTimedWithRetry = async (file: File, label: string): Promise<string> => {
             const oneWave = () =>
                 runWithNetworkRetries(
                     () => withTimeout(uploadFileOnce(file), UPLOAD_TIMEOUT_MS),
-                    `cloudinary.upload ${label}`,
+                    `api.upload ${label}`,
                 )
             try {
                 return await oneWave()

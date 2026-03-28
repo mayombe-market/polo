@@ -18,8 +18,8 @@ function jsonWithSessionCookies(
 }
 
 /**
- * POST JSON { "image": "<data URI ou chaîne base64>" }
- * Envoie l’image dans le dossier Cloudinary "products".
+ * POST JSON { "image": "<base64 ou data URI>", "mimeType"?: "image/jpeg" } (mimeType requis si image est du base64 seul)
+ * Envoie l’image dans le dossier Cloudinary "products" (clés serveur uniquement).
  * Réservé aux utilisateurs connectés (session Supabase).
  */
 export async function POST(request: NextRequest) {
@@ -67,7 +67,7 @@ export async function POST(request: NextRequest) {
         return jsonWithSessionCookies({ error: msg }, 500, pendingCookies)
     }
 
-    let body: { image?: string }
+    let body: { image?: string; mimeType?: string }
     try {
         body = await request.json()
     } catch {
@@ -83,9 +83,16 @@ export async function POST(request: NextRequest) {
         )
     }
 
+    const mimeFromBody =
+        typeof body.mimeType === 'string' &&
+        body.mimeType.startsWith('image/') &&
+        !body.mimeType.includes(';')
+            ? body.mimeType
+            : 'image/jpeg'
+
     const dataUri = raw.startsWith('data:')
         ? raw
-        : `data:image/jpeg;base64,${raw.replace(/\s/g, '')}`
+        : `data:${mimeFromBody};base64,${raw.replace(/\s/g, '')}`
 
     try {
         const result = await cloudinary.uploader.upload(dataUri, {

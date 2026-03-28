@@ -28,7 +28,8 @@ export function getContentSecurityPolicy(): string {
         font-src 'self' data: blob:;
         connect-src 'self'
             https://*.supabase.co wss://*.supabase.co
-            https://www.google-analytics.com https://*.googletagmanager.com
+            https://www.google-analytics.com https://*.google-analytics.com
+            https://*.analytics.google.com https://*.googletagmanager.com
             https://challenges.cloudflare.com
             https://*.cloudflare.com
             https://cloudflareinsights.com https://*.cloudflareinsights.com;

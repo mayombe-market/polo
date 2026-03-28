@@ -33,6 +33,14 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
         return { cloud_name, api_key, api_secret }
     }
 
+    if (api_key && api_secret && !cloud_name && !url) {
+        throw new Error(
+            'Cloudinary : CLOUDINARY_CLOUD_NAME est absent sur ce déploiement. ' +
+                'Dans Vercel → Settings → Environment Variables, ajoutez CLOUDINARY_CLOUD_NAME = le nom du cloud (ex. dtfuyqlvo). ' +
+                'NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ne remplace pas cette variable pour l’API upload.',
+        )
+    }
+
     if (url) {
         let u: URL
         try {
@@ -54,7 +62,7 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
     }
 
     throw new Error(
-        'Cloudinary : côté serveur, définissez CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET (valeurs runtime Vercel), ou uniquement CLOUDINARY_URL. Ne pas compter sur NEXT_PUBLIC_* pour l’upload : il est figé au build.',
+        'Cloudinary : définissez CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET, ou uniquement CLOUDINARY_URL.',
     )
 }
 

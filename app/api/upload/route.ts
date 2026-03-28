@@ -49,14 +49,14 @@ export async function POST(request: NextRequest) {
         console.log('[/api/upload] Upload OK:', result.secure_url)
         return NextResponse.json({ secure_url: result.secure_url, public_id: result.public_id })
     } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : 'Upload Cloudinary échoué'
         let details: string
         try {
             details = JSON.stringify(err, Object.getOwnPropertyNames(err as object))
         } catch {
             details = String(err)
         }
-        console.error('[/api/upload] Cloudinary error:', details)
-        return NextResponse.json({ error: message }, { status: 502 })
+        console.error('[/api/upload] Upload error:', details)
+        // Ne pas renvoyer de détails internes au client
+        return NextResponse.json({ error: 'Échec envoi image côté serveur. Réessayez.' }, { status: 502 })
     }
 }

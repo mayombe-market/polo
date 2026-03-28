@@ -83,28 +83,43 @@ export async function POST(request: NextRequest) {
             ? body.mimeType
             : 'image/jpeg'
 
-    const dataUri = raw.startsWith('data:')
-        ? raw
-        : `data:${mimeFromBody};base64,${raw.replace(/\s/g, '')}`
+    const cleanBase64 = raw.startsWith('data:')
+        ? raw.replace(/^data:[^;]+;base64,/, '').replace(/\s/g, '')
+        : raw.replace(/\s/g, '')
+
+    const dataUri = `data:${mimeFromBody};base64,${cleanBase64}`
+
+    console.log('[/api/upload] base64 length:', cleanBase64.length, '| mimeType:', mimeFromBody)
 
     try {
-        const result = await getCloudinary().uploader.upload(dataUri, {
+        const cld = getCloudinary()
+        const result = await cld.uploader.upload(dataUri, {
             folder: 'products',
-            resource_type: 'image',
+            resource_type: 'auto',
             overwrite: false,
         })
 
         if (!result?.secure_url) {
+            console.error('[/api/upload] Cloudinary réponse sans secure_url:', JSON.stringify(result))
             return jsonWithSessionCookies({ error: 'Réponse Cloudinary sans secure_url' }, 502, pendingCookies)
         }
 
+        console.log('[/api/upload] Upload OK:', result.secure_url)
         return jsonWithSessionCookies(
             { secure_url: result.secure_url, public_id: result.public_id },
             200,
             pendingCookies,
         )
-    } catch (err) {
+    } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Upload Cloudinary échoué'
+        const details = (() => {
+            try {
+                return JSON.stringify(err, Object.getOwnPropertyNames(err as object))
+            } catch {
+                return String(err)
+            }
+        })()
+        console.error('[/api/upload] Cloudinary error:', details)
         return jsonWithSessionCookies({ error: message }, 502, pendingCookies)
     }
 }

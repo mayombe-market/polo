@@ -3,20 +3,26 @@ import 'server-only'
 import { v2 as cloudinary } from 'cloudinary'
 
 /**
- * Configuration lazy : les variables d'environnement sont lues à l'appel (runtime),
- * pas au chargement du module (build-time), pour éviter qu'un build sans secrets échoue.
+ * Reconfigure le SDK **à chaque appel** avec les env vars runtime.
+ * Aucun cache, aucun flag — .config() écrase la config précédente.
  */
-let configured = false
-
 export function getCloudinary() {
-    if (!configured) {
-        cloudinary.config({
-            cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-            api_key: process.env.CLOUDINARY_API_KEY,
-            api_secret: process.env.CLOUDINARY_API_SECRET,
-            secure: true,
-        })
-        configured = true
+    const cloud_name = process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME
+    const api_key = process.env.CLOUDINARY_API_KEY
+    const api_secret = process.env.CLOUDINARY_API_SECRET
+
+    console.log('[Cloudinary] config check:', {
+        cloud_name: cloud_name ? `${cloud_name.slice(0, 4)}...` : 'MISSING',
+        api_key: api_key ? `${api_key.slice(0, 4)}...` : 'MISSING',
+        api_secret: api_secret ? '***set***' : 'MISSING',
+    })
+
+    if (!cloud_name || !api_key || !api_secret) {
+        throw new Error(
+            `Cloudinary non configuré côté serveur — cloud_name=${cloud_name ? 'OK' : 'MISSING'}, api_key=${api_key ? 'OK' : 'MISSING'}, api_secret=${api_secret ? 'OK' : 'MISSING'}. Vérifiez Vercel → Settings → Environment Variables (Production + Preview).`
+        )
     }
+
+    cloudinary.config({ cloud_name, api_key, api_secret, secure: true })
     return cloudinary
 }

@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server'
-import { getCloudinary } from '@/lib/cloudinary'
+import { uploadDataUriToCloudinary } from '@/lib/cloudinaryRestUpload'
 
 export const runtime = 'nodejs'
 
-/** Vercel : évite les coupures sur connexions lentes vers Cloudinary (plan Hobby ~10s par défaut selon projet). */
 export const maxDuration = 60
 
-/** Le SDK Cloudinary rejette parfois un objet ou une string, pas une Error — on extrait un message lisible. */
 function errorToMessage(err: unknown): string {
     if (err instanceof Error) return err.message
     if (typeof err === 'string') return err
@@ -48,21 +46,7 @@ export async function POST(req: Request) {
             )
         }
 
-        const cld = getCloudinary()
-        const uploaded = await cld.uploader.upload(trimmed, {
-            folder: 'products',
-            resource_type: 'auto',
-            timeout: 120_000,
-        })
-
-        const url = uploaded?.secure_url ?? (uploaded as { url?: string })?.url
-        if (!url) {
-            console.error('[/api/upload] réponse Cloudinary sans URL:', uploaded)
-            return NextResponse.json(
-                { error: 'Réponse Cloudinary sans URL (vérifiez les logs serveur).' },
-                { status: 502 },
-            )
-        }
+        const { secure_url: url } = await uploadDataUriToCloudinary(trimmed)
 
         return NextResponse.json({ url })
     } catch (error: unknown) {

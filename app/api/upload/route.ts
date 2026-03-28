@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { assertCloudinaryEnv, cloudinary } from '@/lib/cloudinary'
+import { getCloudinary } from '@/lib/cloudinary'
 
 export const runtime = 'nodejs'
 
@@ -60,13 +60,6 @@ export async function POST(request: NextRequest) {
         )
     }
 
-    try {
-        assertCloudinaryEnv()
-    } catch (e) {
-        const msg = e instanceof Error ? e.message : 'Configuration Cloudinary manquante'
-        return jsonWithSessionCookies({ error: msg }, 500, pendingCookies)
-    }
-
     let body: { image?: string; mimeType?: string }
     try {
         body = await request.json()
@@ -95,7 +88,7 @@ export async function POST(request: NextRequest) {
         : `data:${mimeFromBody};base64,${raw.replace(/\s/g, '')}`
 
     try {
-        const result = await cloudinary.uploader.upload(dataUri, {
+        const result = await getCloudinary().uploader.upload(dataUri, {
             folder: 'products',
             resource_type: 'image',
             overwrite: false,

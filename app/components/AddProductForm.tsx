@@ -943,8 +943,13 @@ export default function AddProductForm({
         setPublishProgress(5)
 
         try {
-            // TODO: rétablir ensureSessionBeforePublish une fois Cloudinary validé
-            const storageUserId = sellerId || 'anonymous'
+            setPublishLabel('Vérification de la session…')
+            const gate = await ensureSessionBeforePublish(supabase, sellerId)
+            if (!ownsPublishUi()) return
+            if ('redirect' in gate) {
+                return
+            }
+            const storageUserId = gate.userId
 
             setPublishLabel('Préparation…')
 

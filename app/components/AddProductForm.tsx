@@ -7,7 +7,7 @@
  * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
  * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
  *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
- * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` en base64 pur + `mimeType`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; envoi **séquentiel** des fichiers.
+ * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` = data URL `data:image/...;base64,...`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; envoi **séquentiel** des fichiers.
  * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
  *   renvoyée dans `{ error: string }` (évite doublons involontaires).
  * - **Feedback** : libellés d’étape (`publishLabel`) + barre de progression ; entrées fichier désactivées pendant `loading`.
@@ -870,35 +870,28 @@ export default function AddProductForm({
         /** Si `runId` ne correspond plus au ref, un autre envoi a pris le relais — ne pas toucher à l’UI globale. */
         const ownsPublishUi = () => publishRunIdRef.current === runId
 
-        /** Data URL → payload JSON : base64 seul + type MIME (pas de clés Cloudinary côté navigateur). */
-        const fileToBase64JsonPayload = (file: File): Promise<{ image: string; mimeType: string }> =>
+        /** Data URL complète (`data:image/...;base64,...`) — même format que Cloudinary attend côté serveur. */
+        const toBase64 = (file: File): Promise<string> =>
             new Promise((resolve, reject) => {
-                const r = new FileReader()
-                r.onload = () => {
-                    const dataUrl = String(r.result || '').trim()
-                    const sep = ';base64,'
-                    const i = dataUrl.indexOf(sep)
-                    if (!dataUrl.startsWith('data:') || i === -1) {
-                        reject(new Error('Encodage image invalide.'))
-                        return
-                    }
-                    const mimeType = dataUrl.slice(5, i)
-                    const image = dataUrl.slice(i + sep.length).replace(/\s/g, '')
-                    resolve({ mimeType, image })
-                }
-                r.onerror = () => reject(new Error('Lecture du fichier image impossible.'))
-                r.readAsDataURL(file)
+                const reader = new FileReader()
+                reader.readAsDataURL(file)
+                reader.onload = () => resolve(String(reader.result ?? '').trim())
+                reader.onerror = () => reject(new Error('Lecture du fichier image impossible.'))
             })
 
         const uploadFileOnce = async (file: File): Promise<string> => {
-            const { image, mimeType } = await fileToBase64JsonPayload(file)
+            const base64 = await toBase64(file)
+            if (!base64.startsWith('data:image')) {
+                throw new Error('Format image invalide — attendu data:image/...')
+            }
+            console.log('Début upload vers API...')
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 credentials: 'same-origin',
-                body: JSON.stringify({ image, mimeType }),
+                body: JSON.stringify({ image: base64 }),
             })
-            let body: { secure_url?: string; error?: string }
+            let body: { url?: string; secure_url?: string; error?: string }
             try {
                 body = await res.json()
             } catch {
@@ -907,10 +900,11 @@ export default function AddProductForm({
             if (!res.ok) {
                 throw new Error(body.error || `Échec envoi image (${res.status})`)
             }
-            if (!body.secure_url) {
+            const imageUrl = body.url ?? body.secure_url
+            if (!imageUrl) {
                 throw new Error('Réponse serveur sans URL d’image.')
             }
-            return body.secure_url
+            return imageUrl
         }
 
         /**

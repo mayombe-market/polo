@@ -13,7 +13,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import Image from 'next/image'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import Link from 'next/link'
 import { useCart } from '@/hooks/userCart'
@@ -456,7 +455,7 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                             <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-orange-500 flex items-center justify-center text-white font-black text-sm">
                                     {profile?.avatar_url ? (
-                                        <Image src={profile.avatar_url} alt="" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
+                                        <img src={profile.avatar_url} alt="" width={40} height={40} className="h-10 w-10 rounded-full object-cover" loading="lazy" decoding="async" />
                                     ) : initials}
                                 </div>
                                 <div className="flex-1 min-w-0">
@@ -1292,7 +1291,7 @@ function FollowingPage({
                         <Link key={shop.id} href={`/seller/${shop.id}`} className="flex items-center gap-4 p-5 bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 hover:border-orange-300 transition-all">
                             <div className="w-14 h-14 rounded-2xl overflow-hidden bg-orange-500 flex-shrink-0 flex items-center justify-center">
                                 {shop.avatar_url ? (
-                                    <Image src={shop.avatar_url} alt="" width={56} height={56} className="w-full h-full object-cover" />
+                                    <img src={shop.avatar_url} alt="" width={56} height={56} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                     <span className="text-white font-black text-xl">{(shop.store_name || shop.shop_name || '?')[0].toUpperCase()}</span>
                                 )}
@@ -1617,7 +1616,7 @@ function ProfilePage({ profile, setProfile, userId }: { profile: any; setProfile
                     <div className="relative group">
                         <div className="w-24 h-24 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border-4 border-white dark:border-slate-900 shadow-xl">
                             {profile?.avatar_url ? (
-                                <Image src={profile.avatar_url} alt="Avatar" width={96} height={96} className="w-full h-full object-cover" />
+                                <img src={profile.avatar_url} alt="Avatar" width={96} height={96} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-300"><User size={48} /></div>
                             )}

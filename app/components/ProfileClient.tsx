@@ -1,6 +1,5 @@
 'use client'
 import { useState } from 'react'
-import Image from 'next/image'
 import { Upload, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -81,7 +80,7 @@ function ProfileClient({ profile, user }: any) {
                 <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-green-600 via-green-500 to-orange-500">
                     {coverPreview && (
                         <>
-                            <Image src={coverPreview} alt="Couverture" fill className="object-cover" />
+                            <img src={coverPreview} alt="Couverture" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                             <button
                                 type="button"
                                 onClick={removeCover}

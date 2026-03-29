@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import Link from 'next/link'
 import FollowButton from './FollowButton'
 import ShareButtons from './ShareButtons'
@@ -39,12 +38,12 @@ export default function SellerProfileHeader({
             {/* COVER */}
             <div className="relative h-44 md:h-56 bg-gradient-to-br from-green-600 via-green-500 to-orange-500 overflow-hidden">
                 {profile?.cover_url && (
-                    <Image
+                    <img
                         src={profile.cover_url}
                         alt=""
-                        fill
-                        sizes="100vw"
-                        className="object-cover"
+                        className="absolute inset-0 h-full w-full object-cover"
+                        loading="eager"
+                        decoding="async"
                     />
                 )}
                 {/* Overlay sombre */}
@@ -63,12 +62,14 @@ export default function SellerProfileHeader({
             <div className="relative flex flex-col items-center -mt-16 z-10">
                 <div className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-950 overflow-hidden shadow-xl bg-orange-500 flex items-center justify-center text-white">
                     {profile?.avatar_url ? (
-                        <Image
+                        <img
                             src={profile.avatar_url}
                             alt={storeName}
                             width={128}
                             height={128}
-                            className="w-full h-full object-cover"
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                            decoding="async"
                         />
                     ) : (
                         <Store size={40} />

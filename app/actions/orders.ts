@@ -314,8 +314,6 @@ export async function adminRejectOrder(orderId: string) {
         return { error: 'Cette commande a déjà été traitée par un autre admin.' }
     }
 
-    console.info('[adminRejectOrder] commande rejetée en base:', orderId)
-
     if (orderData?.customer_email) {
         const rejProdNames = (orderData.items || []).map((i: any) => i.name).join(', ')
         const buyerMail = sendOrderStatusEmail(
@@ -334,8 +332,6 @@ export async function adminRejectOrder(orderId: string) {
                         orderId,
                         to: orderData.customer_email,
                     })
-                } else {
-                    console.info('[adminRejectOrder] email acheteur (rejet) envoyé:', orderId)
                 }
             })
             .catch((e) => {
@@ -377,8 +373,6 @@ export async function adminRejectOrder(orderId: string) {
                 .then((r) => {
                     if (r?.error) {
                         console.error('[adminRejectOrder] email vendeur (Resend / config):', r.error, { orderId, to: em })
-                    } else {
-                        console.info('[adminRejectOrder] email vendeur (rejet) envoyé:', orderId, em)
                     }
                 })
                 .catch((e) => {

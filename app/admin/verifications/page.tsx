@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import Image from 'next/image'
 import { ShieldCheck, Check, X, Loader2, Clock, Eye, ChevronDown, ChevronUp, User, Phone, MapPin, Mail } from 'lucide-react'
 import { toast } from 'sonner'
 import { safeGetUser } from '@/lib/supabase-utils'
@@ -160,7 +159,7 @@ export default function AdminVerificationsPage() {
                                 {/* Avatar */}
                                 <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold text-sm">
                                     {vendor?.avatar_url ? (
-                                        <Image src={vendor.avatar_url} alt="" width={40} height={40} className="object-cover" unoptimized />
+                                        <img src={vendor.avatar_url} alt="" width={40} height={40} className="object-cover" loading="lazy" decoding="async" />
                                     ) : (
                                         (vendor?.first_name?.[0] || '?')
                                     )}
@@ -217,7 +216,7 @@ export default function AdminVerificationsPage() {
                                                 className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
                                                 onClick={() => setZoomImage(v.shop_photo_url)}
                                             >
-                                                <Image src={v.shop_photo_url} alt="Boutique" fill className="object-cover" unoptimized />
+                                                <img src={v.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                                 <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors">
                                                     <Eye size={20} className="text-white opacity-0 hover:opacity-100" />
                                                 </div>
@@ -229,7 +228,7 @@ export default function AdminVerificationsPage() {
                                                 className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
                                                 onClick={() => setZoomImage(v.cni_photo_url)}
                                             >
-                                                <Image src={v.cni_photo_url} alt="CNI" fill className="object-cover" unoptimized />
+                                                <img src={v.cni_photo_url} alt="CNI" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                             </div>
                                         </div>
                                     </div>
@@ -335,7 +334,7 @@ export default function AdminVerificationsPage() {
                     onClick={() => setZoomImage(null)}
                 >
                     <div className="relative w-full max-w-3xl aspect-video rounded-2xl overflow-hidden">
-                        <Image src={zoomImage} alt="Zoom" fill className="object-contain" unoptimized />
+                        <img src={zoomImage} alt="Zoom" className="absolute inset-0 h-full w-full object-contain" loading="lazy" decoding="async" />
                     </div>
                     <button
                         onClick={() => setZoomImage(null)}

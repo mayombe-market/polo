@@ -3,7 +3,8 @@ import { uploadDataUriToCloudinary } from '@/lib/cloudinaryRestUpload'
 
 export const runtime = 'nodejs'
 
-export const maxDuration = 60
+/** 90s — aligné sur les timeouts réseau (`lib/networkTimeouts.ts`) pour connexions lentes. */
+export const maxDuration = 90
 
 function errorToMessage(err: unknown): string {
     if (err instanceof Error) return err.message

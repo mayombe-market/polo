@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { X, Loader2 } from 'lucide-react'
-import Image from 'next/image'
 import StarRating from '@/app/components/StarRating'
 import { confirmReception, submitRating } from '@/app/actions/ratings'
 import { toast } from 'sonner'
@@ -129,8 +128,8 @@ export default function TripleRatingModal({ order, onClose, onComplete }: Triple
                     {/* Récap commande */}
                     <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] mb-5 text-left">
                         {order.items?.[0]?.img ? (
-                            <Image src={order.items[0].img} alt="" width={56} height={56}
-                                className="w-14 h-14 rounded-2xl object-cover flex-shrink-0" />
+                            <img src={order.items[0].img} alt="" width={56} height={56}
+                                className="h-14 w-14 flex-shrink-0 rounded-2xl object-cover" loading="lazy" decoding="async" />
                         ) : (
                             <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center text-2xl flex-shrink-0">📦</div>
                         )}

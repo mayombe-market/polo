@@ -2,9 +2,9 @@
  * Utilitaires Supabase — timeouts, résilience réseau et validation des réponses.
  *
  * Objectifs de cette version :
- * - **Erreurs explicites** : classes d’erreur dédiées, statuts pour `safeGetUser`, logs `warn` / `error` avec préfixe.
+ * - **Erreurs explicites** : classes d’erreur dédiées, statuts pour `safeGetUser`, logs `warn` / `error` avec préfixe (pas de warn pour visiteur sans session).
  * - **Retries (≥ 3 relances)** : au moins **4 tentatives** au total via `withRetry` (`./supabase-browser`),
- *   là où une **nouvelle** promesse peut être créée à chaque essai (`safeGetUser`, `withQueryTimeoutRetry`).
+ *   là où une **nouvelle** promesse peut être créée à chaque essai (`safeGetUser` sur erreurs transitoires, `withQueryTimeoutRetry`).
  * - **Données valides** : helpers optionnels pour n’utiliser `data` que lorsque `error` est absent et que la charge est définie.
  *
  * Limite connue : `withTimeout(fixedPromise)` ne peut pas « rejouer » la même promesse ; pour timeout + retry,
@@ -52,8 +52,8 @@ export class SupabaseQueryTimeoutError extends Error {
 }
 
 /** Erreur interne pour la course contre le timeout dans `safeGetUser`. */
-class AuthGetUserTimeoutError extends Error {
-    readonly name = 'AuthGetUserTimeoutError'
+class AuthGetSessionTimeoutError extends Error {
+    readonly name = 'AuthGetSessionTimeoutError'
     constructor(timeoutMs: number) {
         super(`safeGetUser: délai dépassé (${timeoutMs} ms)`)
     }
@@ -70,12 +70,45 @@ export interface SafeGetUserResult<UserType = any> {
     error?: Error
 }
 
-/**
- * Réponse typique de `supabase.auth.getUser()` : ne lance pas toujours — il faut lire `error`.
- */
-interface AuthGetUserPayload {
-    data?: { user?: unknown }
+/** Réponse typique de `supabase.auth.getSession()` : lire `data.session` et `error`. */
+interface AuthGetSessionPayload {
+    data?: { session?: { user?: unknown } | null }
     error?: { message?: string; status?: number; name?: string }
+}
+
+/**
+ * Visiteur sans session : pas de log (évite spam AuthSessionMissingError sur mobile).
+ * Aligné sur @supabase/auth-js : `__isAuthError` + `name`, plus repli textuel si le bundle altère les champs.
+ */
+function benignNoSessionAuthError(error: unknown): boolean {
+    if (error == null) return false
+
+    if (typeof error === 'object') {
+        const o = error as { __isAuthError?: boolean; name?: string; message?: string }
+        if (o.__isAuthError === true && o.name === 'AuthSessionMissingError') {
+            return true
+        }
+    }
+
+    const parts = [
+        typeof error === 'object' && error !== null && 'message' in error
+            ? String((error as { message: unknown }).message)
+            : '',
+        typeof error === 'object' && error !== null && 'name' in error
+            ? String((error as { name: unknown }).name)
+            : '',
+        error instanceof Error ? error.message : '',
+        error instanceof Error ? error.name : '',
+        String(error),
+    ]
+    const blob = parts.join(' ').toLowerCase()
+
+    return (
+        blob.includes('authsessionmissing')
+        || blob.includes('auth session missing')
+        || blob.includes('invalid refresh token')
+        || blob.includes('refresh token not found')
+    )
 }
 
 function isTransientAuthFailure(error: { message?: string; status?: number }): boolean {
@@ -102,11 +135,9 @@ function classifyAuthSdkError(error: { message?: string; status?: number }): Saf
 }
 
 /**
- * Appelle `supabase.auth.getUser()` avec timeout **et** jusqu’à `SUPABASE_FETCH_MIN_TOTAL_ATTEMPTS` tentatives
- * pour les échecs **transitoires** (timeout, réseau, 5xx côté auth).
- *
- * - **Ne retourne `user` non null que** lorsque la session est valide (`status === 'ok'`).
- * - Distingue `no-user` (réponse OK mais pas d’utilisateur) des erreurs SDK / timeout.
+ * 1) **Fast path** : `getSession()` seul (sans timeout ni retry). Pas de session → `no-user` immédiat
+ *    (pas d’appel `getUser`, pas de spam `AuthSessionMissingError` sur pages publiques).
+ * 2) **Repli** : `getUser()` avec course timeout + retries pour erreurs transitoires uniquement.
  */
 /** Délai par défaut plus tolérant (réseaux lents, CDN) — surchargeable via NEXT_PUBLIC_SUPABASE_GETUSER_TIMEOUT_MS (ex. 15000). */
 function defaultSafeGetUserTimeoutMs(): number {
@@ -116,52 +147,107 @@ function defaultSafeGetUserTimeoutMs(): number {
     return 10000
 }
 
+/** Réponse typique de `supabase.auth.getUser()`. */
+interface AuthGetUserPayload {
+    data?: { user?: unknown }
+    error?: { message?: string; status?: number; name?: string }
+}
+
+function consumeGetUserPayload<UserType>(
+    result: AuthGetUserPayload | undefined,
+    context: string,
+): SafeGetUserResult<UserType> | 'transient-retry' {
+    if (result?.error) {
+        const errObj = result.error
+        if (benignNoSessionAuthError(errObj)) {
+            return { user: null, status: 'no-user' }
+        }
+        if (isTransientAuthFailure(errObj)) {
+            return 'transient-retry'
+        }
+        logError(context, 'Erreur auth non récupérable (getUser).', errObj)
+        return {
+            user: null,
+            status: classifyAuthSdkError(errObj),
+            error: new Error(errObj.message || 'Auth error'),
+        }
+    }
+
+    const user = (result?.data?.user ?? null) as UserType | null
+    if (user == null) {
+        return { user: null, status: 'no-user' }
+    }
+
+    return { user, status: 'ok' }
+}
+
 export async function safeGetUser<UserType = any>(
-    supabase: { auth: { getUser: () => Promise<unknown> } },
+    supabase: { auth: { getSession: () => Promise<unknown>; getUser: () => Promise<unknown> } },
     timeoutMs = defaultSafeGetUserTimeoutMs(),
 ): Promise<SafeGetUserResult<UserType>> {
     const context = 'safeGetUser'
     const maxAttempts = SUPABASE_FETCH_MIN_TOTAL_ATTEMPTS
 
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-            const result = (await Promise.race([
-                supabase.auth.getUser(),
-                new Promise<never>((_, reject) => {
-                    setTimeout(() => reject(new AuthGetUserTimeoutError(timeoutMs)), timeoutMs)
-                }),
-            ])) as AuthGetUserPayload
+    // Fast path : pas de session → pas de getUser, pas de retry (comportement normal visiteur)
+    try {
+        const rawSession = await supabase.auth.getSession()
+        const sessionPayload = rawSession as AuthGetSessionPayload
 
-            if (result?.error) {
-                const errObj = result.error
-                if (attempt < maxAttempts && isTransientAuthFailure(errObj)) {
-                    logWarn(context, `Tentative ${attempt}/${maxAttempts} — erreur auth récupérable, nouvel essai après backoff.`, errObj.message)
-                    await sleep(400 * attempt)
-                    continue
-                }
-                logError(context, 'Erreur auth non récupérable ou dernière tentative.', errObj)
-                return {
-                    user: null,
-                    status: classifyAuthSdkError(errObj),
-                    error: new Error(errObj.message || 'Auth error'),
-                }
-            }
-
-            const user = (result?.data?.user ?? null) as UserType | null
-
-            if (user === null || user === undefined) {
+        if (sessionPayload?.error) {
+            if (benignNoSessionAuthError(sessionPayload.error)) {
                 return { user: null, status: 'no-user' }
             }
-
+        } else {
+            const session = sessionPayload?.data?.session ?? null
+            if (!session) {
+                return { user: null, status: 'no-user' }
+            }
+            const user = (session.user ?? null) as UserType | null
+            if (!user) {
+                return { user: null, status: 'no-user' }
+            }
             return { user, status: 'ok' }
-        } catch (err: unknown) {
-            if (err instanceof AuthGetUserTimeoutError) {
+        }
+    } catch {
+        // getSession a levé : repli getUser + timeouts
+    }
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            const raw = await Promise.race([
+                supabase.auth.getUser(),
+                new Promise<never>((_, reject) => {
+                    setTimeout(() => reject(new AuthGetSessionTimeoutError(timeoutMs)), timeoutMs)
+                }),
+            ])
+            const out = consumeGetUserPayload<UserType>(raw as AuthGetUserPayload, context)
+
+            if (out === 'transient-retry') {
                 if (attempt < maxAttempts) {
-                    logWarn(context, `Timeout ${timeoutMs} ms — tentative ${attempt}/${maxAttempts}, nouvel essai.`)
+                    logWarn(
+                        context,
+                        `Tentative ${attempt}/${maxAttempts} — erreur auth récupérable (getUser), nouvel essai après backoff.`,
+                    )
                     await sleep(400 * attempt)
                     continue
                 }
-                logError(context, `Timeout après ${maxAttempts} tentatives.`, err)
+                logError(context, 'Erreur auth transitoire (getUser) : tentatives épuisées.')
+                return {
+                    user: null,
+                    status: 'network-error',
+                    error: new Error('safeGetUser: transient auth failure'),
+                }
+            }
+
+            return out
+        } catch (err: unknown) {
+            if (err instanceof AuthGetSessionTimeoutError) {
+                if (attempt < maxAttempts) {
+                    logWarn(context, `Timeout ${timeoutMs} ms — tentative ${attempt}/${maxAttempts}, nouvel essai (getUser).`)
+                    await sleep(400 * attempt)
+                    continue
+                }
+                logError(context, `Timeout après ${maxAttempts} tentatives (getUser).`, err)
                 return {
                     user: null,
                     status: 'timeout',
@@ -169,12 +255,16 @@ export async function safeGetUser<UserType = any>(
                 }
             }
 
+            if (benignNoSessionAuthError(err)) {
+                return { user: null, status: 'no-user' }
+            }
+
             const message = err instanceof Error ? err.message : String(err)
             const lower = message.toLowerCase()
             const looksNetwork = lower.includes('network') || lower.includes('fetch') || lower.includes('failed to fetch')
 
             if (looksNetwork && attempt < maxAttempts) {
-                logWarn(context, `Erreur réseau — tentative ${attempt}/${maxAttempts}.`, err)
+                logWarn(context, `Erreur réseau (getUser) — tentative ${attempt}/${maxAttempts}.`, err)
                 await sleep(400 * attempt)
                 continue
             }
@@ -188,7 +278,7 @@ export async function safeGetUser<UserType = any>(
         }
     }
 
-    logError(context, 'Boucle de retry terminée sans succès (ne devrait pas arriver).')
+    logError(context, 'Boucle de retry getUser terminée sans succès (ne devrait pas arriver).')
     return { user: null, status: 'unknown-error', error: new Error('safeGetUser: exhausted attempts') }
 }
 

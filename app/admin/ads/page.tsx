@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import NextImage from 'next/image'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Trash2, Plus, X, Image as ImageIcon, Loader2,
@@ -272,13 +271,14 @@ export default function AdminAds() {
                                             </span>
                                         </td>
                                         <td className="p-4">
-                                            <NextImage
+                                            <img
                                                 src={ad.img || '/placeholder-image.svg'}
                                                 alt={ad.title || ''}
                                                 width={96}
                                                 height={54}
-                                                className="w-24 h-14 rounded-xl object-cover border dark:border-slate-700"
-                                                unoptimized
+                                                className="h-14 w-24 rounded-xl border object-cover dark:border-slate-700"
+                                                loading="lazy"
+                                                decoding="async"
                                             />
                                         </td>
                                         <td className="p-4">
@@ -346,7 +346,7 @@ export default function AdminAds() {
                                 <div className="relative">
                                     {formData.img ? (
                                         <div className="relative w-full h-48 rounded-2xl overflow-hidden border-2 border-dashed border-slate-200">
-                                            <NextImage src={formData.img} alt="" fill className="object-cover" unoptimized />
+                                            <img src={formData.img} alt="" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                             <button type="button" onClick={() => setFormData(prev => ({ ...prev, img: '' }))} className="absolute top-3 right-3 bg-red-500 text-white p-2 rounded-full">
                                                 <X size={14} />
                                             </button>

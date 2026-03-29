@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import { Store } from 'lucide-react'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
@@ -60,12 +59,14 @@ export default function ShopStoriesRow() {
                     >
                         <div className="w-16 h-16 rounded-full ring-[2.5px] ring-orange-500 ring-offset-2 ring-offset-white dark:ring-offset-slate-950 overflow-hidden bg-green-100 dark:bg-green-500/10 flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-md">
                             {seller.avatar_url ? (
-                                <Image
+                                <img
                                     src={seller.avatar_url}
                                     alt={getShopName(seller)}
                                     width={64}
                                     height={64}
-                                    className="w-full h-full object-cover"
+                                    className="h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
                                 />
                             ) : (
                                 <div className="text-green-600 font-black text-xl italic">

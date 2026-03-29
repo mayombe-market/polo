@@ -2,7 +2,6 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import Image from 'next/image'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Shield, Upload, Camera, CreditCard, CheckCircle, Clock, XCircle, ArrowLeft, Loader2 } from 'lucide-react'
@@ -197,13 +196,13 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 mb-1">Photo boutique</p>
                                 <div className="relative w-full aspect-video rounded-xl overflow-hidden">
-                                    <Image src={existingVerification.shop_photo_url} alt="Boutique" fill className="object-cover" unoptimized />
+                                    <img src={existingVerification.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                 </div>
                             </div>
                             <div>
                                 <p className="text-[10px] font-bold text-slate-400 mb-1">Photo CNI</p>
                                 <div className="relative w-full aspect-video rounded-xl overflow-hidden">
-                                    <Image src={existingVerification.cni_photo_url} alt="CNI" fill className="object-cover" unoptimized />
+                                    <img src={existingVerification.cni_photo_url} alt="CNI" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                 </div>
                             </div>
                         </div>
@@ -274,7 +273,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         onClick={() => document.getElementById('shop-photo-input')?.click()}
                     >
                         {shopPhotoPreview ? (
-                            <Image src={shopPhotoPreview} alt="Preview" fill className="object-cover" unoptimized />
+                            <img src={shopPhotoPreview} alt="Preview" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
                                 <Upload size={28} className="mb-2" />
@@ -307,7 +306,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         onClick={() => document.getElementById('cni-photo-input')?.click()}
                     >
                         {cniPhotoPreview ? (
-                            <Image src={cniPhotoPreview} alt="Preview" fill className="object-cover" unoptimized />
+                            <img src={cniPhotoPreview} alt="Preview" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                         ) : (
                             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
                                 <Upload size={28} className="mb-2" />

@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
@@ -228,7 +227,7 @@ export default function AdminVendorsPage() {
                                 {/* Avatar */}
                                 <div className="w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold">
                                     {vendor.avatar_url ? (
-                                        <Image src={vendor.avatar_url} alt="" width={48} height={48} className="object-cover w-full h-full" unoptimized />
+                                        <img src={vendor.avatar_url} alt="" width={48} height={48} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                     ) : (
                                         <span className="text-lg">{(vendor.first_name?.[0] || '?')}</span>
                                     )}

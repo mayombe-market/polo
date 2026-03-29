@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import Image from 'next/image'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { useRouter } from 'next/navigation'
 import ProductCard from '@/app/components/ProductCard'
@@ -70,15 +69,13 @@ export default function ClientHomePage({
                             className={`min-w-[100%] snap-center relative h-[250px] md:h-[400px] rounded-[2rem] overflow-hidden bg-slate-200 shadow-lg ${ad.link_url ? 'cursor-pointer' : ''}`}
                             onClick={() => onAdClick(ad.link_url)}
                         >
-                            <Image
+                            <img
                                 src={ad.img || '/placeholder-image.svg'}
                                 alt={ad.title ? String(ad.title) : 'Bannière'}
-                                fill
-                                sizes="100vw"
-                                priority={index === 0}
+                                className="absolute inset-0 h-full w-full object-cover"
+                                loading={index === 0 ? 'eager' : index < 10 ? 'eager' : 'lazy'}
                                 fetchPriority={index === 0 ? 'high' : 'low'}
-                                loading={index < 10 ? 'eager' : undefined}
-                                className="object-cover"
+                                decoding="async"
                             />
                             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent flex items-end p-8">
                                 <h2 className="text-white text-3xl font-bold">{ad.title}</h2>
@@ -104,7 +101,13 @@ export default function ClientHomePage({
                             >
                                 <div className="relative overflow-hidden aspect-square w-full">
                             <CloudinaryImage
-                                src={product.img || product.image_url || '/placeholder-image.svg'}
+                                src={
+                                    product.img ||
+                                    product.image_url ||
+                                    (Array.isArray(product.images_gallery) ? product.images_gallery[0] : '') ||
+                                    '/placeholder-image.svg'
+                                }
+                                delivery="catalog"
                                 alt={product.name}
                                 fill
                                 sizes="(max-width: 768px) 50vw, 20vw"
@@ -276,18 +279,16 @@ export default function ClientHomePage({
                             className="relative group rounded-3xl overflow-hidden h-80 shadow-lg bg-slate-200 block"
                         >
                             <Link href={`/category/${encodeURIComponent(cat.name)}`} className="absolute inset-0 z-0">
-                                <Image
+                                <img
                                     src={
                                         cat.img ||
                                         'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=800'
                                     }
                                     alt={cat.name}
-                                    fill
-                                    sizes="(max-width: 768px) 100vw, 33vw"
-                                    className="object-cover transition-transform duration-700 group-hover:scale-105"
-                                    priority={catIndex === 0}
+                                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    loading={catIndex === 0 ? 'eager' : catIndex < 10 ? 'eager' : 'lazy'}
                                     fetchPriority={catIndex === 0 ? 'high' : 'low'}
-                                    loading={catIndex < 10 ? 'eager' : undefined}
+                                    decoding="async"
                                 />
                                 <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent" />
                             </Link>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from 'react'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import Image from 'next/image'
 import { User, Phone, Save, Loader2, Camera } from 'lucide-react'
 
 export default function ProfilePage() {
@@ -128,7 +127,13 @@ export default function ProfilePage() {
                     <div className="relative group">
                         <div className="w-32 h-32 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden border-4 border-white dark:border-slate-900 shadow-xl relative">
                             {profile.avatar_url ? (
-                                <Image src={profile.avatar_url} alt="Avatar" fill sizes="128px" className="object-cover" />
+                                <img
+                                    src={profile.avatar_url}
+                                    alt="Avatar"
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                />
                             ) : (
                                 <div className="w-full h-full flex items-center justify-center text-slate-300">
                                     <User size={60} />

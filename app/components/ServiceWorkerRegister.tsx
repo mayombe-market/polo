@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
+import { diagError } from '@/lib/diagnostics'
 
 export default function ServiceWorkerRegister() {
     const [showUpdate, setShowUpdate] = useState(false)
@@ -34,7 +35,9 @@ export default function ServiceWorkerRegister() {
                 })
             })
             .catch((err) => {
-                console.error('SW registration failed:', err)
+                diagError('ServiceWorker', 'Échec enregistrement sw.js', {
+                    message: err instanceof Error ? err.message : String(err),
+                })
             })
 
         // Handle controller change (after skipWaiting)

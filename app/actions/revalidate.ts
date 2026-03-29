@@ -30,6 +30,7 @@ export async function revalidateProducts() {
     revalidatePath('/')
     revalidatePath('/category/[id]', 'page')
     revalidatePath('/sub_category/[id]', 'page')
+    revalidatePath('/search')
 }
 
 export async function revalidateHome() {
@@ -48,6 +49,7 @@ export async function revalidateProductCatalog(productId: string, sellerId: stri
     revalidatePath('/sub_category/[id]', 'page')
     revalidatePath(`/product/${productId}`)
     revalidatePath('/vendor/dashboard')
+    revalidatePath('/search')
     if (sellerId) {
         revalidatePath(`/seller/${sellerId}`)
     }

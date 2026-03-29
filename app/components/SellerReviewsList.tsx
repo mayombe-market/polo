@@ -1,6 +1,5 @@
 'use client'
 
-import Image from 'next/image'
 import StarRating from './StarRating'
 import { MessageSquare } from 'lucide-react'
 
@@ -71,12 +70,14 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                                 {/* Avatar */}
                                 <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden flex items-center justify-center flex-shrink-0">
                                     {review.user_avatar ? (
-                                        <Image
+                                        <img
                                             src={review.user_avatar}
                                             alt=""
                                             width={40}
                                             height={40}
-                                            className="w-full h-full object-cover"
+                                            className="h-full w-full object-cover"
+                                            loading="lazy"
+                                            decoding="async"
                                         />
                                     ) : (
                                         <span className="text-sm font-black text-slate-400 italic">

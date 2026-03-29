@@ -3,7 +3,12 @@ import ClientHomePage from './ClientHomePage'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 
-export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
+/**
+ * Rendu dynamique : évite qu’un segment ISR (anciennes lignes sans `img`) ne soit servi
+ * puis remplacé au refresh — clignotement « image → placeholder ».
+ * L’invalidation on-demand (revalidateProductCatalog) reste utile après publish.
+ */
+export const dynamic = 'force-dynamic'
 
 export default async function HomePage() {
   const supabase = createClient(
@@ -25,20 +30,20 @@ export default async function HomePage() {
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, shop, loc, views_count, img, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
+      supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
       expiredIds
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
   ])

@@ -15,7 +15,6 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import dynamic from 'next/dynamic'
@@ -2141,7 +2140,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-green-600 via-green-500 to-orange-500">
                     {coverPreview && (
                         <>
-                            <Image src={coverPreview} alt="Couverture" fill className="object-cover" />
+                            <img src={coverPreview} alt="Couverture" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                             <button
                                 type="button"
                                 onClick={() => { setCoverFile(null); setCoverPreview(null) }}

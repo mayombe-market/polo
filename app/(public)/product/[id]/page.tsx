@@ -11,10 +11,10 @@
  */
 import { useEffect, useState } from 'react'
 import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
-import Image from 'next/image'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import ProductGallery from '../../../components/ProductGallery'
+import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import NegotiationAction from '../../../components/NegotiationAction'
 import AddToCartButton from '../../../components/AddToCartButton'
 import FollowButton from '../../../components/FollowButton'
@@ -280,7 +280,10 @@ export default function ProductDetailPage() {
         ? reviews.reduce((acc, rev) => acc + rev.rating, 0) / reviews.length
         : 0
 
-    const allImages = [product.img || product.image_url, ...(product.images_gallery || [])].filter(Boolean)
+    const allImages = [product.img || product.image_url, ...(product.images_gallery || [])]
+        .filter(Boolean)
+        .map((u) => normalizeProductImageUrl(String(u)))
+        .filter(Boolean)
     const shopName = shop?.store_name || shop?.shop_name || shop?.full_name || 'Boutique'
     const hasPromo = isPromoActive(product)
     const promoPrice = hasPromo ? getPromoPrice(product) : product.price
@@ -354,7 +357,13 @@ export default function ProductDetailPage() {
                     >
                         <div className="relative w-[46px] h-[46px] rounded-[15px] overflow-hidden flex-shrink-0 shadow-lg">
                             {shop?.avatar_url ? (
-                                <Image src={shop.avatar_url} alt={shopName} fill className="object-cover" unoptimized />
+                                <img
+                                    src={shop.avatar_url}
+                                    alt={shopName}
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                />
                             ) : (
                                 <div
                                     className="w-full h-full flex items-center justify-center text-white font-bold text-sm"
@@ -694,11 +703,12 @@ export default function ProductDetailPage() {
                                         <div className="flex items-center gap-2.5 mb-2">
                                             <div className="relative w-[34px] h-[34px] rounded-[11px] overflow-hidden flex-shrink-0">
                                                 {rev.user_avatar ? (
-                                                    <Image
+                                                    <img
                                                         src={rev.user_avatar}
                                                         alt="Avatar"
-                                                        fill
-                                                        className="object-cover"
+                                                        className="absolute inset-0 h-full w-full object-cover"
+                                                        loading="lazy"
+                                                        decoding="async"
                                                     />
                                                 ) : (
                                                     <div className="w-full h-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xs font-black text-slate-400 italic">

@@ -1,6 +1,7 @@
 import 'server-only'
 
 import crypto from 'crypto'
+import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** Même normalisation que l’ancien module — uniquement `process.env`. */
 function stripEnv(value: string | undefined): string {
@@ -15,23 +16,20 @@ function stripEnv(value: string | undefined): string {
     return s
 }
 
-/**
- * Identifiants Cloudinary — **uniquement** variables serveur + `CLOUDINARY_URL`.
- *
- * Ne pas utiliser `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` ici : Next.js l’inline au **build** ;
- * une ancienne valeur (ex. ancien cloud) reste alors figée dans le bundle → 401 permanent.
- * `CLOUDINARY_CLOUD_NAME` est lue à l’exécution sur Vercel.
- */
+/** Identifiants Cloudinary : `CLOUDINARY_CLOUD_NAME` + clés, ou `CLOUDINARY_URL` parsée (runtime Vercel uniquement). */
 function readCredentials(): { cloud_name: string; api_key: string; api_secret: string } {
     const url = stripEnv(process.env.CLOUDINARY_URL)
-    const cloud_name =
-        stripEnv(process.env.CLOUDINARY_CLOUD_NAME) ||
-        stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
+    const cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
     const api_key = stripEnv(process.env.CLOUDINARY_API_KEY)
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
 
+    if (api_key && api_secret && !cloud_name && !url) {
+        throw new Error(
+            'Cloudinary : ajoutez CLOUDINARY_CLOUD_NAME sur Vercel (NEXT_PUBLIC_* ne suffit pas pour l’upload serveur).',
+        )
+    }
+
     if (cloud_name && api_key && api_secret) {
-        console.log('[cloudinaryRestUpload] cloud_name (CLOUDINARY_CLOUD_NAME):', cloud_name)
         return { cloud_name, api_key, api_secret }
     }
 
@@ -51,7 +49,6 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
         if (!cn || !key || !secret) {
             throw new Error('CLOUDINARY_URL incomplète.')
         }
-        console.log('[cloudinaryRestUpload] cloud_name (CLOUDINARY_URL):', cn)
         return { cloud_name: cn, api_key: key, api_secret: secret }
     }
 
@@ -101,14 +98,10 @@ export async function uploadDataUriToCloudinary(dataUri: string): Promise<{ secu
 
     const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud_name)}/auto/upload`
 
-    console.error('[cloudinaryRestUpload] cloud_name utilisé:', cloud_name)
-    console.error('[cloudinaryRestUpload] endpoint:', endpoint)
-    console.error('[cloudinaryRestUpload] api_key:', api_key)
-
     const res = await fetch(endpoint, {
         method: 'POST',
         body: form,
-        signal: AbortSignal.timeout(120_000),
+        signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
     })
 
     const text = await res.text()

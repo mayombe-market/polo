@@ -9,16 +9,18 @@
  * 2) **État de chargement explicite** — prop optionnelle `isLoading` ou produit encore incomplet → squelette
  *    aux mêmes dimensions (pas de saut de layout quand les données arrivent).
  * 3) **Données partielles** — libellés et image de repli sans casser le rendu.
- * 4) **Pas besoin de refresh pour voir la bonne image** — `key` sur `<Image>` liée à `id` + URL effective pour forcer
- *    le remontage si le parent met à jour l’objet produit après coup (cache Next/Image / navigation client).
+ * 4) **Pas besoin de refresh pour voir la bonne image** — `key` sur `<img>` liée à `id` + URL effective pour forcer
+ *    le remontage si le parent met à jour l’objet produit après coup (navigation client).
+ * 5) **`<img>` natif** : aucun passage par l’optimizer Vercel (évite HTTP 402).
  */
 
 import Link from 'next/link'
-import CloudinaryImage from '@/app/components/CloudinaryImage'
-import { memo } from 'react'
+import { withCloudinaryAutoFormat } from '@/app/components/CloudinaryImage'
+import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
+import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 
 /** Données catalogue telles que renvoyées par Supabase / listes (champs souvent tous présents, parfois retardés). */
 export interface ProductCardProduct {
@@ -27,6 +29,8 @@ export interface ProductCardProduct {
     price?: number
     img?: string
     image_url?: string
+    /** Si `img` est vide côté base, première miniature éventuelle (aligné page catégorie). */
+    images_gallery?: string[] | null
     category?: string
     stock_quantity?: number
     promo_percentage?: number | null
@@ -60,9 +64,21 @@ function isProductDisplayReady(p: ProductCardProduct | null | undefined): boolea
     return id && name && price
 }
 
+function firstGalleryUrl(g: unknown): string {
+    if (!Array.isArray(g) || g.length === 0) return ''
+    const first = g[0]
+    return typeof first === 'string' ? first.trim() : ''
+}
+
 function resolveImageSrc(p: ProductCardProduct): string {
-    const raw = (p.img || p.image_url || '').trim()
-    return raw.length > 0 ? raw : PLACEHOLDER_IMG
+    const candidates = [p.img, p.image_url, firstGalleryUrl(p.images_gallery)]
+    for (const c of candidates) {
+        const t = (c || '').trim()
+        if (!t) continue
+        const url = normalizeProductImageUrl(t)
+        if (url.length > 0) return url
+    }
+    return PLACEHOLDER_IMG
 }
 
 /** Placeholder discret (réseau lent) : réserve l’espace sans bloc gris animé. */
@@ -129,6 +145,18 @@ function ProductCardInner({
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
     const timeRemaining = hasPromo ? getPromoTimeRemaining(product.promo_end_date) : ''
     const imageSrc = resolveImageSrc(product)
+    const displayUrl = useMemo(() => withCloudinaryAutoFormat(imageSrc), [imageSrc])
+    const [imgBroken, setImgBroken] = useState(false)
+
+    useEffect(() => {
+        setImgBroken(false)
+    }, [displayUrl])
+
+    const onImgError = useCallback(() => {
+        setImgBroken(true)
+    }, [])
+
+    const imgSrc = imgBroken ? PLACEHOLDER_IMG : displayUrl
     const displayName = product.name?.trim() || 'Produit'
     const categoryLabel = product.category?.trim() || 'Collection'
 
@@ -140,17 +168,17 @@ function ProductCardInner({
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800">
                 {/*
                   key = id + src : si le parent met à jour l’URL d’image après le 1er rendu (ex. données async),
-                  Next/Image remonte correctement sans exiger un refresh de page entière.
+                  le navigateur recharge la vignette sans refresh de page entière.
                 */}
-                <CloudinaryImage
-                    key={`${product.id}-${imageSrc}`}
-                    src={imageSrc}
+                <img
+                    key={`${product.id}-${imgSrc}`}
+                    src={imgSrc}
                     alt={displayName}
-                    fill
-                    sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                    quality={70}
-                    loading={aboveFold ? 'eager' : undefined}
-                    className="object-cover transition-transform duration-700 group-hover:scale-110"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    loading={aboveFold ? 'eager' : 'lazy'}
+                    fetchPriority={aboveFold ? 'high' : undefined}
+                    decoding="async"
+                    onError={onImgError}
                 />
 
                 <div className="absolute top-3 right-3 z-20">
@@ -255,6 +283,7 @@ const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
         a.price === b.price &&
         a.img === b.img &&
         a.image_url === b.image_url &&
+        JSON.stringify(a.images_gallery ?? null) === JSON.stringify(b.images_gallery ?? null) &&
         a.category === b.category &&
         a.stock_quantity === b.stock_quantity &&
         a.promo_percentage === b.promo_percentage &&

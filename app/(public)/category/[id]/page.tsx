@@ -7,7 +7,8 @@ import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
-export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
+/** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
+export const dynamic = 'force-dynamic'
 
 function categoryTitleFromParam(rawId: string): string {
     try {
@@ -139,6 +140,7 @@ export default async function CategoryPage(props: any) {
                                     <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
                                         <CloudinaryImage
                                             src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.svg'}
+                                            delivery="catalog"
                                             alt={p.name}
                                             fill
                                             sizes="(max-width: 768px) 50vw, 25vw"

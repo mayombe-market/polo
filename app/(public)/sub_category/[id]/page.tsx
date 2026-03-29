@@ -4,7 +4,8 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
-export const revalidate = 60 // Cache 60s, + revalidation on-demand à l'ajout produit
+/** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
+export const dynamic = 'force-dynamic'
 
 export default async function SubCategoryPage({ params }: { params: { id: string } }) {
     const { id } = await params
@@ -49,7 +50,13 @@ export default async function SubCategoryPage({ params }: { params: { id: string
                             >
                                 <div className="aspect-square overflow-hidden bg-gray-100 dark:bg-slate-900 relative">
                                     <CloudinaryImage
-                                        src={product.img || product.image_url || '/placeholder-image.svg'}
+                                        src={
+                                            product.img ||
+                                            product.image_url ||
+                                            (Array.isArray(product.images_gallery) ? product.images_gallery[0] : '') ||
+                                            '/placeholder-image.svg'
+                                        }
+                                        delivery="catalog"
                                         alt={product.name}
                                         fill
                                         sizes="(max-width: 768px) 50vw, 25vw"

@@ -1,10 +1,11 @@
-import './globals.css' // Assure-toi que ce fichier existe et contient @tailwind directives
+import './globals.css'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
 import Script from 'next/script'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
+import DiagnosticsListener from '@/app/components/DiagnosticsListener'
 
 export const viewport = {
   themeColor: '#f97316',
@@ -78,24 +79,28 @@ export const metadata = {
   },
 }
 
-const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID || 'G-SLRPK4NETV'
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim() || 'G-SLRPK4NETV'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr" className="antialiased font-sans">
+      <head>
+        <link rel="dns-prefetch" href="https://res.cloudinary.com" />
+        <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+      </head>
       <body className="m-0 p-0">
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-          strategy="lazyOnload"
+          strategy="afterInteractive"
           crossOrigin="anonymous"
         />
-        <Script id="google-analytics" strategy="lazyOnload">
+        <Script id="google-analytics" strategy="afterInteractive">
           {`
-              window.dataLayer = window.dataLayer || [];
-              function gtag(){dataLayer.push(arguments);}
-              gtag('js', new Date());
-              gtag('config', '${GA_MEASUREMENT_ID}');
-            `}
+window.dataLayer = window.dataLayer || [];
+function gtag(){dataLayer.push(arguments);}
+gtag('js', new Date());
+gtag('config', '${GA_MEASUREMENT_ID}');
+`}
         </Script>
 
         {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
@@ -113,6 +118,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* PWA + offline : bundle chargé après hydratation (réduit TBT) */}
         <DeferredPwaWidgets />
+
+        {/* Erreurs JS / promises non gérées → Console [Mayombe] */}
+        <DiagnosticsListener />
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>

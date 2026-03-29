@@ -1,7 +1,5 @@
 import imageCompression from 'browser-image-compression'
 
-const LOG = '[compressImageForUpload]'
-
 /** Forcé à false partout — évite blocages Safari / onglet en arrière-plan (ne pas repasser à true sans test mobile). */
 const USE_WEB_WORKER = false
 
@@ -23,28 +21,17 @@ const QUALITY = 0.6
  * - GIF : inchangé
  */
 export async function compressImageForUpload(file: File): Promise<File> {
-    console.log(LOG, 'entrée', {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        useWebWorkerForced: USE_WEB_WORKER,
-    })
-
     if (!file.type.startsWith('image/')) {
-        console.log(LOG, 'sortie anticipée — pas de type image/*, fichier renvoyé tel quel')
         return file
     }
     // HEIC/HEIF : souvent non pris en charge par canvas / imageCompression → on envoie le fichier tel quel
     if (file.type === 'image/heic' || file.type === 'image/heif') {
-        console.log(LOG, 'sortie anticipée — HEIC/HEIF non compressé (canvas souvent indisponible)')
         return file
     }
     if (file.type === 'image/gif') {
-        console.log(LOG, 'sortie anticipée — GIF non compressé')
         return file
     }
     if (file.size <= COMPRESS_IF_LARGER_THAN) {
-        console.log(LOG, 'sortie anticipée — déjà léger (≤ 350 Ko), pas de compression')
         return file
     }
 
@@ -56,25 +43,9 @@ export async function compressImageForUpload(file: File): Promise<File> {
         preserveExif: false,
     } as const
 
-    let blob: Blob
-    try {
-        console.log(LOG, 'passe 1 démarrage (imageCompression)', optsPass1)
-        blob = await imageCompression(file, optsPass1)
-        console.log(LOG, 'passe 1 terminée', {
-            outSize: blob?.size,
-            outType: blob?.type,
-        })
-        if (!blob || blob.size === 0) {
-            console.error(
-                LOG,
-                'passe 1 suspecte — blob vide ou taille 0 (échec souvent « silencieux » côté lib)',
-                { blob },
-            )
-            return file
-        }
-    } catch (err) {
-        console.error(LOG, 'passe 1 ERREUR (ne pas ignorer — avant ceci pouvait sembler « silencieux » via fallback appelant)', err)
-        throw err
+    let blob = await imageCompression(file, optsPass1)
+    if (!blob || blob.size === 0) {
+        return file
     }
 
     const asFile = (b: Blob) =>
@@ -93,25 +64,11 @@ export async function compressImageForUpload(file: File): Promise<File> {
             preserveExif: false,
         } as const
         try {
-            console.log(LOG, 'passe 2 démarrage (fichier encore > cible)', {
-                ...optsPass2,
-                currentBlobSize: blob.size,
-            })
             blob = await imageCompression(asFile(blob), optsPass2)
-            console.log(LOG, 'passe 2 terminée', { outSize: blob?.size, outType: blob?.type })
             if (!blob || blob.size === 0) {
-                console.error(
-                    LOG,
-                    'passe 2 suspecte — blob vide, on conserve le résultat de la passe 1 (log anti-échec silencieux)',
-                )
                 blob = blobAfterPass1
             }
-        } catch (err) {
-            console.error(
-                LOG,
-                'passe 2 ERREUR — on conserve le résultat de la passe 1 (pas le fichier original brut)',
-                err,
-            )
+        } catch {
             blob = blobAfterPass1
         }
     }
@@ -121,15 +78,8 @@ export async function compressImageForUpload(file: File): Promise<File> {
     const ext = isPng ? 'png' : 'jpg'
     const mime = isPng ? 'image/png' : 'image/jpeg'
 
-    const out = new File([blob], `${baseName}.${ext}`, {
+    return new File([blob], `${baseName}.${ext}`, {
         type: mime,
         lastModified: Date.now(),
     })
-    console.log(LOG, 'sortie finale', {
-        name: out.name,
-        type: out.type,
-        size: out.size,
-        ratio: file.size ? (out.size / file.size).toFixed(3) : 'n/a',
-    })
-    return out
 }

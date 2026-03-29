@@ -268,8 +268,6 @@ function ResetPasswordForm() {
                 return
             }
 
-            console.debug('[reset-password] updateUser…', { userId: session.user.id })
-
             type UpdateUserResult = Awaited<ReturnType<typeof client.auth.updateUser>>
             const timeoutMsg =
                 'La mise à jour prend trop de temps. Vérifiez la connexion ou réessayez dans un instant.'
@@ -309,7 +307,6 @@ function ResetPasswordForm() {
                 return
             }
 
-            console.debug('[reset-password] mot de passe mis à jour')
             setDone(true)
             setTimeout(() => router.push('/'), 2500)
         } catch (err: unknown) {

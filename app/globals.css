@@ -2,6 +2,7 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* Polices : pile système uniquement (pas de @font-face / Google Fonts) — pas de blocage FOUT sur le texte ni sur le reste du rendu. */
 html {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }

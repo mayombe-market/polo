@@ -5,7 +5,6 @@ import { getConversations, getMessages, sendMessage } from '@/app/actions/messag
 import { playMessageSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import Image from 'next/image'
 import { ArrowLeft, Send, Loader2, MessageCircle, Package } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -200,7 +199,7 @@ export default function MessagesPanel({ userId, initialConversationId }: Message
                         <>
                             <div className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 bg-orange-500 flex items-center justify-center text-white text-sm font-bold">
                                 {getOtherAvatar(activeConvData) ? (
-                                    <Image src={getOtherAvatar(activeConvData)} alt="" width={36} height={36} className="w-full h-full object-cover" unoptimized />
+                                    <img src={getOtherAvatar(activeConvData)} alt="" width={36} height={36} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                     getOtherName(activeConvData)[0]
                                 )}
@@ -312,7 +311,7 @@ export default function MessagesPanel({ userId, initialConversationId }: Message
                             {/* Avatar */}
                             <div className="relative w-12 h-12 rounded-full overflow-hidden flex-shrink-0 bg-orange-500 flex items-center justify-center text-white font-bold">
                                 {getOtherAvatar(conv) ? (
-                                    <Image src={getOtherAvatar(conv)} alt="" width={48} height={48} className="w-full h-full object-cover" unoptimized />
+                                    <img src={getOtherAvatar(conv)} alt="" width={48} height={48} className="h-full w-full object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                     <span className="text-lg">{getOtherName(conv)[0]}</span>
                                 )}

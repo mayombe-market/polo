@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState, useCallback, useRef } from 'react'
-import Image from 'next/image'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'

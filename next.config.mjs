@@ -2,6 +2,8 @@
 const nextConfig = {
     poweredByHeader: false,
     images: {
+        /** Quota Vercel Image Optimization (402) : servir les src telles quelles (Supabase / Cloudinary / static). */
+        unoptimized: true,
         formats: ['image/avif', 'image/webp'],
         deviceSizes: [640, 750, 828, 1080, 1200],
         dangerouslyAllowSVG: true,
@@ -15,7 +17,21 @@ const nextConfig = {
         ],
     },
     async headers() {
+        const noStoreCatalog = [
+            {
+                key: 'Cache-Control',
+                value: 'private, no-cache, no-store, must-revalidate',
+            },
+        ]
         return [
+            // Pages publiques dynamiques (liste produits, RSC ?_rsc=…) : limiter les 304 fantômes au refresh.
+            { source: '/', headers: noStoreCatalog },
+            { source: '/search', headers: noStoreCatalog },
+            { source: '/feed', headers: noStoreCatalog },
+            { source: '/category/:path*', headers: noStoreCatalog },
+            { source: '/sub_category/:path*', headers: noStoreCatalog },
+            { source: '/product/:path*', headers: noStoreCatalog },
+            { source: '/store/:path*', headers: noStoreCatalog },
             {
                 source: '/(.*)',
                 headers: [

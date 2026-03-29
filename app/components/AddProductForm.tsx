@@ -884,7 +884,6 @@ export default function AddProductForm({
             if (!base64.startsWith('data:image')) {
                 throw new Error('Format image invalide — attendu data:image/...')
             }
-            console.log('Début upload vers API...')
             const res = await fetch('/api/upload', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

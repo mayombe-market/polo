@@ -3,7 +3,6 @@
 import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
@@ -89,7 +88,7 @@ export default function Header() {
             <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
                 {/* 1. LOGO — hauteur ~−30 % vs h-20 / h-32 */}
                 <Link href="/" className="shrink-0 flex items-center">
-                    <Image
+                    <img
                         src="/logo.png"
                         alt="Logo"
                         width={128}
@@ -145,7 +144,13 @@ export default function Header() {
                                 className="relative w-9 h-9 rounded-full flex items-center justify-center border-2 border-white shadow-sm hover:scale-105 transition-transform overflow-hidden"
                             >
                                 {avatarUrl ? (
-                                    <Image src={avatarUrl} alt="Avatar" fill sizes="36px" className="object-cover" />
+                                    <img
+                                        src={avatarUrl}
+                                        alt="Avatar"
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                        loading="lazy"
+                                        decoding="async"
+                                    />
                                 ) : (
                                     <div className="w-full h-full bg-green-600 flex items-center justify-center text-white font-bold">
                                         {user.email?.[0]?.toUpperCase() || 'U'}

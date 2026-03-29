@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback, useRef } from 'react'
-import Image from 'next/image'
 import { toast } from 'sonner'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { Phone, Loader2, Package, MapPin, Clock, CheckCircle2, LogOut } from 'lucide-react'
@@ -219,8 +218,8 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                 {/* Info produit */}
                 <div className="flex items-center gap-3.5 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] mb-3">
                     {d.items?.[0]?.img ? (
-                        <Image src={d.items[0].img} alt="" width={60} height={60}
-                            className="w-14 h-14 rounded-2xl object-cover flex-shrink-0" />
+                        <img src={d.items[0].img} alt="" width={60} height={60}
+                            className="h-14 w-14 flex-shrink-0 rounded-2xl object-cover" loading="lazy" decoding="async" />
                     ) : (
                         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center text-2xl flex-shrink-0">
                             <Package size={24} className="text-gray-600" />
@@ -376,8 +375,8 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                             className="w-full text-left p-4 rounded-2xl bg-white/[0.02] border border-white/[0.04] cursor-pointer transition-all hover:bg-white/[0.04]">
                             <div className="flex items-center gap-3 mb-2.5">
                                 {d.items?.[0]?.img ? (
-                                    <Image src={d.items[0].img} alt="" width={48} height={48}
-                                        className="w-12 h-12 rounded-xl object-cover flex-shrink-0" />
+                                    <img src={d.items[0].img} alt="" width={48} height={48}
+                                        className="h-12 w-12 flex-shrink-0 rounded-xl object-cover" loading="lazy" decoding="async" />
                                 ) : (
                                     <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#1a1a2e] to-[#16213e] flex items-center justify-center flex-shrink-0">
                                         <Package size={20} className="text-gray-600" />

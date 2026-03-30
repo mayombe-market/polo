@@ -4,30 +4,13 @@ import type { ImgHTMLAttributes, SyntheticEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { diagError } from '@/lib/diagnostics'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
+import { debugImageSrc } from '@/lib/debugImageSrc'
+import {
+    withCloudinaryAutoFormat,
+    withCloudinaryCatalogThumb,
+} from '@/lib/cloudinaryImageUrl'
 
-/** Insère f_auto,q_auto après /upload/ (delivery URL Cloudinary). */
-export function withCloudinaryAutoFormat(url: string): string {
-    if (!url || !url.includes('res.cloudinary.com')) return url
-    if (url.includes('f_auto,q_auto')) return url
-    return url.replace('/upload/', '/upload/f_auto,q_auto/')
-}
-
-/**
- * Vignettes catalogue : fichier plus petit (réseaux lents, mobile).
- * Cas couverts : `/upload/v…` (URL API) et `/upload/f_auto,q_auto/v…` (déjà optimisée).
- * Si une chaîne `w_…` custom existe déjà après `/upload/`, on se limite à f_auto,q_auto.
- */
-export function withCloudinaryCatalogThumb(url: string): string {
-    if (!url || !url.includes('res.cloudinary.com')) return url
-    if (url.includes('w_480,c_limit,f_auto,q_auto')) return url
-    if (url.includes('/upload/f_auto,q_auto/')) {
-        return url.replace('/upload/f_auto,q_auto/', '/upload/w_480,c_limit,f_auto,q_auto/')
-    }
-    if (/\/upload\/w_/.test(url)) {
-        return withCloudinaryAutoFormat(url)
-    }
-    return url.replace('/upload/', '/upload/w_480,c_limit,f_auto,q_auto/')
-}
+export { withCloudinaryAutoFormat, withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 
 function optimizeSrc(src: string, delivery: 'default' | 'catalog'): string {
     if (delivery === 'catalog') {
@@ -39,7 +22,7 @@ function optimizeSrc(src: string, delivery: 'default' | 'catalog'): string {
 const DEFAULT_RETRIES = 3
 
 type NextImageCompat = {
-    /** Comportement `next/image` fill : position absolue dans le parent `relative`. */
+    /** Position absolue dans le parent `relative` (équivalent ancien `fill` next/image). */
     fill?: boolean
     priority?: boolean
     sizes?: string
@@ -56,7 +39,7 @@ export type CloudinaryImageProps = Omit<ImgHTMLAttributes<HTMLImageElement>, 'sr
     }
 
 /**
- * Image distante (Cloudinary / Supabase storage) via balise native `<img>` — **aucun** passage par l’optimizer Vercel (`/_next/image`).
+ * `<img>` natif — requêtes directes vers Cloudinary / Supabase, **jamais** `/_next/image`.
  */
 export default function CloudinaryImage({
     src,
@@ -96,6 +79,10 @@ export default function CloudinaryImage({
     }, [resolvedSrc, delivery])
     const effectiveSrc =
         retry === 0 ? baseSrc : `${baseSrc}${baseSrc.includes('?') ? '&' : '?'}_retry=${retry}`
+
+    useEffect(() => {
+        debugImageSrc('CloudinaryImage', effectiveSrc)
+    }, [effectiveSrc])
 
     const handleError = useCallback(
         (e: SyntheticEvent<HTMLImageElement, Event>) => {

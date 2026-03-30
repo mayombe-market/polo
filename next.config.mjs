@@ -2,7 +2,10 @@
 const nextConfig = {
     poweredByHeader: false,
     images: {
-        /** Quota Vercel Image Optimization (402) : servir les src telles quelles (Supabase / Cloudinary / static). */
+        /**
+         * Désactive l’optimizer Vercel (`/_next/image`) pour tout `next/image` restant.
+         * L’app utilise surtout des `<img>` directs (Supabase / Cloudinary / URLs externes).
+         */
         unoptimized: true,
         formats: ['image/avif', 'image/webp'],
         deviceSizes: [640, 750, 828, 1080, 1200],

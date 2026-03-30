@@ -11,11 +11,12 @@
  * 3) **Données partielles** — libellés et image de repli sans casser le rendu.
  * 4) **Pas besoin de refresh pour voir la bonne image** — `key` sur `<img>` liée à `id` + URL effective pour forcer
  *    le remontage si le parent met à jour l’objet produit après coup (navigation client).
- * 5) **`<img>` natif** : aucun passage par l’optimizer Vercel (évite HTTP 402).
+ * 5) **`<img>` natif** : URL Cloudinary directe (`res.cloudinary.com`) avec `f_auto,q_auto` / vignette grille — **jamais** `/_next/image`.
  */
 
 import Link from 'next/link'
-import { withCloudinaryAutoFormat } from '@/app/components/CloudinaryImage'
+import { debugImageSrc } from '@/lib/debugImageSrc'
+import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
@@ -145,7 +146,7 @@ function ProductCardInner({
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
     const timeRemaining = hasPromo ? getPromoTimeRemaining(product.promo_end_date) : ''
     const imageSrc = resolveImageSrc(product)
-    const displayUrl = useMemo(() => withCloudinaryAutoFormat(imageSrc), [imageSrc])
+    const displayUrl = useMemo(() => withCloudinaryCatalogThumb(imageSrc), [imageSrc])
     const [imgBroken, setImgBroken] = useState(false)
 
     useEffect(() => {
@@ -157,6 +158,11 @@ function ProductCardInner({
     }, [])
 
     const imgSrc = imgBroken ? PLACEHOLDER_IMG : displayUrl
+
+    useEffect(() => {
+        debugImageSrc('ProductCard', imgSrc)
+    }, [imgSrc])
+
     const displayName = product.name?.trim() || 'Produit'
     const categoryLabel = product.category?.trim() || 'Collection'
 

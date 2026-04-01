@@ -27,6 +27,11 @@ const nextConfig = {
             },
         ]
         return [
+            // Service worker : pas de cache long — chaque déploiement doit être vu vite (évite « rien ne change » côté PWA).
+            {
+                source: '/sw.js',
+                headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
+            },
             // Pages publiques dynamiques (liste produits, RSC ?_rsc=…) : limiter les 304 fantômes au refresh.
             { source: '/', headers: noStoreCatalog },
             { source: '/search', headers: noStoreCatalog },

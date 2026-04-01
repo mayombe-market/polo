@@ -4,9 +4,9 @@
  * placeholders à la place des photos Cloudinary. Ici le réseau est 100 % géré par le navigateur.
  *
  * Conservé : cycle de vie PWA (install / activate / SKIP_WAITING) pour les mises à jour.
- * v10 : bump nom de cache pour forcer reprise du nouveau bundle côté clients.
+ * v12 : bump pour forcer réactivation SW après déploiements (bundle homepage / layout).
  */
-const CACHE_NAME = 'mayombe-v10-no-intercept'
+const CACHE_NAME = 'mayombe-v12-deploy-refresh'
 
 self.addEventListener('install', () => {
   self.skipWaiting()

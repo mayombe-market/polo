@@ -40,6 +40,8 @@ export interface ProductCardProduct {
 }
 
 export type ProductCardProps = {
+    /** Classes optionnelles sur le lien carte (grilles, sections) — UI uniquement. */
+    className?: string
     /** Objet produit ; peut être partiel tant que le parent indique `isLoading` ou avant hydratation des listes. */
     product?: ProductCardProduct | null
     /**
@@ -136,9 +138,11 @@ function ProductCardPending() {
 function ProductCardInner({
     product,
     aboveFold = false,
+    className,
 }: {
     product: ProductCardProduct
     aboveFold?: boolean
+    className?: string
 }) {
     const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
     const hasPromo = isPromoActive(product as Parameters<typeof isPromoActive>[0])
@@ -169,7 +173,12 @@ function ProductCardInner({
     return (
         <Link
             href={`/product/${product.id}`}
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 block"
+            className={[
+                'group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 block',
+                className,
+            ]
+                .filter(Boolean)
+                .join(' ')}
         >
             <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800">
                 {/*
@@ -253,7 +262,7 @@ function ProductCardInner({
     )
 }
 
-function ProductCard({ product, isLoading = false, aboveFold = false }: ProductCardProps) {
+function ProductCard({ product, isLoading = false, aboveFold = false, className }: ProductCardProps) {
     // 1) Chargement explicite côté parent
     if (isLoading) {
         return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardSkeleton />
@@ -270,10 +279,11 @@ function ProductCard({ product, isLoading = false, aboveFold = false }: ProductC
     }
 
     // 4) À ce stade id / name / price sont garantis pour l’affichage métier
-    return <ProductCardInner product={product} aboveFold={aboveFold} />
+    return <ProductCardInner product={product} aboveFold={aboveFold} className={className} />
 }
 
 const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
+    if (prev.className !== next.className) return false
     if (prev.isLoading !== next.isLoading) return false
     if (prev.aboveFold !== next.aboveFold) return false
     if (prev.isLoading || next.isLoading) return prev.isLoading === next.isLoading

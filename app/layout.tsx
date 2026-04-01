@@ -1,4 +1,5 @@
 import './globals.css'
+import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
@@ -81,14 +82,20 @@ export const metadata = {
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim() || 'G-SLRPK4NETV'
 
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
+
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className="antialiased font-sans">
+    <html lang="fr" className={`${inter.variable} antialiased`}>
       <head>
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
       </head>
-      <body className="m-0 p-0">
+      <body className={`${inter.className} m-0 min-h-screen bg-neutral-50 p-0 text-slate-900`}>
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"

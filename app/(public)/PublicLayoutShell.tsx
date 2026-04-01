@@ -32,7 +32,7 @@ export default function PublicLayoutShell({ children }: { children: React.ReactN
 
             {!tunnel && <DeferredShopStoriesRow />}
 
-            <main className="min-h-screen bg-neutral-50">{children}</main>
+            <main className="min-h-screen bg-white">{children}</main>
 
             {!tunnel && <Footer />}
             <DeferredCookieConsent />

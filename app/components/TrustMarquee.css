@@ -19,7 +19,10 @@
 }
 
 .strip-item {
+    display: inline-flex;
     flex-shrink: 0;
+    align-items: center;
+    gap: 0.5rem;
     padding: 0.875rem 2.5rem;
     font-size: 0.6875rem;
     font-weight: 600;
@@ -27,6 +30,15 @@
     text-transform: uppercase;
     color: #525252;
     white-space: nowrap;
+}
+
+.strip-item-star {
+    flex-shrink: 0;
+    color: #c9a040;
+}
+
+.strip-item-text {
+    color: #525252;
 }
 
 @keyframes scroll {

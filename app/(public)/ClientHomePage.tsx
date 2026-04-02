@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
-import ShopStoriesRow from '@/app/components/ShopStoriesRow'
+import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import { Truck, Store, ArrowRight } from 'lucide-react'
 
 interface ClientHomePageProps {
@@ -37,6 +37,7 @@ export default function ClientHomePage({
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const [newsletterEmail, setNewsletterEmail] = useState('')
     const [newsletterOk, setNewsletterOk] = useState(false)
+    const [vendorDrawerOpen, setVendorDrawerOpen] = useState(false)
 
     const safeAds = useMemo(() => (Array.isArray(ads) ? ads : []), [ads])
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
@@ -68,6 +69,7 @@ export default function ClientHomePage({
 
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
+            <VendorMarketDrawer open={vendorDrawerOpen} onClose={() => setVendorDrawerOpen(false)} />
             {/* Hero : ~80 % de largeur (–20 % vs plein écran), centré */}
             <section className="w-full overflow-x-clip overflow-y-hidden bg-white py-4 dark:bg-neutral-950 sm:py-6">
                 {safeAds.length > 0 ? (
@@ -150,27 +152,30 @@ export default function ClientHomePage({
             </section>
 
             <div className="mx-auto max-w-[1320px] space-y-24 px-5 pt-10 sm:px-8 lg:px-10 lg:pt-14">
-                {/* Sous le hero : stories vendeurs + livraison / ouvrir une boutique (un seul bloc) */}
+                {/* Sous le hero : livraison | Vendeurs (drawer boutiques + CTA) */}
                 <section className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-neutral-800">
-                    <ShopStoriesRow embedded />
                     <div className="grid gap-0 bg-neutral-50/80 md:grid-cols-2 dark:bg-neutral-900/50">
-                    <div className="flex items-center gap-5 border-b border-neutral-200/80 px-6 py-6 md:border-b-0 md:border-r dark:border-neutral-800">
-                        <Truck className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
-                        <div>
-                            <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-500">Livraison</p>
-                            <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-200">Brazzaville & Pointe-Noire</p>
-                        </div>
-                    </div>
-                    <Link href="/vendor/dashboard" className="flex items-center justify-between gap-4 px-6 py-6 transition hover:bg-white dark:hover:bg-neutral-800/80">
-                        <div className="flex items-center gap-5">
-                            <Store className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
+                        <div className="flex items-center gap-5 border-b border-neutral-200/80 px-6 py-6 md:border-b-0 md:border-r dark:border-neutral-800">
+                            <Truck className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
                             <div>
-                                <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-500">Vendeurs</p>
-                                <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-200">Ouvrir une boutique</p>
+                                <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-500">Livraison</p>
+                                <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-200">Brazzaville & Pointe-Noire</p>
                             </div>
                         </div>
-                        <ArrowRight className="h-5 w-5 text-neutral-400" />
-                    </Link>
+                        <button
+                            type="button"
+                            onClick={() => setVendorDrawerOpen(true)}
+                            className="flex w-full items-center justify-between gap-4 px-6 py-6 text-left transition hover:bg-white dark:hover:bg-neutral-800/80"
+                        >
+                            <div className="flex items-center gap-5">
+                                <Store className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-neutral-500">Vendeurs</p>
+                                    <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-200">Ouvrir une boutique</p>
+                                </div>
+                            </div>
+                            <ArrowRight className="h-5 w-5 shrink-0 text-neutral-400" />
+                        </button>
                     </div>
                 </section>
 

@@ -71,7 +71,8 @@ export default function ClientHomePage({
             <section className="w-full overflow-x-clip overflow-y-hidden bg-white py-4 dark:bg-neutral-950 sm:py-6">
                 {safeAds.length > 0 ? (
                     <>
-                        <div className="relative mx-auto h-[min(88vh,820px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900">
+                        {/* Hauteur ×0,8 vs avant (largeur inchangée) */}
+                        <div className="relative mx-auto h-[min(70.4vh,656px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900">
                             {safeAds.map((ad, index) => {
                                 const active = index === currentAdIndex
                                 return (
@@ -97,7 +98,7 @@ export default function ClientHomePage({
                                                     Shop Now
                                                 </span>
                                             </div>
-                                            <div className="relative min-h-[min(42vh,380px)] w-full min-w-0 flex-1 overflow-hidden md:min-h-0">
+                                            <div className="relative min-h-[min(33.6vh,304px)] w-full min-w-0 flex-1 overflow-hidden md:min-h-0">
                                                 {/* Cadre fixe : l’image ne dépasse pas (cover + clip) */}
                                                 <img
                                                     src={ad.img || '/placeholder-image.svg'}
@@ -132,7 +133,7 @@ export default function ClientHomePage({
                         )}
                     </>
                 ) : (
-                    <div className="mx-auto flex min-h-[70vh] w-[90%] min-w-0 max-w-[1400px] flex-col items-center justify-center rounded-2xl bg-[#ebe8e2] px-6 py-20 sm:w-[80%] dark:bg-neutral-900">
+                    <div className="mx-auto flex min-h-[56vh] w-[90%] min-w-0 max-w-[1400px] flex-col items-center justify-center rounded-2xl bg-[#ebe8e2] px-6 py-20 sm:w-[80%] dark:bg-neutral-900">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">Mayombe Market</p>
                         <h2 className="mt-4 text-center text-3xl font-light text-neutral-900 dark:text-white md:text-5xl">
                             Découvrez le catalogue

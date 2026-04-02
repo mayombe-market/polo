@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
 import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
+import TrustMarquee from '@/app/components/TrustMarquee'
 import { Truck, Store, ArrowRight } from 'lucide-react'
 
 interface ClientHomePageProps {
@@ -179,7 +180,7 @@ export default function ClientHomePage({
                     </div>
                 </section>
 
-                {/* Sélection — grille 4 (Sophie : featured) */}
+                {/* Sélection — grille 4 (Sophie : featured) + bandeau confiance */}
                 {featuredProducts.length > 0 && (
                     <section>
                         <SophieSectionTitle
@@ -195,6 +196,9 @@ export default function ClientHomePage({
                                     aboveFold={index < 4}
                                 />
                             ))}
+                        </div>
+                        <div className="mt-12 sm:mt-14">
+                            <TrustMarquee />
                         </div>
                         <div className="mt-10 text-center">
                             <Link

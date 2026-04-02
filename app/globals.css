@@ -5,6 +5,9 @@
 /* Inter via `next/font` sur `<body>` (`app/layout.tsx`). */
 html {
     font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    /* Valeurs valides pour WebKit / Firefox (évite « Erreur d’analyse » sur -webkit-text-size-adjust). */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
 }
 
 body {

@@ -86,6 +86,8 @@ const inter = Inter({
   subsets: ['latin'],
   display: 'swap',
   variable: '--font-inter',
+  /** Évite l’avertissement console « préchargée mais non utilisée » (swap + timing navigateur). */
+  preload: false,
 })
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

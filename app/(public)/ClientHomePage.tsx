@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
 import { Truck, Store, ArrowRight } from 'lucide-react'
@@ -36,7 +36,6 @@ export default function ClientHomePage({
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const [newsletterEmail, setNewsletterEmail] = useState('')
     const [newsletterOk, setNewsletterOk] = useState(false)
-    const scrollContainerRef = useRef<HTMLDivElement>(null)
 
     const safeAds = useMemo(() => (Array.isArray(ads) ? ads : []), [ads])
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
@@ -57,14 +56,6 @@ export default function ClientHomePage({
         return () => clearInterval(interval)
     }, [safeAds.length])
 
-    useEffect(() => {
-        const container = scrollContainerRef.current
-        if (!container || safeAds.length === 0) return
-        // Largeur d’une slide = largeur visible du carrousel (pas scrollWidth/n qui bouge quand les images chargent).
-        const slideWidth = container.clientWidth
-        container.scrollTo({ left: slideWidth * currentAdIndex, behavior: 'smooth' })
-    }, [currentAdIndex, safeAds.length])
-
     const onNewsletterSubmit = (e: React.FormEvent) => {
         e.preventDefault()
         if (newsletterEmail.includes('@')) {
@@ -76,44 +67,52 @@ export default function ClientHomePage({
 
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
-            {/* Hero : colonne texte beige + image (données `ads` inchangées) */}
-            <section className="w-full max-w-[100vw] overflow-hidden bg-[#ebe8e2] dark:bg-neutral-900 [contain:layout]">
+            {/* Hero : surface fixe, pas de scroll horizontal — slides superposées (opacity) */}
+            <section className="w-full overflow-x-clip overflow-y-hidden bg-[#ebe8e2] dark:bg-neutral-900">
                 {safeAds.length > 0 ? (
                     <>
-                        <div
-                            ref={scrollContainerRef}
-                            className="flex w-full min-w-0 max-w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hide"
-                            style={{ scrollbarWidth: 'none' }}
-                        >
-                            {safeAds.map((ad, index) => (
-                                <Link
-                                    key={ad.id}
-                                    href={(ad.link_url as string) || '/search'}
-                                    className="flex min-h-[min(88vh,820px)] w-full min-w-0 max-w-full flex-[0_0_100%] snap-center flex-col overflow-hidden md:min-h-[min(78vh,720px)] md:flex-row"
-                                >
-                                    <div className="flex min-w-0 w-full flex-col justify-center px-8 py-14 md:w-[46%] md:max-w-xl md:py-20 md:pl-12 md:pr-8 lg:pl-20 lg:pr-12">
-                                        <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">
-                                            Collection
-                                        </p>
-                                        <h2 className="mt-5 text-4xl font-light leading-[1.1] tracking-tight text-neutral-900 dark:text-white md:text-5xl lg:text-[3.25rem]">
-                                            {ad.title ? String(ad.title) : 'Nouvelle sélection'}
-                                        </h2>
-                                        <span className="mt-10 inline-flex w-fit items-center border border-neutral-900 bg-neutral-900 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white hover:text-neutral-900 dark:border-white dark:bg-white dark:text-neutral-900 dark:hover:bg-transparent dark:hover:text-white">
-                                            Shop Now
-                                        </span>
+                        <div className="relative mx-auto h-[min(88vh,820px)] w-full max-w-[100vw] overflow-hidden">
+                            {safeAds.map((ad, index) => {
+                                const active = index === currentAdIndex
+                                return (
+                                    <div
+                                        key={ad.id}
+                                        className={`absolute inset-0 flex flex-col transition-opacity duration-500 ease-out md:flex-row ${
+                                            active ? 'z-10 opacity-100' : 'pointer-events-none z-0 opacity-0'
+                                        }`}
+                                        aria-hidden={!active}
+                                    >
+                                        <Link
+                                            href={(ad.link_url as string) || '/search'}
+                                            className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-hidden md:flex-row"
+                                        >
+                                            <div className="flex min-h-0 w-full shrink-0 flex-col justify-center px-8 py-10 md:w-[46%] md:max-w-xl md:py-16 md:pl-12 md:pr-8 lg:pl-20 lg:pr-12">
+                                                <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">
+                                                    Collection
+                                                </p>
+                                                <h2 className="mt-5 text-4xl font-light leading-[1.1] tracking-tight text-neutral-900 dark:text-white md:text-5xl lg:text-[3.25rem]">
+                                                    {ad.title ? String(ad.title) : 'Nouvelle sélection'}
+                                                </h2>
+                                                <span className="mt-10 inline-flex w-fit items-center border border-neutral-900 bg-neutral-900 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white hover:text-neutral-900 dark:border-white dark:bg-white dark:text-neutral-900 dark:hover:bg-transparent dark:hover:text-white">
+                                                    Shop Now
+                                                </span>
+                                            </div>
+                                            <div className="relative min-h-[min(42vh,380px)] w-full min-w-0 flex-1 overflow-hidden md:min-h-0">
+                                                {/* Cadre fixe : l’image ne dépasse pas (cover + clip) */}
+                                                <img
+                                                    src={ad.img || '/placeholder-image.svg'}
+                                                    alt={ad.title ? String(ad.title) : 'Bannière'}
+                                                    className="absolute inset-0 box-border h-full w-full max-w-full object-cover object-center"
+                                                    loading={index === 0 ? 'eager' : 'lazy'}
+                                                    fetchPriority={index === 0 ? 'high' : 'low'}
+                                                    decoding="async"
+                                                    sizes="(max-width: 768px) 100vw, 54vw"
+                                                />
+                                            </div>
+                                        </Link>
                                     </div>
-                                    <div className="relative min-h-[45vh] min-w-0 w-full flex-1 md:min-h-0">
-                                        <img
-                                            src={ad.img || '/placeholder-image.svg'}
-                                            alt={ad.title ? String(ad.title) : 'Bannière'}
-                                            className="h-full min-h-0 w-full max-w-full object-cover object-center"
-                                            loading={index === 0 ? 'eager' : 'lazy'}
-                                            fetchPriority={index === 0 ? 'high' : 'low'}
-                                            decoding="async"
-                                        />
-                                    </div>
-                                </Link>
-                            ))}
+                                )
+                            })}
                         </div>
                         {safeAds.length > 1 && (
                             <div className="flex justify-center gap-2 pb-8 pt-2">

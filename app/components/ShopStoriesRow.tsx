@@ -13,7 +13,12 @@ interface Seller {
     avatar_url: string | null
 }
 
-export default function ShopStoriesRow() {
+type Props = {
+    /** Quand true : pas de max-width externe (intégré sous le hero, même conteneur que le reste). */
+    embedded?: boolean
+}
+
+export default function ShopStoriesRow({ embedded = false }: Props) {
     const [sellers, setSellers] = useState<Seller[]>([])
 
     const supabase = getSupabaseBrowserClient()
@@ -41,14 +46,24 @@ export default function ShopStoriesRow() {
         seller.store_name || seller.shop_name || seller.full_name || 'Boutique'
 
     return (
-        <div className="max-w-7xl mx-auto">
-            <div className="px-4 mb-2">
+        <div
+            className={
+                embedded
+                    ? 'w-full border-b border-neutral-200/80 bg-white/60 px-3 py-3 dark:border-neutral-800 dark:bg-neutral-900/50 sm:px-5'
+                    : 'mx-auto max-w-7xl'
+            }
+        >
+            <div className={`mb-2 ${embedded ? '' : 'px-4'}`}>
                 <span className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-400">
                     Boutiques
                 </span>
             </div>
             <div
-                className="flex gap-4 overflow-x-auto px-4 pt-2 pb-4"
+                className={
+                    embedded
+                        ? 'flex gap-4 overflow-x-auto pb-1 pt-1'
+                        : 'flex gap-4 overflow-x-auto px-4 pb-4 pt-2'
+                }
                 style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
             >
                 {sellers.map((seller) => (

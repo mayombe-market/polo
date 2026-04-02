@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
+import ShopStoriesRow from '@/app/components/ShopStoriesRow'
 import { Truck, Store, ArrowRight } from 'lucide-react'
 
 interface ClientHomePageProps {
@@ -148,9 +149,11 @@ export default function ClientHomePage({
                 )}
             </section>
 
-            <div className="mx-auto max-w-[1320px] space-y-24 px-5 pt-20 sm:px-8 lg:px-10 lg:pt-28">
-                {/* Bandeau discret livraison / vendeur — monochrome */}
-                <section className="grid gap-3 border border-neutral-200/80 bg-neutral-50/80 md:grid-cols-2 dark:border-neutral-800 dark:bg-neutral-900/50">
+            <div className="mx-auto max-w-[1320px] space-y-24 px-5 pt-10 sm:px-8 lg:px-10 lg:pt-14">
+                {/* Sous le hero : stories vendeurs + livraison / ouvrir une boutique (un seul bloc) */}
+                <section className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-neutral-800">
+                    <ShopStoriesRow embedded />
+                    <div className="grid gap-0 bg-neutral-50/80 md:grid-cols-2 dark:bg-neutral-900/50">
                     <div className="flex items-center gap-5 border-b border-neutral-200/80 px-6 py-6 md:border-b-0 md:border-r dark:border-neutral-800">
                         <Truck className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
                         <div>
@@ -168,6 +171,7 @@ export default function ClientHomePage({
                         </div>
                         <ArrowRight className="h-5 w-5 text-neutral-400" />
                     </Link>
+                    </div>
                 </section>
 
                 {/* Sélection — grille 4 (Sophie : featured) */}

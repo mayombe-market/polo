@@ -1,11 +1,10 @@
 import type { Metadata } from 'next'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
-import CloudinaryImage from '@/app/components/CloudinaryImage'
+import ProductCard from '@/app/components/ProductCard'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
-import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
 export const dynamic = 'force-dynamic'
@@ -130,44 +129,16 @@ export default async function CategoryPage(props: any) {
                 </div>
 
                 {/* GRILLE DE PRODUITS */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
                     {products && products.length > 0 ? (
-                        products.map((p: any) => {
-                            const hasPromo = isPromoActive(p)
-                            const promoPrice = hasPromo ? getPromoPrice(p) : p.price
-                            return (
-                                <Link href={`/product/${p.id}`} key={p.id} className="group border border-slate-100 dark:border-slate-800 rounded-[2rem] overflow-hidden hover:shadow-2xl transition-all bg-white dark:bg-slate-800/50">
-                                    <div className="aspect-square bg-slate-50 dark:bg-slate-900 overflow-hidden relative">
-                                        <CloudinaryImage
-                                            src={p.img || p.image_url || (p.images_gallery && p.images_gallery[0]) || '/placeholder-image.svg'}
-                                            delivery="catalog"
-                                            alt={p.name}
-                                            fill
-                                            sizes="(max-width: 768px) 50vw, 25vw"
-                                            className="object-cover group-hover:scale-105 transition-transform duration-700"
-                                        />
-                                        {hasPromo && (
-                                            <div className="absolute top-0 left-0 bg-red-600 text-white font-black uppercase rounded-br-2xl px-3 py-2 flex items-center gap-1.5 z-10">
-                                                <span className="text-[9px]">🔥 PROMO</span>
-                                                <span className="text-sm">-{p.promo_percentage}%</span>
-                                            </div>
-                                        )}
-                                    </div>
-                                    <div className="p-5">
-                                        <p className="text-[10px] text-green-600 font-black uppercase mb-1 tracking-widest">{p.subcategory || category.name}</p>
-                                        <h3 className="font-bold truncate text-sm text-slate-800 dark:text-slate-100 mb-2">{p.name}</h3>
-                                        {hasPromo ? (
-                                            <div>
-                                                <p className="text-slate-400 text-xs line-through">{p.price?.toLocaleString('fr-FR')} F</p>
-                                                <p className="text-red-500 font-black text-lg">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
-                                            </div>
-                                        ) : (
-                                            <p className="text-green-600 font-black text-lg">{p.price?.toLocaleString('fr-FR')} FCFA</p>
-                                        )}
-                                    </div>
-                                </Link>
-                            )
-                        })
+                        products.map((p: any, index: number) => (
+                            <ProductCard
+                                key={p.id}
+                                product={p}
+                                tone="editorial"
+                                aboveFold={index < 8}
+                            />
+                        ))
                     ) : (
                         <div className="col-span-full py-32 text-center">
                             <div className="text-5xl mb-4">📦</div>

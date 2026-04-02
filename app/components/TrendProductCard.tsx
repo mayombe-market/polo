@@ -6,6 +6,7 @@ import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import type { ProductCardProduct } from '@/app/components/ProductCard'
+import { getProductShopLabel } from '@/lib/productShopLabel'
 
 const PLACEHOLDER_IMG = '/placeholder-image.svg'
 
@@ -66,6 +67,7 @@ export default function TrendProductCard({ product, aboveFold = false }: TrendPr
 
     const imgSrc = imgBroken ? PLACEHOLDER_IMG : displayUrl
     const displayName = product.name?.trim() || 'Produit'
+    const shopLabel = getProductShopLabel(product)
     const views = typeof product.views_count === 'number' && Number.isFinite(product.views_count) ? product.views_count : 0
     const socialLabel =
         views > 0 ? `${views.toLocaleString('fr-FR')} vues` : 'Nouveau sur Mayombe'
@@ -98,10 +100,8 @@ export default function TrendProductCard({ product, aboveFold = false }: TrendPr
                     <span className="text-[11px] text-neutral-500 dark:text-neutral-400">{socialLabel}</span>
                 </div>
 
-                <p className="mt-2 text-[11px] leading-snug text-neutral-700 dark:text-neutral-300">
-                    Produit{' '}
-                    <span className="font-bold text-neutral-900 dark:text-white">Mayombe Market</span>{' '}
-                    <span className="font-medium text-sky-600 dark:text-sky-400">fidélité récompensée</span>
+                <p className="mt-2 truncate text-[11px] font-semibold leading-snug text-neutral-800 dark:text-neutral-200">
+                    {shopLabel}
                 </p>
 
                 <div className="mt-auto pt-3">

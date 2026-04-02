@@ -12,7 +12,18 @@ export const searchProducts = async (query: string, filters: any, page: number =
     const to = from + itemsPerPage - 1
 
     // On sélectionne les colonnes et on demande le compte total (count)
-    let request = supabase.from('products').select('*', { count: 'exact' })
+    let request = supabase.from('products').select(
+        `
+        *,
+        profiles:seller_id (
+            store_name,
+            shop_name,
+            full_name,
+            name
+        )
+    `,
+        { count: 'exact' }
+    )
 
     // 1. RECHERCHE TEXTUELLE (Nom + Description) — input sanitisé
     if (query) {

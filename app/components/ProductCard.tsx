@@ -306,12 +306,20 @@ function ProductCardInner({
                             <p
                                 className={
                                     editorial
-                                        ? 'text-sm font-medium tabular-nums text-neutral-900 dark:text-neutral-100'
+                                        ? 'text-sm font-bold tabular-nums text-red-600 dark:text-red-500'
                                         : 'text-lg font-black tracking-tighter text-red-600 dark:text-red-400'
                                 }
                             >
                                 {hasPromo ? promoPrice.toLocaleString('fr-FR') : basePrice.toLocaleString('fr-FR')}{' '}
-                                <span className={editorial ? 'text-xs text-neutral-500' : 'ml-0.5 text-[10px]'}>FCFA</span>
+                                <span
+                                    className={
+                                        editorial
+                                            ? 'text-xs font-bold text-red-600 dark:text-red-500'
+                                            : 'ml-0.5 text-[10px] font-black text-red-600 dark:text-red-400'
+                                    }
+                                >
+                                    FCFA
+                                </span>
                             </p>
                             {editorial && (
                                 <p className="text-[11px] text-neutral-400 line-through">
@@ -328,12 +336,20 @@ function ProductCardInner({
                         <p
                             className={
                                 editorial
-                                    ? 'text-sm font-medium tabular-nums text-neutral-900 dark:text-neutral-100'
-                                    : 'text-lg font-black tracking-tighter text-slate-900 dark:text-slate-50'
+                                    ? 'text-sm font-bold tabular-nums text-red-600 dark:text-red-500'
+                                    : 'text-lg font-black tracking-tighter text-red-600 dark:text-red-400'
                             }
                         >
                             {basePrice.toLocaleString('fr-FR')}{' '}
-                            <span className={editorial ? 'text-xs text-neutral-500' : 'ml-0.5 text-[10px]'}>FCFA</span>
+                            <span
+                                className={
+                                    editorial
+                                        ? 'text-xs font-bold text-red-600 dark:text-red-500'
+                                        : 'ml-0.5 text-[10px] font-black text-red-600 dark:text-red-400'
+                                }
+                            >
+                                FCFA
+                            </span>
                         </p>
                     )}
 

@@ -159,10 +159,10 @@ export default async function CategoryPage(props: any) {
                                         {hasPromo ? (
                                             <div>
                                                 <p className="text-slate-400 text-xs line-through">{p.price?.toLocaleString('fr-FR')} F</p>
-                                                <p className="text-red-500 font-black text-lg">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
+                                                <p className="text-red-600 font-black text-lg">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
                                             </div>
                                         ) : (
-                                            <p className="text-green-600 font-black text-lg">{p.price?.toLocaleString('fr-FR')} FCFA</p>
+                                            <p className="text-red-600 font-black text-lg">{p.price?.toLocaleString('fr-FR')} FCFA</p>
                                         )}
                                     </div>
                                 </Link>

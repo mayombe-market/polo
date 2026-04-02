@@ -76,10 +76,10 @@ export default async function SubCategoryPage({ params }: { params: { id: string
                                     {hasPromo ? (
                                         <div className="mt-1">
                                             <p className="text-slate-400 text-xs line-through">{product.price?.toLocaleString('fr-FR')} F</p>
-                                            <p className="text-red-500 font-black text-lg">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
+                                            <p className="text-red-600 font-black text-lg">{promoPrice.toLocaleString('fr-FR')} FCFA</p>
                                         </div>
                                     ) : (
-                                        <p className="text-green-600 font-black mt-1 text-lg">{product.price?.toLocaleString('fr-FR')} FCFA</p>
+                                        <p className="text-red-600 font-black mt-1 text-lg">{product.price?.toLocaleString('fr-FR')} FCFA</p>
                                     )}
 
                                     <div className="w-full mt-4 bg-slate-900 dark:bg-green-600 text-white py-2.5 rounded-xl text-sm text-center font-bold hover:opacity-90 transition-opacity">

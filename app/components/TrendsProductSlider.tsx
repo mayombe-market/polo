@@ -14,14 +14,28 @@ function isProductDisplayReady(p: ProductCardProduct | null | undefined): boolea
     return id && name && price
 }
 
+const EMBLA_OPTIONS = {
+    align: 'start' as const,
+    loop: false,
+    containScroll: 'trimSnaps' as const,
+    dragFree: false,
+    /** Transition fluide pour scroll programmé et au doigt (comportement Embla). */
+    duration: 500,
+    /**
+     * Mobile : avancer d’1 slide par « page » (1,5 visible → 1 produit entier par clic).
+     * Tablette : groupes de 3 (3,5 visibles).
+     * Desktop : groupes de 5 (5,5 visibles).
+     */
+    slidesToScroll: 1,
+    breakpoints: {
+        '(min-width: 768px)': { slidesToScroll: 3 },
+        '(min-width: 1024px)': { slidesToScroll: 5 },
+    },
+}
+
 export default function TrendsProductSlider({ products }: { products: ProductCardProduct[] }) {
     const ready = products.filter(isProductDisplayReady)
-    const [emblaRef, emblaApi] = useEmblaCarousel({
-        align: 'start',
-        loop: false,
-        containScroll: 'trimSnaps',
-        dragFree: false,
-    })
+    const [emblaRef, emblaApi] = useEmblaCarousel(EMBLA_OPTIONS)
     const [canPrev, setCanPrev] = useState(false)
     const [canNext, setCanNext] = useState(false)
 
@@ -80,11 +94,15 @@ export default function TrendsProductSlider({ products }: { products: ProductCar
             </button>
 
             <div className="overflow-hidden px-1 md:px-12" ref={emblaRef}>
+                {/*
+                  Peek à droite : largeur slide = (100% − n×gap) / slidesPerView
+                  — 1,5 / 3,5 / 5,5 colonnes (gap-3 = 0,75rem ; n = slidesPerView − 0,5 arrondi aux gaps entre colonnes visibles).
+                */}
                 <div className="-ml-1 flex gap-3 pl-1">
                     {ready.map((product, index) => (
                         <div
                             key={product.id}
-                            className="min-w-0 shrink-0 grow-0 basis-[calc(50%-0.375rem)] sm:basis-[calc(33.333%-0.5rem)] md:basis-[calc(25%-0.5625rem)] lg:basis-[calc(20%-0.6rem)] xl:basis-[calc(16.666%-0.625rem)]"
+                            className="min-w-0 shrink-0 grow-0 basis-[calc((100%-0.75rem)/1.5)] md:basis-[calc((100%-2.25rem)/3.5)] lg:basis-[calc((100%-3.75rem)/5.5)]"
                         >
                             <TrendProductCard product={product} aboveFold={index < 6} />
                         </div>

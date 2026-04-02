@@ -191,9 +191,6 @@ export default function ClientHomePage({
                             title={promoProducts.length > 0 ? 'Sélection du moment' : 'Coup de cœur'}
                         />
                         <TrendsProductSlider products={trendsList} />
-                        <div className="mt-12 sm:mt-14">
-                            <TrustMarquee />
-                        </div>
                         <div className="mt-10 text-center">
                             <Link
                                 href={promoProducts.length > 0 ? '/search?filter=promo' : '/search?sort=popular'}
@@ -201,6 +198,9 @@ export default function ClientHomePage({
                             >
                                 Voir tout
                             </Link>
+                        </div>
+                        <div className="mt-12 sm:mt-14">
+                            <TrustMarquee />
                         </div>
                     </section>
                 )}

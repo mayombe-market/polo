@@ -27,6 +27,7 @@ export default async function HomePage() {
     { data: newProducts },
     { data: popularProducts },
     { data: promoProducts },
+    { data: trendProducts },
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     excludeExpiredSellers(
@@ -46,6 +47,17 @@ export default async function HomePage() {
       supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
+    excludeExpiredSellers(
+      supabase
+        .from('products')
+        .select(
+          'id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date'
+        )
+        .neq('category', IMMOBILIER_CATEGORY)
+        .order('views_count', { ascending: false })
+        .limit(30),
+      expiredIds
+    ),
   ])
 
   return (
@@ -58,6 +70,7 @@ export default async function HomePage() {
           newProducts={newProducts || []}
           popularProducts={popularProducts || []}
           promoProducts={promoProducts || []}
+          trendProducts={trendProducts || []}
         />
       </div>
     </main>

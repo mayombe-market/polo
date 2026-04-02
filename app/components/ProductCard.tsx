@@ -37,6 +37,8 @@ export interface ProductCardProduct {
     promo_percentage?: number | null
     promo_start_date?: string | null
     promo_end_date?: string | null
+    /** Présent sur les listes triées par popularité (home tendances, etc.). */
+    views_count?: number | null
 }
 
 /** `editorial` = style vitrine type catalogue luxe (titres nets, peu de décor). */

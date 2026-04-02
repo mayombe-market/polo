@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
 import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
+import TrendsProductSlider from '@/app/components/TrendsProductSlider'
 import { Truck, Store, ArrowRight } from 'lucide-react'
 
 interface ClientHomePageProps {
@@ -14,6 +15,7 @@ interface ClientHomePageProps {
     newProducts: any[]
     popularProducts: any[]
     promoProducts: any[]
+    trendProducts: any[]
 }
 
 /** Titres centrés type vitrine (Sophie) */
@@ -34,6 +36,7 @@ export default function ClientHomePage({
     newProducts,
     popularProducts,
     promoProducts,
+    trendProducts,
 }: ClientHomePageProps) {
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const [newsletterEmail, setNewsletterEmail] = useState('')
@@ -43,7 +46,7 @@ export default function ClientHomePage({
     const safeAds = useMemo(() => (Array.isArray(ads) ? ads : []), [ads])
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
 
-    const featuredProducts = promoProducts.length > 0 ? promoProducts.slice(0, 4) : popularProducts.slice(0, 4)
+    const trendsList = Array.isArray(trendProducts) ? trendProducts.slice(0, 30) : []
     const newProductsRow = newProducts.slice(0, 10)
     const categoryBanners = safeCategories.slice(0, 2)
     const categoryRest = safeCategories.slice(2)
@@ -181,22 +184,13 @@ export default function ClientHomePage({
                 </section>
 
                 {/* Sélection — grille 4 (Sophie : featured) + bandeau confiance */}
-                {featuredProducts.length > 0 && (
+                {trendsList.length > 0 && (
                     <section>
                         <SophieSectionTitle
-                            label={promoProducts.length > 0 ? 'Offres' : 'À la une'}
+                            label="Tendances"
                             title={promoProducts.length > 0 ? 'Sélection du moment' : 'Coup de cœur'}
                         />
-                        <div className="grid grid-flow-dense grid-cols-2 gap-x-4 gap-y-12 md:grid-cols-4 md:gap-6 md:gap-y-14">
-                            {featuredProducts.map((product: any, index: number) => (
-                                <ProductCard
-                                    key={product.id}
-                                    product={product}
-                                    tone="editorial"
-                                    aboveFold={index < 4}
-                                />
-                            ))}
-                        </div>
+                        <TrendsProductSlider products={trendsList} />
                         <div className="mt-12 sm:mt-14">
                             <TrustMarquee />
                         </div>

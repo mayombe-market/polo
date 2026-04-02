@@ -67,11 +67,11 @@ export default function ClientHomePage({
 
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
-            {/* Hero : surface fixe, pas de scroll horizontal — slides superposées (opacity) */}
-            <section className="w-full overflow-x-clip overflow-y-hidden bg-[#ebe8e2] dark:bg-neutral-900">
+            {/* Hero : ~80 % de largeur (–20 % vs plein écran), centré */}
+            <section className="w-full overflow-x-clip overflow-y-hidden bg-white py-4 dark:bg-neutral-950 sm:py-6">
                 {safeAds.length > 0 ? (
                     <>
-                        <div className="relative mx-auto h-[min(88vh,820px)] w-full max-w-[100vw] overflow-hidden">
+                        <div className="relative mx-auto h-[min(88vh,820px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900">
                             {safeAds.map((ad, index) => {
                                 const active = index === currentAdIndex
                                 return (
@@ -115,7 +115,7 @@ export default function ClientHomePage({
                             })}
                         </div>
                         {safeAds.length > 1 && (
-                            <div className="flex justify-center gap-2 pb-8 pt-2">
+                            <div className="mx-auto flex w-[90%] min-w-0 max-w-[1400px] justify-center gap-2 pb-8 pt-2 sm:w-[80%]">
                                 {safeAds.map((_, i) => (
                                     <button
                                         key={i}
@@ -132,7 +132,7 @@ export default function ClientHomePage({
                         )}
                     </>
                 ) : (
-                    <div className="flex min-h-[70vh] flex-col items-center justify-center bg-[#ebe8e2] px-6 py-20 dark:bg-neutral-900">
+                    <div className="mx-auto flex min-h-[70vh] w-[90%] min-w-0 max-w-[1400px] flex-col items-center justify-center rounded-2xl bg-[#ebe8e2] px-6 py-20 sm:w-[80%] dark:bg-neutral-900">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">Mayombe Market</p>
                         <h2 className="mt-4 text-center text-3xl font-light text-neutral-900 dark:text-white md:text-5xl">
                             Découvrez le catalogue

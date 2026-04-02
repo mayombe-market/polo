@@ -36,22 +36,22 @@ export default async function HomePage() {
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, shop, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, shop, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, shop, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
       supabase
         .from('products')
         .select(
-          'id, name, price, img, images_gallery, category, stock_quantity, views_count, shop, seller_id, promo_percentage, promo_start_date, promo_end_date'
+          'id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date'
         )
         .neq('category', IMMOBILIER_CATEGORY)
         .order('views_count', { ascending: false })

@@ -25,7 +25,7 @@ export const getFollowedProducts = async (userId: string) => {
         .from('products')
         .select(`
             *,
-            profiles:seller_id (id, name, avatar_url, store_name, shop_name, full_name)
+            profiles:seller_id (id, name, avatar_url)
         `)
         .in('seller_id', activeSellerIds) // Utilisation de ta colonne seller_id (vendeurs actifs uniquement)
         .order('created_at', { ascending: false })

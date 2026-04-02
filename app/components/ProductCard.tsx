@@ -18,10 +18,10 @@ import Link from 'next/link'
 import { debugImageSrc } from '@/lib/debugImageSrc'
 import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
+import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
-import { getProductShopLabel } from '@/lib/productShopLabel'
 
 /** Données catalogue telles que renvoyées par Supabase / listes (champs souvent tous présents, parfois retardés). */
 export interface ProductCardProduct {
@@ -39,15 +39,6 @@ export interface ProductCardProduct {
     promo_end_date?: string | null
     /** Présent sur les listes triées par popularité (home tendances, etc.). */
     views_count?: number | null
-    /** Nom boutique affiché sur la fiche produit / vendeur (dénormalisé). */
-    shop?: string | null
-    store_name?: string | null
-    shop_name?: string | null
-    /** Jointure Supabase `profiles` via `seller_id` (optionnel). */
-    profiles?:
-        | { store_name?: string | null; shop_name?: string | null; full_name?: string | null; name?: string | null }
-        | { store_name?: string | null; shop_name?: string | null; full_name?: string | null; name?: string | null }[]
-        | null
 }
 
 /** `editorial` = style vitrine type catalogue luxe (titres nets, peu de décor). */
@@ -104,11 +95,11 @@ function resolveImageSrc(p: ProductCardProduct): string {
 function ProductCardEmptyPlaceholder() {
     return (
         <div
-            className="group relative rounded-xl border border-neutral-200/80 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 shadow-sm dark:shadow-none"
             aria-busy="true"
             aria-label="Emplacement produit"
         >
-            <div className="relative aspect-square min-h-[120px] overflow-hidden rounded-lg bg-white dark:bg-slate-950" />
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-white dark:bg-slate-950 min-h-[140px]" />
             <div className="mt-4 px-2 pb-2 h-14" />
         </div>
     )
@@ -118,15 +109,18 @@ function ProductCardEmptyPlaceholder() {
 function ProductCardSkeleton() {
     return (
         <div
-            className="group relative animate-pulse rounded-xl border border-neutral-200/80 bg-white p-3 dark:border-neutral-700 dark:bg-neutral-900"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 animate-pulse"
             aria-busy="true"
             aria-label="Chargement du produit"
         >
-            <div className="relative aspect-square overflow-hidden rounded-lg bg-slate-200 dark:bg-slate-800" />
-            <div className="mt-4 space-y-2 px-0.5 pb-2">
-                <div className="h-2.5 w-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                <div className="h-4 w-[90%] bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                <div className="h-5 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse mt-3" />
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800" />
+            <div className="mt-4 px-2 pb-2 space-y-3">
+                <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                <div className="h-4 w-[85%] bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                <div className="flex justify-between items-center mt-3">
+                    <div className="h-6 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                    <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
+                </div>
             </div>
         </div>
     )
@@ -136,10 +130,10 @@ function ProductCardSkeleton() {
 function ProductCardPending() {
     return (
         <div
-            className="group relative rounded-xl border border-dashed border-neutral-300 bg-white p-3 dark:border-neutral-600 dark:bg-neutral-900"
+            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-dashed border-slate-200 dark:border-slate-600"
             aria-live="polite"
         >
-            <div className="relative aspect-square overflow-hidden rounded-lg bg-slate-200 dark:bg-slate-800 animate-pulse" />
+            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800 animate-pulse" />
             <div className="mt-4 px-2 pb-2 space-y-2">
                 <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
                 <div className="h-3 w-32 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
@@ -183,15 +177,28 @@ function ProductCardInner({
     }, [imgSrc])
 
     const displayName = product.name?.trim() || 'Produit'
-    const shopLabel = getProductShopLabel(product)
+    const categoryLabel = product.category?.trim() || 'Collection'
     const editorial = tone === 'editorial'
 
-    const cardShell =
-        'group relative block rounded-xl border border-neutral-200/80 bg-white p-3 transition-shadow duration-300 hover:shadow-md dark:border-neutral-700 dark:bg-neutral-900'
-
     return (
-        <Link href={`/product/${product.id}`} className={[cardShell, className].filter(Boolean).join(' ')}>
-            <div className="relative aspect-square overflow-hidden rounded-lg bg-white dark:bg-neutral-950">
+        <Link
+            href={`/product/${product.id}`}
+            className={[
+                editorial
+                    ? 'group relative block border border-neutral-200/80 bg-white p-0 transition-shadow duration-300 hover:shadow-md dark:border-neutral-700 dark:bg-neutral-900'
+                    : 'group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 block',
+                className,
+            ]
+                .filter(Boolean)
+                .join(' ')}
+        >
+            <div
+                className={
+                    editorial
+                        ? 'relative aspect-[4/5] overflow-hidden bg-neutral-50 dark:bg-neutral-800'
+                        : 'relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800'
+                }
+            >
                 {/*
                   key = id + src : si le parent met à jour l’URL d’image après le 1er rendu (ex. données async),
                   le navigateur recharge la vignette sans refresh de page entière.
@@ -200,7 +207,11 @@ function ProductCardInner({
                     key={`${product.id}-${imgSrc}`}
                     src={imgSrc}
                     alt={displayName}
-                    className="absolute inset-0 h-full w-full object-contain object-center transition-transform duration-300 group-hover:scale-[1.02]"
+                    className={
+                        editorial
+                            ? 'absolute inset-0 h-full w-full object-cover transition-transform duration-500 group-hover:scale-105'
+                            : 'absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110'
+                    }
                     loading={aboveFold ? 'eager' : 'lazy'}
                     fetchPriority={aboveFold ? 'high' : undefined}
                     decoding="async"
@@ -208,54 +219,128 @@ function ProductCardInner({
                 />
 
                 {!editorial && (
-                    <div className="absolute top-2 right-2 z-20">
+                    <div className="absolute top-3 right-3 z-20">
                         <LikeButton productId={product.id!} />
                     </div>
                 )}
 
                 <div className="absolute top-0 left-0 z-10 flex flex-col items-start gap-1.5">
                     {hasPromo && product.promo_percentage != null && (
-                        <div className="bg-[#2563eb] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white">
-                            -{product.promo_percentage}%
+                        <div
+                            className={
+                                editorial
+                                    ? 'bg-[#2563eb] px-2.5 py-1 text-[10px] font-medium uppercase tracking-wider text-white'
+                                    : 'flex items-center gap-1.5 rounded-br-2xl rounded-tl-[1.5rem] bg-red-600 px-4 py-2.5 font-black uppercase text-white shadow-lg'
+                            }
+                        >
+                            {editorial ? (
+                                <span>-{product.promo_percentage}%</span>
+                            ) : (
+                                <>
+                                    <span className="text-[10px] tracking-wide md:text-xs">🔥 PROMO</span>
+                                    <span className="text-sm font-black md:text-base">-{product.promo_percentage}%</span>
+                                </>
+                            )}
                         </div>
                     )}
                     {isOutOfStock && (
-                        <div className="ml-1 mt-0.5 bg-neutral-800 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white">
+                        <div
+                            className={
+                                editorial
+                                    ? 'ml-2 mt-1 bg-neutral-800 px-2 py-0.5 text-[9px] font-medium uppercase tracking-wide text-white'
+                                    : 'ml-4 mt-2 rounded-full bg-red-500 px-3 py-1.5 text-[8px] font-black uppercase text-white shadow-lg'
+                            }
+                        >
                             Épuisé
                         </div>
                     )}
                 </div>
+
+                {!editorial && (
+                    <div className="absolute inset-0 flex items-center justify-center gap-2 bg-black/20 opacity-0 transition-opacity duration-300 group-hover:opacity-100">
+                        <div className="translate-y-4 transform rounded-full bg-white p-3 text-black transition-transform duration-300 group-hover:translate-y-0">
+                            <Eye size={18} />
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div className="mt-3 text-left">
-                <p className="truncate text-[10px] font-semibold uppercase tracking-[0.2em] text-neutral-500 dark:text-neutral-400">
-                    {shopLabel}
-                </p>
-                <h3 className="mt-1 line-clamp-2 text-sm font-semibold leading-snug text-neutral-900 dark:text-neutral-100">
-                    {displayName}
-                </h3>
+            <div className={editorial ? 'px-3 py-4 text-center sm:px-4' : 'mt-4 px-2 pb-2'}>
+                <div className="flex items-start justify-between gap-2">
+                    <div className={editorial ? 'min-w-0 flex-1 text-center' : ''}>
+                        <p
+                            className={
+                                editorial
+                                    ? 'mb-1.5 text-[10px] font-medium uppercase tracking-[0.25em] text-neutral-400'
+                                    : 'mb-1 text-[10px] font-black uppercase tracking-widest text-orange-500'
+                            }
+                        >
+                            {categoryLabel}
+                        </p>
+                        <h3
+                            className={
+                                editorial
+                                    ? 'line-clamp-2 text-sm font-medium leading-snug tracking-normal text-neutral-800 dark:text-neutral-100'
+                                    : 'line-clamp-1 text-sm font-black uppercase leading-tight tracking-tighter text-slate-900 dark:text-slate-50'
+                            }
+                        >
+                            {displayName}
+                        </h3>
+                    </div>
+                </div>
 
-                <div className="mt-2 flex w-full flex-col items-start gap-0.5">
+                <div
+                    className={
+                        editorial
+                            ? 'mt-3 flex flex-col items-center justify-center gap-0.5'
+                            : 'mt-3 flex items-center justify-between'
+                    }
+                >
                     {hasPromo ? (
-                        <>
-                            <p className="text-[11px] text-neutral-400 line-through dark:text-neutral-500">
-                                {basePrice.toLocaleString('fr-FR')} FCFA
+                        <div className={editorial ? 'text-center' : ''}>
+                            {!editorial && (
+                                <p className="text-xs font-bold text-slate-500 line-through dark:text-slate-400">
+                                    {basePrice.toLocaleString('fr-FR')} F
+                                </p>
+                            )}
+                            <p
+                                className={
+                                    editorial
+                                        ? 'text-sm font-medium tabular-nums text-neutral-900 dark:text-neutral-100'
+                                        : 'text-lg font-black tracking-tighter text-red-600 dark:text-red-400'
+                                }
+                            >
+                                {hasPromo ? promoPrice.toLocaleString('fr-FR') : basePrice.toLocaleString('fr-FR')}{' '}
+                                <span className={editorial ? 'text-xs text-neutral-500' : 'ml-0.5 text-[10px]'}>FCFA</span>
                             </p>
-                            <p className="text-base font-bold tabular-nums tracking-tight text-red-600 dark:text-red-500">
-                                {promoPrice.toLocaleString('fr-FR')}{' '}
-                                <span className="text-xs font-bold">FCFA</span>
-                            </p>
+                            {editorial && (
+                                <p className="text-[11px] text-neutral-400 line-through">
+                                    {basePrice.toLocaleString('fr-FR')} FCFA
+                                </p>
+                            )}
                             {timeRemaining && !editorial ? (
-                                <p className="text-[9px] font-semibold text-red-500 dark:text-red-400">
+                                <p className="mt-0.5 text-[9px] font-bold text-red-500 dark:text-red-300">
                                     Expire dans {timeRemaining}
                                 </p>
                             ) : null}
-                        </>
+                        </div>
                     ) : (
-                        <p className="text-base font-bold tabular-nums tracking-tight text-red-600 dark:text-red-500">
+                        <p
+                            className={
+                                editorial
+                                    ? 'text-sm font-medium tabular-nums text-neutral-900 dark:text-neutral-100'
+                                    : 'text-lg font-black tracking-tighter text-slate-900 dark:text-slate-50'
+                            }
+                        >
                             {basePrice.toLocaleString('fr-FR')}{' '}
-                            <span className="text-xs font-bold">FCFA</span>
+                            <span className={editorial ? 'text-xs text-neutral-500' : 'ml-0.5 text-[10px]'}>FCFA</span>
                         </p>
+                    )}
+
+                    {!editorial && (
+                        <div className="rounded-xl bg-slate-50 p-2.5 transition-colors group-hover:bg-black group-hover:text-white dark:bg-slate-800 dark:group-hover:bg-orange-500">
+                            <ShoppingBag size={16} />
+                        </div>
                     )}
                 </div>
             </div>
@@ -312,10 +397,7 @@ const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
         a.stock_quantity === b.stock_quantity &&
         a.promo_percentage === b.promo_percentage &&
         a.promo_start_date === b.promo_start_date &&
-        a.promo_end_date === b.promo_end_date &&
-        a.shop === b.shop &&
-        a.store_name === b.store_name &&
-        a.shop_name === b.shop_name
+        a.promo_end_date === b.promo_end_date
     )
 }
 

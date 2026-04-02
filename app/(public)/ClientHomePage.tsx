@@ -58,11 +58,11 @@ export default function ClientHomePage({
     }, [safeAds.length])
 
     useEffect(() => {
-        if (scrollContainerRef.current) {
-            const container = scrollContainerRef.current
-            const scrollWidth = container.scrollWidth / (safeAds.length || 1)
-            container.scrollTo({ left: scrollWidth * currentAdIndex, behavior: 'smooth' })
-        }
+        const container = scrollContainerRef.current
+        if (!container || safeAds.length === 0) return
+        // Largeur d’une slide = largeur visible du carrousel (pas scrollWidth/n qui bouge quand les images chargent).
+        const slideWidth = container.clientWidth
+        container.scrollTo({ left: slideWidth * currentAdIndex, behavior: 'smooth' })
     }, [currentAdIndex, safeAds.length])
 
     const onNewsletterSubmit = (e: React.FormEvent) => {
@@ -77,21 +77,21 @@ export default function ClientHomePage({
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
             {/* Hero : colonne texte beige + image (données `ads` inchangées) */}
-            <section className="w-full overflow-hidden bg-[#ebe8e2] dark:bg-neutral-900">
+            <section className="w-full max-w-[100vw] overflow-hidden bg-[#ebe8e2] dark:bg-neutral-900 [contain:layout]">
                 {safeAds.length > 0 ? (
                     <>
                         <div
                             ref={scrollContainerRef}
-                            className="flex w-full snap-x snap-mandatory overflow-x-auto scrollbar-hide"
+                            className="flex w-full min-w-0 max-w-full snap-x snap-mandatory overflow-x-auto overflow-y-hidden overscroll-x-contain scrollbar-hide"
                             style={{ scrollbarWidth: 'none' }}
                         >
                             {safeAds.map((ad, index) => (
                                 <Link
                                     key={ad.id}
                                     href={(ad.link_url as string) || '/search'}
-                                    className="flex min-h-[min(88vh,820px)] w-full min-w-full shrink-0 snap-center flex-col md:min-h-[min(78vh,720px)] md:flex-row"
+                                    className="flex min-h-[min(88vh,820px)] w-full min-w-0 max-w-full flex-[0_0_100%] snap-center flex-col overflow-hidden md:min-h-[min(78vh,720px)] md:flex-row"
                                 >
-                                    <div className="flex w-full flex-col justify-center px-8 py-14 md:w-[46%] md:max-w-xl md:py-20 md:pl-12 md:pr-8 lg:pl-20 lg:pr-12">
+                                    <div className="flex min-w-0 w-full flex-col justify-center px-8 py-14 md:w-[46%] md:max-w-xl md:py-20 md:pl-12 md:pr-8 lg:pl-20 lg:pr-12">
                                         <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">
                                             Collection
                                         </p>
@@ -102,11 +102,11 @@ export default function ClientHomePage({
                                             Shop Now
                                         </span>
                                     </div>
-                                    <div className="relative min-h-[45vh] w-full flex-1 md:min-h-0">
+                                    <div className="relative min-h-[45vh] min-w-0 w-full flex-1 md:min-h-0">
                                         <img
                                             src={ad.img || '/placeholder-image.svg'}
                                             alt={ad.title ? String(ad.title) : 'Bannière'}
-                                            className="h-full w-full object-cover object-center"
+                                            className="h-full min-h-0 w-full max-w-full object-cover object-center"
                                             loading={index === 0 ? 'eager' : 'lazy'}
                                             fetchPriority={index === 0 ? 'high' : 'low'}
                                             decoding="async"

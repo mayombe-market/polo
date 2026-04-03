@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import ClientHomePage from './ClientHomePage'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
+import { mergeHeroSlides } from '@/lib/mergeHeroSlides'
 
 /**
  * Rendu dynamique : évite qu’un segment ISR (anciennes lignes sans `img`) ne soit servi
@@ -22,6 +23,8 @@ export default async function HomePage() {
   // Toutes les requêtes EN PARALLÈLE (au lieu de séquentiellement)
   const [
     { data: ads },
+    { data: heroCampaignRows },
+    { data: tileCampaignRows },
     { data: topProducts },
     { data: categories },
     { data: newProducts },
@@ -30,6 +33,16 @@ export default async function HomePage() {
     { data: trendProducts },
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
+    supabase
+      .from('vendor_ad_campaigns')
+      .select('id, title, description, image_url, link_url, display_order')
+      .eq('placement', 'hero')
+      .order('display_order', { ascending: true }),
+    supabase
+      .from('vendor_ad_campaigns')
+      .select('id, title, description, image_url, link_url, display_order')
+      .eq('placement', 'tile')
+      .order('display_order', { ascending: true }),
     excludeExpiredSellers(
       supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
       expiredIds
@@ -60,11 +73,14 @@ export default async function HomePage() {
     ),
   ])
 
+  const heroSlides = mergeHeroSlides(ads || [], heroCampaignRows || [])
+
   return (
     <main className="min-h-screen flex flex-col">
       <div className="flex-grow">
         <ClientHomePage
-          ads={ads || []}
+          heroSlides={heroSlides}
+          tileCampaigns={tileCampaignRows || []}
           topProducts={topProducts || []}
           categories={categories || []}
           newProducts={newProducts || []}

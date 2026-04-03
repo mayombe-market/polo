@@ -7,9 +7,20 @@ import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
 import TrendsProductSlider from '@/app/components/TrendsProductSlider'
 import { Truck, Store, ArrowRight } from 'lucide-react'
+import type { UnifiedHeroSlide } from '@/lib/mergeHeroSlides'
+
+type TileCampaign = {
+    id: string
+    title?: string | null
+    description?: string | null
+    image_url: string
+    link_url: string
+    display_order?: number | null
+}
 
 interface ClientHomePageProps {
-    ads: any[]
+    heroSlides: UnifiedHeroSlide[]
+    tileCampaigns: TileCampaign[]
     topProducts: any[]
     categories: any[]
     newProducts: any[]
@@ -30,7 +41,8 @@ function SophieSectionTitle({ label, title }: { label: string; title: string }) 
 }
 
 export default function ClientHomePage({
-    ads,
+    heroSlides,
+    tileCampaigns,
     topProducts,
     categories,
     newProducts,
@@ -43,24 +55,38 @@ export default function ClientHomePage({
     const [newsletterOk, setNewsletterOk] = useState(false)
     const [vendorDrawerOpen, setVendorDrawerOpen] = useState(false)
 
-    const safeAds = useMemo(() => (Array.isArray(ads) ? ads : []), [ads])
+    const safeHeroSlides = useMemo(() => (Array.isArray(heroSlides) ? heroSlides : []), [heroSlides])
+    const safeTileCampaigns = useMemo(
+        () => (Array.isArray(tileCampaigns) ? tileCampaigns : []),
+        [tileCampaigns]
+    )
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
 
     const trendsList = Array.isArray(trendProducts) ? trendProducts.slice(0, 30) : []
     const newProductsRow = newProducts.slice(0, 10)
-    const categoryBanners = safeCategories.slice(0, 2)
-    const categoryRest = safeCategories.slice(2)
+
+    /** Deux emplacements tuiles (même gabarit que les catégories) : campagnes puis repli catégories. */
+    let categoryCursor = 0
+    const nextCategory = () => {
+        const c = safeCategories[categoryCursor]
+        if (c) categoryCursor += 1
+        return c ?? null
+    }
+    const fixedTileLeft = safeTileCampaigns[0] ?? nextCategory()
+    const fixedTileRight = safeTileCampaigns[1] ?? nextCategory()
+    const scrollTileCampaigns = safeTileCampaigns.slice(2)
+    const categoryRest = safeCategories.slice(categoryCursor)
 
     const asymmetricPair =
         Array.isArray(topProducts) && topProducts.length >= 2 ? [topProducts[0], topProducts[1]] : null
 
     useEffect(() => {
-        if (safeAds.length <= 1) return
+        if (safeHeroSlides.length <= 1) return
         const interval = setInterval(() => {
-            setCurrentAdIndex((prev) => (prev + 1) % safeAds.length)
+            setCurrentAdIndex((prev) => (prev + 1) % safeHeroSlides.length)
         }, 6000)
         return () => clearInterval(interval)
-    }, [safeAds.length])
+    }, [safeHeroSlides.length])
 
     const onNewsletterSubmit = (e: React.FormEvent) => {
         e.preventDefault()
@@ -76,31 +102,36 @@ export default function ClientHomePage({
             <VendorMarketDrawer open={vendorDrawerOpen} onClose={() => setVendorDrawerOpen(false)} />
             {/* Hero : ~80 % de largeur (–20 % vs plein écran), centré */}
             <section className="w-full overflow-x-clip overflow-y-hidden bg-white py-4 dark:bg-neutral-950 sm:py-6">
-                {safeAds.length > 0 ? (
+                {safeHeroSlides.length > 0 ? (
                     <>
                         {/* Hauteur ×0,8 vs avant (largeur inchangée) */}
                         <div className="relative mx-auto h-[min(70.4vh,656px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900">
-                            {safeAds.map((ad, index) => {
+                            {safeHeroSlides.map((slide, index) => {
                                 const active = index === currentAdIndex
                                 return (
                                     <div
-                                        key={ad.id}
+                                        key={slide.id}
                                         className={`absolute inset-0 flex flex-col transition-opacity duration-500 ease-out md:flex-row ${
                                             active ? 'z-10 opacity-100' : 'pointer-events-none z-0 opacity-0'
                                         }`}
                                         aria-hidden={!active}
                                     >
                                         <Link
-                                            href={(ad.link_url as string) || '/search'}
+                                            href={slide.link_url || '/search'}
                                             className="flex h-full min-h-0 w-full min-w-0 max-w-full flex-1 flex-col overflow-hidden md:flex-row"
                                         >
                                             <div className="flex min-h-0 w-full shrink-0 flex-col justify-center px-8 py-10 md:w-[46%] md:max-w-xl md:py-16 md:pl-12 md:pr-8 lg:pl-20 lg:pr-12">
                                                 <p className="text-[11px] font-semibold uppercase tracking-[0.4em] text-neutral-500">
-                                                    Collection
+                                                    {slide.source === 'campaign' ? 'Sponsorisé' : 'Collection'}
                                                 </p>
                                                 <h2 className="mt-5 text-4xl font-light leading-[1.1] tracking-tight text-neutral-900 dark:text-white md:text-5xl lg:text-[3.25rem]">
-                                                    {ad.title ? String(ad.title) : 'Nouvelle sélection'}
+                                                    {slide.title}
                                                 </h2>
+                                                {slide.subtitle ? (
+                                                    <p className="mt-4 max-w-md text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">
+                                                        {slide.subtitle}
+                                                    </p>
+                                                ) : null}
                                                 <span className="mt-10 inline-flex w-fit items-center border border-neutral-900 bg-neutral-900 px-10 py-3.5 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white hover:text-neutral-900 dark:border-white dark:bg-white dark:text-neutral-900 dark:hover:bg-transparent dark:hover:text-white">
                                                     Shop Now
                                                 </span>
@@ -108,8 +139,8 @@ export default function ClientHomePage({
                                             <div className="relative min-h-[min(33.6vh,304px)] w-full min-w-0 flex-1 overflow-hidden md:min-h-0">
                                                 {/* Cadre fixe : l’image ne dépasse pas (cover + clip) */}
                                                 <img
-                                                    src={ad.img || '/placeholder-image.svg'}
-                                                    alt={ad.title ? String(ad.title) : 'Bannière'}
+                                                    src={slide.img || '/placeholder-image.svg'}
+                                                    alt={slide.title}
                                                     className="absolute inset-0 box-border h-full w-full max-w-full object-cover object-center"
                                                     loading={index === 0 ? 'eager' : 'lazy'}
                                                     fetchPriority={index === 0 ? 'high' : 'low'}
@@ -122,9 +153,9 @@ export default function ClientHomePage({
                                 )
                             })}
                         </div>
-                        {safeAds.length > 1 && (
+                        {safeHeroSlides.length > 1 && (
                             <div className="mx-auto flex w-[90%] min-w-0 max-w-[1400px] justify-center gap-2 pb-8 pt-2 sm:w-[80%]">
-                                {safeAds.map((_, i) => (
+                                {safeHeroSlides.map((_, i) => (
                                     <button
                                         key={i}
                                         type="button"
@@ -205,36 +236,104 @@ export default function ClientHomePage({
                     </section>
                 )}
 
-                {/* Deux grandes bannières catégories */}
-                {categoryBanners.length > 0 && (
+                {/* Deux tuiles (campagnes puis catégories) + rangée horizontale de campagnes tuile */}
+                {(fixedTileLeft || fixedTileRight || scrollTileCampaigns.length > 0) && (
                     <section>
-                        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
-                            {categoryBanners.map((cat) => (
-                                <Link
-                                    key={cat.id}
-                                    href={`/category/${encodeURIComponent(cat.name)}`}
-                                    className="group relative aspect-[4/3] overflow-hidden bg-neutral-200 md:aspect-[16/10]"
-                                >
-                                    <img
-                                        src={
-                                            cat.img ||
-                                            'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=1200'
-                                        }
-                                        alt={cat.name}
-                                        className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
-                                        loading="lazy"
-                                        decoding="async"
-                                    />
-                                    <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
-                                    <div className="absolute inset-0 flex flex-col items-center justify-end p-10 text-center text-white pb-12">
-                                        <h3 className="text-3xl font-light tracking-wide md:text-4xl">{cat.name}</h3>
-                                        <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.35em] opacity-90">
-                                            Voir la collection →
-                                        </span>
-                                    </div>
-                                </Link>
-                            ))}
-                        </div>
+                        {(fixedTileLeft || fixedTileRight) && (
+                            <div className="grid grid-cols-1 gap-5 md:grid-cols-2 md:gap-6">
+                                {[fixedTileLeft, fixedTileRight].filter(Boolean).map((slot) => {
+                                    if (slot && 'image_url' in slot) {
+                                        const c = slot as TileCampaign
+                                        return (
+                                            <Link
+                                                key={`vtile-${c.id}`}
+                                                href={c.link_url}
+                                                className="group relative aspect-[4/3] overflow-hidden bg-neutral-200 md:aspect-[16/10]"
+                                            >
+                                                <img
+                                                    src={c.image_url || '/placeholder-image.svg'}
+                                                    alt={c.title || 'Sponsorisé'}
+                                                    className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                                                    loading="lazy"
+                                                    decoding="async"
+                                                />
+                                                <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
+                                                <div className="absolute inset-0 flex flex-col items-center justify-end p-10 pb-12 text-center text-white">
+                                                    <p className="text-[10px] font-semibold uppercase tracking-[0.35em] opacity-80">
+                                                        Sponsorisé
+                                                    </p>
+                                                    <h3 className="mt-2 text-3xl font-light tracking-wide md:text-4xl">
+                                                        {c.title || 'À découvrir'}
+                                                    </h3>
+                                                    {c.description ? (
+                                                        <p className="mt-2 line-clamp-2 max-w-sm text-sm text-white/90">
+                                                            {c.description}
+                                                        </p>
+                                                    ) : null}
+                                                    <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.35em] opacity-90">
+                                                        Découvrir →
+                                                    </span>
+                                                </div>
+                                            </Link>
+                                        )
+                                    }
+                                    const cat = slot as { id: string; name: string; img?: string | null }
+                                    return (
+                                        <Link
+                                            key={cat.id}
+                                            href={`/category/${encodeURIComponent(cat.name)}`}
+                                            className="group relative aspect-[4/3] overflow-hidden bg-neutral-200 md:aspect-[16/10]"
+                                        >
+                                            <img
+                                                src={
+                                                    cat.img ||
+                                                    'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=1200'
+                                                }
+                                                alt={cat.name}
+                                                className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                                                loading="lazy"
+                                                decoding="async"
+                                            />
+                                            <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
+                                            <div className="absolute inset-0 flex flex-col items-center justify-end p-10 pb-12 text-center text-white">
+                                                <h3 className="text-3xl font-light tracking-wide md:text-4xl">{cat.name}</h3>
+                                                <span className="mt-4 text-[11px] font-semibold uppercase tracking-[0.35em] opacity-90">
+                                                    Voir la collection →
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    )
+                                })}
+                            </div>
+                        )}
+                        {scrollTileCampaigns.length > 0 && (
+                            <div className="mt-6 flex gap-4 overflow-x-auto pb-2 pt-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden snap-x snap-mandatory">
+                                {scrollTileCampaigns.map((c) => (
+                                    <Link
+                                        key={`vtile-scroll-${c.id}`}
+                                        href={c.link_url}
+                                        className="group relative aspect-[4/3] w-[min(85vw,320px)] shrink-0 snap-start overflow-hidden rounded-2xl bg-neutral-200 md:aspect-[16/10] md:w-[min(42vw,400px)]"
+                                    >
+                                        <img
+                                            src={c.image_url || '/placeholder-image.svg'}
+                                            alt={c.title || 'Sponsorisé'}
+                                            className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                                            loading="lazy"
+                                            decoding="async"
+                                        />
+                                        <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-black/20 to-transparent" />
+                                        <div className="absolute inset-0 flex flex-col items-center justify-end p-8 pb-10 text-center text-white">
+                                            <p className="text-[10px] font-semibold uppercase tracking-[0.35em] opacity-80">
+                                                Sponsorisé
+                                            </p>
+                                            <h3 className="mt-2 line-clamp-2 text-2xl font-light tracking-wide">
+                                                {c.title || 'À découvrir'}
+                                            </h3>
+                                        </div>
+                                    </Link>
+                                ))}
+                            </div>
+                        )}
                     </section>
                 )}
 
@@ -247,7 +346,6 @@ export default function ClientHomePage({
                                 <ProductCard
                                     key={product.id}
                                     product={product}
-                                    tone="editorial"
                                     aboveFold={index < 8}
                                 />
                             ))}
@@ -308,10 +406,10 @@ export default function ClientHomePage({
                         <SophieSectionTitle label="Focus" title="En lumière" />
                         <div className="grid grid-flow-dense grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
                             <div className="md:col-span-2">
-                                <ProductCard product={asymmetricPair[0]} tone="editorial" aboveFold className="p-1" />
+                                <ProductCard product={asymmetricPair[0]} aboveFold />
                             </div>
                             <div className="md:col-span-1">
-                                <ProductCard product={asymmetricPair[1]} tone="editorial" aboveFold={false} className="p-1" />
+                                <ProductCard product={asymmetricPair[1]} aboveFold={false} />
                             </div>
                         </div>
                     </section>

@@ -1,5 +1,4 @@
 import './globals.css'
-import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
@@ -82,22 +81,14 @@ export const metadata = {
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim() || 'G-SLRPK4NETV'
 
-const inter = Inter({
-  subsets: ['latin'],
-  display: 'swap',
-  variable: '--font-inter',
-  /** Évite l’avertissement console « préchargée mais non utilisée » (swap + timing navigateur). */
-  preload: false,
-})
-
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={`${inter.variable} antialiased`}>
+    <html lang="fr" className="antialiased font-sans">
       <head>
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
       </head>
-      <body className={`${inter.className} m-0 min-h-screen bg-white p-0 text-slate-900`}>
+      <body className="m-0 p-0">
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
           strategy="afterInteractive"
@@ -114,16 +105,6 @@ gtag('config', '${GA_MEASUREMENT_ID}');
 
         {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
         <ZodClientInit />
-
-        {/* ENTÊTE : UNIQUEMENT LE DRAPEAU DU CONGO */}
-        <header className="w-full h-4 sticky top-0 z-50 shadow-sm">
-          <div className="w-full h-full" style={{
-            background: `linear-gradient(135deg,
-                  #009543 0%, #009543 45%,
-                  #FBDE4A 45%, #FBDE4A 55%,
-                  #DC241F 55%, #DC241F 100%)`
-          }}></div>
-        </header>
 
         {/* PWA + offline : bundle chargé après hydratation (réduit TBT) */}
         <DeferredPwaWidgets />

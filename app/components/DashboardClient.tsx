@@ -26,7 +26,7 @@ import {
     ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles
+    Crown, Sparkles, Megaphone
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -509,6 +509,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             </button>
                         )
                     })}
+                    <Link
+                        href="/vendor/ad-campaigns"
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
+                    >
+                        <Megaphone size={20} />
+                        {sidebarOpen && <span>Campagnes pub</span>}
+                    </Link>
                 </nav>
 
                 {showVendorPlanCta && (
@@ -570,6 +577,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         </button>
                     )
                 })}
+                <Link
+                    href="/vendor/ad-campaigns"
+                    className="relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 text-slate-400 hover:text-orange-500"
+                >
+                    <Megaphone size={18} />
+                    <span className="text-[7px] font-black uppercase whitespace-nowrap">Pubs</span>
+                </Link>
             </div>
 
             {/* ===== MAIN CONTENT ===== */}

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, Images } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = getSupabaseBrowserClient()
@@ -18,20 +18,27 @@ const links = [
     { href: '/admin/vendors', label: 'Vendeurs', icon: Users, badgeKey: null },
     { href: '/admin/logisticians', label: 'Logisticiens', icon: Truck, badgeKey: null },
     { href: '/admin/ads', label: 'Pubs', icon: Megaphone, badgeKey: null },
+    { href: '/admin/ad-campaigns', label: 'Campagnes vendeurs', icon: Images, badgeKey: 'ad_campaigns' as const },
 ]
 
 export default function AdminNav() {
     const pathname = usePathname()
-    const [badges, setBadges] = useState<{ orders: number; verifications: number }>({ orders: 0, verifications: 0 })
+    const [badges, setBadges] = useState<{ orders: number; verifications: number; ad_campaigns: number }>({
+        orders: 0,
+        verifications: 0,
+        ad_campaigns: 0,
+    })
 
     const fetchCounts = useCallback(async () => {
-        const [ordersRes, verificationsRes] = await Promise.all([
+        const [ordersRes, verificationsRes, adCampRes] = await Promise.all([
             supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
+            supabase.from('vendor_ad_campaigns').select('*', { count: 'exact', head: true }).eq('status', 'pending_review'),
         ])
         setBadges({
             orders: ordersRes.count || 0,
             verifications: verificationsRes.count || 0,
+            ad_campaigns: adCampRes.count || 0,
         })
     }, [])
 
@@ -48,7 +55,14 @@ export default function AdminNav() {
             <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {links.map(({ href, label, icon: Icon, badgeKey }) => {
                     const active = pathname === href
-                    const count = badgeKey ? badges[badgeKey] : 0
+                    const count =
+                        badgeKey === 'orders'
+                            ? badges.orders
+                            : badgeKey === 'verifications'
+                              ? badges.verifications
+                              : badgeKey === 'ad_campaigns'
+                                ? badges.ad_campaigns
+                                : 0
 
                     return (
                         <Link

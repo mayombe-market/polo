@@ -2,12 +2,9 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Inter via `next/font` sur `<body>` (`app/layout.tsx`). */
+/* Polices : pile système uniquement (pas de @font-face / Google Fonts) — pas de blocage FOUT sur le texte ni sur le reste du rendu. */
 html {
-    font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-    /* Valeurs valides pour WebKit / Firefox (évite « Erreur d’analyse » sur -webkit-text-size-adjust). */
-    -webkit-text-size-adjust: 100%;
-    text-size-adjust: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {

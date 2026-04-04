@@ -92,7 +92,7 @@ export default function AdminVendorCampaignsPanel() {
     }
 
     return (
-        <div className="max-w-6xl mx-auto">
+        <div className="w-full">
             <div className="flex items-center gap-2 mb-6">
                 <Images size={24} className="text-orange-500" />
                 <div>

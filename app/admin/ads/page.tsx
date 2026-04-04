@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense, useEffect, useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import AdminVendorCampaignsPanel from './AdminVendorCampaignsPanel'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
@@ -29,11 +29,6 @@ const defaultForm = { title: '', img: '', link_url: '', is_active: true, positio
 
 function AdminAdsInner() {
     const searchParams = useSearchParams()
-    const router = useRouter()
-    const tab = searchParams.get('tab') === 'vendeurs' ? 'vendeurs' : 'maison'
-    const setTab = (t: 'maison' | 'vendeurs') => {
-        router.replace(t === 'vendeurs' ? '/admin/ads?tab=vendeurs' : '/admin/ads', { scroll: false })
-    }
 
     const [ads, setAds] = useState<Ad[]>([])
     const [pageLoading, setPageLoading] = useState(true)
@@ -57,6 +52,18 @@ function AdminAdsInner() {
     }
 
     useEffect(() => { fetchAds() }, [])
+
+    /** Anciens liens ?tab=vendeurs ou #campagnes-vendeurs : scroll vers la section. */
+    useEffect(() => {
+        const go =
+            searchParams.get('tab') === 'vendeurs' ||
+            (typeof window !== 'undefined' && window.location.hash === '#campagnes-vendeurs')
+        if (!go) return
+        const t = window.setTimeout(() => {
+            document.getElementById('campagnes-vendeurs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }, 100)
+        return () => window.clearTimeout(t)
+    }, [searchParams])
 
     // Stats
     const totalAds = ads.length
@@ -200,55 +207,48 @@ function AdminAdsInner() {
                             <h1 className="text-4xl font-black uppercase italic tracking-tighter">
                                 <span className="text-orange-500">Pubs</span>
                             </h1>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                                {tab === 'maison'
-                                    ? `${totalAds} bannières configurées — hero « maison » (table ads)`
-                                    : 'Validation des campagnes Hero & Tuile payées par les vendeurs'}
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xl leading-relaxed">
+                                Une seule page : bannières « maison » (table{' '}
+                                <code className="rounded bg-slate-100 px-1 text-[9px] dark:bg-slate-800">ads</code>
+                                ) puis, plus bas, validation des campagnes vendeurs (Hero &amp; Tuile).
+                            </p>
+                            <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
+                                <a
+                                    href="#bannieres-site"
+                                    className="text-orange-500 hover:underline underline-offset-2"
+                                >
+                                    Bannières site
+                                </a>
+                                <span className="text-slate-300 dark:text-slate-600" aria-hidden>
+                                    ·
+                                </span>
+                                <a
+                                    href="#campagnes-vendeurs"
+                                    className="text-orange-500 hover:underline underline-offset-2"
+                                >
+                                    Campagnes vendeurs
+                                </a>
                             </p>
                         </div>
-                        {tab === 'maison' && (
-                            <button
-                                type="button"
-                                onClick={openCreate}
-                                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-orange-500 text-white text-[10px] font-black uppercase italic hover:bg-orange-600 transition-all whitespace-nowrap"
-                            >
-                                <Plus size={14} /> Nouvelle pub
-                            </button>
-                        )}
-                    </div>
-                    <div className="flex flex-wrap gap-2">
                         <button
                             type="button"
-                            onClick={() => setTab('maison')}
-                            className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider transition-all ${
-                                tab === 'maison'
-                                    ? 'bg-orange-500 text-white shadow-md'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
-                            }`}
+                            onClick={openCreate}
+                            className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-orange-500 text-white text-[10px] font-black uppercase italic hover:bg-orange-600 transition-all whitespace-nowrap"
                         >
-                            Bannières site
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setTab('vendeurs')}
-                            className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider transition-all ${
-                                tab === 'vendeurs'
-                                    ? 'bg-orange-500 text-white shadow-md'
-                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
-                            }`}
-                        >
-                            Campagnes vendeurs
+                            <Plus size={14} /> Nouvelle pub
                         </button>
                     </div>
                 </div>
             </div>
 
-            {tab === 'vendeurs' ? (
-                <div className="max-w-7xl mx-auto px-4 py-8">
-                    <AdminVendorCampaignsPanel />
-                </div>
-            ) : (
-            <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
+            <div className="max-w-7xl mx-auto px-4 py-8 space-y-16">
+                <section id="bannieres-site" className="space-y-6 scroll-mt-24">
+                    <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800 pb-3">
+                        Bannières site — hero maison
+                        <span className="block text-[10px] font-bold text-slate-400 not-italic mt-1 normal-case tracking-normal">
+                            {totalAds} bannière{totalAds > 1 ? 's' : ''} (table ads)
+                        </span>
+                    </h2>
                 {/* STATS */}
                 <div className="grid grid-cols-3 gap-4">
                     <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
@@ -369,8 +369,12 @@ function AdminAdsInner() {
                         </table>
                     </div>
                 )}
+                </section>
+
+                <section id="campagnes-vendeurs" className="scroll-mt-24 border-t border-slate-200 dark:border-slate-800 pt-12">
+                    <AdminVendorCampaignsPanel />
+                </section>
             </div>
-            )}
 
             {/* MODAL CREATE/EDIT */}
             {showModal && (

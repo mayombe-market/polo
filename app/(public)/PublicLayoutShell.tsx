@@ -1,11 +1,8 @@
 'use client'
 
-import { Suspense } from 'react'
 import { usePathname } from 'next/navigation'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
-import CategoryBar from '../components/CategoryBar'
-import DeferredShopStoriesRow from '../components/DeferredShopStoriesRow'
 import DeferredCookieConsent from '../components/DeferredCookieConsent'
 import { Toaster } from 'sonner'
 
@@ -18,20 +15,11 @@ function isCheckoutTunnelPath(pathname: string | null): boolean {
 export default function PublicLayoutShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const tunnel = isCheckoutTunnelPath(pathname)
-    const isHome = pathname === '/'
 
     return (
         <>
             <Header />
             <Toaster position="top-right" richColors closeButton />
-
-            {!tunnel && !isHome && (
-                <Suspense fallback={<div className="h-16 bg-white dark:bg-slate-950 animate-pulse" />}>
-                    <CategoryBar />
-                </Suspense>
-            )}
-
-            {!tunnel && !isHome && <DeferredShopStoriesRow />}
 
             <main className="min-h-screen">{children}</main>
 

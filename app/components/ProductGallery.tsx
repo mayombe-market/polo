@@ -24,15 +24,15 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
     }
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-8">
             {/* Image Principale - CORRECTION QUALITÉ OPTIMISÉE */}
-            <div className="aspect-square rounded-[2.5rem] overflow-hidden bg-white border border-slate-100 shadow-sm group relative">
+            <div className="aspect-square rounded-[2.5rem] overflow-hidden bg-white/80 dark:bg-slate-900/40 backdrop-blur-md border border-white/10 dark:border-white/10 shadow-[0_8px_40px_-12px_rgba(0,0,0,0.08)] dark:shadow-none group relative">
                 <CloudinaryImage
                     src={mainImg || firstImage}
                     alt={productName}
                     fill
                     // Page produit (max-w-lg): éviter de servir une 4K sur desktop
-                    sizes="(max-width: 640px) 100vw, 512px"
+                    sizes="(max-width: 1024px) 90vw, min(520px, 45vw)"
                     quality={80}
                     priority={priorityMain}
                     fetchPriority={priorityMain ? 'high' : 'auto'}
@@ -51,25 +51,26 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
             {normalizedImages.length > 1 && (
                 <div className="grid grid-cols-5 gap-3">
                     {normalizedImages.map((img, i) => (
-                        <div
+                        <button
+                            type="button"
                             key={i}
                             onClick={() => setMainImg(img)}
                             onMouseEnter={() => setMainImg(img)}
-                            className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all duration-300 cursor-pointer ${mainImg === img
-                                    ? 'border-green-600 scale-90 shadow-md rotate-2'
-                                    : 'border-transparent hover:border-green-300 opacity-60 hover:opacity-100 hover:scale-105'
-                                }`}
+                            className={`relative aspect-square rounded-2xl overflow-hidden border transition-all duration-300 cursor-pointer bg-white/50 dark:bg-white/5 backdrop-blur-md hover:scale-105 active:scale-100 ${
+                                mainImg === img
+                                    ? 'border-blue-600 ring-2 ring-blue-500/30 shadow-md scale-100'
+                                    : 'border-white/10 dark:border-white/10 opacity-80 hover:opacity-100 hover:border-blue-300/50'
+                            }`}
                         >
                             <CloudinaryImage
                                 src={img}
                                 fill
-                                // 5 vignettes: ~20% de la largeur, mais cap visuel autour de ~96px
                                 sizes="(max-width: 640px) 18vw, 96px"
                                 quality={55}
-                                className="object-cover"
+                                className="object-cover transition-transform duration-300"
                                 alt={`miniature-${i}`}
                             />
-                        </div>
+                        </button>
                     ))}
                 </div>
             )}

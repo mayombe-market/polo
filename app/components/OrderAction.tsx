@@ -41,9 +41,18 @@ interface OrderActionProps {
     product: any
     shop: any
     user: any
+    /** false si couleur/taille requises mais non choisies — bloque l’ouverture du flux commande. */
+    variantsComplete?: boolean
+    onVariantsInvalid?: () => void
 }
 
-export default function OrderAction({ product, shop, user }: OrderActionProps) {
+export default function OrderAction({
+    product,
+    shop,
+    user,
+    variantsComplete = true,
+    onVariantsInvalid,
+}: OrderActionProps) {
     const [isAuthOpen, setIsAuthOpen] = useState(false)
     const [isModalOpen, setIsModalOpen] = useState(false)
     const [step, setStep] = useState<Step>('location')
@@ -76,6 +85,10 @@ export default function OrderAction({ product, shop, user }: OrderActionProps) {
 
     // Ouvrir le modal
     const handleMainClick = async () => {
+        if (variantsComplete === false) {
+            onVariantsInvalid?.()
+            return
+        }
         if (!user) {
             setIsAuthOpen(true)
             return

@@ -23,9 +23,11 @@ interface Props {
         size: string
         color: string
     }
+    /** Si fourni, remplace l’alerte navigateur quand couleur/taille manquantes (ex. erreurs inline page produit). */
+    onVariantsInvalid?: () => void
 }
 
-export default function AddToCartButton({ product, selectedVariant }: Props) {
+export default function AddToCartButton({ product, selectedVariant, onVariantsInvalid }: Props) {
     const { addToCart } = useCart()
     const [status, setStatus] = useState<'idle' | 'added' | 'error'>('idle')
 
@@ -38,6 +40,10 @@ export default function AddToCartButton({ product, selectedVariant }: Props) {
             const needsColor = hasColorPicker && !selectedVariant?.color
 
             if (needsSize || needsColor) {
+                if (onVariantsInvalid) {
+                    onVariantsInvalid()
+                    return
+                }
                 setStatus('error')
                 alert(`Veuillez choisir ${needsSize ? 'une taille' : ''}${needsSize && needsColor ? ' et ' : ''}${needsColor ? 'une couleur' : ''}`)
                 setTimeout(() => setStatus('idle'), 2000)

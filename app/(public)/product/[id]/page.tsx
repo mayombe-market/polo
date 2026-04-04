@@ -60,6 +60,8 @@ export default function ProductDetailPage() {
 
     const [selectedSize, setSelectedSize] = useState<string>('')
     const [selectedColor, setSelectedColor] = useState<string>('')
+    const [showColorError, setShowColorError] = useState(false)
+    const [showSizeError, setShowSizeError] = useState(false)
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [qty, setQty] = useState(1)
     const [activeTab, setActiveTab] = useState<'desc' | 'details' | 'reviews'>('desc')
@@ -216,6 +218,13 @@ export default function ProductDetailPage() {
         }
     }, [productId, retryNonce])
 
+    useEffect(() => {
+        if (selectedColor) setShowColorError(false)
+    }, [selectedColor])
+    useEffect(() => {
+        if (selectedSize) setShowSizeError(false)
+    }, [selectedSize])
+
     if (phase === 'loading') {
         return <ProductDetailSkeleton />
     }
@@ -299,22 +308,34 @@ export default function ProductDetailPage() {
         !isRealEstateProduct(product) ||
         (Number(basePrice) >= 100 && !realEstateExtras?.priceOnRequest)
 
+    const isImmo = isRealEstateProduct(product)
+
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
         const count = reviews.filter((r: any) => r.rating === stars).length
         const pct = reviews.length > 0 ? Math.round((count / reviews.length) * 100) : 0
         return { stars, pct }
     })
 
+    const hasColorOptions = (product.colors?.length ?? 0) > 0
+    const hasSizeOptions = (product.sizes?.length ?? 0) > 0
+    const variantsComplete =
+        (!hasColorOptions || !!selectedColor) &&
+        (!hasSizeOptions || !!selectedSize)
+
+    const handleVariantsInvalid = () => {
+        if (hasColorOptions && !selectedColor) setShowColorError(true)
+        if (hasSizeOptions && !selectedSize) setShowSizeError(true)
+    }
+
     return (
-        <div className="max-w-lg mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative">
+        <div className={`${isImmo ? 'max-w-lg' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative`}>
 
             <div>
-
                 {/* ── BACK BAR ── */}
-                <div className="flex items-center justify-between p-4">
+                <div className="flex items-center justify-between p-4 lg:px-8 pb-2">
                     <Link
                         href="/"
-                        className="w-10 h-10 rounded-[14px] bg-slate-100 dark:bg-white/[0.04] border border-slate-200 dark:border-white/[0.06] flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-white/[0.08] transition-all"
+                        className="w-10 h-10 rounded-[14px] bg-white/70 dark:bg-white/[0.06] backdrop-blur-md border border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-white/10 transition-all shadow-sm"
                     >
                         <ArrowLeft size={18} />
                     </Link>
@@ -322,28 +343,51 @@ export default function ProductDetailPage() {
                         {realEstateExtras ? 'Annonce' : 'Détail produit'}
                     </span>
                     <button
+                        type="button"
                         onClick={() => setLiked(!liked)}
-                        className={`w-10 h-10 rounded-[14px] border flex items-center justify-center transition-all duration-300 ${
+                        className={`w-10 h-10 rounded-[14px] border flex items-center justify-center transition-all duration-300 backdrop-blur-md ${
                             liked
                                 ? 'bg-red-500/10 border-red-500/30 text-red-500 scale-110'
-                                : 'bg-slate-100 dark:bg-white/[0.04] border-slate-200 dark:border-white/[0.06] text-slate-400'
+                                : 'bg-white/70 dark:bg-white/[0.06] border-white/10 text-slate-400 shadow-sm'
                         }`}
                     >
                         <Heart size={18} fill={liked ? 'currentColor' : 'none'} />
                     </button>
                 </div>
 
-                {/* ── PRODUCT GALLERY (images conservées) ── */}
-                <div className="px-4 mb-5">
-                    <ProductGallery images={allImages} productName={product.name} priorityMain />
-                </div>
+                {/* Fil d’Ariane type premium */}
+                <nav
+                    className="px-4 lg:px-8 pb-6 text-[11px] font-medium text-slate-400 flex flex-wrap items-center gap-1.5 tracking-tight"
+                    aria-label="Fil d’Ariane"
+                >
+                    <Link href="/" className="hover:text-blue-600 dark:hover:text-blue-400 transition-colors">
+                        Accueil
+                    </Link>
+                    <span className="text-slate-300 dark:text-slate-600">/</span>
+                    {product.category ? (
+                        <>
+                            <span className="text-slate-500 dark:text-slate-500 max-w-[120px] truncate">{product.category}</span>
+                            <span className="text-slate-300 dark:text-slate-600">/</span>
+                        </>
+                    ) : null}
+                    <span className="text-slate-600 dark:text-slate-300 truncate max-w-[min(100%,220px)]">{product.name}</span>
+                </nav>
 
-                {/* ── CONTENT ── */}
-                <div className="px-5">
+                {/* ── Galerie + infos (2 col desktop) puis onglets pleine largeur ── */}
+                <div
+                    className={`grid gap-10 lg:gap-16 xl:gap-20 px-4 lg:px-8 pb-4 ${
+                        isImmo ? 'grid-cols-1' : 'lg:grid-cols-2'
+                    }`}
+                >
+                    <div className={!isImmo ? 'lg:sticky lg:top-20 self-start' : ''}>
+                        <ProductGallery images={allImages} productName={product.name} priorityMain />
+                    </div>
+
+                    <div className="space-y-5 lg:space-y-7 min-w-0 px-1 sm:px-0">
                     {reviewsRpcFailed && (
                         <div
                             role="status"
-                            className="mb-4 rounded-xl border border-amber-200 dark:border-amber-800/40 bg-amber-50 dark:bg-amber-950/30 px-3 py-2.5 text-[11px] text-amber-900 dark:text-amber-100 leading-snug"
+                            className="mb-4 rounded-xl border border-amber-200/80 dark:border-amber-800/40 bg-amber-50/90 dark:bg-amber-950/40 backdrop-blur-md px-3 py-2.5 text-[11px] text-amber-900 dark:text-amber-100 leading-snug"
                         >
                             Les avis n’ont pas pu être chargés après plusieurs tentatives. Le produit et la boutique
                             s’affichent normalement.
@@ -353,7 +397,7 @@ export default function ProductDetailPage() {
                     {/* Shop banner */}
                     <Link
                         href={`/store/${product.seller_id}`}
-                        className="flex items-center gap-3 p-3.5 rounded-[18px] bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.05] mb-5 group hover:bg-slate-100 dark:hover:bg-white/[0.04] transition-all no-underline"
+                        className="flex items-center gap-3 p-3.5 rounded-[18px] bg-white/70 dark:bg-white/[0.04] backdrop-blur-md border border-white/10 mb-5 group hover:bg-white/90 dark:hover:bg-white/[0.07] transition-all no-underline shadow-[0_4px_24px_-8px_rgba(0,0,0,0.06)]"
                     >
                         <div className="relative w-[46px] h-[46px] rounded-[15px] overflow-hidden flex-shrink-0 shadow-lg">
                             {shop?.avatar_url ? (
@@ -408,7 +452,7 @@ export default function ProductDetailPage() {
 
                     {/* Category badge */}
                     {product.subcategory && (
-                        <span className="inline-block text-[10px] bg-slate-100 dark:bg-white/[0.04] text-slate-500 dark:text-slate-400 px-3 py-1 rounded-full font-semibold mb-3 uppercase tracking-wider border border-slate-200 dark:border-white/[0.06]">
+                        <span className="inline-block text-[10px] bg-white/60 dark:bg-white/[0.06] backdrop-blur-md text-slate-500 dark:text-slate-400 px-3 py-1.5 rounded-full font-semibold mb-3 uppercase tracking-wider border border-white/10">
                             {product.subcategory}
                         </span>
                     )}
@@ -416,9 +460,34 @@ export default function ProductDetailPage() {
                     {realEstateExtras && <RealEstateListingDetails extras={realEstateExtras} />}
 
                     {/* Product name */}
-                    <h1 className="text-2xl font-extrabold text-slate-900 dark:text-[#F0ECE2] leading-tight mb-1.5 tracking-tight">
+                    <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-[#F0ECE2] leading-tight mb-1.5 tracking-tight">
                         {product.name}
                     </h1>
+
+                    {/* Bloc prix type SoundWave (hors immo) */}
+                    {!isImmo && showNegotiationBlock && (
+                        <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-blue-50/80 to-white/90 dark:from-blue-950/40 dark:to-[#0A0A12]/80 backdrop-blur-md px-5 py-4 mb-4 shadow-[0_8px_32px_-12px_rgba(37,99,235,0.15)]">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-600/80 dark:text-blue-400 mb-1">
+                                Prix
+                            </p>
+                            <div className="flex flex-wrap items-baseline gap-3">
+                                {hasPromo && (
+                                    <span className="text-xl text-slate-400 line-through font-bold tabular-nums">
+                                        {fmt(Number(product.price))} F
+                                    </span>
+                                )}
+                                <span className="text-3xl font-black tabular-nums text-slate-900 dark:text-white">
+                                    {fmt(effectivePrice)}{' '}
+                                    <span className="text-lg font-bold text-blue-600 dark:text-blue-400">FCFA</span>
+                                </span>
+                                {negotiatedPrice != null && (
+                                    <span className="text-[11px] font-black uppercase text-emerald-600 dark:text-emerald-400">
+                                        Prix négocié
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    )}
 
                     {/* Rating + views */}
                     <div className="flex items-center gap-2.5 mb-4">
@@ -441,7 +510,7 @@ export default function ProductDetailPage() {
 
                     {/* Promo banner */}
                     {hasPromo && (
-                        <div className="flex items-center gap-3 mb-4 p-3 rounded-2xl bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30">
+                        <div className="flex items-center gap-3 mb-4 p-3.5 rounded-2xl bg-red-50/90 dark:bg-red-950/30 backdrop-blur-md border border-white/10 dark:border-red-900/40">
                             <div className="bg-red-500 text-white text-[10px] font-black uppercase px-3 py-1.5 rounded-full animate-pulse">
                                 -{product.promo_percentage}%
                             </div>
@@ -472,28 +541,30 @@ export default function ProductDetailPage() {
                         </p>
                     )}
 
-                    {/* Stock badge */}
+                    {/* Stock badge — pulse discret sur le badge entier si stock faible (>0 et <5) */}
                     {product.has_stock && (
                         <div className="flex items-center gap-3 mb-5 flex-wrap">
-                            <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] border ${
+                            <div
+                                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] border border-white/10 backdrop-blur-md ${
                                 product.stock_quantity > 0
-                                    ? product.stock_quantity <= 5
-                                        ? 'bg-red-500/[0.08] border-red-500/20'
-                                        : 'bg-green-500/[0.08] border-green-500/20'
-                                    : 'bg-red-500/[0.08] border-red-500/20'
-                            }`}>
+                                    ? product.stock_quantity < 5
+                                        ? 'bg-red-500/[0.08] motion-safe:animate-pulse'
+                                        : 'bg-green-500/[0.08]'
+                                    : 'bg-red-500/[0.08]'
+                            }`}
+                            >
                                 <div className={`w-[7px] h-[7px] rounded-full ${
                                     product.stock_quantity > 0
-                                        ? product.stock_quantity <= 5 ? 'bg-red-500 animate-pulse' : 'bg-green-500'
-                                        : 'bg-red-500 animate-pulse'
+                                        ? product.stock_quantity < 5 ? 'bg-red-500' : 'bg-green-500'
+                                        : 'bg-red-500 motion-safe:animate-pulse'
                                 }`} />
                                 <span className={`text-xs font-semibold ${
                                     product.stock_quantity > 0
-                                        ? product.stock_quantity <= 5 ? 'text-red-400' : 'text-green-400'
+                                        ? product.stock_quantity < 5 ? 'text-red-400' : 'text-green-400'
                                         : 'text-red-400'
                                 }`}>
                                     {product.stock_quantity > 0
-                                        ? product.stock_quantity <= 5
+                                        ? product.stock_quantity < 5
                                             ? `Plus que ${product.stock_quantity} en stock !`
                                             : `${product.stock_quantity} en stock`
                                         : 'Rupture de stock'
@@ -503,11 +574,17 @@ export default function ProductDetailPage() {
                         </div>
                     )}
 
-                    <div className="h-px bg-slate-100 dark:bg-white/[0.04] mb-5" />
+                    <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-6" />
 
                     {/* Couleurs : pastilles uniquement (pas de libellé texte côté client) */}
                     {product.colors && product.colors.length > 0 && (
-                        <div className="mb-5">
+                        <div
+                            className={`mb-5 rounded-[14px] p-3 -mx-1 transition-[box-shadow,border-color] ${
+                                showColorError
+                                    ? 'ring-1 ring-red-500/50 border border-red-500/40'
+                                    : 'border border-transparent'
+                            }`}
+                        >
                             <span className="sr-only">Couleur</span>
                             <div className="flex gap-3 flex-wrap items-center">
                                 {product.colors.map((colorName: string) => {
@@ -532,12 +609,23 @@ export default function ProductDetailPage() {
                                     )
                                 })}
                             </div>
+                            {showColorError && (
+                                <p className="text-red-500 dark:text-red-400 text-xs font-medium mt-1" role="alert">
+                                    Veuillez sélectionner une couleur
+                                </p>
+                            )}
                         </div>
                     )}
 
                     {/* Tailles : cases carrées + guide */}
                     {product.sizes && product.sizes.length > 0 && (
-                        <div className="mb-5">
+                        <div
+                            className={`mb-5 rounded-[14px] p-3 -mx-1 transition-[box-shadow,border-color] ${
+                                showSizeError
+                                    ? 'ring-1 ring-red-500/50 border border-red-500/40'
+                                    : 'border border-transparent'
+                            }`}
+                        >
                             <div className="flex justify-end mb-2">
                                 <button
                                     type="button"
@@ -568,6 +656,11 @@ export default function ProductDetailPage() {
                                     )
                                 })}
                             </div>
+                            {showSizeError && (
+                                <p className="text-red-500 dark:text-red-400 text-xs font-medium mt-1" role="alert">
+                                    Veuillez sélectionner une taille
+                                </p>
+                            )}
                         </div>
                     )}
 
@@ -575,7 +668,7 @@ export default function ProductDetailPage() {
                     {!isRealEstateProduct(product) && (
                     <div className="mb-5">
                         <span className="text-slate-400 dark:text-slate-500 text-xs font-semibold uppercase tracking-wider block mb-2.5">Quantité</span>
-                        <div className="inline-flex items-center rounded-[14px] border-[1.5px] border-slate-200 dark:border-white/[0.08] overflow-hidden">
+                        <div className="inline-flex items-center rounded-[14px] border border-white/10 bg-white/50 dark:bg-white/[0.04] backdrop-blur-md overflow-hidden shadow-sm">
                             <button
                                 onClick={() => qty > 1 && setQty(qty - 1)}
                                 className={`w-11 h-11 flex items-center justify-center transition-all border-none bg-transparent ${
@@ -597,67 +690,137 @@ export default function ProductDetailPage() {
                     </div>
                     )}
 
-                    <div className="h-px bg-slate-100 dark:bg-white/[0.04] mb-5" />
+                    {!isImmo && (
+                        <div className="hidden lg:flex flex-col sm:flex-row gap-4 pt-4">
+                            <div className="flex-1 min-w-0">
+                                <AddToCartButton
+                                    product={{ ...product, price: effectivePrice }}
+                                    selectedVariant={{ size: selectedSize, color: selectedColor }}
+                                    onVariantsInvalid={handleVariantsInvalid}
+                                />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                                <OrderAction
+                                    product={{ ...product, price: effectivePrice }}
+                                    shop={shop}
+                                    user={user}
+                                    variantsComplete={variantsComplete}
+                                    onVariantsInvalid={handleVariantsInvalid}
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    </div>
+
+                    {/* ── Onglets (pleine largeur sur desktop) ── */}
+                    <div className={`min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-4' : ''}`}>
+                    <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-8" />
 
                     {/* ── TABS ── */}
-                    <div className="flex gap-0 mb-4 border-b border-slate-100 dark:border-white/[0.06]">
+                    <div className="flex gap-0 mb-6 border-b border-white/10 dark:border-white/[0.08] overflow-x-auto no-scrollbar">
                         {([
                             { key: 'desc' as const, label: 'Description', icon: '📝' },
-                            { key: 'details' as const, label: 'Détails', icon: '📋' },
+                            { key: 'details' as const, label: 'Informations additionnelles', icon: '📋' },
                             { key: 'reviews' as const, label: `Avis (${reviews.length})`, icon: '⭐' },
                         ]).map(tab => (
                             <button
                                 key={tab.key}
+                                type="button"
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flex-1 py-3 bg-transparent border-none text-xs font-semibold cursor-pointer transition-all ${
+                                className={`flex-1 min-w-[100px] py-4 bg-transparent border-none text-xs font-semibold cursor-pointer transition-all tracking-tight border-b-[3px] ${
                                     activeTab === tab.key
-                                        ? 'text-slate-900 dark:text-[#F0ECE2]'
-                                        : 'text-slate-400'
+                                        ? 'text-slate-900 dark:text-[#F0ECE2] border-blue-600'
+                                        : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300'
                                 }`}
-                                style={{
-                                    borderBottom: activeTab === tab.key ? '2.5px solid #E8A838' : '2.5px solid transparent',
-                                }}
                             >
-                                {tab.icon} {tab.label}
+                                <span className="mr-1 opacity-80">{tab.icon}</span>
+                                {tab.label}
                             </button>
                         ))}
                     </div>
 
                     {/* ── TAB CONTENT ── */}
                     {activeTab === 'desc' ? (
-                        <div className="text-slate-500 dark:text-slate-400 text-sm leading-relaxed mb-6">
+                        <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-10 max-w-3xl">
                             {product.description}
                         </div>
                     ) : activeTab === 'details' ? (
-                        <div className="flex flex-col gap-2 mb-6">
-                            {product.subcategory && (
-                                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                    <span className="text-orange-400 text-sm">✦</span>
-                                    <span className="text-slate-600 dark:text-slate-300 text-[13px]">Catégorie : {product.subcategory}</span>
-                                </div>
-                            )}
-                            {product.has_stock && (
-                                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                    <span className="text-orange-400 text-sm">✦</span>
-                                    <span className="text-slate-600 dark:text-slate-300 text-[13px]">
-                                        Stock : {product.stock_quantity > 0 ? `${product.stock_quantity} disponibles` : 'Rupture'}
-                                    </span>
-                                </div>
-                            )}
-                            {product.views_count > 0 && (
-                                <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                    <span className="text-orange-400 text-sm">✦</span>
-                                    <span className="text-slate-600 dark:text-slate-300 text-[13px]">{product.views_count} vues sur ce produit</span>
-                                </div>
-                            )}
-                            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                <span className="text-orange-400 text-sm">✦</span>
-                                <span className="text-slate-600 dark:text-slate-300 text-[13px]">Vendu par {shopName}</span>
-                            </div>
-                            <div className="flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-white/[0.02] border border-slate-100 dark:border-white/[0.04]">
-                                <span className="text-orange-400 text-sm">✦</span>
-                                <span className="text-slate-600 dark:text-slate-300 text-[13px]">Prix négociable via le marchandage</span>
-                            </div>
+                        <div className="mb-10 overflow-hidden rounded-xl border border-white/10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md shadow-[0_12px_40px_-16px_rgba(37,99,235,0.12)]">
+                            <table className="w-full table-fixed text-sm border-collapse">
+                                <thead>
+                                    <tr className="bg-blue-600 text-white text-left">
+                                        <th className="w-1/3 px-4 py-3 font-semibold tracking-tight border-b border-white/10">
+                                            Spécification
+                                        </th>
+                                        <th className="px-4 py-3 font-semibold tracking-tight border-b border-white/10">
+                                            Détails
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody
+                                    className="[&_tr:nth-child(odd)]:bg-white [&_tr:nth-child(odd)]:dark:bg-slate-800/40 [&_tr:nth-child(even)]:bg-slate-50/90 [&_tr:nth-child(even)]:dark:bg-slate-900/50"
+                                >
+                                    {product.category && (
+                                        <tr>
+                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                                Catégorie
+                                            </td>
+                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                                {product.category}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {product.subcategory && (
+                                        <tr>
+                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                                Sous-catégorie
+                                            </td>
+                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                                {product.subcategory}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {product.has_stock && (
+                                        <tr>
+                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                                Stock
+                                            </td>
+                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                                {product.stock_quantity > 0
+                                                    ? `${product.stock_quantity} disponible(s)`
+                                                    : 'Rupture'}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {product.views_count > 0 && (
+                                        <tr>
+                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                                Vues
+                                            </td>
+                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                                {product.views_count}
+                                            </td>
+                                        </tr>
+                                    )}
+                                    <tr>
+                                        <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                            Vendeur
+                                        </td>
+                                        <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                            {shopName}
+                                        </td>
+                                    </tr>
+                                    <tr>
+                                        <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 align-top">
+                                            Marchandage
+                                        </td>
+                                        <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200">
+                                            Disponible (voir bloc prix ci-dessus)
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     ) : (
                         <div className="mb-6">
@@ -756,6 +919,8 @@ export default function ProductDetailPage() {
                             </div>
                         </div>
                     )}
+                    </div>
+
                 </div>
 
                 {/* ── PRODUITS SIMILAIRES ── */}
@@ -788,7 +953,7 @@ export default function ProductDetailPage() {
                     </div>
                 </div>
             ) : (
-            <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40">
+            <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40 lg:hidden">
                 {/* Total */}
                 <div className="flex-shrink-0 mr-1">
                     <p className="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Total</p>
@@ -800,12 +965,19 @@ export default function ProductDetailPage() {
                     <AddToCartButton
                         product={{ ...product, price: effectivePrice }}
                         selectedVariant={{ size: selectedSize, color: selectedColor }}
+                        onVariantsInvalid={handleVariantsInvalid}
                     />
                 </div>
 
                 {/* Order */}
                 <div className="flex-1 min-w-0">
-                    <OrderAction product={{ ...product, price: effectivePrice }} shop={shop} user={user} />
+                    <OrderAction
+                        product={{ ...product, price: effectivePrice }}
+                        shop={shop}
+                        user={user}
+                        variantsComplete={variantsComplete}
+                        onVariantsInvalid={handleVariantsInvalid}
+                    />
                 </div>
             </div>
             )}

@@ -20,10 +20,10 @@ export function getSubscriptionStatus(profile: {
     subscription_plan?: string | null
     subscription_end_date?: string | null
 }): SubscriptionStatus {
-    const plan = profile?.subscription_plan || 'free'
+    const plan = profile?.subscription_plan || 'gratuit'
 
     // Plan gratuit = toujours actif (limité par nombre de produits, pas par le temps)
-    if (plan === 'free' || !plan) return 'free'
+    if (plan === 'gratuit' || plan === 'free' || !plan) return 'free'
 
     // Plan payant sans date de fin = vendeur legacy (migré avant cette feature)
     if (!profile.subscription_end_date) return 'legacy'

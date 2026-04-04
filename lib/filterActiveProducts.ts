@@ -16,7 +16,7 @@ export async function getExpiredSellerIds(supabase: SupabaseClient): Promise<str
     const { data: expiredSellers } = await supabase
         .from('profiles')
         .select('id')
-        .neq('subscription_plan', 'free')
+        .neq('subscription_plan', 'gratuit')
         .not('subscription_plan', 'is', null)
         .not('subscription_end_date', 'is', null)
         .lt('subscription_end_date', graceDeadline)

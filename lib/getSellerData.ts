@@ -23,6 +23,7 @@ export const getSellerData = async (sellerId: string) => {
     // Vérifier si le vendeur est expiré (produits masqués)
     const sellerExpired = profile
         && profile.subscription_plan
+        && profile.subscription_plan !== 'gratuit'
         && profile.subscription_plan !== 'free'
         && isSubscriptionExpiredPastGrace(profile)
 

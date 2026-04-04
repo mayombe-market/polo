@@ -180,7 +180,7 @@ export default function Header() {
                         <button
                             type="button"
                             onClick={() => setShowAuthModal(true)}
-                            className="bg-green-600 text-white px-4 py-1.5 rounded-full font-bold hover:bg-green-700 transition shadow-md text-xs"
+                            className="rounded-full border border-neutral-900 bg-neutral-900 px-4 py-1.5 text-xs font-bold text-white shadow-sm transition hover:bg-neutral-800 dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white"
                         >
                             Connexion
                         </button>
@@ -277,7 +277,7 @@ export default function Header() {
                                 </button>
                             </>
                         ) : (
-                            <button onClick={() => { setShowAuthModal(true); setMobileMenuOpen(false); }} className="mt-2 w-full bg-green-600 text-white py-3 rounded-full font-bold hover:bg-green-700 transition shadow-md text-sm border-none cursor-pointer">
+                            <button onClick={() => { setShowAuthModal(true); setMobileMenuOpen(false); }} className="mt-2 w-full cursor-pointer rounded-full border border-neutral-900 bg-neutral-900 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-neutral-800 dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white">
                                 Connexion
                             </button>
                         )}

@@ -42,7 +42,7 @@ export default function CategoryBar() {
                     onClick={() => handleClick(cat)}
                     className={`whitespace-nowrap px-5 py-2 rounded-full text-xs font-black uppercase tracking-widest transition-all ${
                         activeCategory === cat
-                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-200'
+                            ? 'bg-neutral-900 text-white dark:bg-neutral-100 dark:text-neutral-900 shadow-sm'
                             : 'bg-slate-100 dark:bg-slate-900 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800'
                     }`}
                 >

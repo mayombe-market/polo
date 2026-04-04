@@ -69,8 +69,7 @@ export default function BecomeVendorCta({ variant, onNavigate }: BecomeVendorCta
             <Link
                 href={href}
                 {...clickProps}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-white text-[10px] font-black uppercase tracking-wide no-underline whitespace-nowrap transition-transform hover:scale-[1.02] active:scale-[0.98] shadow-md"
-                style={{ background: BTN_GRADIENT, boxShadow: BTN_SHADOW }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-neutral-300 bg-white text-[10px] font-black uppercase tracking-wide text-neutral-800 no-underline whitespace-nowrap shadow-sm transition-colors hover:bg-neutral-50 active:scale-[0.98] dark:border-neutral-600 dark:bg-slate-900 dark:text-neutral-100 dark:hover:bg-slate-800"
             >
                 {icon}
                 {label}
@@ -83,8 +82,7 @@ export default function BecomeVendorCta({ variant, onNavigate }: BecomeVendorCta
             <Link
                 href={href}
                 {...clickProps}
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-2xl text-white text-sm font-black uppercase tracking-wide no-underline shadow-lg"
-                style={{ background: BTN_GRADIENT, boxShadow: BTN_SHADOW }}
+                className="flex w-full items-center justify-center gap-2 rounded-2xl border border-neutral-300 bg-white py-3.5 text-sm font-black uppercase tracking-wide text-neutral-800 no-underline shadow-sm transition-colors hover:bg-neutral-50 dark:border-neutral-600 dark:bg-slate-900 dark:text-neutral-100 dark:hover:bg-slate-800"
             >
                 {icon}
                 {label}

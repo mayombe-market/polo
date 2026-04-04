@@ -1,6 +1,8 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import AdminVendorCampaignsPanel from './AdminVendorCampaignsPanel'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Trash2, Plus, X, Image as ImageIcon, Loader2,
@@ -25,7 +27,14 @@ interface Ad {
 
 const defaultForm = { title: '', img: '', link_url: '', is_active: true, position: 0 }
 
-export default function AdminAds() {
+function AdminAdsInner() {
+    const searchParams = useSearchParams()
+    const router = useRouter()
+    const tab = searchParams.get('tab') === 'vendeurs' ? 'vendeurs' : 'maison'
+    const setTab = (t: 'maison' | 'vendeurs') => {
+        router.replace(t === 'vendeurs' ? '/admin/ads?tab=vendeurs' : '/admin/ads', { scroll: false })
+    }
+
     const [ads, setAds] = useState<Ad[]>([])
     const [pageLoading, setPageLoading] = useState(true)
     const [error, setError] = useState(false)
@@ -185,24 +194,60 @@ export default function AdminAds() {
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950">
             {/* HEADER */}
             <div className="bg-white dark:bg-slate-900 border-b dark:border-slate-800 py-8 px-4">
-                <div className="max-w-7xl mx-auto flex items-start justify-between">
-                    <div>
-                        <h1 className="text-4xl font-black uppercase italic tracking-tighter">
-                            <span className="text-orange-500">Publicités</span>
-                        </h1>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
-                            {totalAds} bannières configurées
-                        </p>
+                <div className="max-w-7xl mx-auto flex flex-col gap-4">
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                        <div>
+                            <h1 className="text-4xl font-black uppercase italic tracking-tighter">
+                                <span className="text-orange-500">Pubs</span>
+                            </h1>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
+                                {tab === 'maison'
+                                    ? `${totalAds} bannières configurées — hero « maison » (table ads)`
+                                    : 'Validation des campagnes Hero & Tuile payées par les vendeurs'}
+                            </p>
+                        </div>
+                        {tab === 'maison' && (
+                            <button
+                                type="button"
+                                onClick={openCreate}
+                                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-orange-500 text-white text-[10px] font-black uppercase italic hover:bg-orange-600 transition-all whitespace-nowrap"
+                            >
+                                <Plus size={14} /> Nouvelle pub
+                            </button>
+                        )}
                     </div>
-                    <button
-                        onClick={openCreate}
-                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-orange-500 text-white text-[10px] font-black uppercase italic hover:bg-orange-600 transition-all whitespace-nowrap"
-                    >
-                        <Plus size={14} /> Nouvelle pub
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setTab('maison')}
+                            className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider transition-all ${
+                                tab === 'maison'
+                                    ? 'bg-orange-500 text-white shadow-md'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                        >
+                            Bannières site
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setTab('vendeurs')}
+                            className={`rounded-xl px-4 py-2 text-[10px] font-black uppercase tracking-wider transition-all ${
+                                tab === 'vendeurs'
+                                    ? 'bg-orange-500 text-white shadow-md'
+                                    : 'bg-slate-100 text-slate-500 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-400'
+                            }`}
+                        >
+                            Campagnes vendeurs
+                        </button>
+                    </div>
                 </div>
             </div>
 
+            {tab === 'vendeurs' ? (
+                <div className="max-w-7xl mx-auto px-4 py-8">
+                    <AdminVendorCampaignsPanel />
+                </div>
+            ) : (
             <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
                 {/* STATS */}
                 <div className="grid grid-cols-3 gap-4">
@@ -325,6 +370,7 @@ export default function AdminAds() {
                     </div>
                 )}
             </div>
+            )}
 
             {/* MODAL CREATE/EDIT */}
             {showModal && (
@@ -427,5 +473,19 @@ export default function AdminAds() {
                 </div>
             )}
         </div>
+    )
+}
+
+export default function AdminAds() {
+    return (
+        <Suspense
+            fallback={
+                <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
+                    <Loader2 className="animate-spin text-orange-500" size={40} />
+                </div>
+            }
+        >
+            <AdminAdsInner />
+        </Suspense>
     )
 }

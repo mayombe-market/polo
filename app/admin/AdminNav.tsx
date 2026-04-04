@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, Images } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = getSupabaseBrowserClient()
@@ -17,8 +17,7 @@ const links = [
     { href: '/admin/verifications', label: 'Vérifications', icon: ShieldCheck, badgeKey: 'verifications' as const },
     { href: '/admin/vendors', label: 'Vendeurs', icon: Users, badgeKey: null },
     { href: '/admin/logisticians', label: 'Logisticiens', icon: Truck, badgeKey: null },
-    { href: '/admin/ads', label: 'Pubs', icon: Megaphone, badgeKey: null },
-    { href: '/admin/ad-campaigns', label: 'Campagnes vendeurs', icon: Images, badgeKey: 'ad_campaigns' as const },
+    { href: '/admin/ads', label: 'Pubs', icon: Megaphone, badgeKey: 'ad_campaigns' as const },
 ]
 
 export default function AdminNav() {

@@ -140,7 +140,7 @@ export async function markVendorAdCampaignPaid(campaignId: string, paymentNote: 
 
     if (error) return { error: error.message }
     revalidatePath('/vendor/ad-campaigns')
-    revalidatePath('/admin/ad-campaigns')
+    revalidatePath('/admin/ads')
     return { success: true }
 }
 
@@ -197,7 +197,7 @@ export async function adminApproveVendorAdCampaign(
 
     if (error) return { error: error.message }
     revalidatePath('/')
-    revalidatePath('/admin/ad-campaigns')
+    revalidatePath('/admin/ads')
     return { success: true }
 }
 
@@ -219,19 +219,31 @@ export async function adminRejectVendorAdCampaign(campaignId: string, reason: st
 
     if (error) return { error: error.message }
     revalidatePath('/')
-    revalidatePath('/admin/ad-campaigns')
+    revalidatePath('/admin/ads')
     return { success: true }
 }
 
-export async function adminListVendorAdCampaigns() {
-    const { supabase } = await requireAdmin()
-    const { data, error } = await supabase
-        .from('vendor_ad_campaigns')
-        .select('*')
-        .order('created_at', { ascending: false })
+export type AdminListCampaignsResult =
+    | { ok: true; campaigns: any[] }
+    | { ok: false; campaigns: []; error: string }
 
-    if (error) throw new Error(error.message)
-    return data || []
+/** Liste admin — ne lève pas d’exception : l’UI peut afficher `error` (accès, table manquante, RLS). */
+export async function adminListVendorAdCampaigns(): Promise<AdminListCampaignsResult> {
+    try {
+        const { supabase } = await requireAdmin()
+        const { data, error } = await supabase
+            .from('vendor_ad_campaigns')
+            .select('*')
+            .order('created_at', { ascending: false })
+
+        if (error) {
+            return { ok: false, campaigns: [], error: error.message }
+        }
+        return { ok: true, campaigns: data || [] }
+    } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : 'Erreur inconnue'
+        return { ok: false, campaigns: [], error: msg }
+    }
 }
 
 export async function listMyVendorAdCampaigns() {

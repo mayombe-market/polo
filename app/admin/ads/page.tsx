@@ -212,6 +212,11 @@ function AdminAdsInner() {
                                 <code className="rounded bg-slate-100 px-1 text-[9px] dark:bg-slate-800">ads</code>
                                 ) puis, plus bas, validation des campagnes vendeurs (Hero &amp; Tuile).
                             </p>
+                            {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? (
+                                <p className="mt-2 text-[9px] font-mono text-slate-300 dark:text-slate-600">
+                                    Build déployé : {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}
+                                </p>
+                            ) : null}
                             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
                                 <a
                                     href="#bannieres-site"

@@ -119,7 +119,7 @@ const SimilarProducts = ({ productId, subcategory, category }: {
                     ))}
                 </div>
                 <div
-                    className="pointer-events-none absolute right-0 top-0 z-10 h-full w-16 bg-gradient-to-l from-white to-transparent dark:from-[#0A0A12] sm:w-20"
+                    className="pointer-events-none absolute right-0 top-0 z-10 h-full w-20 bg-gradient-to-l from-white via-white/40 to-transparent dark:from-[#0A0A12] dark:via-[#0A0A12]/50 sm:w-24"
                     aria-hidden
                 />
             </div>

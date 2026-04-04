@@ -49,7 +49,7 @@ function ProductGallery({ images, productName, priorityMain = false }: { images:
 
             {/* Miniatures interactives */}
             {normalizedImages.length > 1 && (
-                <div className="grid grid-cols-5 gap-3">
+                <div className="relative z-0 grid grid-cols-5 gap-3">
                     {normalizedImages.map((img, i) => (
                         <button
                             type="button"

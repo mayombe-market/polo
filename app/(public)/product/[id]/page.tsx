@@ -328,7 +328,9 @@ export default function ProductDetailPage() {
     }
 
     return (
-        <div className={`${isImmo ? 'max-w-lg' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative`}>
+        <div
+            className={`${isImmo ? 'max-w-lg' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20`}
+        >
 
             <div>
                 {/* ── BACK BAR ── */}
@@ -373,17 +375,21 @@ export default function ProductDetailPage() {
                     <span className="text-slate-600 dark:text-slate-300 truncate max-w-[min(100%,220px)]">{product.name}</span>
                 </nav>
 
-                {/* ── Galerie + infos (2 col desktop) puis onglets pleine largeur ── */}
+                {/* ── Galerie (gauche ~60 %) + infos (droite ~40 %, sticky) puis onglets pleine largeur ── */}
                 <div
-                    className={`grid gap-10 lg:gap-16 xl:gap-20 px-4 lg:px-8 pb-4 ${
-                        isImmo ? 'grid-cols-1' : 'lg:grid-cols-2'
+                    className={`grid gap-10 lg:gap-16 px-4 lg:px-8 pb-4 ${
+                        isImmo ? 'grid-cols-1' : 'lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]'
                     }`}
                 >
-                    <div className={!isImmo ? 'lg:sticky lg:top-20 self-start' : ''}>
+                    <div className={`min-w-0 ${!isImmo ? 'relative z-0' : ''}`}>
                         <ProductGallery images={allImages} productName={product.name} priorityMain />
                     </div>
 
-                    <div className="space-y-5 lg:space-y-7 min-w-0 px-1 sm:px-0">
+                    <div
+                        className={`space-y-5 lg:space-y-8 min-w-0 px-1 sm:px-0 ${
+                            !isImmo ? 'lg:sticky lg:top-24 lg:self-start' : ''
+                        }`}
+                    >
                     {reviewsRpcFailed && (
                         <div
                             role="status"
@@ -460,7 +466,7 @@ export default function ProductDetailPage() {
                     {realEstateExtras && <RealEstateListingDetails extras={realEstateExtras} />}
 
                     {/* Product name */}
-                    <h1 className="text-2xl lg:text-3xl font-extrabold text-slate-900 dark:text-[#F0ECE2] leading-tight mb-1.5 tracking-tight">
+                    <h1 className="text-3xl lg:text-[2rem] font-semibold text-slate-900 dark:text-white leading-[1.15] mb-2 tracking-tight">
                         {product.name}
                     </h1>
 
@@ -713,28 +719,28 @@ export default function ProductDetailPage() {
 
                     </div>
 
-                    {/* ── Onglets (pleine largeur sur desktop) ── */}
-                    <div className={`min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-4' : ''}`}>
+                    {/* ── Onglets (pleine largeur) — z-index au-dessus du carrousel de miniatures ── */}
+                    <div className={`relative z-10 isolate min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-10' : ''}`}>
                     <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-8" />
 
                     {/* ── TABS ── */}
-                    <div className="flex gap-0 mb-6 border-b border-white/10 dark:border-white/[0.08] overflow-x-auto no-scrollbar">
+                    <div className="flex gap-1 mb-8 border-b border-slate-200/80 dark:border-white/[0.08] overflow-x-auto no-scrollbar">
                         {([
                             { key: 'desc' as const, label: 'Description', icon: '📝' },
-                            { key: 'details' as const, label: 'Informations additionnelles', icon: '📋' },
+                            { key: 'details' as const, label: 'Détails produit', icon: '📋' },
                             { key: 'reviews' as const, label: `Avis (${reviews.length})`, icon: '⭐' },
                         ]).map(tab => (
                             <button
                                 key={tab.key}
                                 type="button"
                                 onClick={() => setActiveTab(tab.key)}
-                                className={`flex-1 min-w-[100px] py-4 bg-transparent border-none text-xs font-semibold cursor-pointer transition-all tracking-tight border-b-[3px] ${
+                                className={`flex-1 min-w-[100px] py-3.5 px-2 bg-transparent border-none text-[13px] font-medium cursor-pointer transition-colors tracking-tight border-b-2 -mb-px ${
                                     activeTab === tab.key
-                                        ? 'text-slate-900 dark:text-[#F0ECE2] border-blue-600'
+                                        ? 'text-slate-900 dark:text-white border-slate-900 dark:border-white'
                                         : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300'
                                 }`}
                             >
-                                <span className="mr-1 opacity-80">{tab.icon}</span>
+                                <span className="mr-1.5 opacity-70">{tab.icon}</span>
                                 {tab.label}
                             </button>
                         ))}
@@ -742,85 +748,73 @@ export default function ProductDetailPage() {
 
                     {/* ── TAB CONTENT ── */}
                     {activeTab === 'desc' ? (
-                        <div className="text-slate-600 dark:text-slate-400 text-sm leading-relaxed mb-10 max-w-3xl">
+                        <div className="text-slate-600 dark:text-slate-300 text-[15px] leading-[1.7] mb-12 max-w-3xl">
                             {product.description}
                         </div>
                     ) : activeTab === 'details' ? (
-                        <div className="mb-10 overflow-hidden rounded-xl border border-white/10 bg-white/40 dark:bg-slate-900/40 backdrop-blur-md shadow-[0_12px_40px_-16px_rgba(37,99,235,0.12)]">
-                            <table className="w-full table-fixed text-sm border-collapse">
-                                <thead>
-                                    <tr className="bg-blue-600 text-white text-left">
-                                        <th className="w-1/3 px-4 py-3 font-semibold tracking-tight border-b border-white/10">
-                                            Spécification
-                                        </th>
-                                        <th className="px-4 py-3 font-semibold tracking-tight border-b border-white/10">
-                                            Détails
-                                        </th>
-                                    </tr>
-                                </thead>
-                                <tbody
-                                    className="[&_tr:nth-child(odd)]:bg-white [&_tr:nth-child(odd)]:dark:bg-slate-800/40 [&_tr:nth-child(even)]:bg-slate-50/90 [&_tr:nth-child(even)]:dark:bg-slate-900/50"
-                                >
+                        <div className="mb-12 max-w-3xl">
+                            <div className="overflow-hidden rounded-2xl border border-white/25 bg-white/35 dark:bg-white/[0.05] backdrop-blur-2xl shadow-[0_12px_48px_-20px_rgba(0,0,0,0.12)] dark:shadow-[0_12px_48px_-24px_rgba(0,0,0,0.45)] ring-1 ring-black/[0.04] dark:ring-white/[0.08]">
+                                <dl className="divide-y divide-slate-200/60 dark:divide-white/[0.08]">
                                     {product.category && (
-                                        <tr>
-                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                            <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                                 Catégorie
-                                            </td>
-                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                            </dt>
+                                            <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white sm:max-w-[60%]">
                                                 {product.category}
-                                            </td>
-                                        </tr>
+                                            </dd>
+                                        </div>
                                     )}
                                     {product.subcategory && (
-                                        <tr>
-                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                            <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                                 Sous-catégorie
-                                            </td>
-                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                            </dt>
+                                            <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white sm:max-w-[60%]">
                                                 {product.subcategory}
-                                            </td>
-                                        </tr>
+                                            </dd>
+                                        </div>
                                     )}
                                     {product.has_stock && (
-                                        <tr>
-                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                            <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                                 Stock
-                                            </td>
-                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                            </dt>
+                                            <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white sm:max-w-[60%]">
                                                 {product.stock_quantity > 0
                                                     ? `${product.stock_quantity} disponible(s)`
                                                     : 'Rupture'}
-                                            </td>
-                                        </tr>
+                                            </dd>
+                                        </div>
                                     )}
                                     {product.views_count > 0 && (
-                                        <tr>
-                                            <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                        <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                            <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                                 Vues
-                                            </td>
-                                            <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                            </dt>
+                                            <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white tabular-nums sm:max-w-[60%]">
                                                 {product.views_count}
-                                            </td>
-                                        </tr>
+                                            </dd>
+                                        </div>
                                     )}
-                                    <tr>
-                                        <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 border-b border-blue-100/80 dark:border-white/[0.06] align-top">
+                                    <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                        <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                             Vendeur
-                                        </td>
-                                        <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200 border-b border-blue-100/80 dark:border-white/[0.06]">
+                                        </dt>
+                                        <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white sm:max-w-[60%]">
                                             {shopName}
-                                        </td>
-                                    </tr>
-                                    <tr>
-                                        <td className="w-1/3 px-4 py-3.5 font-semibold text-slate-900/40 dark:text-slate-400 align-top">
+                                        </dd>
+                                    </div>
+                                    <div className="flex flex-col gap-1 px-5 py-4 sm:flex-row sm:items-baseline sm:justify-between sm:gap-6">
+                                        <dt className="shrink-0 text-xs font-medium uppercase tracking-wide text-slate-400 dark:text-slate-500">
                                             Marchandage
-                                        </td>
-                                        <td className="px-4 py-3.5 font-medium text-slate-800 dark:text-slate-200">
+                                        </dt>
+                                        <dd className="min-w-0 text-right text-sm font-medium text-slate-900 dark:text-white sm:max-w-[60%]">
                                             Disponible (voir bloc prix ci-dessus)
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                                        </dd>
+                                    </div>
+                                </dl>
+                            </div>
                         </div>
                     ) : (
                         <div className="mb-6">

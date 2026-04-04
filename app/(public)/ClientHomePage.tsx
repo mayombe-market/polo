@@ -6,8 +6,26 @@ import ProductCard from '@/app/components/ProductCard'
 import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
 import TrendsProductSlider from '@/app/components/TrendsProductSlider'
-import { Truck, Store, ArrowRight } from 'lucide-react'
+import PubProductMixSlider from '@/app/components/PubProductMixSlider'
+import { Truck, Store, ArrowRight, ShieldCheck } from 'lucide-react'
 import type { UnifiedHeroSlide } from '@/lib/mergeHeroSlides'
+import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
+
+/** Visuel central « confiance » (hors catalogue) — livraison / soin colis ; remplaçable par une image maison. */
+const REASSURANCE_HERO_IMAGE =
+    'https://images.unsplash.com/photo-1586528116311-ad8dd3c8310d?q=80&w=1600&auto=format&fit=crop'
+
+function firstGalleryUrl(g: unknown): string {
+    if (!Array.isArray(g) || g.length === 0) return ''
+    const first = g[0]
+    return typeof first === 'string' ? first.trim() : ''
+}
+
+function sideProductImageUrl(p: { img?: string | null; images_gallery?: string[] | null }): string {
+    const raw = (p?.img || firstGalleryUrl(p?.images_gallery) || '').trim()
+    const url = normalizeProductImageUrl(raw)
+    return url || '/placeholder-image.svg'
+}
 
 type TileCampaign = {
     id: string
@@ -64,6 +82,40 @@ export default function ClientHomePage({
 
     const trendsList = Array.isArray(trendProducts) ? trendProducts.slice(0, 30) : []
     const newProductsRow = newProducts.slice(0, 10)
+
+    /** Deux produits (hors tendances si possible) pour le triptyque — IDs normalisés en string (UUID Supabase). */
+    const sideHighlightPair = useMemo(() => {
+        const trendIds = new Set(
+            trendsList
+                .map((p: { id?: unknown }) => (p?.id != null && p.id !== '' ? String(p.id) : null))
+                .filter((x): x is string => x != null),
+        )
+        const pool: any[] = [
+            ...(Array.isArray(popularProducts) ? popularProducts : []),
+            ...(Array.isArray(newProducts) ? newProducts : []),
+            ...(Array.isArray(promoProducts) ? promoProducts : []),
+            ...(Array.isArray(topProducts) ? topProducts : []),
+        ]
+        const out: any[] = []
+        const seen = new Set<string>()
+        for (const p of pool) {
+            const id = p?.id != null && p.id !== '' ? String(p.id) : ''
+            if (!id || seen.has(id) || trendIds.has(id)) continue
+            seen.add(id)
+            out.push(p)
+            if (out.length >= 2) break
+        }
+        if (out.length < 2) {
+            for (const p of pool) {
+                const id = p?.id != null && p.id !== '' ? String(p.id) : ''
+                if (!id || seen.has(id)) continue
+                seen.add(id)
+                out.push(p)
+                if (out.length >= 2) break
+            }
+        }
+        return out.length >= 2 ? ([out[0], out[1]] as const) : null
+    }, [trendsList, popularProducts, newProducts, promoProducts, topProducts])
 
     /** Deux emplacements tuiles (même gabarit que les catégories) : campagnes puis repli catégories. */
     let categoryCursor = 0
@@ -221,7 +273,11 @@ export default function ClientHomePage({
                             label="Tendances"
                             title={promoProducts.length > 0 ? 'Sélection du moment' : 'Coup de cœur'}
                         />
-                        <TrendsProductSlider products={trendsList} />
+                        {safeTileCampaigns.length > 0 ? (
+                            <PubProductMixSlider products={trendsList} tileCampaigns={safeTileCampaigns} />
+                        ) : (
+                            <TrendsProductSlider products={trendsList} />
+                        )}
                         <div className="mt-10 text-center">
                             <Link
                                 href={promoProducts.length > 0 ? '/search?filter=promo' : '/search?sort=popular'}
@@ -399,6 +455,81 @@ export default function ClientHomePage({
                         </p>
                     </div>
                 </section>
+
+                {/* Trois zones : produits hors tendances (côtés) + visuel confiance (centre, plus large) */}
+                {sideHighlightPair && (
+                    <section
+                        className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800"
+                        aria-labelledby="triptych-reassurance-heading"
+                    >
+                        <h2 id="triptych-reassurance-heading" className="sr-only">
+                            Pour acheter en toute confiance
+                        </h2>
+                        <div className="grid grid-cols-1 gap-5 md:grid-cols-12 md:gap-6 md:items-stretch">
+                            <Link
+                                href={`/product/${sideHighlightPair[0].id}`}
+                                className="group relative aspect-[4/5] min-h-0 overflow-hidden rounded-2xl bg-neutral-100 md:col-span-3 dark:bg-neutral-900"
+                            >
+                                <img
+                                    src={sideProductImageUrl(sideHighlightPair[0])}
+                                    alt={sideHighlightPair[0].name ? String(sideHighlightPair[0].name) : ''}
+                                    className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                                    loading="lazy"
+                                    decoding="async"
+                                    sizes="(max-width:768px) 100vw, 25vw"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                                <p className="absolute bottom-4 left-4 right-4 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white/90">
+                                    Sélection
+                                </p>
+                            </Link>
+
+                            <div className="relative min-h-[280px] overflow-hidden rounded-2xl bg-neutral-200 md:col-span-6 md:min-h-[min(420px,52vh)]">
+                                <img
+                                    src={REASSURANCE_HERO_IMAGE}
+                                    alt=""
+                                    className="absolute inset-0 h-full w-full object-cover"
+                                    loading="lazy"
+                                    decoding="async"
+                                    sizes="(max-width:768px) 100vw, 50vw"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-transparent" />
+                                <div className="absolute inset-0 flex flex-col items-center justify-end p-8 pb-10 text-center text-white md:p-12 md:pb-14">
+                                    <ShieldCheck
+                                        className="mb-4 h-10 w-10 text-white/95 md:h-12 md:w-12"
+                                        strokeWidth={1.25}
+                                        aria-hidden
+                                    />
+                                    <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/85">
+                                        Votre tranquillité
+                                    </p>
+                                    <p className="mt-3 max-w-lg text-lg font-light leading-snug md:text-xl">
+                                        Paiement Mobile Money ou cash · Vendeurs accompagnés · Livraison soignée sur
+                                        Brazzaville & Pointe-Noire
+                                    </p>
+                                </div>
+                            </div>
+
+                            <Link
+                                href={`/product/${sideHighlightPair[1].id}`}
+                                className="group relative aspect-[4/5] min-h-0 overflow-hidden rounded-2xl bg-neutral-100 md:col-span-3 dark:bg-neutral-900"
+                            >
+                                <img
+                                    src={sideProductImageUrl(sideHighlightPair[1])}
+                                    alt={sideHighlightPair[1].name ? String(sideHighlightPair[1].name) : ''}
+                                    className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
+                                    loading="lazy"
+                                    decoding="async"
+                                    sizes="(max-width:768px) 100vw, 25vw"
+                                />
+                                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                                <p className="absolute bottom-4 left-4 right-4 text-center text-[10px] font-semibold uppercase tracking-[0.2em] text-white/90">
+                                    Sélection
+                                </p>
+                            </Link>
+                        </div>
+                    </section>
+                )}
 
                 {/* Mise en avant asymétrique */}
                 {asymmetricPair && (

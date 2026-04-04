@@ -23,8 +23,8 @@ export default async function HomePage() {
   // Toutes les requêtes EN PARALLÈLE (au lieu de séquentiellement)
   const [
     { data: ads },
-    { data: heroCampaignRows },
-    { data: tileCampaignRows },
+    heroCampRes,
+    tileCampRes,
     { data: topProducts },
     { data: categories },
     { data: newProducts },
@@ -73,14 +73,23 @@ export default async function HomePage() {
     ),
   ])
 
-  const heroSlides = mergeHeroSlides(ads || [], heroCampaignRows || [])
+  const heroCampaignRows = heroCampRes.error ? [] : heroCampRes.data ?? []
+  const tileCampaignRows = tileCampRes.error ? [] : tileCampRes.data ?? []
+  if (heroCampRes.error && process.env.NODE_ENV === 'development') {
+    console.error('[HomePage] vendor_ad_campaigns hero:', heroCampRes.error.message)
+  }
+  if (tileCampRes.error && process.env.NODE_ENV === 'development') {
+    console.error('[HomePage] vendor_ad_campaigns tile:', tileCampRes.error.message)
+  }
+
+  const heroSlides = mergeHeroSlides(ads || [], heroCampaignRows)
 
   return (
     <main className="min-h-screen flex flex-col">
       <div className="flex-grow">
         <ClientHomePage
           heroSlides={heroSlides}
-          tileCampaigns={tileCampaignRows || []}
+          tileCampaigns={tileCampaignRows}
           topProducts={topProducts || []}
           categories={categories || []}
           newProducts={newProducts || []}

@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 
-/** Ancienne URL : tout est sous /admin/ads (onglet Campagnes vendeurs). */
+/** Ancienne URL : tout est regroupé sous /admin/ads (#campagnes-vendeurs). */
 export default function AdminAdCampaignsRedirectPage() {
-    redirect('/admin/ads?tab=vendeurs')
+    redirect('/admin/ads#campagnes-vendeurs')
 }

@@ -23,15 +23,17 @@ export default function AdminVendorCampaignsPanel() {
     const load = async () => {
         setLoading(true)
         setLoadError(null)
-        const res = await adminListVendorAdCampaigns()
-        if (res.ok) {
-            setRows(res.campaigns)
-        } else {
+        try {
+            const data = await adminListVendorAdCampaigns()
+            setRows(Array.isArray(data) ? data : [])
+        } catch (e: unknown) {
+            const msg = e instanceof Error ? e.message : 'Erreur chargement'
             setRows([])
-            setLoadError(res.error)
-            toast.error(res.error)
+            setLoadError(msg)
+            toast.error(msg)
+        } finally {
+            setLoading(false)
         }
-        setLoading(false)
     }
 
     useEffect(() => {
@@ -97,7 +99,7 @@ export default function AdminVendorCampaignsPanel() {
                 <Images size={24} className="text-orange-500" />
                 <div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">
-                        Campagnes vendeurs (Hero & Tuile)
+                        Campagnes vendeurs (Hero &amp; Tuile)
                     </h2>
                     <p className="text-[10px] font-bold uppercase text-slate-400 tracking-widest mt-1">
                         Paiement déclaré → validation → dates de diffusion
@@ -114,11 +116,6 @@ export default function AdminVendorCampaignsPanel() {
                         Impossible de charger les campagnes
                     </p>
                     <p className="mt-2 font-mono text-xs break-words">{loadError}</p>
-                    <p className="mt-3 text-xs text-red-800/90 dark:text-red-200/90">
-                        Vérifiez : table <code className="rounded bg-red-100 px-1 dark:bg-red-900/50">vendor_ad_campaigns</code>{' '}
-                        créée dans Supabase, et les variables <code className="rounded bg-red-100 px-1 dark:bg-red-900/50">NEXT_PUBLIC_SUPABASE_*</code>{' '}
-                        alignées avec ce projet.
-                    </p>
                 </div>
             )}
 
@@ -132,7 +129,7 @@ export default function AdminVendorCampaignsPanel() {
                     <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
                         Les vendeurs créent leurs campagnes sur{' '}
                         <code className="rounded bg-white px-1.5 py-0.5 text-xs dark:bg-slate-800">/vendor/ad-campaigns</code>
-                        . Après paiement déclaré ( <strong>pending_review</strong> ), elles apparaissent ici pour validation.
+                        . Après paiement déclaré (<strong>pending_review</strong>), elles apparaissent ici.
                     </p>
                 </div>
             ) : rows.length === 0 ? null : (
@@ -152,7 +149,7 @@ export default function AdminVendorCampaignsPanel() {
                                     {statusBadge(c.status)}
                                     <span className="text-[10px] font-bold uppercase text-slate-400">
                                         {c.placement === 'hero' ? 'Hero' : 'Tuile'} · {c.duration_days} j ·{' '}
-                                        {c.price_fcfa?.toLocaleString('fr-FR')} F
+                                        {c.price_fcfa != null ? `${Number(c.price_fcfa).toLocaleString('fr-FR')} FCFA` : '—'}
                                     </span>
                                 </div>
                                 <p className="font-black text-slate-900 dark:text-white">{c.title || 'Sans titre'}</p>

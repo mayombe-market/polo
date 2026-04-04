@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react'
+import type { Metadata } from 'next'
 
-/** Évite qu’une vieille version HTML/edge soit servie pour cette route admin. */
+export const metadata: Metadata = {
+    title: 'Pubs — Admin',
+    description: 'Bannières site et campagnes vendeurs.',
+}
+
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 

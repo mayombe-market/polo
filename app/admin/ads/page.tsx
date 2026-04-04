@@ -1,7 +1,6 @@
 'use client'
 
-import { Suspense, useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useEffect, useState } from 'react'
 import AdminVendorCampaignsPanel from './AdminVendorCampaignsPanel'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
@@ -27,9 +26,7 @@ interface Ad {
 
 const defaultForm = { title: '', img: '', link_url: '', is_active: true, position: 0 }
 
-function AdminAdsInner() {
-    const searchParams = useSearchParams()
-
+export default function AdminAds() {
     const [ads, setAds] = useState<Ad[]>([])
     const [pageLoading, setPageLoading] = useState(true)
     const [error, setError] = useState(false)
@@ -52,18 +49,6 @@ function AdminAdsInner() {
     }
 
     useEffect(() => { fetchAds() }, [])
-
-    /** Anciens liens ?tab=vendeurs ou #campagnes-vendeurs : scroll vers la section. */
-    useEffect(() => {
-        const go =
-            searchParams.get('tab') === 'vendeurs' ||
-            (typeof window !== 'undefined' && window.location.hash === '#campagnes-vendeurs')
-        if (!go) return
-        const t = window.setTimeout(() => {
-            document.getElementById('campagnes-vendeurs')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-        }, 100)
-        return () => window.clearTimeout(t)
-    }, [searchParams])
 
     // Stats
     const totalAds = ads.length
@@ -208,29 +193,20 @@ function AdminAdsInner() {
                                 <span className="text-orange-500">Pubs</span>
                             </h1>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 max-w-xl leading-relaxed">
-                                Une seule page : bannières « maison » (table{' '}
+                                Bannières « maison » (table{' '}
                                 <code className="rounded bg-slate-100 px-1 text-[9px] dark:bg-slate-800">ads</code>
-                                ) puis, plus bas, validation des campagnes vendeurs (Hero &amp; Tuile).
+                                ), puis validation des campagnes vendeurs (
+                                <code className="rounded bg-slate-100 px-1 text-[9px] dark:bg-slate-800">vendor_ad_campaigns</code>
+                                ).
                             </p>
-                            {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ? (
-                                <p className="mt-2 text-[9px] font-mono text-slate-300 dark:text-slate-600">
-                                    Build déployé : {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}
-                                </p>
-                            ) : null}
                             <p className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-black uppercase tracking-wider text-slate-500">
-                                <a
-                                    href="#bannieres-site"
-                                    className="text-orange-500 hover:underline underline-offset-2"
-                                >
+                                <a href="#bannieres-site" className="text-orange-500 hover:underline underline-offset-2">
                                     Bannières site
                                 </a>
                                 <span className="text-slate-300 dark:text-slate-600" aria-hidden>
                                     ·
                                 </span>
-                                <a
-                                    href="#campagnes-vendeurs"
-                                    className="text-orange-500 hover:underline underline-offset-2"
-                                >
+                                <a href="#campagnes-vendeurs" className="text-orange-500 hover:underline underline-offset-2">
                                     Campagnes vendeurs
                                 </a>
                             </p>
@@ -251,7 +227,7 @@ function AdminAdsInner() {
                     <h2 className="text-lg font-black uppercase italic tracking-tight text-slate-800 dark:text-slate-100 border-b border-slate-200 dark:border-slate-800 pb-3">
                         Bannières site — hero maison
                         <span className="block text-[10px] font-bold text-slate-400 not-italic mt-1 normal-case tracking-normal">
-                            {totalAds} bannière{totalAds > 1 ? 's' : ''} (table ads)
+                            {totalAds} bannière{totalAds > 1 ? 's' : ''} · table ads
                         </span>
                     </h2>
                 {/* STATS */}
@@ -482,19 +458,5 @@ function AdminAdsInner() {
                 </div>
             )}
         </div>
-    )
-}
-
-export default function AdminAds() {
-    return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
-                    <Loader2 className="animate-spin text-orange-500" size={40} />
-                </div>
-            }
-        >
-            <AdminAdsInner />
-        </Suspense>
     )
 }

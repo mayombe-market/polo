@@ -587,12 +587,27 @@ async function handleJwtOrPermissionRecovery(
     supabase: ReturnType<typeof getSupabaseBrowserClient>,
 ): Promise<void> {
     alert(MSG_SESSION_EXPIRED_RECONNECT)
-    const { data, error } = await supabase.auth.refreshSession()
-    if (!error && data.session?.user) {
-        alert('Session renouvelée. Vous pouvez réessayer de publier votre produit.')
-        return
+    try {
+        const { data, error } = (await withTimeout(
+            supabase.auth.refreshSession(),
+            SESSION_VERIFY_TIMEOUT_MS,
+        )) as { data: { session: Session | null }; error: { message: string } | null }
+        if (!error && data.session?.user) {
+            alert('Session renouvelée. Vous pouvez réessayer de publier votre produit.')
+            return
+        }
+    } catch (e: unknown) {
+        if (isTimeoutError(e)) {
+            console.warn('[AddProductForm] refreshSession timeout (récupération JWT) — déconnexion.')
+        } else {
+            console.warn('[AddProductForm] refreshSession:', e)
+        }
     }
-    await supabase.auth.signOut({ scope: 'local' })
+    try {
+        await withTimeout(supabase.auth.signOut({ scope: 'local' }), 15_000)
+    } catch {
+        /* évite de bloquer indéfiniment si signOut rame */
+    }
     window.location.href = LOGIN_REDIRECT
 }
 
@@ -822,14 +837,56 @@ export default function AddProductForm({
                   ? String((err as { message: unknown }).message)
                   : String(err)
 
-        if (isJwtExpiredOrPermissionDenied(msg) || /permission denied|not authorized|\b403\b|\b401\b/i.test(msg)) {
+        /**
+         * Chaîne images (compression + POST `/api/upload`) : toujours afficher le message serveur réel.
+         * Sinon des erreurs du type « Échec envoi image (500) » ou texte avec « policy » tombaient dans des branches
+         * génériques / JWT sans explication utile.
+         */
+        const isImageUploadPipeline =
+            context === 'compression_images' ||
+            context === 'upload_image_principale' ||
+            context === 'upload_galerie'
+
+        if (isImageUploadPipeline) {
+            const detail = msg.length > 520 ? `${msg.slice(0, 520)}…` : msg
+            alert(
+                `Erreur lors du traitement ou de l’envoi d’une image.\n\n${detail}\n\n` +
+                    'Vérifiez : 1) variables serveur CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET (Vercel ou .env.local, voir .env.example) ; 2) connexion ; 3) taille/format des photos. Ce message n’est en général pas lié à une simple déconnexion vendeur.',
+            )
+            return
+        }
+
+        /**
+         * Erreurs Cloudinary explicites (hors pipeline ci-dessus si jamais remontées ailleurs).
+         */
+        const looksLikeCloudinaryOrUploadConfig =
+            /cloudinary|CLOUDINARY_|définissez CLOUDINARY|CLOUDINARY_URL/i.test(msg)
+
+        if (looksLikeCloudinaryOrUploadConfig) {
+            const detail = msg.length > 450 ? `${msg.slice(0, 450)}…` : msg
+            alert(
+                `Erreur d’envoi d’image (serveur).\n\n${detail}\n\n` +
+                    'À vérifier sur Vercel → Environment Variables (ou .env.local) : CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET (voir .env.example). Un 401 Cloudinary indique en général des clés ou un cloud_name incorrects, pas votre session vendeur.',
+            )
+            return
+        }
+
+        if (
+            isJwtExpiredOrPermissionDenied(msg) ||
+            /permission denied|not authorized|\b403\b|\b401\b/i.test(msg)
+        ) {
             await handleJwtOrPermissionRecovery(supabase)
             return
         }
 
-        if (/row-level security|\brls\b|policy|storage api|cloudinary/i.test(msg)) {
+        /** RLS / Storage Supabase — éviter le seul mot « policy » (faux positifs avec d’autres APIs). */
+        if (
+            /row-level security|row level security|violates row-level|\brls\b|storage api|storage\.from|new row violates/i.test(
+                msg,
+            )
+        ) {
             alert(
-                'Accès refusé ou erreur d’envoi d’image. Vérifiez votre connexion, la configuration Cloudinary (serveur), ou reconnectez-vous.',
+                'Accès refusé côté base de données ou stockage. Vérifiez votre connexion ou reconnectez-vous.',
             )
             return
         }

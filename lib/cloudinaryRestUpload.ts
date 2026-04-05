@@ -16,18 +16,20 @@ function stripEnv(value: string | undefined): string {
     return s
 }
 
-/** Identifiants Cloudinary : `CLOUDINARY_CLOUD_NAME` + clés, ou `CLOUDINARY_URL` parsée (runtime Vercel uniquement). */
+/**
+ * Identifiants Cloudinary : clés serveur + nom du cloud, ou `CLOUDINARY_URL`.
+ * Le cloud name n’est pas secret : si `CLOUDINARY_CLOUD_NAME` est absent, on retombe sur
+ * `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` (souvent déjà renseigné pour le front) pour éviter l’erreur
+ * « API_KEY + API_SECRET sans cloud name » sur Vercel.
+ */
 function readCredentials(): { cloud_name: string; api_key: string; api_secret: string } {
     const url = stripEnv(process.env.CLOUDINARY_URL)
-    const cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
+    let cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
+    if (!cloud_name) {
+        cloud_name = stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
+    }
     const api_key = stripEnv(process.env.CLOUDINARY_API_KEY)
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
-
-    if (api_key && api_secret && !cloud_name && !url) {
-        throw new Error(
-            'Cloudinary : ajoutez CLOUDINARY_CLOUD_NAME sur Vercel (NEXT_PUBLIC_* ne suffit pas pour l’upload serveur).',
-        )
-    }
 
     if (cloud_name && api_key && api_secret) {
         return { cloud_name, api_key, api_secret }
@@ -53,7 +55,7 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
     }
 
     throw new Error(
-        'Cloudinary : définissez CLOUDINARY_CLOUD_NAME + CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET, ou uniquement CLOUDINARY_URL.',
+        'Cloudinary : définissez CLOUDINARY_API_KEY + CLOUDINARY_API_SECRET et un nom de cloud (CLOUDINARY_CLOUD_NAME ou NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME), ou uniquement CLOUDINARY_URL (cloudinary://…).',
     )
 }
 

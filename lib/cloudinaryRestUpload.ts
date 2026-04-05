@@ -24,12 +24,22 @@ function stripEnv(value: string | undefined): string {
  */
 function readCredentials(): { cloud_name: string; api_key: string; api_secret: string } {
     const url = stripEnv(process.env.CLOUDINARY_URL)
+    // Turbopack peut inliner process.env.X comme undefined au build — on lit aussi via indexation dynamique
     let cloud_name = stripEnv(process.env.CLOUDINARY_CLOUD_NAME)
-    if (!cloud_name) {
-        cloud_name = stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
-    }
+        || stripEnv(process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME)
+        || stripEnv((process.env as Record<string, string | undefined>)['CLOUDINARY_CLOUD_NAME'])
+        || stripEnv((process.env as Record<string, string | undefined>)['NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME'])
     const api_key = stripEnv(process.env.CLOUDINARY_API_KEY)
+        || stripEnv((process.env as Record<string, string | undefined>)['CLOUDINARY_API_KEY'])
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
+        || stripEnv((process.env as Record<string, string | undefined>)['CLOUDINARY_API_SECRET'])
+
+    console.error('[Cloudinary readCredentials]', {
+        cloud_name: cloud_name ? '✓' : '✗',
+        api_key: api_key ? '✓' : '✗',
+        api_secret: api_secret ? '✓' : '✗',
+        url: url ? '✓' : '✗',
+    })
 
     if (cloud_name && api_key && api_secret) {
         return { cloud_name, api_key, api_secret }

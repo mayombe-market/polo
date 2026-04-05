@@ -99,18 +99,22 @@ export const PLANS = [
 // ═══════════════════════════════════════
 export function getPlanMaxProducts(plan: string): number {
   switch (plan) {
+    case 'gratuit':
+    case 'free': return 5
+    case 'intermediaire':
     case 'starter': return 30
+    case 'premium':
     case 'pro': return 100
-    case 'premium': return -1 // illimité
-    default: return 5 // free
+    default: return 5
   }
 }
 
 export function getPlanName(plan: string): string {
   switch (plan) {
-    case 'starter': return 'Starter'
-    case 'pro': return 'Pro'
-    case 'premium': return 'Premium'
+    case 'intermediaire':
+    case 'starter': return 'Intermédiaire'
+    case 'premium':
+    case 'pro': return 'Premium'
     default: return 'Gratuit'
   }
 }

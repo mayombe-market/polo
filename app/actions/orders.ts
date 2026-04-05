@@ -795,10 +795,13 @@ function getPlanCommissionRate(plan: string): number {
 // ═══ Limites par plan d'abonnement ═══
 function getPlanMaxProducts(plan: string): number {
     switch (plan) {
+        case 'gratuit':
+        case 'free': return 5
+        case 'intermediaire':
         case 'starter': return 30
+        case 'premium':
         case 'pro': return 100
-        case 'premium': return -1 // illimité
-        default: return 5 // free
+        default: return 5
     }
 }
 
@@ -807,7 +810,7 @@ export async function getSellerPlanInfo() {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return { plan: 'free', productCount: 0, maxProducts: 5 }
+    if (!user) return { plan: 'gratuit', productCount: 0, maxProducts: 5 }
 
     const { data: profile } = await supabase
         .from('profiles')
@@ -815,7 +818,7 @@ export async function getSellerPlanInfo() {
         .eq('id', user.id)
         .single()
 
-    const plan = profile?.subscription_plan || 'free'
+    const plan = profile?.subscription_plan || 'gratuit'
     const maxProducts = getPlanMaxProducts(plan)
 
     const { count } = await supabase
@@ -990,10 +993,10 @@ export async function createProduct(input: {
         }
 
         // ═══ Vérification de la limite de produits selon le plan ═══
-        const plan = profile?.subscription_plan || 'free'
+        const plan = profile?.subscription_plan || 'gratuit'
         const maxProducts = getPlanMaxProducts(plan)
 
-        if (plan !== 'free' && isSubscriptionExpiredPastGrace(profile)) {
+        if (plan !== 'gratuit' && plan !== 'free' && isSubscriptionExpiredPastGrace(profile)) {
             return { error: 'Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des produits.' }
         }
 

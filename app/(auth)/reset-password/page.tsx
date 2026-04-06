@@ -4,7 +4,6 @@ import { Suspense, useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { withTimeout } from '@/lib/withTimeout'
 import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
@@ -12,10 +11,6 @@ import { PasswordPolicyChecklist } from '@/app/components/PasswordPolicyChecklis
 
 /** getSession après recovery : réseaux lents / mobile. */
 const AUTH_WAIT_MS = NETWORK_TIMEOUT_MS
-/**
- * updateUser vers GoTrue — timeout raisonnable.
- */
-const UPDATE_WAIT_MS = 30_000
 
 function authErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
@@ -238,56 +233,37 @@ function ResetPasswordForm() {
         try {
             const client = getSupabaseBrowserClient()
 
-            // Session requise pour updateUser (session « recovery » après clic sur le lien e-mail).
-            let session: Session | null = null
-            try {
-                type GetSessionResult = Awaited<ReturnType<typeof client.auth.getSession>>
-                const { data, error: sessErr } = await withTimeout<GetSessionResult>(
-                    client.auth.getSession(),
-                    AUTH_WAIT_MS,
-                    'Impossible de vérifier la session (temps écoulé). Rafraîchissez la page ou redemandez un lien.'
-                )
-                if (sessErr) {
-                    console.error('[reset-password] getSession:', sessErr)
-                    setError(translateAuthErrorMessage(sessErr.message))
-                    return
-                }
-                session = data.session
-            } catch (e) {
-                console.error('[reset-password] getSession timeout:', e)
-                setError(translateAuthErrorMessage(authErrorMessage(e)))
+            // Vérifier qu'on a une session active
+            const { data: { session } } = await client.auth.getSession()
+            if (!session?.access_token) {
+                setError('Session expirée. Redemandez un lien de réinitialisation.')
                 return
             }
 
-            if (!session?.user) {
-                const msg =
-                    'Aucune session active. Le lien a peut-être expiré : redemandez un e-mail de réinitialisation.'
-                console.warn('[reset-password]', msg)
-                setError(msg)
-                return
-            }
+            // Appel direct REST API Supabase Auth (évite le SDK qui peut rester en suspens)
+            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+            const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session.access_token}`,
+                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                },
+                body: JSON.stringify({ password }),
+            })
 
-            try {
-                const { error: updateErr } = await withTimeout(
-                    client.auth.updateUser({ password }),
-                    UPDATE_WAIT_MS,
-                    'La mise à jour prend trop de temps. Rafraichissez la page et reessayez.'
-                )
-                if (updateErr) {
-                    console.error('[reset-password] updateUser error:', updateErr)
-                    setError(translateAuthErrorMessage(updateErr.message || ''))
-                    return
-                }
-            } catch (e) {
-                console.error('[reset-password] updateUser failed:', e)
-                setError(authErrorMessage(e))
+            if (!res.ok) {
+                const body = await res.json().catch(() => ({}))
+                const msg = body?.msg || body?.message || body?.error_description || `Erreur ${res.status}`
+                console.error('[reset-password] API error:', msg)
+                setError(translateAuthErrorMessage(msg))
                 return
             }
 
             setDone(true)
         } catch (err: unknown) {
             console.error('[reset-password] exception:', err)
-            setError(translateAuthErrorMessage(authErrorMessage(err)))
+            setError(authErrorMessage(err))
         } finally {
             setLoading(false)
         }

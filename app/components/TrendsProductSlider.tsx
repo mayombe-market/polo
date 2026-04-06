@@ -21,7 +21,8 @@ const EMBLA_OPTIONS = {
     dragFree: false,
     /** Pas de glisser-déposer : navigation par les flèches uniquement, une carte à la fois. */
     watchDrag: false,
-    duration: 500,
+    /** Pas d’animation de défilement : saut instantané à chaque clic. */
+    duration: 0,
     slidesToScroll: 1,
 }
 

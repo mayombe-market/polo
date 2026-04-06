@@ -17,7 +17,8 @@ const EMBLA_OPTIONS = {
     containScroll: 'trimSnaps' as const,
     dragFree: false,
     watchDrag: false,
-    duration: 500,
+    /** Saut instantané à chaque clic (pas de glissement animé). */
+    duration: 0,
     slidesToScroll: 1,
 }
 

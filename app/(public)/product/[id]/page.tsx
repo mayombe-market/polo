@@ -325,6 +325,9 @@ export default function ProductDetailPage() {
     const handleVariantsInvalid = () => {
         if (hasColorOptions && !selectedColor) setShowColorError(true)
         if (hasSizeOptions && !selectedSize) setShowSizeError(true)
+        // Scroll vers les sélecteurs de variantes sur mobile
+        const el = document.getElementById('variant-selectors')
+        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
 
     return (
@@ -583,11 +586,12 @@ export default function ProductDetailPage() {
                     <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-6" />
 
                     {/* Couleurs : pastilles uniquement (pas de libellé texte côté client) */}
+                    <div id="variant-selectors">
                     {product.colors && product.colors.length > 0 && (
                         <div
                             className={`mb-5 rounded-[14px] p-3 -mx-1 transition-[box-shadow,border-color] ${
                                 showColorError
-                                    ? 'ring-1 ring-red-500/50 border border-red-500/40'
+                                    ? 'ring-1 ring-red-500/50 border border-red-500/40 animate-shake'
                                     : 'border border-transparent'
                             }`}
                         >
@@ -602,7 +606,7 @@ export default function ProductDetailPage() {
                                         <button
                                             key={colorName}
                                             type="button"
-                                            onClick={() => setSelectedColor(colorName)}
+                                            onClick={() => { setSelectedColor(colorName); setShowColorError(false) }}
                                             aria-label={colorName}
                                             title={colorName}
                                             className={`rounded-full p-0.5 transition-transform ${selected ? 'scale-110' : 'hover:scale-105'}`}
@@ -628,7 +632,7 @@ export default function ProductDetailPage() {
                         <div
                             className={`mb-5 rounded-[14px] p-3 -mx-1 transition-[box-shadow,border-color] ${
                                 showSizeError
-                                    ? 'ring-1 ring-red-500/50 border border-red-500/40'
+                                    ? 'ring-1 ring-red-500/50 border border-red-500/40 animate-shake'
                                     : 'border border-transparent'
                             }`}
                         >
@@ -649,7 +653,7 @@ export default function ProductDetailPage() {
                                         <button
                                             key={size}
                                             type="button"
-                                            onClick={() => setSelectedSize(size)}
+                                            onClick={() => { setSelectedSize(size); setShowSizeError(false) }}
                                             aria-pressed={selected}
                                             className={`min-w-[48px] h-12 px-2 rounded-lg text-sm font-black flex items-center justify-center transition-all ${
                                                 selected
@@ -669,6 +673,7 @@ export default function ProductDetailPage() {
                             )}
                         </div>
                     )}
+                    </div>{/* /variant-selectors */}
 
                     {/* Quantity selector — masqué pour annonces immobilières */}
                     {!isRealEstateProduct(product) && (

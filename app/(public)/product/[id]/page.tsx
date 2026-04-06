@@ -390,7 +390,9 @@ export default function ProductDetailPage() {
 
                     <div
                         className={`space-y-5 lg:space-y-8 min-w-0 px-1 sm:px-0 ${
-                            !isImmo ? 'lg:sticky lg:top-24 lg:self-start' : ''
+                            !isImmo
+                                ? 'lg:relative lg:z-20 lg:sticky lg:top-24 lg:self-start pointer-events-auto'
+                                : ''
                         }`}
                     >
                     {reviewsRpcFailed && (
@@ -702,7 +704,7 @@ export default function ProductDetailPage() {
                     )}
 
                     {!isImmo && (
-                        <div className="hidden lg:flex flex-col sm:flex-row gap-4 pt-4">
+                        <div className="relative z-[25] hidden lg:flex flex-col sm:flex-row gap-4 pt-4 pointer-events-auto">
                             <div className="flex-1 min-w-0">
                                 <AddToCartButton
                                     product={{ ...product, price: effectivePrice }}
@@ -726,8 +728,8 @@ export default function ProductDetailPage() {
 
                     </div>
 
-                    {/* ── Onglets (pleine largeur) — z-index au-dessus du carrousel de miniatures ── */}
-                    <div className={`relative z-10 isolate min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-10' : ''}`}>
+                    {/* ── Onglets (pleine largeur) — z-index SOUS le sticky panel boutons ── */}
+                    <div className={`relative z-0 isolate min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-10' : ''}`}>
                     <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-8" />
 
                     {/* ── TABS ── */}

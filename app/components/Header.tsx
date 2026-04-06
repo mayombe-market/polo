@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
+import HeaderContactPhones from './HeaderContactPhones'
 import { Menu, X, Bell } from 'lucide-react'
 
 // Lazy load AuthModal — ne se charge que quand l'user clique "Connexion"
@@ -97,8 +98,11 @@ export default function Header() {
                     />
                 </Link>
 
-                <div className="hidden md:flex flex-1 min-w-0 justify-center max-w-xl mx-2">
-                    <SearchBar compact />
+                <div className="hidden md:flex flex-1 min-w-0 items-center gap-3 lg:gap-4 mx-2">
+                    <HeaderContactPhones />
+                    <div className="flex min-w-0 flex-1 justify-center max-w-xl">
+                        <SearchBar compact />
+                    </div>
                 </div>
 
                 <nav className="hidden md:flex items-center gap-2.5 shrink-0">

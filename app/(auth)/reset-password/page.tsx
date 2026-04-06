@@ -267,42 +267,20 @@ function ResetPasswordForm() {
                 return
             }
 
-            type UpdateUserResult = Awaited<ReturnType<typeof client.auth.updateUser>>
-            const timeoutMsg =
-                'La mise à jour prend trop de temps. Vérifiez la connexion ou réessayez dans un instant.'
-
-            const runUpdateUser = () =>
-                withTimeout<UpdateUserResult>(
+            try {
+                const { error: updateErr } = await withTimeout(
                     client.auth.updateUser({ password }),
                     UPDATE_WAIT_MS,
-                    timeoutMsg
+                    'La mise à jour prend trop de temps. Rafraichissez la page et reessayez.'
                 )
-
-            try {
-                let upErr: UpdateUserResult['error'] | undefined
-                try {
-                    const { error: e1 } = await runUpdateUser()
-                    upErr = e1
-                } catch (e) {
-                    const msg = e instanceof Error ? e.message : ''
-                    const isTimeout = msg === timeoutMsg || msg.toLowerCase().includes('trop de temps')
-                    if (isTimeout) {
-                        console.warn('[reset-password] updateUser timeout, nouvel essai dans 2s…')
-                        await new Promise((r) => setTimeout(r, 2000))
-                        const { error: e2 } = await runUpdateUser()
-                        upErr = e2
-                    } else {
-                        throw e
-                    }
-                }
-                if (upErr) {
-                    console.error('[reset-password] updateUser error:', upErr)
-                    setError(translateAuthErrorMessage(upErr.message || ''))
+                if (updateErr) {
+                    console.error('[reset-password] updateUser error:', updateErr)
+                    setError(translateAuthErrorMessage(updateErr.message || ''))
                     return
                 }
             } catch (e) {
-                console.error('[reset-password] updateUser timeout ou erreur:', e)
-                setError(translateAuthErrorMessage(authErrorMessage(e)))
+                console.error('[reset-password] updateUser failed:', e)
+                setError(authErrorMessage(e))
                 return
             }
 

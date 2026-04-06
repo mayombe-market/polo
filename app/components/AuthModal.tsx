@@ -184,6 +184,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
     const [showSuccess, setShowSuccess] = useState(false)
     const [successName, setSuccessName] = useState('')
+    const [emailSent, setEmailSent] = useState(false)
     const emailRef = useRef<HTMLInputElement>(null)
 
     const supabase = getSupabaseBrowserClient()
@@ -199,6 +200,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             setClosing(false)
             setError('')
             setLoading(false)
+            setEmailSent(false)
             setTimeout(() => emailRef.current?.focus(), 300)
         }
     }, [isOpen, mode])
@@ -294,9 +296,8 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                 // Remember me
                 localStorage.setItem('mayombe_email', email)
 
-                handleClose()
-                setToast({ message: 'Email de confirmation envoyé ! Vérifiez votre boîte mail.', type: 'success' })
                 setPassword('')
+                setEmailSent(true)
             }
         } catch (err: any) {
             console.error('Erreur auth:', err)
@@ -372,6 +373,43 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             <p className="text-slate-600 text-[13px]">{titles[mode].sub}</p>
                         </div>
 
+                        {/* Écran de confirmation email après inscription */}
+                        {emailSent ? (
+                            <div className="text-center py-6 space-y-5">
+                                <div className="w-20 h-20 rounded-full mx-auto bg-orange-500/10 border-2 border-orange-500/30 flex items-center justify-center text-4xl">
+                                    ✉️
+                                </div>
+                                <div>
+                                    <h3 className="text-[#F0ECE2] text-xl font-extrabold mb-2">
+                                        Vérifiez votre boîte mail !
+                                    </h3>
+                                    <p className="text-slate-400 text-sm leading-relaxed">
+                                        Un email de confirmation a été envoyé à
+                                    </p>
+                                    <p className="text-orange-400 font-bold text-sm mt-1">{email}</p>
+                                </div>
+                                <div className="bg-amber-950/40 border border-amber-500/30 rounded-xl px-4 py-3">
+                                    <p className="text-amber-200 text-xs font-semibold leading-relaxed">
+                                        ⚠️ Pensez à vérifier vos <strong>spams</strong> et <strong>courriers indésirables</strong> si vous ne voyez pas l&apos;email.
+                                    </p>
+                                </div>
+                                <p className="text-slate-500 text-xs leading-relaxed">
+                                    Cliquez sur le lien dans l&apos;email pour activer votre compte et finaliser votre inscription.
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={handleClose}
+                                    className="w-full py-4 rounded-[14px] border-none text-white text-[15px] font-bold cursor-pointer transition-transform hover:scale-[1.02]"
+                                    style={{
+                                        background: 'linear-gradient(135deg, #E8A838, #D4782F)',
+                                        boxShadow: '0 8px 24px rgba(232,168,56,0.25)',
+                                    }}
+                                >
+                                    OK, j&apos;ai compris
+                                </button>
+                            </div>
+                        ) : (
+                        <>
                         {/* Error message (login / signup uniquement) */}
                         {error && mode !== 'forgot' && (
                             <div className="bg-red-950/50 dark:bg-red-950/60 border border-red-500/30 rounded-xl px-3.5 py-2.5 mb-4 flex items-center gap-2 animate-auth-fadeDown">
@@ -512,6 +550,8 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                             <p className="text-[11px] text-slate-600 text-center mt-2 leading-relaxed">
                                 Un email de confirmation vous sera envoyé pour activer votre compte.
                             </p>
+                        )}
+                        </>
                         )}
                     </div>
                 </div>

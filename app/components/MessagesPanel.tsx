@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { getConversations, getMessages, sendMessage } from '@/app/actions/messages'
-import { playMessageSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { ArrowLeft, Send, Loader2, MessageCircle, Package } from 'lucide-react'
@@ -105,7 +104,6 @@ export default function MessagesPanel({ userId, initialConversationId }: Message
                         : c
                 ))
             }
-            playMessageSound()
         }
     }, [activeConversation, userId])
 

@@ -28,7 +28,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { playNegotiationSound, playDeliverySound, playMessageSound } from '@/lib/notificationSound'
 import { getBuyerNegotiations } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
@@ -348,9 +347,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         const labels: Record<string, string> = { confirmed: 'Confirmée', shipped: 'Expédiée', picked_up: 'En livraison 🏍️', delivered: 'Livrée ✅' }
         const label = labels[updated.status]
         if (label) {
-            if (updated.status === 'picked_up' || updated.status === 'delivered') {
-                playDeliverySound()
-            }
             toast.success(formatOrderNumber(updated), { description: `Statut : ${label}` })
             sendNotification(
                 `Commande ${formatOrderNumber(updated)}`,
@@ -365,7 +361,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         const updated = payload.new as any
         setNegotiations(prev => prev.map(n => n.id === updated.id ? { ...n, ...updated } : n))
         if (updated.status === 'accepte') {
-            playNegotiationSound()
             toast.success('Offre acceptée !', { description: 'Votre prix négocié a été accepté par le vendeur.' })
             sendNotification('Offre acceptée !', 'Votre prix négocié a été accepté.')
         } else if (updated.status === 'refuse') {
@@ -379,7 +374,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
         const msg = payload.new as any
         if (msg.sender_id !== user.id) {
             setUnreadMessages(prev => prev + 1)
-            playMessageSound()
             toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
             sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
         }

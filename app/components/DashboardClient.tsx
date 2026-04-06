@@ -31,7 +31,6 @@ import {
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { playNewOrderSound, playNegotiationSound, playMessageSound } from '@/lib/notificationSound'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo } from '@/app/actions/orders'
 import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
@@ -346,7 +345,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
             const productNames = vendorItems.map((i: any) => i.name).join(', ')
             const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
             const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
-            playNewOrderSound()
             toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
             sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
         }
@@ -365,7 +363,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     const productNames = updatedVendorItems.map((i: any) => i.name).join(', ')
                     const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
                     const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
-                    playNewOrderSound()
                     toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
                     sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
                     return [updated, ...prev]
@@ -381,7 +378,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
         const newNeg = payload.new as any
         setNegotiations(prev => [newNeg, ...prev])
         const desc = `${newNeg.buyer_name || 'Client'} propose ${newNeg.proposed_price?.toLocaleString('fr-FR')} FCFA`
-        playNegotiationSound()
         toast.success('Nouvelle offre de négociation !', { description: desc })
         sendNotification('Nouvelle offre !', desc)
     }, [user?.id])
@@ -397,7 +393,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
         const msg = payload.new as any
         if (msg.sender_id !== user.id) {
             setUnreadMessages(prev => prev + 1)
-            playMessageSound()
             toast.success('Nouveau message !', { description: msg.content?.slice(0, 50) })
             sendNotification('Nouveau message', msg.content?.slice(0, 50) || '')
         }

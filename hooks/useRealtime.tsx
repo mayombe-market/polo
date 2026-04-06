@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useRef, useCallback, useMemo, ReactNode, type DependencyList } from 'react'
 import { useAuth } from '@/hooks/useAuth'
+import { playNotificationAlertSound, unlockNotificationAudio } from '@/lib/notificationSound'
 
 // ═══ Types d'événements real-time ═══
 export type RealtimeEvent =
@@ -45,6 +46,9 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
     const subscribersRef = useRef<SubscriberMap>(new Map())
 
     const dispatch = useCallback((event: RealtimeEvent, payload: any) => {
+        if (event === 'notification:insert') {
+            playNotificationAlertSound()
+        }
         const subs = subscribersRef.current.get(event)
         if (subs) {
             subs.forEach(cb => {
@@ -64,6 +68,17 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
             subscribersRef.current.get(event)?.delete(cb)
         }
     }, [])
+
+    // Premier clic / touch sur la page : débloque l’AudioContext pour les sonneries (Chrome, Safari).
+    useEffect(() => {
+        if (!user?.id) return
+        const unlock = () => {
+            unlockNotificationAudio()
+            window.removeEventListener('pointerdown', unlock)
+        }
+        window.addEventListener('pointerdown', unlock, { passive: true })
+        return () => window.removeEventListener('pointerdown', unlock)
+    }, [user?.id])
 
     useEffect(() => {
         if (!user?.id || !profile?.role || !supabase) return

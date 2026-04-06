@@ -95,7 +95,7 @@ export async function markPickedUp(orderId: string) {
     // Vérifier que la commande est bien assignée à ce logisticien
     const { data: order } = await supabase
         .from('orders')
-        .select('logistician_id, status, customer_name, customer_email, items')
+        .select('logistician_id, status, customer_name, customer_email, items, user_id')
         .eq('id', orderId)
         .single()
 
@@ -113,6 +113,17 @@ export async function markPickedUp(orderId: string) {
 
     if (error) return { error: error.message }
 
+    const productName = order.items?.[0]?.name || 'Votre commande'
+    if (order.user_id) {
+        createNotification(
+            order.user_id,
+            'order_picked_up',
+            'Colis en route',
+            `${productName} a été récupéré — il arrive chez vous.`,
+            '/account/dashboard?tab=orders',
+        ).catch(() => {})
+    }
+
     // Récupérer le nom du logisticien
     const { data: logProfile } = await supabase
         .from('profiles')
@@ -122,7 +133,6 @@ export async function markPickedUp(orderId: string) {
 
     // Notifier le client par email
     if (order.customer_email) {
-        const productName = order.items?.[0]?.name || 'votre commande'
         sendPickupNotificationEmail(
             order.customer_email,
             order.customer_name,

@@ -7,6 +7,58 @@ function getAudioContext() {
     return audioContext
 }
 
+/** Débloque l’audio après interaction utilisateur (politique navigateur). */
+function resumeAudioIfNeeded(ctx: AudioContext) {
+    if (ctx.state === 'suspended') {
+        void ctx.resume()
+    }
+}
+
+/** À appeler après un geste utilisateur (clic/touch) pour autoriser les sons ensuite. */
+export function unlockNotificationAudio() {
+    try {
+        resumeAudioIfNeeded(getAudioContext())
+    } catch {
+        /* noop */
+    }
+}
+
+/**
+ * Sonnerie de notification in-app (ligne insérée dans `notifications`).
+ * Volume plus marqué que les autres bips pour être entendu hors du focus.
+ */
+export function playNotificationAlertSound() {
+    try {
+        const ctx = getAudioContext()
+        resumeAudioIfNeeded(ctx)
+        const now = ctx.currentTime
+        const vol = 0.38
+
+        // Double coup : aigu puis médium (type « cloche »)
+        const tones: { freq: number; at: number; dur: number }[] = [
+            { freq: 1046, at: 0, dur: 0.12 },
+            { freq: 784, at: 0.1, dur: 0.14 },
+            { freq: 1318, at: 0.28, dur: 0.12 },
+        ]
+
+        for (const { freq, at, dur } of tones) {
+            const osc = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.type = 'sine'
+            osc.frequency.value = freq
+            const t0 = now + at
+            gain.gain.setValueAtTime(0.0001, t0)
+            gain.gain.exponentialRampToValueAtTime(vol, t0 + 0.02)
+            gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur)
+            osc.connect(gain).connect(ctx.destination)
+            osc.start(t0)
+            osc.stop(t0 + dur + 0.02)
+        }
+    } catch {
+        /* Audio indisponible */
+    }
+}
+
 /** Son de succes (paiement valide, commande confirmee) */
 export function playSuccessSound() {
     try {

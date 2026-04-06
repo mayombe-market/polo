@@ -6,7 +6,6 @@ import { Phone, Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
 import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 
@@ -26,7 +25,6 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
 
         if (vendorItems.length > 0 && newOrder.status !== 'pending') {
             setOrders((prev) => [newOrder, ...prev])
-            playNewOrderSound()
             toast.success('Nouvelle commande !', {
                 description: `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`,
                 duration: 8000,
@@ -46,7 +44,6 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                 if (exists) {
                     return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
                 } else if (updated.status !== 'pending') {
-                    playNewOrderSound()
                     toast.success('Nouvelle commande confirmée !', {
                         description: `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`,
                         duration: 8000,

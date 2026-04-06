@@ -38,8 +38,10 @@ export default function CompleteProfileGateModal({ open, onClose, detail }: Comp
                         Profil incomplet
                     </h2>
                     <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
-                        Pour commander, renseignez au minimum votre <strong className="text-orange-500">ville</strong> et votre{' '}
-                        <strong className="text-orange-500">téléphone</strong> dans votre profil.
+                        Pour commander (y compris avec un compte <strong className="text-slate-600 dark:text-slate-300">vendeur</strong>),
+                        renseignez au minimum votre <strong className="text-orange-500">ville</strong> et votre{' '}
+                        <strong className="text-orange-500">téléphone</strong> dans votre profil acheteur — ce sont des champs distincts
+                        des infos boutique.
                     </p>
                     {detail && (
                         <p className="text-xs text-amber-600 dark:text-amber-400 font-bold mt-3">{detail}</p>

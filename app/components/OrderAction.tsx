@@ -72,6 +72,7 @@ export default function OrderAction({
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [profileGateDetail, setProfileGateDetail] = useState<string | undefined>(undefined)
 
     const deliveryFee =
         deliveryMode === 'inter_urban'
@@ -108,6 +109,16 @@ export default function OrderAction({
             .eq('id', user.id)
             .maybeSingle()
         if (!isBuyerProfileCompleteForOrder(prof)) {
+            const missing: string[] = []
+            if (!prof?.city?.trim()) missing.push('ville')
+            if (!(prof?.phone?.trim() || prof?.whatsapp_number?.trim())) {
+                missing.push('téléphone ou WhatsApp')
+            }
+            setProfileGateDetail(
+                missing.length > 0
+                    ? `Renseignez : ${missing.join(', ')}. (Exigé pour toute commande, y compris pour un compte vendeur.)`
+                    : undefined,
+            )
             setProfileGateOpen(true)
             return
         }
@@ -212,6 +223,7 @@ export default function OrderAction({
 
             if (result.error) {
                 if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateDetail(result.error)
                     setProfileGateOpen(true)
                 }
                 setOrderError(result.error)
@@ -276,6 +288,7 @@ export default function OrderAction({
 
             if (result.error) {
                 if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateDetail(result.error)
                     setProfileGateOpen(true)
                 }
                 setOrderError(result.error)
@@ -464,7 +477,14 @@ export default function OrderAction({
             {/* MODAL DE CONNEXION */}
             <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
 
-            <CompleteProfileGateModal open={profileGateOpen} onClose={() => setProfileGateOpen(false)} />
+            <CompleteProfileGateModal
+                open={profileGateOpen}
+                onClose={() => {
+                    setProfileGateOpen(false)
+                    setProfileGateDetail(undefined)
+                }}
+                detail={profileGateDetail}
+            />
         </div>
     )
 }

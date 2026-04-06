@@ -165,7 +165,14 @@ export default function AdminVendorCampaignsPanel() {
                                 <p className="text-[10px] text-slate-400">
                                     Créée {c.created_at ? formatAdminDateTime(c.created_at) : '—'}
                                 </p>
-                                {c.payment_note ? (
+                                {c.payment_method && c.transaction_id ? (
+                                    <p className="text-xs bg-slate-50 dark:bg-slate-800 rounded-lg p-2">
+                                        <span className="font-bold text-slate-900 dark:text-white">
+                                            {c.payment_method === 'mobile_money' ? 'MTN Mobile Money' : 'Airtel Money'} · ID:{' '}
+                                            {String(c.transaction_id)}
+                                        </span>
+                                    </p>
+                                ) : c.payment_note ? (
                                     <p className="text-xs bg-slate-50 dark:bg-slate-800 rounded-lg p-2">
                                         Paiement : {c.payment_note}
                                     </p>

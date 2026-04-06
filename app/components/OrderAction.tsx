@@ -422,6 +422,7 @@ export default function OrderAction({
                                 total={grandTotal}
                                 onConfirm={() => setStep('enter_id')}
                                 onBack={() => setStep('payment_method')}
+                                sellerCity={shop?.city}
                             />
                         )}
 

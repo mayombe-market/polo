@@ -11,11 +11,8 @@ import {
     type AdDurationDays,
     type AdPlacement,
 } from '@/lib/adCampaignPricing'
-import {
-    submitVendorAdCampaign,
-    markVendorAdCampaignPaid,
-    cancelVendorAdCampaign,
-} from '@/app/actions/vendorAdCampaigns'
+import { submitVendorAdCampaign, cancelVendorAdCampaign } from '@/app/actions/vendorAdCampaigns'
+import VendorAdPaymentModal from './VendorAdPaymentModal'
 import { toast } from 'sonner'
 import { Loader2, Megaphone, Upload, ArrowLeft } from 'lucide-react'
 
@@ -32,6 +29,8 @@ type CampaignRow = {
     image_url: string
     title?: string | null
     payment_note?: string | null
+    payment_method?: string | null
+    transaction_id?: string | null
     paid_at?: string | null
     reject_reason?: string | null
     start_date?: string | null
@@ -57,8 +56,7 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
     const [description, setDescription] = useState('')
     const [placement, setPlacement] = useState<AdPlacement>('hero')
     const [durationDays, setDurationDays] = useState<AdDurationDays>(7)
-    const [paymentNote, setPaymentNote] = useState('')
-    const [payingId, setPayingId] = useState<string | null>(null)
+    const [paymentModalCampaign, setPaymentModalCampaign] = useState<CampaignRow | null>(null)
 
     const refresh = async () => {
         router.refresh()
@@ -117,24 +115,6 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
         setImageUrl('')
         setTitle('')
         setDescription('')
-        await refresh()
-    }
-
-    const onPay = async (id: string) => {
-        if (!paymentNote.trim()) {
-            toast.error('Indiquez une référence ou une preuve de paiement')
-            return
-        }
-        setLoading(true)
-        const res = await markVendorAdCampaignPaid(id, paymentNote.trim())
-        setLoading(false)
-        if (res.error) {
-            toast.error(res.error)
-            return
-        }
-        toast.success('Paiement enregistré — en attente de validation admin.')
-        setPayingId(null)
-        setPaymentNote('')
         await refresh()
     }
 
@@ -340,55 +320,21 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
 
                                 {c.status === 'pending_payment' && (
                                     <div className="mt-3 flex flex-col sm:flex-row gap-2 sm:items-end">
-                                        {payingId === c.id ? (
-                                            <>
-                                                <input
-                                                    value={paymentNote}
-                                                    onChange={(e) => setPaymentNote(e.target.value)}
-                                                    placeholder="Référence virement / preuve"
-                                                    className="flex-1 rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm"
-                                                />
-                                                <button
-                                                    type="button"
-                                                    disabled={loading}
-                                                    onClick={() => onPay(c.id)}
-                                                    className="rounded-xl bg-green-600 text-white px-4 py-2 text-[10px] font-black uppercase"
-                                                >
-                                                    Confirmer paiement
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPayingId(null)
-                                                        setPaymentNote('')
-                                                    }}
-                                                    className="text-xs text-slate-500"
-                                                >
-                                                    Annuler
-                                                </button>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setPayingId(c.id)
-                                                        setPaymentNote('')
-                                                    }}
-                                                    className="rounded-xl bg-green-600 text-white px-4 py-2 text-[10px] font-black uppercase"
-                                                >
-                                                    J&apos;ai payé
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    disabled={loading}
-                                                    onClick={() => onCancel(c.id)}
-                                                    className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500"
-                                                >
-                                                    Annuler la campagne
-                                                </button>
-                                            </>
-                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => setPaymentModalCampaign(c)}
+                                            className="rounded-xl bg-orange-500 text-white px-4 py-2 text-[10px] font-black uppercase shadow-md shadow-orange-500/20 hover:bg-orange-600"
+                                        >
+                                            Payer
+                                        </button>
+                                        <button
+                                            type="button"
+                                            disabled={loading}
+                                            onClick={() => onCancel(c.id)}
+                                            className="text-[10px] font-black uppercase text-slate-400 hover:text-red-500"
+                                        >
+                                            Annuler la campagne
+                                        </button>
                                     </div>
                                 )}
                             </div>
@@ -396,6 +342,20 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
                     ))}
                 </ul>
             )}
+
+            {paymentModalCampaign ? (
+                <VendorAdPaymentModal
+                    campaignId={paymentModalCampaign.id}
+                    campaignTitle={paymentModalCampaign.title || 'Sans titre'}
+                    priceFcfa={Number(paymentModalCampaign.price_fcfa) || 0}
+                    isOpen={!!paymentModalCampaign}
+                    onClose={() => setPaymentModalCampaign(null)}
+                    onSuccess={async () => {
+                        toast.success('Paiement déclaré — en attente de validation admin.')
+                        await refresh()
+                    }}
+                />
+            ) : null}
         </div>
     )
 }

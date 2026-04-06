@@ -1,5 +1,6 @@
 'use server'
 
+import { revalidatePath } from 'next/cache'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejectedVendorEmail } from '@/app/actions/emails'
@@ -10,6 +11,10 @@ import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscri
 import { digitsOnly, isExactly10Digits } from '@/lib/phonePaymentValidation'
 import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { orderRequiresInterUrbanDelivery, orderCityToProfileCity } from '@/lib/deliveryLocation'
+import {
+    isBuyerPaymentNoticeType,
+    type BuyerPaymentNoticeType,
+} from '@/lib/buyerPaymentNotice'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -388,6 +393,98 @@ export async function adminRejectOrder(orderId: string) {
         createNotification(orderData.user_id, 'order_rejected', 'Commande rejetée', 'Votre commande a été rejetée. Contactez le support.', `/account/dashboard?tab=orders`).catch(() => {})
     }
 
+    return { success: true }
+}
+
+/** Admin : envoie un avis paiement affiché en carte in-app chez l’acheteur (commande toujours `pending`). */
+export async function adminSetBuyerPaymentNotice(orderId: string, noticeType: string) {
+    const supabase = await getSupabase()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    if (!isBuyerPaymentNoticeType(noticeType)) return { error: 'Type d’avis invalide' }
+
+    const { data: row } = await supabase
+        .from('orders')
+        .select('id, status, user_id, order_type')
+        .eq('id', orderId)
+        .single()
+
+    if (!row) return { error: 'Commande introuvable' }
+    if (row.status !== 'pending') return { error: 'Seules les commandes en attente de paiement peuvent recevoir cet avis.' }
+
+    const now = new Date().toISOString()
+    const { error } = await supabase
+        .from('orders')
+        .update({
+            buyer_payment_notice_type: noticeType,
+            buyer_payment_notice_at: now,
+            buyer_payment_notice_dismissed_at: null,
+            updated_at: now,
+        })
+        .eq('id', orderId)
+
+    if (error) return { error: error.message }
+
+    if (row.user_id) {
+        const titles: Record<BuyerPaymentNoticeType, string> = {
+            invalid_code: 'Code de transaction à corriger',
+            partial_payment: 'Paiement incomplet',
+            no_payment: 'Paiement non reçu',
+            resend_code: 'Code de transaction requis',
+        }
+        createNotification(
+            row.user_id,
+            'payment_notice',
+            titles[noticeType as BuyerPaymentNoticeType],
+            'Ouvrez votre espace client pour lire le message et mettre à jour votre paiement.',
+            '/account/dashboard?tab=orders',
+        ).catch(() => {})
+    }
+
+    revalidatePath('/admin/orders')
+    revalidatePath('/account/dashboard')
+    return { success: true }
+}
+
+export async function buyerDismissPaymentNotice(orderId: string) {
+    const supabase = await getSupabase()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data, error } = await supabase.rpc('buyer_dismiss_payment_notice', { p_order_id: orderId })
+    if (error) return { error: error.message }
+    if (!data) return { error: 'Impossible de fermer l’avis (commande introuvable ou déjà traitée).' }
+
+    revalidatePath('/account/dashboard')
+    return { success: true }
+}
+
+export async function buyerUpdatePendingTransactionId(orderId: string, rawTransactionId: string) {
+    const supabase = await getSupabase()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data, error } = await supabase.rpc('buyer_update_pending_transaction_id', {
+        p_order_id: orderId,
+        p_raw: rawTransactionId,
+    })
+    if (error) return { error: error.message }
+    const payload = data as { ok?: boolean; error?: string }
+    if (payload && typeof payload === 'object' && payload.ok === false) {
+        return { error: payload.error || 'Erreur' }
+    }
+
+    revalidatePath('/account/dashboard')
     return { success: true }
 }
 

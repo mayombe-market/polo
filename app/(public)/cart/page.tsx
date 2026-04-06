@@ -28,6 +28,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { orderRequiresInterUrbanDelivery, orderCityToProfileCity, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
+import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
 
 type Step =
     | 'location'
@@ -125,6 +126,11 @@ export default function CartPage() {
                 sellerIds.map((sid) => sellerCities[sid])
             ),
         [sellerIds, sellerCities]
+    )
+
+    const { sellerCity: paymentSellerCity, ambiguous: ambiguousPaymentCities } = useMemo(
+        () => getSellerCityForPayment(sellerIds, sellerCities),
+        [sellerIds, sellerCities],
     )
 
     // Check user on first interaction (avec timeout)
@@ -584,6 +590,8 @@ export default function CartPage() {
                                 total={grandTotal}
                                 onConfirm={() => setStep('enter_id')}
                                 onBack={() => setStep('payment_method')}
+                                sellerCity={paymentSellerCity}
+                                ambiguousSellerCities={ambiguousPaymentCities}
                             />
                         )}
                         {step === 'enter_id' && (

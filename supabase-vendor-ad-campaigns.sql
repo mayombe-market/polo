@@ -25,6 +25,8 @@ CREATE TABLE IF NOT EXISTS vendor_ad_campaigns (
         )
     ),
     payment_note text,
+    payment_method text,
+    transaction_id text,
     paid_at timestamptz,
     reviewed_at timestamptz,
     reviewed_by uuid REFERENCES profiles(id),

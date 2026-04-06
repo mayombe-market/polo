@@ -113,11 +113,37 @@ function extractUuidFromPath(url: string, segment: 'product' | 'store'): string 
     }
 }
 
-/** Après paiement : passage en attente de validation admin */
-export async function markVendorAdCampaignPaid(campaignId: string, paymentNote: string) {
+export type VendorAdPaymentMethod = 'mobile_money' | 'airtel_money'
+
+export type DeclareVendorAdPaymentInput = {
+    payment_method: VendorAdPaymentMethod
+    /** 10 chiffres */
+    transaction_id: string
+    /** Si absent, généré automatiquement à partir de la méthode et de l’ID */
+    payment_note?: string | null
+}
+
+function labelForVendorAdPaymentMethod(m: VendorAdPaymentMethod): string {
+    return m === 'mobile_money' ? 'MTN Mobile Money' : 'Airtel Money'
+}
+
+/** Après paiement déclaré : passage en attente de validation admin */
+export async function declareVendorAdPayment(campaignId: string, input: DeclareVendorAdPaymentInput) {
     const { supabase, user } = await requireVendor()
-    const note = paymentNote?.trim()
-    if (!note) return { error: 'Indiquez une référence ou preuve de paiement' }
+
+    const method = input.payment_method
+    if (method !== 'mobile_money' && method !== 'airtel_money') {
+        return { error: 'Mode de paiement invalide' }
+    }
+
+    const digits = String(input.transaction_id ?? '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(digits)) {
+        return { error: 'Le code de transaction doit contenir exactement 10 chiffres' }
+    }
+
+    const note =
+        input.payment_note?.trim() ||
+        `${labelForVendorAdPaymentMethod(method)} — ID: ${digits}`
 
     const { data: row } = await supabase
         .from('vendor_ad_campaigns')
@@ -132,6 +158,8 @@ export async function markVendorAdCampaignPaid(campaignId: string, paymentNote: 
         .from('vendor_ad_campaigns')
         .update({
             status: 'pending_review',
+            payment_method: method,
+            transaction_id: digits,
             payment_note: note,
             paid_at: new Date().toISOString(),
             updated_at: new Date().toISOString(),

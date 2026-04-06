@@ -7,13 +7,21 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
-    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown, Trash2
+    Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown, Trash2,
+    AlertTriangle, RefreshCw, Banknote
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { adminConfirmPayment, adminReleaseFunds, adminRejectOrder, adminCancelSubscription, adminDeleteOrder } from '@/app/actions/orders'
+import {
+    adminConfirmPayment,
+    adminReleaseFunds,
+    adminRejectOrder,
+    adminCancelSubscription,
+    adminDeleteOrder,
+    adminSetBuyerPaymentNotice,
+} from '@/app/actions/orders'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -157,6 +165,38 @@ export default function AdminOrders() {
             toast.success('Commande rejetée')
         } catch (err: any) {
             toast.error('Erreur: ' + (err?.message || 'Impossible de rejeter'))
+        } finally {
+            setUpdating(null)
+        }
+    }
+
+    /** Carte in-app acheteur (sans e-mail / SMS) — commande reste en attente. */
+    const sendBuyerNotice = async (orderId: string, noticeType: string) => {
+        setUpdating(orderId)
+        try {
+            const result = await adminSetBuyerPaymentNotice(orderId, noticeType)
+            if (result.error) {
+                toast.error(result.error)
+                return
+            }
+            const now = new Date().toISOString()
+            setOrders((prev) =>
+                prev.map((o) =>
+                    o.id === orderId
+                        ? {
+                              ...o,
+                              buyer_payment_notice_type: noticeType,
+                              buyer_payment_notice_at: now,
+                              buyer_payment_notice_dismissed_at: null,
+                          }
+                        : o,
+                ),
+            )
+            toast.success('Message affiché chez l’acheteur (espace client)', {
+                description: 'Sans e-mail ni SMS — carte à la connexion.',
+            })
+        } catch (err: any) {
+            toast.error(err?.message || 'Erreur')
         } finally {
             setUpdating(null)
         }
@@ -709,14 +749,14 @@ export default function AdminOrders() {
                                     )}
 
                                     {/* ACTIONS ADMIN */}
-                                    <div className="flex flex-col sm:flex-row gap-3 pt-6 border-t border-slate-100 dark:border-slate-800">
-                                        {/* VERROU 1 : Confirmer le paiement */}
+                                    <div className="flex flex-col gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                        {/* VERROU 1 : Confirmer / rejeter */}
                                         {order.status === 'pending' && (
-                                            <>
+                                            <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                                                 <button
                                                     onClick={() => confirmPayment(order.id)}
                                                     disabled={updating === order.id}
-                                                    className="flex-1 bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                                                    className="flex-1 min-w-[140px] bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                                 >
                                                     {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
                                                     Confirmer le paiement
@@ -724,12 +764,57 @@ export default function AdminOrders() {
                                                 <button
                                                     onClick={() => rejectOrder(order.id)}
                                                     disabled={updating === order.id}
-                                                    className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
+                                                    className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50 shrink-0"
                                                 >
                                                     <Ban size={14} /> Rejeter
                                                 </button>
-                                            </>
+                                            </div>
                                         )}
+
+                                        {/* Messages acheteur in-app (pas d’e-mail / SMS) */}
+                                        {order.status === 'pending' && (
+                                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
+                                                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">
+                                                    Message client — carte sur l&apos;espace acheteur
+                                                </p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendBuyerNotice(order.id, 'invalid_code')}
+                                                        disabled={updating === order.id}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase hover:bg-amber-200/80 dark:hover:bg-amber-900/50 disabled:opacity-50 transition-colors"
+                                                    >
+                                                        <AlertTriangle size={12} /> Code invalide
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendBuyerNotice(order.id, 'partial_payment')}
+                                                        disabled={updating === order.id}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/25 text-orange-900 dark:text-orange-100 text-[9px] font-black uppercase hover:bg-orange-200/70 dark:hover:bg-orange-900/40 disabled:opacity-50 transition-colors"
+                                                    >
+                                                        <Banknote size={12} /> Paiement incomplet
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendBuyerNotice(order.id, 'no_payment')}
+                                                        disabled={updating === order.id}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-[9px] font-black uppercase hover:bg-red-200/60 dark:hover:bg-red-950/60 disabled:opacity-50 transition-colors"
+                                                    >
+                                                        <Ban size={12} /> Aucun paiement
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => sendBuyerNotice(order.id, 'resend_code')}
+                                                        disabled={updating === order.id}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 text-[9px] font-black uppercase hover:bg-violet-200/70 dark:hover:bg-violet-900/45 disabled:opacity-50 transition-colors"
+                                                    >
+                                                        <RefreshCw size={12} /> Renvoi du code
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
 
                                         {/* VERROU 2 : Libérer les fonds */}
                                         {order.status === 'delivered' && order.payout_status === 'pending' && (
@@ -794,6 +879,7 @@ export default function AdminOrders() {
                                             Supprimer de la BDD
                                         </button>
                                     </div>
+                                </div>
                                 </div>
                             )
                         })

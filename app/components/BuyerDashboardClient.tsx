@@ -36,6 +36,8 @@ import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
 import { getLoyaltyPoints } from '@/app/actions/ratings'
 import TripleRatingModal from '@/app/components/TripleRatingModal'
+import BuyerPaymentNoticeModal from '@/app/components/BuyerPaymentNoticeModal'
+import { isBuyerPaymentNoticeType } from '@/lib/buyerPaymentNotice'
 import BecomeVendorCta from '@/app/components/BecomeVendorCta'
 import { useRouter } from 'next/navigation'
 
@@ -401,6 +403,16 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     const userName = profile?.full_name || user?.email?.split('@')[0] || 'Client'
     const initials = userName.slice(0, 2).toUpperCase()
 
+    const paymentNoticeOrder = useMemo(() => {
+        return orders.find(
+            (o: any) =>
+                o.status === 'pending' &&
+                o.buyer_payment_notice_type &&
+                isBuyerPaymentNoticeType(o.buyer_payment_notice_type) &&
+                !o.buyer_payment_notice_dismissed_at,
+        )
+    }, [orders])
+
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
             {/* ===== SIDEBAR DESKTOP ===== */}
@@ -600,6 +612,14 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                 {activePage === 'profile' && <ProfilePage profile={profile} setProfile={setProfile} userId={user?.id} />}
                 {activePage === 'settings' && <SettingsPage />}
             </main>
+
+            {/* Avis paiement admin — carte in-app (sans email/SMS) */}
+            {paymentNoticeOrder && (
+                <BuyerPaymentNoticeModal
+                    order={paymentNoticeOrder}
+                    onCloseResolved={() => void refetchBuyerDashboard()}
+                />
+            )}
 
             {/* TRIPLE RATING MODAL */}
             {ratingOrder && (

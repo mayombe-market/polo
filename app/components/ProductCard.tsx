@@ -38,6 +38,7 @@ export interface ProductCardProduct {
     promo_start_date?: string | null
     promo_end_date?: string | null
     views_count?: number | null
+    created_at?: string | null
 }
 
 export type ProductCardProps = {
@@ -142,6 +143,9 @@ function ProductCardInner({
     aboveFold?: boolean
 }) {
     const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
+    const isNew = product.created_at
+        ? Date.now() - new Date(product.created_at).getTime() < 7 * 24 * 60 * 60 * 1000
+        : false
     const hasPromo = isPromoActive(product as Parameters<typeof isPromoActive>[0])
     const basePrice = typeof product.price === 'number' && Number.isFinite(product.price) ? product.price : 0
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
@@ -197,6 +201,11 @@ function ProductCardInner({
                         <div className="bg-red-600 text-white font-black uppercase shadow-lg rounded-tl-[1.5rem] rounded-br-2xl px-4 py-2.5 flex items-center gap-1.5">
                             <span className="text-[10px] md:text-xs tracking-wide">🔥 PROMO</span>
                             <span className="text-sm md:text-base font-black">-{product.promo_percentage}%</span>
+                        </div>
+                    )}
+                    {isNew && !hasPromo && (
+                        <div className="bg-emerald-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-tl-[1.5rem] rounded-br-2xl shadow-lg">
+                            Nouveau
                         </div>
                     )}
                     {isOutOfStock && (
@@ -295,7 +304,8 @@ const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
         a.stock_quantity === b.stock_quantity &&
         a.promo_percentage === b.promo_percentage &&
         a.promo_start_date === b.promo_start_date &&
-        a.promo_end_date === b.promo_end_date
+        a.promo_end_date === b.promo_end_date &&
+        a.created_at === b.created_at
     )
 }
 

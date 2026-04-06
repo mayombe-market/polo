@@ -49,22 +49,22 @@ export default async function HomePage() {
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(20),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(20),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
       supabase
         .from('products')
         .select(
-          'id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date'
+          'id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at'
         )
         .neq('category', IMMOBILIER_CATEGORY)
         .order('views_count', { ascending: false })
@@ -72,6 +72,14 @@ export default async function HomePage() {
       expiredIds
     ),
   ])
+
+  // Compteurs produits & boutiques (pour la barre de stats)
+  const [productsCountRes, vendorsCountRes] = await Promise.all([
+    supabase.from('products').select('*', { count: 'exact', head: true }),
+    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor'),
+  ])
+  const totalProducts = productsCountRes.count ?? 0
+  const totalVendors = vendorsCountRes.count ?? 0
 
   const heroCampaignRows = heroCampRes.error ? [] : heroCampRes.data ?? []
   const tileCampaignRows = tileCampRes.error ? [] : tileCampRes.data ?? []
@@ -96,6 +104,8 @@ export default async function HomePage() {
           popularProducts={popularProducts || []}
           promoProducts={promoProducts || []}
           trendProducts={trendProducts || []}
+          totalProducts={totalProducts}
+          totalVendors={totalVendors}
         />
       </div>
     </main>

@@ -46,6 +46,8 @@ interface ClientHomePageProps {
     popularProducts: any[]
     promoProducts: any[]
     trendProducts: any[]
+    totalProducts?: number
+    totalVendors?: number
 }
 
 /** Titres centrés type vitrine (Sophie) */
@@ -68,6 +70,8 @@ export default function ClientHomePage({
     popularProducts,
     promoProducts,
     trendProducts,
+    totalProducts = 0,
+    totalVendors = 0,
 }: ClientHomePageProps) {
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
     const [newsletterEmail, setNewsletterEmail] = useState('')
@@ -86,7 +90,7 @@ export default function ClientHomePage({
             const supabase = getSupabaseBrowserClient()
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date')
+                .select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at')
                 .neq('category', 'Immobilier')
                 .order('created_at', { ascending: false })
                 .range(newProductsOffset, newProductsOffset + 19)
@@ -302,6 +306,28 @@ export default function ClientHomePage({
                         </button>
                     </div>
                 </section>
+
+                {/* Compteurs produits & boutiques */}
+                {(totalProducts > 0 || totalVendors > 0) && (
+                    <section className="grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
+                        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/80 px-5 py-6 text-center dark:border-neutral-800 dark:bg-neutral-900/50">
+                            <p className="text-2xl font-black tracking-tight text-orange-500 md:text-3xl">{totalProducts.toLocaleString('fr-FR')}+</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">Produits</p>
+                        </div>
+                        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/80 px-5 py-6 text-center dark:border-neutral-800 dark:bg-neutral-900/50">
+                            <p className="text-2xl font-black tracking-tight text-orange-500 md:text-3xl">{totalVendors.toLocaleString('fr-FR')}+</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">Boutiques</p>
+                        </div>
+                        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/80 px-5 py-6 text-center dark:border-neutral-800 dark:bg-neutral-900/50">
+                            <p className="text-2xl font-black tracking-tight text-orange-500 md:text-3xl">2</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">Villes</p>
+                        </div>
+                        <div className="rounded-2xl border border-neutral-200/80 bg-neutral-50/80 px-5 py-6 text-center dark:border-neutral-800 dark:bg-neutral-900/50">
+                            <p className="text-2xl font-black tracking-tight text-orange-500 md:text-3xl">24/7</p>
+                            <p className="mt-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">Disponible</p>
+                        </div>
+                    </section>
+                )}
 
                 {/* Sélection — grille 4 (Sophie : featured) + bandeau confiance */}
                 {trendsList.length > 0 && (

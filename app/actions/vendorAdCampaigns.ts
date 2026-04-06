@@ -45,9 +45,10 @@ async function requireAdmin() {
         data: { user },
     } = await supabase.auth.getUser()
     if (!user) throw new Error('Non authentifié')
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('role, city').eq('id', user.id).single()
     if (profile?.role !== 'admin') throw new Error('Accès refusé')
-    return { supabase, user }
+    const adminCity = (profile?.city || '').trim() || ''
+    return { supabase, user, adminCity }
 }
 
 export type SubmitVendorAdCampaignInput = {
@@ -80,7 +81,7 @@ export async function submitVendorAdCampaign(input: SubmitVendorAdCampaignInput)
         if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
     } else {
         const storeId = extractUuidFromPath(link, 'store')
-        if (!storeId || storeId !== user.id) return { error: 'Lien boutique : utilisez l’URL de votre boutique' }
+        if (!storeId || storeId !== user.id) return { error: "Lien boutique : utilisez l'URL de votre boutique" }
     }
 
     const { error } = await supabase.from('vendor_ad_campaigns').insert({
@@ -119,7 +120,7 @@ export type DeclareVendorAdPaymentInput = {
     payment_method: VendorAdPaymentMethod
     /** 10 chiffres */
     transaction_id: string
-    /** Si absent, généré automatiquement à partir de la méthode et de l’ID */
+    /** Si absent, généré automatiquement à partir de la méthode et de l'ID */
     payment_note?: string | null
 }
 
@@ -255,19 +256,23 @@ export type AdminListCampaignsResult =
     | { ok: true; campaigns: any[] }
     | { ok: false; campaigns: []; error: string }
 
-/** Liste admin — ne lève pas d’exception : l’UI peut afficher `error` (accès, table manquante, RLS). */
+/** Liste admin filtree par ville. */
 export async function adminListVendorAdCampaigns(): Promise<AdminListCampaignsResult> {
     try {
-        const { supabase } = await requireAdmin()
-        const { data, error } = await supabase
-            .from('vendor_ad_campaigns')
-            .select('*')
-            .order('created_at', { ascending: false })
+        const { supabase, adminCity } = await requireAdmin()
 
-        if (error) {
-            return { ok: false, campaigns: [], error: error.message }
+        if (adminCity) {
+            const sellersRes = await supabase.from('profiles').select('id').eq('role', 'vendor').ilike('city', adminCity)
+            const ids: string[] = (sellersRes.data || []).map((s: any) => s.id as string)
+            if (ids.length === 0) return { ok: true, campaigns: [] }
+            const res = await supabase.from('vendor_ad_campaigns').select('*').in('seller_id', ids).order('created_at', { ascending: false })
+            if (res.error) return { ok: false, campaigns: [], error: res.error.message }
+            return { ok: true, campaigns: res.data || [] }
         }
-        return { ok: true, campaigns: data || [] }
+
+        const all = await supabase.from('vendor_ad_campaigns').select('*').order('created_at', { ascending: false })
+        if (all.error) return { ok: false, campaigns: [], error: all.error.message }
+        return { ok: true, campaigns: all.data || [] }
     } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : 'Erreur inconnue'
         return { ok: false, campaigns: [], error: msg }

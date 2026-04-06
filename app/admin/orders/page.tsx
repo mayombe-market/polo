@@ -37,6 +37,9 @@ export default function AdminOrders() {
     const [assigningOrder, setAssigningOrder] = useState<string | null>(null)
     const [dateFilter, setDateFilter] = useState('all')
     const [cityFilter, setCityFilter] = useState('all')
+    /** IDs des vendeurs de la ville de l'admin — null = super-admin (voit tout). */
+    const [adminSellerIds, setAdminSellerIds] = useState<Set<string> | null>(null)
+    const [adminCity, setAdminCity] = useState<string | null>(null)
 
     const supabase = getSupabaseBrowserClient()
 
@@ -84,6 +87,27 @@ export default function AdminOrders() {
                 const { user } = await safeGetUser(supabase)
                 if (!user) return
 
+                // Récupérer la ville de l'admin
+                const { data: adminProfile } = await supabase
+                    .from('profiles')
+                    .select('city')
+                    .eq('id', user.id)
+                    .maybeSingle()
+                const city = adminProfile?.city?.trim()?.toLowerCase() || null
+                setAdminCity(city)
+
+                // Si admin a une ville, récupérer les vendeurs de cette ville
+                let sellerIds: Set<string> | null = null
+                if (city) {
+                    const { data: sellers } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .eq('role', 'vendor')
+                        .ilike('city', city)
+                    sellerIds = new Set((sellers || []).map(s => s.id))
+                    setAdminSellerIds(sellerIds)
+                }
+
                 const { data, error } = await withTimeout(supabase
                     .from('orders')
                     .select('*')
@@ -91,7 +115,17 @@ export default function AdminOrders() {
                     .limit(500))
 
                 if (error) console.error('Erreur chargement:', error)
-                setOrders(data || [])
+
+                let allOrders = data || []
+                // Filtrer par vendeurs de la ville de l'admin
+                if (sellerIds) {
+                    allOrders = allOrders.filter(order => {
+                        const items = order.items || []
+                        return items.some((item: any) => sellerIds!.has(item.seller_id))
+                    })
+                }
+
+                setOrders(allOrders)
             } catch (err) {
                 console.error('Erreur:', err)
             } finally {
@@ -105,9 +139,15 @@ export default function AdminOrders() {
 
     }, [supabase])
 
-    // Realtime via shared channel
+    // Realtime via shared channel — filtre par ville admin
     useRealtime('order:insert', (payload) => {
         const order = payload.new as any
+        // Filtrer : si admin a une ville, ne montrer que les commandes de ses vendeurs
+        if (adminSellerIds) {
+            const items = order.items || []
+            const isMyCity = items.some((item: any) => adminSellerIds.has(item.seller_id))
+            if (!isMyCity) return
+        }
         setOrders(prev => [order, ...prev])
         const when = formatAdminDateTime(order.created_at)
         if (order.order_type === 'subscription') {

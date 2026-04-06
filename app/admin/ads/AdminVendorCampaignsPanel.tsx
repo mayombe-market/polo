@@ -24,8 +24,16 @@ export default function AdminVendorCampaignsPanel() {
         setLoading(true)
         setLoadError(null)
         try {
-            const data = await adminListVendorAdCampaigns()
-            setRows(Array.isArray(data) ? data : [])
+            const res = await adminListVendorAdCampaigns()
+            if ('ok' in res && res.ok) {
+                setRows(res.campaigns || [])
+            } else if ('error' in res) {
+                setRows([])
+                setLoadError(res.error)
+                toast.error(res.error)
+            } else {
+                setRows(Array.isArray(res) ? res : [])
+            }
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Erreur chargement'
             setRows([])

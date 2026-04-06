@@ -1,6 +1,16 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
+/** Libellé article pour le PDF : nom + taille / couleur si présents dans l’item commande. */
+function formatInvoiceArticleCell(item: any): string {
+    const name = item.name || '-'
+    const parts: string[] = []
+    if (item.selectedSize) parts.push(`Taille : ${item.selectedSize}`)
+    if (item.selectedColor) parts.push(`Couleur : ${item.selectedColor}`)
+    if (parts.length === 0) return name
+    return `${name}\n${parts.join(' · ')}`
+}
+
 export const generateInvoice = (order: any) => {
     try {
         const doc = new jsPDF()
@@ -81,7 +91,7 @@ export const generateInvoice = (order: any) => {
 
         // ── Articles table ──
         const tableRows = (order.items || []).map((item: any) => [
-            item.name || '-',
+            formatInvoiceArticleCell(item),
             `${fmt(item.price || 0)} F`,
             String(item.quantity || 1),
             `${fmt((item.price || 0) * (item.quantity || 1))} F`
@@ -96,7 +106,7 @@ export const generateInvoice = (order: any) => {
             bodyStyles: { fontSize: 9 },
             alternateRowStyles: { fillColor: [248, 248, 248] },
             columnStyles: {
-                0: { cellWidth: 80 },
+                0: { cellWidth: 80, overflow: 'linebreak' as const },
                 1: { halign: 'right' },
                 2: { halign: 'center', cellWidth: 20 },
                 3: { halign: 'right', fontStyle: 'bold' },

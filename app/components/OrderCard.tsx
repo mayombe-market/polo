@@ -100,8 +100,15 @@ export function OrderCard({ order }: { order: any }) {
                 {order.items?.map((item: any, idx: number) => (
                     <div key={idx} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl flex items-center gap-3 border border-transparent hover:border-slate-200 transition-all">
                         <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name} width={40} height={40} className="w-10 h-10 rounded-xl object-cover shadow-sm" />
-                        <div className="overflow-hidden">
+                        <div className="overflow-hidden min-w-0">
                             <p className="text-[9px] font-black uppercase italic truncate leading-none mb-1">{item.name}</p>
+                            {(item.selectedSize || item.selectedColor) && (
+                                <p className="text-[7px] font-bold text-slate-500 dark:text-slate-400 truncate mb-0.5">
+                                    {[item.selectedSize && `Taille ${item.selectedSize}`, item.selectedColor && `Couleur ${item.selectedColor}`]
+                                        .filter(Boolean)
+                                        .join(' · ')}
+                                </p>
+                            )}
                             <p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest">Qté: {item.quantity}</p>
                         </div>
                     </div>

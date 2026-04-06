@@ -1010,8 +1010,22 @@ function BuyerOrders({
                                     {order.items?.map((item: any, idx: number) => (
                                         <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800 p-2 rounded-xl">
                                             <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={32} height={32} className="w-8 h-8 rounded-lg object-cover" />
-                                            <div>
+                                            <div className="min-w-0">
                                                 <p className="text-[9px] font-black uppercase truncate max-w-[120px] dark:text-white">{item.name}</p>
+                                                {(item.selectedSize || item.selectedColor) && (
+                                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                                        {item.selectedSize && (
+                                                            <span className="text-[7px] font-bold bg-slate-200/80 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded">
+                                                                T. {item.selectedSize}
+                                                            </span>
+                                                        )}
+                                                        {item.selectedColor && (
+                                                            <span className="text-[7px] font-bold bg-orange-100/80 dark:bg-orange-900/30 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded">
+                                                                C. {item.selectedColor}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                )}
                                                 <p className="text-[8px] text-slate-400 font-bold">x{item.quantity}</p>
                                             </div>
                                         </div>

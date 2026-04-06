@@ -548,9 +548,16 @@ export default function AdminOrders() {
                                             {order.items?.map((item: any, idx: number) => (
                                                 <div key={idx} className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
                                                     <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
-                                                    <div className="flex-1">
+                                                    <div className="flex-1 min-w-0">
                                                         <h3 className="text-xs font-black uppercase italic leading-tight">{item.name}</h3>
-                                                        <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F x {item.quantity}</p>
+                                                        {(item.selectedSize || item.selectedColor) && (
+                                                            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                                                {[item.selectedSize && `Taille : ${item.selectedSize}`, item.selectedColor && `Couleur : ${item.selectedColor}`]
+                                                                    .filter(Boolean)
+                                                                    .join(' · ')}
+                                                            </p>
+                                                        )}
+                                                        <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F × {item.quantity}</p>
                                                     </div>
                                                 </div>
                                             ))}

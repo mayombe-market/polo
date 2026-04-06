@@ -44,6 +44,10 @@ interface OrderActionProps {
     /** false si couleur/taille requises mais non choisies — bloque l’ouverture du flux commande. */
     variantsComplete?: boolean
     onVariantsInvalid?: () => void
+    /** Quantité choisie sur la fiche produit (défaut 1) */
+    quantity?: number
+    /** Variantes enregistrées dans les items de commande (couleur / taille) */
+    selectedVariant?: { size: string; color: string }
 }
 
 export default function OrderAction({
@@ -52,6 +56,8 @@ export default function OrderAction({
     user,
     variantsComplete = true,
     onVariantsInvalid,
+    quantity: quantityProp = 1,
+    selectedVariant,
 }: OrderActionProps) {
     const [isAuthOpen, setIsAuthOpen] = useState(false)
     const [isModalOpen, setIsModalOpen] = useState(false)
@@ -73,7 +79,9 @@ export default function OrderAction({
             : deliveryMode
               ? DELIVERY_FEES[deliveryMode]
               : 0
-    const grandTotal = product.price + deliveryFee
+    const qty = Math.max(1, Math.min(99, Math.floor(Number(quantityProp)) || 1))
+    const lineTotal = product.price * qty
+    const grandTotal = lineTotal + deliveryFee
 
     // Step indicator index (4 steps: Retrait, Livraison, Paiement, Confirmation)
     const getStepIndex = () => {
@@ -183,14 +191,20 @@ export default function OrderAction({
                     id: product.id,
                     name: product.name,
                     price: product.price,
-                    quantity: 1,
+                    quantity: qty,
                     img: product.img || product.image_url || '',
                     seller_id: product.seller_id || '',
+                    ...(selectedVariant?.size?.trim()
+                        ? { selectedSize: selectedVariant.size.trim() }
+                        : {}),
+                    ...(selectedVariant?.color?.trim()
+                        ? { selectedColor: selectedVariant.color.trim() }
+                        : {}),
                 }],
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: product.price + fee,
+                total_amount: lineTotal + fee,
                 transaction_id: id,
                 delivery_mode: deliveryMode,
                 delivery_fee: fee,
@@ -239,14 +253,20 @@ export default function OrderAction({
                     id: product.id,
                     name: product.name,
                     price: product.price,
-                    quantity: 1,
+                    quantity: qty,
                     img: product.img || product.image_url || '',
                     seller_id: product.seller_id || '',
+                    ...(selectedVariant?.size?.trim()
+                        ? { selectedSize: selectedVariant.size.trim() }
+                        : {}),
+                    ...(selectedVariant?.color?.trim()
+                        ? { selectedColor: selectedVariant.color.trim() }
+                        : {}),
                 }],
                 city,
                 district,
                 payment_method: paymentMethod,
-                total_amount: product.price + fee,
+                total_amount: lineTotal + fee,
                 customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone,
                 landmark: deliveryInfo.address,
@@ -329,7 +349,8 @@ export default function OrderAction({
                             {step !== 'location' &&
                                 !['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step) && (
                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                                    {product.price.toLocaleString('fr-FR')} F + {deliveryFee.toLocaleString('fr-FR')} F{' '}
+                                    {lineTotal.toLocaleString('fr-FR')} F{qty > 1 ? ` (${qty}×)` : ''} +{' '}
+                                    {deliveryFee.toLocaleString('fr-FR')} F{' '}
                                     {deliveryMode === 'inter_urban' ? 'livraison inter-ville' : 'livraison'}
                                 </p>
                             )}

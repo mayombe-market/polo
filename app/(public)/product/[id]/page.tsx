@@ -717,6 +717,8 @@ export default function ProductDetailPage() {
                                     user={user}
                                     variantsComplete={variantsComplete}
                                     onVariantsInvalid={handleVariantsInvalid}
+                                    quantity={qty}
+                                    selectedVariant={{ size: selectedSize, color: selectedColor }}
                                 />
                             </div>
                         </div>
@@ -976,6 +978,8 @@ export default function ProductDetailPage() {
                         user={user}
                         variantsComplete={variantsComplete}
                         onVariantsInvalid={handleVariantsInvalid}
+                        quantity={qty}
+                        selectedVariant={{ size: selectedSize, color: selectedColor }}
                     />
                 </div>
             </div>

@@ -1,4 +1,5 @@
 import './globals.css'
+import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
@@ -6,6 +7,13 @@ import Script from 'next/script'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 import DiagnosticsListener from '@/app/components/DiagnosticsListener'
+import WelcomePopup from '@/app/components/WelcomePopup'
+
+const inter = Inter({
+  subsets: ['latin'],
+  display: 'swap',
+  variable: '--font-inter',
+})
 
 export const viewport = {
   themeColor: '#f97316',
@@ -83,7 +91,7 @@ const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim() || 'G-SLRPK4NETV
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className="antialiased font-sans">
+    <html lang="fr" className={`${inter.variable} antialiased dark`}>
       <head>
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
@@ -111,6 +119,9 @@ gtag('config', '${GA_MEASUREMENT_ID}');
 
         {/* Erreurs JS / promises non gérées → Console [Mayombe] */}
         <DiagnosticsListener />
+
+        {/* Popup de bienvenue (première visite uniquement) */}
+        <WelcomePopup />
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>

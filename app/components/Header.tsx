@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import HeaderContactPhones from './HeaderContactPhones'
+import TrustBar from './TrustBar'
 import { Menu, X, Bell } from 'lucide-react'
 
 // Lazy load AuthModal — ne se charge que quand l'user clique "Connexion"
@@ -30,9 +31,11 @@ export default function Header() {
 
     useEffect(() => {
         const savedMode = localStorage.getItem('darkMode')
-        const prefersDark = savedMode === 'true'
+        // Dark mode par défaut si aucune préférence sauvegardée
+        const prefersDark = savedMode === null ? true : savedMode === 'true'
         setIsDarkMode(prefersDark)
         if (prefersDark) document.documentElement.classList.add('dark')
+        else document.documentElement.classList.remove('dark')
     }, [])
 
     const toggleDarkMode = () => {
@@ -85,6 +88,7 @@ export default function Header() {
     }
 
     return (
+        <>
         <header className="relative border-b bg-white dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-50 transition-colors shadow-sm">
             <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
                 {/* 1. LOGO — hauteur ~−30 % vs h-20 / h-32 */}
@@ -296,5 +300,7 @@ export default function Header() {
 
             <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
         </header>
+        <TrustBar />
+        </>
     )
 }

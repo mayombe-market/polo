@@ -49,7 +49,7 @@ export default async function HomePage() {
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(20),
       expiredIds
     ),
     excludeExpiredSellers(

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import ProductCard from '@/app/components/ProductCard'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
 import TrendsProductSlider from '@/app/components/TrendsProductSlider'
@@ -73,6 +74,43 @@ export default function ClientHomePage({
     const [newsletterOk, setNewsletterOk] = useState(false)
     const [vendorDrawerOpen, setVendorDrawerOpen] = useState(false)
 
+    // Load-more nouveautés
+    const [displayedNewProducts, setDisplayedNewProducts] = useState<any[]>(() => newProducts.slice(0, 20))
+    const [newProductsOffset, setNewProductsOffset] = useState(newProducts.length)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [hasMoreNewProducts, setHasMoreNewProducts] = useState(newProducts.length >= 20)
+
+    const loadMoreNewProducts = useCallback(async () => {
+        setLoadingMore(true)
+        try {
+            const supabase = getSupabaseBrowserClient()
+            const { data, error } = await supabase
+                .from('products')
+                .select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date')
+                .neq('category', 'Immobilier')
+                .order('created_at', { ascending: false })
+                .range(newProductsOffset, newProductsOffset + 19)
+
+            if (error) {
+                console.error('[loadMore] Erreur:', error.message)
+                return
+            }
+
+            const moreProducts = data || []
+            if (moreProducts.length > 0) {
+                setDisplayedNewProducts(prev => [...prev, ...moreProducts])
+                setNewProductsOffset(prev => prev + moreProducts.length)
+            }
+            if (moreProducts.length < 20) {
+                setHasMoreNewProducts(false)
+            }
+        } catch (err) {
+            console.error('[loadMore] Erreur:', err)
+        } finally {
+            setLoadingMore(false)
+        }
+    }, [newProductsOffset])
+
     const safeHeroSlides = useMemo(() => (Array.isArray(heroSlides) ? heroSlides : []), [heroSlides])
     const safeTileCampaigns = useMemo(
         () => (Array.isArray(tileCampaigns) ? tileCampaigns : []),
@@ -81,7 +119,6 @@ export default function ClientHomePage({
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
 
     const trendsList = Array.isArray(trendProducts) ? trendProducts.slice(0, 30) : []
-    const newProductsRow = newProducts.slice(0, 10)
 
     /** Deux produits (hors tendances si possible) pour le triptyque — IDs normalisés en string (UUID Supabase). */
     const sideHighlightPair = useMemo(() => {
@@ -278,14 +315,6 @@ export default function ClientHomePage({
                         ) : (
                             <TrendsProductSlider products={trendsList} />
                         )}
-                        <div className="mt-10 text-center">
-                            <Link
-                                href={promoProducts.length > 0 ? '/search?filter=promo' : '/search?sort=popular'}
-                                className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500 underline decoration-neutral-300 underline-offset-8 transition hover:text-neutral-900 dark:hover:text-white"
-                            >
-                                Voir tout
-                            </Link>
-                        </div>
                         <div className="mt-12 sm:mt-14">
                             <TrustMarquee />
                         </div>
@@ -394,11 +423,11 @@ export default function ClientHomePage({
                 )}
 
                 {/* Nouveautés — grille 5 */}
-                {newProductsRow.length > 0 && (
+                {displayedNewProducts.length > 0 && (
                     <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800">
                         <SophieSectionTitle label="Nouveautés" title="Dernières arrivées" />
                         <div className="grid grid-flow-dense grid-cols-2 gap-x-3 gap-y-10 sm:grid-cols-3 md:grid-cols-5 md:gap-x-4 md:gap-y-12">
-                            {newProductsRow.map((product, index) => (
+                            {displayedNewProducts.map((product, index) => (
                                 <ProductCard
                                     key={product.id}
                                     product={product}
@@ -406,14 +435,30 @@ export default function ClientHomePage({
                                 />
                             ))}
                         </div>
-                        <div className="mt-10 text-center">
-                            <Link
-                                href="/search?sort=newest"
-                                className="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-500 underline decoration-neutral-300 underline-offset-8 transition hover:text-neutral-900 dark:hover:text-white"
-                            >
-                                Voir tout
-                            </Link>
-                        </div>
+                        {hasMoreNewProducts && (
+                            <div className="mt-10 text-center">
+                                <button
+                                    onClick={loadMoreNewProducts}
+                                    disabled={loadingMore}
+                                    className="inline-flex items-center gap-2 bg-orange-500 text-white px-10 py-4 rounded-full text-sm font-black uppercase tracking-wider hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 disabled:opacity-50 active:scale-[0.97]"
+                                >
+                                    {loadingMore ? (
+                                        <>
+                                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                            </svg>
+                                            Chargement…
+                                        </>
+                                    ) : (
+                                        <>
+                                            Afficher plus
+                                            <span className="text-lg leading-none">↓</span>
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        )}
                     </section>
                 )}
 

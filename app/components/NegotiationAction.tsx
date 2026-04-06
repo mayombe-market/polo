@@ -100,24 +100,14 @@ const NegotiationAction = ({ product, initialPrice, user, shop, onNegotiatedPric
 
     return (
         <div className="w-full space-y-4">
-            <div className="flex flex-col">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Prix actuel</span>
-                <div className="flex items-center gap-3">
-                    {isAccepted && (
-                        <p className="text-lg font-bold text-slate-400 line-through">
-                            {(initialPrice || 0).toLocaleString('fr-FR')} FCFA
-                        </p>
-                    )}
-                    <p className={`text-3xl font-black transition-all ${isAccepted ? 'text-orange-500 scale-110' : 'text-green-600'}`}>
-                        {(currentPrice || 0).toLocaleString('fr-FR')} FCFA
-                    </p>
-                    {isAccepted && (
-                        <span className="bg-orange-100 text-orange-600 text-[9px] font-black px-2 py-1 rounded-full uppercase animate-bounce">
-                            Prix Négocié
-                        </span>
-                    )}
+            {/* Prix affiché une seule fois au-dessus (page produit) — ici uniquement le statut négociation */}
+            {isAccepted && (
+                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/90 dark:bg-emerald-950/30 dark:border-emerald-800/50 px-3 py-2 text-center">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+                        ✓ Prix négocié appliqué au panier
+                    </span>
                 </div>
-            </div>
+            )}
 
             {/* Bouton : états différents selon le contexte */}
             {!isAccepted && !isOwnProduct && !checkingStatus && (

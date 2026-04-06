@@ -8,12 +8,15 @@ const ShareButtons = ({
     text,
     url,
     inline = false,
+    hideWhatsApp = false,
 }: {
     title: string
     text: string
     url: string
     /** Sans marge bas — alignement avec d’autres boutons (ex. Suivre sur la boutique) */
     inline?: boolean
+    /** Masquer le bouton WhatsApp (ex. CTA vendeur dédié sur la fiche produit) */
+    hideWhatsApp?: boolean
 }) => {
     const [copied, setCopied] = useState(false)
     const canNativeShare = typeof navigator !== 'undefined' && !!navigator.share
@@ -52,6 +55,7 @@ const ShareButtons = ({
 
     return (
         <div className={`flex items-center justify-center gap-2 ${inline ? '' : 'mb-4'}`}>
+            {!hideWhatsApp && (
             <button
                 type="button"
                 onClick={handleWhatsApp}
@@ -62,6 +66,7 @@ const ShareButtons = ({
                 </svg>
                 WhatsApp
             </button>
+            )}
 
             {/* Copier le lien */}
             <button

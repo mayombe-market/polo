@@ -322,7 +322,7 @@ export default function OrderAction({
                 onClick={handleMainClick}
                 className="w-full bg-orange-500 text-white py-4 rounded-[1.2rem] text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98]"
             >
-                Commander <ArrowRight size={16} />
+                Commander maintenant <ArrowRight size={16} />
             </button>
 
             {/* MODAL CHECKOUT — portal pour sortir du transform parent */}

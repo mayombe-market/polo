@@ -13,10 +13,9 @@ import { PasswordPolicyChecklist } from '@/app/components/PasswordPolicyChecklis
 /** getSession après recovery : réseaux lents / mobile. */
 const AUTH_WAIT_MS = NETWORK_TIMEOUT_MS
 /**
- * updateUser vers GoTrue peut dépasser 25s (latence, Cloudflare, réseau instable).
- * Ne pas confondre avec les timeouts middleware (inchangés).
+ * updateUser vers GoTrue — timeout raisonnable.
  */
-const UPDATE_WAIT_MS = 90_000
+const UPDATE_WAIT_MS = 30_000
 
 function authErrorMessage(err: unknown): string {
     if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
@@ -308,7 +307,6 @@ function ResetPasswordForm() {
             }
 
             setDone(true)
-            setTimeout(() => router.push('/'), 2500)
         } catch (err: unknown) {
             console.error('[reset-password] exception:', err)
             setError(translateAuthErrorMessage(authErrorMessage(err)))
@@ -362,8 +360,20 @@ function ResetPasswordForm() {
                     <div className="w-16 h-16 rounded-full mx-auto mb-4 bg-green-500/10 border border-green-500/30 flex items-center justify-center text-3xl">
                         ✅
                     </div>
-                    <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Mot de passe mis à jour</h1>
-                    <p className="text-slate-500 text-sm">Redirection vers l&apos;accueil…</p>
+                    <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Mot de passe mis à jour !</h1>
+                    <p className="text-slate-400 text-sm mb-6">
+                        Votre mot de passe a bien été changé. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
+                    </p>
+                    <Link
+                        href="/"
+                        className="inline-block w-full py-4 rounded-[14px] text-center font-bold text-white no-underline transition-transform hover:scale-[1.02]"
+                        style={{
+                            background: 'linear-gradient(135deg, #E8A838, #D4782F)',
+                            boxShadow: '0 8px 24px rgba(232,168,56,0.25)',
+                        }}
+                    >
+                        Retour à l&apos;accueil
+                    </Link>
                 </div>
             </div>
         )
@@ -415,8 +425,13 @@ function ResetPasswordForm() {
                         {loading && (
                             <span className="w-5 h-5 rounded-full border-[2.5px] border-white/20 border-t-white animate-spin inline-block" />
                         )}
-                        {loading ? 'Enregistrement…' : 'Enregistrer le mot de passe'}
+                        {loading ? 'Enregistrement en cours…' : 'Enregistrer le mot de passe'}
                     </button>
+                    {loading && (
+                        <p className="text-slate-500 text-xs text-center">
+                            Veuillez patienter, cela peut prendre quelques secondes…
+                        </p>
+                    )}
 
                     <Link href="/" className="block text-center text-orange-400 text-sm font-semibold hover:text-orange-300 no-underline">
                         ← Retour à l&apos;accueil

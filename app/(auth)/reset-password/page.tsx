@@ -252,13 +252,24 @@ function ResetPasswordForm() {
                 body: JSON.stringify({ password }),
             })
 
+            const body = await res.json().catch(() => ({}))
+
             if (!res.ok) {
-                const body = await res.json().catch(() => ({}))
                 const msg = body?.msg || body?.message || body?.error_description || `Erreur ${res.status}`
-                console.error('[reset-password] API error:', msg)
+                console.error('[reset-password] API error:', res.status, msg)
                 setError(translateAuthErrorMessage(msg))
                 return
             }
+
+            // Vérifier que Supabase a bien confirmé le changement
+            if (body?.error || body?.msg) {
+                console.error('[reset-password] Unexpected response:', body)
+                setError(body.msg || body.error || 'Le changement a échoué.')
+                return
+            }
+
+            // Déconnecter pour forcer une reconnexion propre avec le nouveau mot de passe
+            await client.auth.signOut().catch(() => {})
 
             setDone(true)
         } catch (err: unknown) {
@@ -316,7 +327,7 @@ function ResetPasswordForm() {
                     </div>
                     <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Mot de passe mis à jour !</h1>
                     <p className="text-slate-400 text-sm mb-6">
-                        Votre mot de passe a bien été changé. Vous pouvez maintenant vous connecter avec votre nouveau mot de passe.
+                        Votre mot de passe a bien été changé. Connectez-vous avec votre nouveau mot de passe.
                     </p>
                     <Link
                         href="/"
@@ -326,7 +337,7 @@ function ResetPasswordForm() {
                             boxShadow: '0 8px 24px rgba(232,168,56,0.25)',
                         }}
                     >
-                        Retour à l&apos;accueil
+                        Se connecter
                     </Link>
                 </div>
             </div>

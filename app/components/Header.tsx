@@ -99,7 +99,7 @@ export default function Header() {
                 </Link>
 
                 <div className="hidden md:flex flex-1 min-w-0 items-center gap-3 lg:gap-4 mx-2">
-                    <HeaderContactPhones />
+                    <HeaderContactPhones variant="inline" />
                     <div className="flex min-w-0 flex-1 justify-center max-w-xl">
                         <SearchBar compact />
                     </div>
@@ -212,6 +212,11 @@ export default function Header() {
                         {mobileMenuOpen ? <X size={24} className="text-slate-700 dark:text-slate-200" /> : <Menu size={24} className="text-slate-700 dark:text-slate-200" />}
                     </button>
                 </div>
+            </div>
+
+            {/* Mobile : numéros visibles (desktop les a entre logo et recherche) */}
+            <div className="md:hidden border-t border-slate-200/80 bg-slate-50/80 px-2 py-2 dark:border-slate-800 dark:bg-slate-950/40">
+                <HeaderContactPhones variant="banner" />
             </div>
 
             {/* MOBILE MENU DRAWER */}

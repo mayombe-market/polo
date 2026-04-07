@@ -1,7 +1,9 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
+import ImmobilierCategoryClient from '@/app/components/category/ImmobilierCategoryClient'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
@@ -59,6 +61,8 @@ export default async function CategoryPage(props: any) {
 
     let category: any = null;
     let products: any[] = [];
+    let immoSubCounts: Record<string, number> = {};
+    let immoTotal = 0;
 
     try {
         const { data: catData } = await supabase
@@ -90,6 +94,21 @@ export default async function CategoryPage(props: any) {
 
             const { data: prodData } = await productQuery.order('created_at', { ascending: false }).limit(100);
             products = prodData || [];
+
+            if (category.name === 'Immobilier') {
+                const safeCategoryName = sanitizePostgrestValue(categoryName);
+                const { data: countRows } = await excludeExpiredSellers(
+                    supabase.from('products').select('subcategory'),
+                    expiredIds,
+                )
+                    .or(`category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`)
+                    .limit(2500);
+                for (const r of countRows || []) {
+                    immoTotal += 1;
+                    const s = ((r as { subcategory?: string | null }).subcategory || '').trim();
+                    if (s) immoSubCounts[s] = (immoSubCounts[s] || 0) + 1;
+                }
+            }
         }
     } catch (e) {
         console.error("Erreur de récupération :", e);
@@ -97,6 +116,30 @@ export default async function CategoryPage(props: any) {
     // Si on n'a toujours pas de catégorie après le try/catch
     if (!category) {
         return <div className="p-20 text-center font-bold">Chargement ou catégorie "{categoryName}" introuvable... <br /><Link href="/" className="text-green-600 underline">Retour</Link></div>
+    }
+
+    if (category.name === 'Immobilier') {
+        return (
+            <div className="flex min-h-screen flex-col bg-white dark:bg-slate-900">
+                <Suspense
+                    fallback={
+                        <div className="flex min-h-[50vh] flex-col items-center justify-center gap-3 text-slate-500">
+                            <div className="h-8 w-8 animate-spin rounded-full border-2 border-green-600 border-t-transparent" aria-hidden />
+                            <p className="text-sm font-medium">Chargement…</p>
+                        </div>
+                    }
+                >
+                    <ImmobilierCategoryClient
+                        category={category}
+                        products={products}
+                        categoryName={categoryName}
+                        selectedSub={selectedSub}
+                        immoSubCounts={immoSubCounts}
+                        immoTotal={immoTotal}
+                    />
+                </Suspense>
+            </div>
+        )
     }
 
     return (

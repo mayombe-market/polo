@@ -7,8 +7,6 @@ const ITEMS = [
     'Paiement via Mobile Money/Airtel Money ou cash',
     'Vendeurs sélectionnés avec soin',
     'Expédition sous un temps record',
-    'Retour sous 24h',
-    'Retours simples et gratuits',
     'Service client à votre écoute',
 ]
 

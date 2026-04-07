@@ -195,8 +195,8 @@ export default function Header() {
                     )}
                 </nav>
 
-                {/* MOBILE: cart + hamburger */}
-                <div className="flex md:hidden items-center gap-3">
+                {/* MOBILE: hamburger à gauche est déjà le logo, on met notif + panier + hamburger à droite */}
+                <div className="flex md:hidden items-center gap-2">
                     {user && (
                         <Link href={notifDashboardLink} className="relative p-1">
                             <Bell size={20} className="text-slate-600 dark:text-slate-300" />
@@ -218,6 +218,11 @@ export default function Header() {
                 </div>
             </div>
 
+            {/* Mobile : barre de recherche pleine largeur (toujours visible, comme Jumia) */}
+            <div className="md:hidden border-t border-slate-200/60 dark:border-slate-800 px-3 py-2 bg-white dark:bg-slate-900">
+                <SearchBar />
+            </div>
+
             {/* Mobile : numéros visibles (desktop les a entre logo et recherche) */}
             <div className="md:hidden border-t border-slate-200/80 bg-slate-50/80 px-2 py-2 dark:border-slate-800 dark:bg-slate-950/40">
                 <HeaderContactPhones variant="banner" />
@@ -226,12 +231,7 @@ export default function Header() {
             {/* MOBILE MENU DRAWER */}
             {mobileMenuOpen && (
                 <div className="md:hidden border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pb-4">
-                    {/* Search */}
-                    <div className="py-3">
-                        <SearchBar compact />
-                    </div>
-
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 pt-2">
                         <div className="px-0 py-2">
                             <BecomeVendorCta variant="header-mobile" onNavigate={() => setMobileMenuOpen(false)} />
                         </div>

@@ -74,8 +74,6 @@ export default function ClientHomePage({
     totalVendors = 0,
 }: ClientHomePageProps) {
     const [currentAdIndex, setCurrentAdIndex] = useState(0)
-    const [newsletterEmail, setNewsletterEmail] = useState('')
-    const [newsletterOk, setNewsletterOk] = useState(false)
     const [vendorDrawerOpen, setVendorDrawerOpen] = useState(false)
 
     // Load-more nouveautés
@@ -180,15 +178,6 @@ export default function ClientHomePage({
         }, 6000)
         return () => clearInterval(interval)
     }, [safeHeroSlides.length])
-
-    const onNewsletterSubmit = (e: React.FormEvent) => {
-        e.preventDefault()
-        if (newsletterEmail.includes('@')) {
-            setNewsletterOk(true)
-            setNewsletterEmail('')
-            setTimeout(() => setNewsletterOk(false), 4000)
-        }
-    }
 
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
@@ -488,41 +477,26 @@ export default function ClientHomePage({
                     </section>
                 )}
 
-                {/* Newsletter + bandeau livraison (noir) */}
+                {/* Blocs confiance premium */}
                 <section className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-6">
                     <div className="border border-neutral-200 bg-white px-8 py-12 dark:border-neutral-800 dark:bg-neutral-950">
                         <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-neutral-400">
-                            Newsletter
+                            Communaute
                         </p>
-                        <h3 className="mt-3 text-2xl font-light text-neutral-900 dark:text-white">Restez informé</h3>
-                        {newsletterOk ? (
-                            <p className="mt-6 text-sm text-neutral-600 dark:text-neutral-400">Merci — à très bientôt.</p>
-                        ) : (
-                            <form onSubmit={onNewsletterSubmit} className="mt-8 flex flex-col gap-4 sm:flex-row sm:items-end">
-                                <label className="sr-only" htmlFor="home-newsletter-email">
-                                    E-mail
-                                </label>
-                                <input
-                                    id="home-newsletter-email"
-                                    type="email"
-                                    value={newsletterEmail}
-                                    onChange={(e) => setNewsletterEmail(e.target.value)}
-                                    placeholder="votre@email.com"
-                                    className="min-h-12 flex-1 border-b border-neutral-300 bg-transparent px-0 py-2 text-sm text-neutral-900 outline-none placeholder:text-neutral-400 focus:border-neutral-900 dark:border-neutral-600 dark:text-white dark:focus:border-white"
-                                />
-                                <button
-                                    type="submit"
-                                    className="min-h-12 shrink-0 border border-neutral-900 bg-neutral-900 px-8 text-xs font-semibold uppercase tracking-[0.2em] text-white transition hover:bg-white hover:text-neutral-900 dark:border-white dark:bg-white dark:text-neutral-900 dark:hover:bg-transparent dark:hover:text-white"
-                                >
-                                    S&apos;inscrire
-                                </button>
-                            </form>
-                        )}
+                        <h3 className="mt-3 text-2xl font-light text-neutral-900 dark:text-white">
+                            Plus qu&apos;un marche, une communaute
+                        </h3>
+                        <p className="mt-5 text-sm leading-relaxed text-neutral-500 dark:text-neutral-400">
+                            Des milliers de Congolais nous font confiance pour acheter et vendre chaque jour. Chaque commande soutient un entrepreneur local.
+                        </p>
                     </div>
                     <div className="flex flex-col justify-center bg-neutral-900 px-8 py-12 text-center text-white md:px-12">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/60">Avantage</p>
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.35em] text-white/60">Simple</p>
                         <p className="mt-4 text-xl font-light leading-snug md:text-2xl">
-                            Livraison soignée sur Brazzaville & Pointe-Noire
+                            Trouve. Commande. Livre.
+                        </p>
+                        <p className="mx-auto mt-4 max-w-xs text-sm text-white/50">
+                            En 3 clics, recevez vos articles chez vous a Brazzaville ou Pointe-Noire.
                         </p>
                     </div>
                 </section>

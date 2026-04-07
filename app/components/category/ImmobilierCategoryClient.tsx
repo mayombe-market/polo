@@ -12,10 +12,13 @@ import ImmobilierFilters, {
 import { parseListingExtras } from '@/lib/realEstateListing'
 
 const IMMO_SUBS = [
-    'Terrains & Parcelles',
-    'Maisons & Villas (Vente)',
-    'Locations (Maisons, Studios, Chambres)',
-    'Commerces & Bureaux (Magasins à louer)',
+    'Maisons',
+    'Appartements',
+    'Terrains',
+    'Luxe',
+    'Hôtels',
+    'Villas',
+    'Locations',
 ] as const
 
 type Props = {

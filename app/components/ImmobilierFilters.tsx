@@ -14,32 +14,53 @@ type SubDef = {
 
 const SUB_DEFS: SubDef[] = [
     {
-        name: 'Terrains & Parcelles',
-        label: 'Terrains & Parcelles',
+        name: 'Maisons',
+        label: 'Maisons',
+        icon: '🏠',
+        inactiveClass:
+            'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950',
+    },
+    {
+        name: 'Appartements',
+        label: 'Appartements',
+        icon: '🏢',
+        inactiveClass:
+            'border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800/50 dark:text-slate-300 dark:hover:bg-slate-800',
+    },
+    {
+        name: 'Terrains',
+        label: 'Terrains',
         icon: '🌿',
         inactiveClass:
             'border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-950',
     },
     {
-        name: 'Maisons & Villas (Vente)',
-        label: 'Maisons & Villas (Vente)',
-        icon: '🏡',
+        name: 'Luxe',
+        label: 'Luxe',
+        icon: '💎',
         inactiveClass:
-            'border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-950/50 dark:text-blue-300 dark:hover:bg-blue-950',
+            'border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300 dark:hover:bg-purple-950',
     },
     {
-        name: 'Locations (Maisons, Studios, Chambres)',
-        label: 'Locations',
-        icon: '🔑',
+        name: 'Hôtels',
+        label: 'Hôtels',
+        icon: '🏨',
         inactiveClass:
             'border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/50 dark:text-amber-300 dark:hover:bg-amber-950',
     },
     {
-        name: 'Commerces & Bureaux (Magasins à louer)',
-        label: 'Commerces & Bureaux',
-        icon: '🏢',
+        name: 'Villas',
+        label: 'Villas',
+        icon: '🏖️',
         inactiveClass:
-            'border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-950/50 dark:text-purple-300 dark:hover:bg-purple-950',
+            'border border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100 dark:border-rose-800 dark:bg-rose-950/50 dark:text-rose-300 dark:hover:bg-rose-950',
+    },
+    {
+        name: 'Locations',
+        label: 'Locations',
+        icon: '🔑',
+        inactiveClass:
+            'border border-teal-200 bg-teal-50 text-teal-700 hover:bg-teal-100 dark:border-teal-800 dark:bg-teal-950/50 dark:text-teal-300 dark:hover:bg-teal-950',
     },
 ]
 

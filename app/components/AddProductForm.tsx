@@ -114,7 +114,7 @@ function validateProductStep(s: number, ctx: ProductFormValidationContext): stri
             if (!reLandLegalStatus.trim()) return "Indiquez le statut du terrain / document (titre foncier, arrêté…)."
             if (subcategoryNeedsSurface(selectedSubcategory)) {
                 const s = parseFloat(reSurfaceValue.replace(',', '.'))
-                if (!Number.isFinite(s) || s <= 0) return "La surface (m² ou ares) est requise pour Terrains & Parcelles."
+                if (!Number.isFinite(s) || s <= 0) return "La surface (m² ou ares) est requise pour les Terrains."
             }
             return null
         }

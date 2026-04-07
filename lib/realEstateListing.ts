@@ -7,10 +7,13 @@ export const IMMOBILIER_CATEGORY = 'Immobilier'
 
 /** Sous-catégories proposées dans le formulaire vendeur (alignées stratégie Congo). */
 export const IMMOBILIER_SUBCATEGORIES = [
-    'Terrains & Parcelles',
-    'Maisons & Villas (Vente)',
-    'Locations (Maisons, Studios, Chambres)',
-    'Commerces & Bureaux (Magasins à louer)',
+    'Maisons',
+    'Appartements',
+    'Terrains',
+    'Luxe',
+    'Hôtels',
+    'Villas',
+    'Locations',
 ] as const
 
 export type RealEstateOfferType = 'vente' | 'location'

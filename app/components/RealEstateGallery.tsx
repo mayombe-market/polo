@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 
@@ -12,6 +12,8 @@ type Props = {
 export default function RealEstateGallery({ images, productName }: Props) {
     const list = useMemo(() => (Array.isArray(images) ? images.filter(Boolean) : []), [images])
     const [lightbox, setLightbox] = useState<number | null>(null)
+    const [imgOpacity, setImgOpacity] = useState(1)
+    const touchStartX = useRef<number | null>(null)
 
     const open = useCallback((i: number) => setLightbox(i), [])
     const close = useCallback(() => setLightbox(null), [])
@@ -45,6 +47,33 @@ export default function RealEstateGallery({ images, productName }: Props) {
             document.body.style.overflow = prev
         }
     }, [lightbox, close, goPrev, goNext])
+
+    useEffect(() => {
+        if (lightbox === null) {
+            setImgOpacity(1)
+            return
+        }
+        setImgOpacity(0)
+        const t = window.setTimeout(() => setImgOpacity(1), 40)
+        return () => clearTimeout(t)
+    }, [lightbox])
+
+    const onLightboxTouchStart = useCallback((e: React.TouchEvent) => {
+        const t = e.touches[0] ?? e.changedTouches[0]
+        if (t) touchStartX.current = t.clientX
+    }, [])
+
+    const onLightboxTouchEnd = useCallback(
+        (e: React.TouchEvent) => {
+            if (touchStartX.current === null) return
+            const dx = e.changedTouches[0].clientX - touchStartX.current
+            touchStartX.current = null
+            if (Math.abs(dx) <= 50) return
+            if (dx > 50) goPrev()
+            else goNext()
+        },
+        [goPrev, goNext],
+    )
 
     if (list.length === 0) {
         return (
@@ -207,10 +236,7 @@ export default function RealEstateGallery({ images, productName }: Props) {
                     aria-modal="true"
                     aria-label="Galerie photos"
                 >
-                    <div className="flex items-center justify-between px-4 py-3 text-white/90">
-                        <span className="text-sm font-medium tabular-nums">
-                            {lightbox + 1} / {list.length}
-                        </span>
+                    <div className="flex shrink-0 items-center justify-end px-4 py-3 text-white/90">
                         <button
                             type="button"
                             onClick={close}
@@ -220,7 +246,11 @@ export default function RealEstateGallery({ images, productName }: Props) {
                             <X className="h-6 w-6" />
                         </button>
                     </div>
-                    <div className="relative flex flex-1 items-center justify-center px-2 pb-8">
+                    <div
+                        className="relative flex min-h-0 flex-1 touch-pan-y items-center justify-center px-2"
+                        onTouchStart={onLightboxTouchStart}
+                        onTouchEnd={onLightboxTouchEnd}
+                    >
                         <button
                             type="button"
                             onClick={goPrev}
@@ -229,7 +259,10 @@ export default function RealEstateGallery({ images, productName }: Props) {
                         >
                             <ChevronLeft className="h-8 w-8" />
                         </button>
-                        <div className="relative mx-auto h-[min(85vh,900px)] w-full max-w-6xl">
+                        <div
+                            className="relative mx-auto h-[min(85vh,900px)] w-full max-w-6xl transition-opacity duration-300"
+                            style={{ opacity: imgOpacity }}
+                        >
                             <CloudinaryImage
                                 src={list[lightbox]}
                                 alt={`${productName} — ${lightbox + 1}`}
@@ -248,6 +281,9 @@ export default function RealEstateGallery({ images, productName }: Props) {
                             <ChevronRight className="h-8 w-8" />
                         </button>
                     </div>
+                    <p className="shrink-0 pb-[max(12px,env(safe-area-inset-bottom,0px))] text-center text-sm text-white/70 tabular-nums">
+                        {lightbox + 1} / {list.length}
+                    </p>
                 </div>
             )}
         </>

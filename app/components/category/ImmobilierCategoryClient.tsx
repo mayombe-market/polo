@@ -1,8 +1,9 @@
 'use client'
 
 import Link from 'next/link'
-import { useCallback, useMemo, useState, useEffect, type FormEvent } from 'react'
+import { useCallback, useMemo, useState, useEffect, type CSSProperties, type FormEvent } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import { ChevronDown } from 'lucide-react'
 import RealEstateCard from '@/app/components/RealEstateCard'
 import ImmobilierFilters, {
     type ImmoChipCity,
@@ -62,6 +63,41 @@ function filterByTextQuery(products: any[], q: string) {
     })
 }
 
+/** Filtre budget / chambres / surface — appliqué après chips + recherche. */
+function applyAdvancedFilters(
+    products: any[],
+    budgetMin: string,
+    budgetMax: string,
+    minBedrooms: string,
+    surfaceMin: string,
+) {
+    const minP = budgetMin.trim() === '' ? null : Number(budgetMin)
+    const maxP = budgetMax.trim() === '' ? null : Number(budgetMax)
+    const minBed =
+        minBedrooms.trim() === '' ? null : Number.parseInt(minBedrooms, 10)
+    const minSurf = surfaceMin.trim() === '' ? null : Number(surfaceMin)
+
+    return products.filter((p) => {
+        const price = Number(p.price)
+        if (minP !== null && !Number.isNaN(minP) && price < minP) return false
+        if (maxP !== null && !Number.isNaN(maxP) && price > maxP) return false
+
+        if (minBed !== null && !Number.isNaN(minBed)) {
+            const ex = parseListingExtras(p.listing_extras)
+            const beds = ex?.bedrooms
+            if (beds == null || Number(beds) < minBed) return false
+        }
+
+        if (minSurf !== null && !Number.isNaN(minSurf)) {
+            const ex = parseListingExtras(p.listing_extras)
+            const surf = ex?.surfaceValue
+            if (surf == null || Number(surf) < minSurf) return false
+        }
+
+        return true
+    })
+}
+
 export default function ImmobilierCategoryClient({
     category,
     products,
@@ -78,6 +114,15 @@ export default function ImmobilierCategoryClient({
     const [subSelect, setSubSelect] = useState<string>(() => selectedSub || '')
     const [chipCity, setChipCity] = useState<ImmoChipCity>(null)
     const [chipOffer, setChipOffer] = useState<ImmoChipOffer>(null)
+    /** Filtre > 5 M FCFA (bannière « Biens de prestige »). */
+    const [prestigeFilter, setPrestigeFilter] = useState(false)
+
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+    const [budgetMin, setBudgetMin] = useState('')
+    const [budgetMax, setBudgetMax] = useState('')
+    /** Valeur numérique min (1–5) ou '' = pas de filtre chambres. */
+    const [minBedrooms, setMinBedrooms] = useState('')
+    const [surfaceMin, setSurfaceMin] = useState('')
 
     useEffect(() => {
         setQ(qParam)
@@ -99,7 +144,57 @@ export default function ImmobilierCategoryClient({
         return list
     }, [products, chipCity, chipOffer, qParam])
 
+    const afterAdvancedFilters = useMemo(
+        () => applyAdvancedFilters(filteredProducts, budgetMin, budgetMax, minBedrooms, surfaceMin),
+        [filteredProducts, budgetMin, budgetMax, minBedrooms, surfaceMin],
+    )
+
+    const displayProducts = useMemo(() => {
+        if (!prestigeFilter) return afterAdvancedFilters
+        return afterAdvancedFilters.filter((p) => Number(p.price) > 5_000_000)
+    }, [afterAdvancedFilters, prestigeFilter])
+
+    const resetAdvancedFilters = useCallback(() => {
+        setBudgetMin('')
+        setBudgetMax('')
+        setMinBedrooms('')
+        setSurfaceMin('')
+    }, [])
+
     const encodedCat = encodeURIComponent(categoryName)
+
+    /** Remet chips, filtres avancés, prestige et efface la recherche URL (`q`). */
+    const resetAllFilters = useCallback(() => {
+        setChipCity(null)
+        setChipOffer(null)
+        setPrestigeFilter(false)
+        resetAdvancedFilters()
+        setShowAdvancedFilters(false)
+        const params = new URLSearchParams()
+        if (selectedSub?.trim()) params.set('sub', selectedSub.trim())
+        const qs = params.toString()
+        router.push(qs ? `/category/${encodedCat}?${qs}` : `/category/${encodedCat}`)
+    }, [router, encodedCat, selectedSub, resetAdvancedFilters])
+
+    const cardFadeStyle = (index: number): CSSProperties => ({
+        animationDelay: index < 12 ? `${index * 60}ms` : '0ms',
+    })
+
+    const inputClass =
+        'w-full rounded-lg border border-slate-300 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900 dark:text-white'
+
+    const firstGridChunk = displayProducts.slice(0, 6)
+    const restGridChunk = displayProducts.slice(6)
+
+    const handlePrestigeBannerClick = () => {
+        setPrestigeFilter((prev) => !prev)
+        setTimeout(() => {
+            document.getElementById('immo-product-grid')?.scrollIntoView({
+                behavior: 'smooth',
+                block: 'start',
+            })
+        }, 80)
+    }
 
     const onSearch = useCallback(
         (e: FormEvent) => {
@@ -180,7 +275,7 @@ export default function ImmobilierCategoryClient({
                 </div>
             </section>
 
-            <div className="mx-auto w-full max-w-7xl flex-grow px-4 py-12">
+            <div className="mx-auto w-full max-w-7xl flex-grow overflow-x-hidden px-4 py-12">
                 <nav className="mb-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link href="/" className="transition-colors hover:text-green-600 dark:hover:text-green-500">
                         Accueil
@@ -200,17 +295,192 @@ export default function ImmobilierCategoryClient({
                     onChipOffer={setChipOffer}
                 />
 
-                <div className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-                    {filteredProducts && filteredProducts.length > 0 ? (
-                        filteredProducts.map((p: any) => <RealEstateCard key={p.id} product={p} />)
+                <button
+                    type="button"
+                    onClick={() => setShowAdvancedFilters((v) => !v)}
+                    className="mt-3 flex cursor-pointer items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                >
+                    Filtres avancés
+                    <ChevronDown
+                        size={16}
+                        className={`shrink-0 transition-transform duration-200 ${showAdvancedFilters ? 'rotate-180' : ''}`}
+                        aria-hidden
+                    />
+                </button>
+
+                <div
+                    className={`overflow-hidden transition-[max-height] duration-300 ease-in-out ${
+                        showAdvancedFilters ? 'max-h-[560px]' : 'max-h-0'
+                    }`}
+                >
+                    <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-800/50">
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                            <label className="block min-w-0">
+                                <span className="sr-only">Budget minimum</span>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    placeholder="Budget min (FCFA)"
+                                    value={budgetMin}
+                                    onChange={(e) => setBudgetMin(e.target.value)}
+                                    className={inputClass}
+                                />
+                            </label>
+                            <label className="block min-w-0">
+                                <span className="sr-only">Budget maximum</span>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    placeholder="Budget max (FCFA)"
+                                    value={budgetMax}
+                                    onChange={(e) => setBudgetMax(e.target.value)}
+                                    className={inputClass}
+                                />
+                            </label>
+                            <label className="block min-w-0">
+                                <span className="sr-only">Nombre de chambres minimum</span>
+                                <select
+                                    value={minBedrooms}
+                                    onChange={(e) => setMinBedrooms(e.target.value)}
+                                    className={inputClass}
+                                >
+                                    <option value="">Chambres</option>
+                                    <option value="1">1+</option>
+                                    <option value="2">2+</option>
+                                    <option value="3">3+</option>
+                                    <option value="4">4+</option>
+                                    <option value="5">5+</option>
+                                </select>
+                            </label>
+                            <label className="block min-w-0">
+                                <span className="sr-only">Surface minimum</span>
+                                <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    min={0}
+                                    placeholder="Surface min (m²)"
+                                    value={surfaceMin}
+                                    onChange={(e) => setSurfaceMin(e.target.value)}
+                                    className={inputClass}
+                                />
+                            </label>
+                        </div>
+                        <div className="mt-3 flex justify-end gap-2">
+                            <button
+                                type="button"
+                                onClick={resetAdvancedFilters}
+                                className="cursor-pointer text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+                            >
+                                Réinitialiser
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowAdvancedFilters(false)}
+                                className="cursor-pointer rounded-lg bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                            >
+                                Appliquer
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    {displayProducts.length === 1
+                        ? '1 bien trouvé'
+                        : `${displayProducts.length} biens trouvés`}
+                </p>
+
+                <div
+                    id="immo-product-grid"
+                    className="mt-10 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3"
+                >
+                    {displayProducts.length > 0 ? (
+                        <>
+                            {firstGridChunk.map((p: any, i: number) => (
+                                <div
+                                    key={p.id}
+                                    className="min-w-0 opacity-0 animate-fadeIn"
+                                    style={cardFadeStyle(i)}
+                                >
+                                    <RealEstateCard product={p} />
+                                </div>
+                            ))}
+                            {displayProducts.length >= 1 && (
+                                <div className="col-span-full flex flex-col gap-6 rounded-2xl bg-gradient-to-r from-slate-900 to-slate-800 p-8 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-amber-400">
+                                            EXCLUSIF
+                                        </p>
+                                        <h2 className="mt-1 text-xl font-medium text-white">Biens de prestige</h2>
+                                        <p className="mt-2 max-w-md text-sm text-slate-400">
+                                            Découvrez notre sélection de biens haut de gamme à Brazzaville &amp;
+                                            Pointe-Noire
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        onClick={handlePrestigeBannerClick}
+                                        className="w-full shrink-0 cursor-pointer rounded-lg bg-white px-6 py-3 text-sm font-medium text-slate-900 transition hover:bg-slate-100 sm:w-auto"
+                                    >
+                                        {prestigeFilter ? 'Voir tous les prix' : 'Découvrir'}
+                                    </button>
+                                </div>
+                            )}
+                            {restGridChunk.map((p: any, i: number) => (
+                                <div
+                                    key={p.id}
+                                    className="min-w-0 opacity-0 animate-fadeIn"
+                                    style={cardFadeStyle(6 + i)}
+                                >
+                                    <RealEstateCard product={p} />
+                                </div>
+                            ))}
+                        </>
                     ) : (
-                        <div className="col-span-full py-32 text-center">
-                            <div className="mb-4 text-5xl">📦</div>
-                            <p className="font-medium italic text-slate-400">
-                                Aucun article trouvé dans &quot;{selectedSub || category.name}&quot;.
+                        <div className="col-span-full py-16 text-center">
+                            <div className="mb-4 text-5xl" aria-hidden>
+                                🏠
+                            </div>
+                            <p className="font-medium text-slate-500 dark:text-slate-400">
+                                Aucun bien ne correspond à vos critères
                             </p>
+                            <p className="mt-1 text-sm text-slate-400">
+                                Essayez d&apos;élargir votre recherche
+                            </p>
+                            <button
+                                type="button"
+                                onClick={resetAllFilters}
+                                className="mt-4 cursor-pointer text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+                            >
+                                Réinitialiser les filtres
+                            </button>
                         </div>
                     )}
+                </div>
+
+                <div className="mt-12 rounded-2xl bg-slate-50 p-8 text-center dark:bg-slate-800/50">
+                    <h2 className="text-lg font-medium text-slate-900 dark:text-white">
+                        Vous avez un bien à vendre ou à louer ?
+                    </h2>
+                    <p className="mt-2 text-sm text-slate-500">
+                        Publiez votre annonce et touchez des acheteurs qualifiés
+                    </p>
+                    <div className="mt-6 flex flex-col flex-wrap items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+                        <Link
+                            href="/vendor/dashboard"
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-700"
+                        >
+                            Publier mon annonce
+                        </Link>
+                        <Link
+                            href="/devenir-vendeur"
+                            className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                        >
+                            Devenir vendeur
+                        </Link>
+                    </div>
                 </div>
             </div>
         </>

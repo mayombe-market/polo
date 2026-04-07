@@ -37,10 +37,10 @@ export default function RealEstateCard({ product }: Props) {
     const isLocation = extras?.offerType === 'location'
 
     return (
-        <div className="group relative">
+        <div className="relative">
             <Link
                 href={`/product/${product.id}`}
-                className="block overflow-hidden rounded-2xl border border-slate-200 bg-white transition-all hover:border-blue-300 hover:shadow-md dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-600 dark:hover:shadow-lg"
+                className="group block overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm transition-shadow duration-300 hover:border-blue-300 hover:shadow-xl dark:border-slate-800 dark:bg-slate-900/50 dark:hover:border-blue-600 dark:hover:shadow-xl"
             >
                 <div className="relative aspect-[4/3] overflow-hidden bg-slate-100 dark:bg-slate-800">
                     <CloudinaryImage
@@ -49,7 +49,7 @@ export default function RealEstateCard({ product }: Props) {
                         alt={product.name || 'Annonce'}
                         fill
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                        className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
+                        className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
 
                     <div className="pointer-events-none absolute left-3 top-3 z-[1] flex max-w-[75%] flex-col gap-1.5">

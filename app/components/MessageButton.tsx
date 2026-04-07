@@ -12,13 +12,18 @@ const MessageButton = ({
     /** Immobilier : la conversation est créée avec un compte `role = admin`, pas l’annonceur. */
     realEstateContactAdmin,
     viewerIsAdmin,
+    /** Libellé affiché (défaut : « Contacter »). */
+    label = 'Contacter',
+    /** Surcharge des classes Tailwind du bouton (ex. variante primaire fiche immo). */
+    className,
 }: {
     sellerId: string
     productId?: string
     user: any
     realEstateContactAdmin?: boolean
-    /** Masque le bouton pour les admins (ils reçoivent les demandes ailleurs). */
     viewerIsAdmin?: boolean
+    label?: string
+    className?: string
 }) => {
     const [loading, setLoading] = useState(false)
     const router = useRouter()
@@ -56,7 +61,7 @@ const MessageButton = ({
                 return
             }
 
-            if (result.conversation) {
+            if ('conversation' in result && result.conversation) {
                 router.push(`/account/dashboard?tab=messages&conv=${result.conversation.id}`)
             }
         } catch (err) {
@@ -71,14 +76,18 @@ const MessageButton = ({
 
     if (realEstateContactAdmin && viewerIsAdmin) return null
 
+    const defaultClassName =
+        'flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-full font-black uppercase text-[10px] tracking-widest bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50'
+
     return (
         <button
             onClick={handleClick}
             disabled={loading}
-            className="flex items-center gap-1.5 px-4 py-2.5 rounded-full font-black uppercase text-[10px] tracking-widest bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
+            type="button"
+            className={className ?? defaultClassName}
         >
             {loading ? <Loader2 size={13} className="animate-spin" /> : <MessageCircle size={13} />}
-            Contacter
+            {label}
         </button>
     )
 }

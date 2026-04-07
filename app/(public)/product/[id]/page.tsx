@@ -342,7 +342,9 @@ export default function ProductDetailPage() {
 
     return (
         <div
-            className={`${isImmo ? 'max-w-5xl' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20`}
+            className={`${isImmo ? 'max-w-5xl' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20 ${
+                isImmo ? 'pb-[calc(6rem+env(safe-area-inset-bottom,0px))]' : ''
+            }`}
         >
 
             <div>
@@ -469,6 +471,185 @@ export default function ProductDetailPage() {
                                             )}
                                         </div>
                                     )}
+
+                                    {typeof product.description === 'string' && product.description.trim().length > 0 && (
+                                        <div className="mt-8">
+                                            <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                                Description
+                                            </h3>
+                                            <p className="whitespace-pre-line text-sm leading-relaxed text-slate-600 dark:text-slate-400">
+                                                {product.description.trim()}
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {realEstateExtras && (
+                                        <div className="mt-8">
+                                            <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                                Localisation
+                                            </h3>
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                <div>
+                                                    <p className="text-xs uppercase tracking-wider text-slate-400">Ville</p>
+                                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                        {realEstateExtras.city?.trim() || '—'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-xs uppercase tracking-wider text-slate-400">Quartier</p>
+                                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                        {realEstateExtras.district?.trim() || '—'}
+                                                    </p>
+                                                </div>
+                                                {realEstateExtras.street?.trim() ? (
+                                                    <div className="col-span-full">
+                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
+                                                            Rue / Repère
+                                                        </p>
+                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                            {realEstateExtras.street.trim()}
+                                                        </p>
+                                                    </div>
+                                                ) : null}
+                                            </div>
+                                            <div className="mt-4 flex h-40 items-center justify-center rounded-xl bg-slate-100 text-center text-sm font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                                📍{' '}
+                                                {[realEstateExtras.district?.trim(), realEstateExtras.city?.trim()]
+                                                    .filter(Boolean)
+                                                    .join(', ') || 'Carte'}
+                                            </div>
+                                            <p className="mt-2 text-xs italic text-slate-400">
+                                                Adresse exacte communiquée après contact
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {realEstateExtras &&
+                                        (realEstateExtras.propertyCondition?.trim() ||
+                                            realEstateExtras.landLegalStatus?.trim() ||
+                                            realEstateExtras.legalNotes?.trim()) && (
+                                        <div className="mt-8">
+                                            <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                                Informations juridiques
+                                            </h3>
+                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                                                {realEstateExtras.propertyCondition?.trim() && (
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
+                                                            État du bien
+                                                        </p>
+                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                            {realEstateExtras.propertyCondition.trim()}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {realEstateExtras.landLegalStatus?.trim() && (
+                                                    <div>
+                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
+                                                            Statut foncier
+                                                        </p>
+                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                            {realEstateExtras.landLegalStatus.trim()}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                                {realEstateExtras.legalNotes?.trim() && (
+                                                    <div className="col-span-full">
+                                                        <p className="text-xs uppercase tracking-wider text-slate-400">Notes</p>
+                                                        <p className="whitespace-pre-line text-sm font-medium text-slate-700 dark:text-slate-200">
+                                                            {realEstateExtras.legalNotes.trim()}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-900/20 dark:text-amber-400">
+                                                ⚠️ Mayombe Market ne garantit pas les informations juridiques. Vérifiez
+                                                auprès des autorités compétentes.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {shop && (
+                                        <div className="mt-8">
+                                            <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                                Agent responsable
+                                            </h3>
+                                            <div
+                                                id="agent-section"
+                                                className="rounded-2xl border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-900"
+                                            >
+                                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+                                                    <div className="flex min-w-0 flex-1 items-center gap-4">
+                                                        {shop.avatar_url ? (
+                                                            <img
+                                                                src={shop.avatar_url}
+                                                                alt={shopName}
+                                                                className="h-12 w-12 shrink-0 rounded-full object-cover"
+                                                            />
+                                                        ) : (
+                                                            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-slate-200 text-sm font-semibold text-slate-600 dark:bg-slate-700 dark:text-slate-300">
+                                                                {(shopName[0] || '?').toUpperCase()}
+                                                            </div>
+                                                        )}
+                                                        <div className="min-w-0">
+                                                            <p className="text-sm font-medium text-slate-900 dark:text-white">
+                                                                {shopName}
+                                                            </p>
+                                                            <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+                                                                <span className="text-xs text-slate-500">
+                                                                    Agent immobilier
+                                                                </span>
+                                                                {shop.verification_status === 'verified' && (
+                                                                    <VerifiedBadge />
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-shrink-0 sm:flex-row sm:justify-end">
+                                                        {shop.phone?.trim() && (
+                                                            <a
+                                                                href={`tel:${String(shop.phone).replace(/\s/g, '')}`}
+                                                                className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-center text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
+                                                            >
+                                                                Appeler
+                                                            </a>
+                                                        )}
+                                                        <MessageButton
+                                                            sellerId={product.seller_id}
+                                                            productId={product.id}
+                                                            user={user}
+                                                            realEstateContactAdmin
+                                                            viewerIsAdmin={viewerIsAdmin}
+                                                            label="Message"
+                                                            className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 sm:w-auto"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Link
+                                                href={`/store/${shop.id}`}
+                                                className="mt-2 inline-block text-xs text-blue-600 hover:underline dark:text-blue-400"
+                                            >
+                                                Voir la boutique →
+                                            </Link>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-8">
+                                        <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                            Partager cette annonce
+                                        </h3>
+                                        <ShareButtons
+                                            title={product.name}
+                                            text={`Découvre ${product.name} — ${sharePriceText} sur Mayombe Market !`}
+                                            url={
+                                                typeof window !== 'undefined'
+                                                    ? `${window.location.origin}/product/${product.id}`
+                                                    : ''
+                                            }
+                                            inline
+                                        />
+                                    </div>
                                 </div>
                             </>
                         ) : (
@@ -865,8 +1046,9 @@ export default function ProductDetailPage() {
 
                     </div>
 
-                    {/* ── Onglets (pleine largeur) — z-index SOUS le sticky panel boutons ── */}
-                    <div className={`relative z-0 isolate min-w-0 ${!isImmo ? 'lg:col-span-2 lg:mt-10' : ''}`}>
+                    {/* ── Onglets (pleine largeur) — z-index SOUS le sticky panel boutons — produits classiques uniquement ── */}
+                    {!isImmo && (
+                    <div className="relative z-0 isolate min-w-0 lg:col-span-2 lg:mt-10">
                     <div className="h-px bg-slate-100/80 dark:bg-white/[0.06] mb-8" />
 
                     {/* ── TABS ── */}
@@ -1060,6 +1242,7 @@ export default function ProductDetailPage() {
                         </div>
                     )}
                     </div>
+                    )}
 
                 </div>
 
@@ -1077,51 +1260,75 @@ export default function ProductDetailPage() {
                     <p className="text-red-600 dark:text-red-400 text-sm font-bold">Ce vendeur est actuellement inactif.</p>
                     <p className="text-red-400 dark:text-red-500 text-xs mt-1">Ce produit n'est pas disponible pour le moment.</p>
                 </div>
-            ) : isRealEstateProduct(product) ? (
-                <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-amber-200/60 dark:border-amber-800/40 px-5 py-3.5 pb-6 flex flex-col gap-2 z-40">
-                    <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 font-semibold">
-                        Annonce immobilière — écrivez à l’administration Mayombe Market pour une visite ou une mise en relation.
-                    </p>
-                    <div className="flex justify-center w-full" onClick={(e) => e.stopPropagation()}>
-                        <MessageButton
-                            sellerId={product.seller_id}
-                            productId={product.id}
-                            user={user}
-                            realEstateContactAdmin
-                            viewerIsAdmin={viewerIsAdmin}
-                        />
+            ) : isImmo ? (
+                <div className="fixed bottom-0 left-0 right-0 z-50 border-t border-slate-200 bg-white px-4 py-3 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] dark:border-slate-800 dark:bg-slate-900 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))]">
+                    <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-bold text-slate-900 dark:text-white sm:text-lg">
+                                {formatRealEstatePriceLabel(Number(effectivePrice), realEstateExtras)}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                                {realEstateExtras?.offerType === 'location' ? 'Location' : 'Vente'}
+                            </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => setLiked(!liked)}
+                                className="rounded-lg border border-slate-300 p-3 transition hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800"
+                                aria-label={liked ? 'Retirer des favoris' : 'Ajouter aux favoris'}
+                            >
+                                <Heart
+                                    size={18}
+                                    className={liked ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}
+                                    fill={liked ? 'currentColor' : 'none'}
+                                />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    document.getElementById('agent-section')?.scrollIntoView({
+                                        behavior: 'smooth',
+                                        block: 'center',
+                                    })
+                                }
+                                className="rounded-lg bg-blue-600 px-4 py-3 text-sm font-bold text-white transition hover:bg-blue-700 sm:px-6"
+                            >
+                                Contacter l&apos;agent
+                            </button>
+                        </div>
                     </div>
                 </div>
             ) : (
-            <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40 lg:hidden">
-                {/* Total */}
-                <div className="flex-shrink-0 mr-1">
-                    <p className="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Total</p>
-                    <p className="text-xl font-extrabold" style={{ color: '#E8A838' }}>{fmt(total)} F</p>
-                </div>
+                <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40 lg:hidden">
+                    {/* Total */}
+                    <div className="flex-shrink-0 mr-1">
+                        <p className="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Total</p>
+                        <p className="text-xl font-extrabold" style={{ color: '#E8A838' }}>{fmt(total)} F</p>
+                    </div>
 
-                {/* Add to cart */}
-                <div className="flex-1 min-w-0">
-                    <AddToCartButton
-                        product={{ ...product, price: effectivePrice }}
-                        selectedVariant={{ size: selectedSize, color: selectedColor }}
-                        onVariantsInvalid={handleVariantsInvalid}
-                    />
-                </div>
+                    {/* Add to cart */}
+                    <div className="flex-1 min-w-0">
+                        <AddToCartButton
+                            product={{ ...product, price: effectivePrice }}
+                            selectedVariant={{ size: selectedSize, color: selectedColor }}
+                            onVariantsInvalid={handleVariantsInvalid}
+                        />
+                    </div>
 
-                {/* Order */}
-                <div className="flex-1 min-w-0">
-                    <OrderAction
-                        product={{ ...product, price: effectivePrice }}
-                        shop={shop}
-                        user={user}
-                        variantsComplete={variantsComplete}
-                        onVariantsInvalid={handleVariantsInvalid}
-                        quantity={qty}
-                        selectedVariant={{ size: selectedSize, color: selectedColor }}
-                    />
+                    {/* Order */}
+                    <div className="flex-1 min-w-0">
+                        <OrderAction
+                            product={{ ...product, price: effectivePrice }}
+                            shop={shop}
+                            user={user}
+                            variantsComplete={variantsComplete}
+                            onVariantsInvalid={handleVariantsInvalid}
+                            quantity={qty}
+                            selectedVariant={{ size: selectedSize, color: selectedColor }}
+                        />
+                    </div>
                 </div>
-            </div>
             )}
 
             <SizeGuideModal open={sizeGuideOpen} onClose={() => setSizeGuideOpen(false)} />

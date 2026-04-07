@@ -9,7 +9,7 @@ import ImmobilierFilters, {
     type ImmoChipCity,
     type ImmoChipOffer,
 } from '@/app/components/ImmobilierFilters'
-import { parseListingExtras } from '@/lib/realEstateListing'
+import { parseListingExtras, IMMO_SUBCATEGORY_HEADERS } from '@/lib/realEstateListing'
 
 const IMMO_SUBS = [
     'Maisons',
@@ -389,11 +389,18 @@ export default function ImmobilierCategoryClient({
                     </div>
                 </div>
 
-                <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
-                    {displayProducts.length === 1
-                        ? '1 bien trouvé'
-                        : `${displayProducts.length} biens trouvés`}
-                </p>
+                <div className="mt-6 mb-2">
+                    <h2 className="text-lg font-medium text-slate-900 dark:text-white">
+                        {IMMO_SUBCATEGORY_HEADERS[selectedSub || '']?.title ?? 'Tous les biens disponibles'}
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        {IMMO_SUBCATEGORY_HEADERS[selectedSub || '']?.subtitle ?? 'Cliquez sur un bien pour voir tous les détails'}
+                        {' — '}
+                        {displayProducts.length === 1
+                            ? '1 bien trouvé'
+                            : `${displayProducts.length} biens trouvés`}
+                    </p>
+                </div>
 
                 <div
                     id="immo-product-grid"

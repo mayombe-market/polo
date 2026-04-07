@@ -35,6 +35,7 @@ import {
     isRealEstateProduct,
     parseListingExtras,
     formatRealEstatePriceLabel,
+    IMMO_SUBCATEGORY_BADGES,
 } from '@/lib/realEstateListing'
 import RealEstateListingDetails from '@/app/components/RealEstateListingDetails'
 import ProductDetailSkeleton from '@/app/components/skeletons/ProductDetailSkeleton'
@@ -403,17 +404,26 @@ export default function ProductDetailPage() {
                                 <div className="mt-6 space-y-4">
                                     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-x-8">
                                         <div className="min-w-0 flex-1">
-                                            {realEstateExtras && (
-                                                <span
-                                                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                                        realEstateExtras.offerType === 'location'
-                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/80 dark:text-emerald-200'
-                                                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-200'
-                                                    }`}
-                                                >
-                                                    {realEstateExtras.offerType === 'location' ? 'Location' : 'Vente'}
-                                                </span>
-                                            )}
+                                            {(() => {
+                                                const subBadge = IMMO_SUBCATEGORY_BADGES[product.subcategory || '']
+                                                return subBadge ? (
+                                                    <span
+                                                        className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold ${subBadge.bg} ${subBadge.text} ${subBadge.darkBg} ${subBadge.darkText}`}
+                                                    >
+                                                        {subBadge.label}
+                                                    </span>
+                                                ) : realEstateExtras ? (
+                                                    <span
+                                                        className={`inline-flex rounded-full px-3 py-1 text-[11px] font-bold ${
+                                                            realEstateExtras.offerType === 'location'
+                                                                ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/80 dark:text-emerald-200'
+                                                                : 'bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-200'
+                                                        }`}
+                                                    >
+                                                        {realEstateExtras.offerType === 'location' ? 'Location' : 'Vente'}
+                                                    </span>
+                                                ) : null
+                                            })()}
                                             <h1 className="mt-2 text-2xl font-medium leading-tight tracking-tight text-slate-900 dark:text-white">
                                                 {product.name}
                                             </h1>
@@ -483,47 +493,56 @@ export default function ProductDetailPage() {
                                         </div>
                                     )}
 
+                                    {/* ── Caractéristiques & services (grille avec dots bleus) ── */}
+                                    {realEstateExtras && (
+                                        <div className="mt-8">
+                                            <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
+                                                Caractéristiques & services
+                                            </h3>
+                                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                                {[
+                                                    realEstateExtras.city?.trim() && `Ville : ${realEstateExtras.city.trim()}`,
+                                                    realEstateExtras.district?.trim() && `Quartier : ${realEstateExtras.district.trim()}`,
+                                                    realEstateExtras.street?.trim() && `Repère : ${realEstateExtras.street.trim()}`,
+                                                    realEstateExtras.propertyCondition?.trim() && `État : ${realEstateExtras.propertyCondition.trim()}`,
+                                                    realEstateExtras.landLegalStatus?.trim() && `Statut foncier : ${realEstateExtras.landLegalStatus.trim()}`,
+                                                    realEstateExtras.surfaceValue != null && realEstateExtras.surfaceValue > 0 &&
+                                                        `Surface : ${realEstateExtras.surfaceValue} ${realEstateExtras.surfaceUnit === 'ares' ? 'ares' : 'm²'}`,
+                                                    realEstateExtras.bedrooms != null && realEstateExtras.bedrooms > 0 &&
+                                                        `${realEstateExtras.bedrooms} chambre${realEstateExtras.bedrooms > 1 ? 's' : ''}`,
+                                                    realEstateExtras.rooms != null && realEstateExtras.rooms > 0 &&
+                                                        `${realEstateExtras.rooms} pièce${realEstateExtras.rooms > 1 ? 's' : ''}`,
+                                                    realEstateExtras.offerType === 'location' ? 'Type : Location' : 'Type : Vente',
+                                                    realEstateExtras.priceNegotiable && 'Prix négociable',
+                                                ].filter(Boolean).map((item, i) => (
+                                                    <div key={i} className="flex items-center gap-2.5 text-sm text-slate-600 dark:text-slate-400">
+                                                        <div className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-600" />
+                                                        {item}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ── Localisation ── */}
                                     {realEstateExtras && (
                                         <div className="mt-8">
                                             <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
                                                 Localisation
                                             </h3>
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                                <div>
-                                                    <p className="text-xs uppercase tracking-wider text-slate-400">Ville</p>
-                                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                        {realEstateExtras.city?.trim() || '—'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs uppercase tracking-wider text-slate-400">Quartier</p>
-                                                    <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                        {realEstateExtras.district?.trim() || '—'}
-                                                    </p>
-                                                </div>
-                                                {realEstateExtras.street?.trim() ? (
-                                                    <div className="col-span-full">
-                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
-                                                            Rue / Repère
-                                                        </p>
-                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                            {realEstateExtras.street.trim()}
-                                                        </p>
-                                                    </div>
-                                                ) : null}
-                                            </div>
-                                            <div className="mt-4 flex h-40 items-center justify-center rounded-xl bg-slate-100 text-center text-sm font-medium text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+                                            <div className="flex h-40 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-center text-sm font-medium text-slate-500 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-400">
                                                 📍{' '}
                                                 {[realEstateExtras.district?.trim(), realEstateExtras.city?.trim()]
                                                     .filter(Boolean)
                                                     .join(', ') || 'Carte'}
                                             </div>
-                                            <p className="mt-2 text-xs italic text-slate-400">
-                                                Adresse exacte communiquée après contact
+                                            <p className="mt-2 text-xs text-slate-400">
+                                                📍 {[realEstateExtras.district?.trim(), realEstateExtras.city?.trim()].filter(Boolean).join(', ')}
                                             </p>
                                         </div>
                                     )}
 
+                                    {/* ── Informations juridiques ── */}
                                     {realEstateExtras &&
                                         (realEstateExtras.propertyCondition?.trim() ||
                                             realEstateExtras.landLegalStatus?.trim() ||
@@ -532,36 +551,34 @@ export default function ProductDetailPage() {
                                             <h3 className="mb-3 text-base font-medium text-slate-900 dark:text-white">
                                                 Informations juridiques
                                             </h3>
-                                            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                                                {realEstateExtras.propertyCondition?.trim() && (
-                                                    <div>
-                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
-                                                            État du bien
-                                                        </p>
-                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                            {realEstateExtras.propertyCondition.trim()}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {realEstateExtras.landLegalStatus?.trim() && (
-                                                    <div>
-                                                        <p className="text-xs uppercase tracking-wider text-slate-400">
-                                                            Statut foncier
-                                                        </p>
-                                                        <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                            {realEstateExtras.landLegalStatus.trim()}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                                {realEstateExtras.legalNotes?.trim() && (
-                                                    <div className="col-span-full">
-                                                        <p className="text-xs uppercase tracking-wider text-slate-400">Notes</p>
-                                                        <p className="whitespace-pre-line text-sm font-medium text-slate-700 dark:text-slate-200">
-                                                            {realEstateExtras.legalNotes.trim()}
-                                                        </p>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            <table className="w-full text-sm">
+                                                <tbody>
+                                                    {realEstateExtras.propertyCondition?.trim() && (
+                                                        <tr className="border-b border-slate-100 dark:border-slate-800">
+                                                            <td className="py-2.5 text-slate-500 dark:text-slate-400">État du bien</td>
+                                                            <td className="py-2.5 text-right font-medium text-slate-800 dark:text-slate-200">
+                                                                {realEstateExtras.propertyCondition.trim()}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                    {realEstateExtras.landLegalStatus?.trim() && (
+                                                        <tr className="border-b border-slate-100 dark:border-slate-800">
+                                                            <td className="py-2.5 text-slate-500 dark:text-slate-400">Statut foncier</td>
+                                                            <td className="py-2.5 text-right font-medium text-slate-800 dark:text-slate-200">
+                                                                {realEstateExtras.landLegalStatus.trim()}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                    {realEstateExtras.legalNotes?.trim() && (
+                                                        <tr>
+                                                            <td className="py-2.5 text-slate-500 dark:text-slate-400">Notes</td>
+                                                            <td className="py-2.5 text-right font-medium text-slate-800 dark:text-slate-200 whitespace-pre-line">
+                                                                {realEstateExtras.legalNotes.trim()}
+                                                            </td>
+                                                        </tr>
+                                                    )}
+                                                </tbody>
+                                            </table>
                                             <p className="mt-4 rounded-lg bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-900/20 dark:text-amber-400">
                                                 ⚠️ Mayombe Market ne garantit pas les informations juridiques. Vérifiez
                                                 auprès des autorités compétentes.

@@ -6,6 +6,7 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import {
     parseListingExtras,
     formatRealEstatePriceLabel,
+    IMMO_SUBCATEGORY_BADGES,
     type RealEstateListingExtrasV1,
 } from '@/lib/realEstateListing'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
@@ -35,6 +36,7 @@ export default function RealEstateCard({ product }: Props) {
         '/placeholder-image.svg'
 
     const isLocation = extras?.offerType === 'location'
+    const subBadge = IMMO_SUBCATEGORY_BADGES[product.subcategory || ''] ?? null
 
     return (
         <div className="relative">
@@ -53,15 +55,11 @@ export default function RealEstateCard({ product }: Props) {
                     />
 
                     <div className="pointer-events-none absolute left-3 top-3 z-[1] flex max-w-[75%] flex-col gap-1.5">
-                        {extras && (
+                        {subBadge && (
                             <span
-                                className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
-                                    extras.offerType === 'location'
-                                        ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/80 dark:text-emerald-200'
-                                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-200'
-                                }`}
+                                className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${subBadge.bg} ${subBadge.text} ${subBadge.darkBg} ${subBadge.darkText}`}
                             >
-                                {extras.offerType === 'location' ? 'Location' : 'Vente'}
+                                {subBadge.label}
                             </span>
                         )}
                         {hasPromo && (
@@ -87,16 +85,22 @@ export default function RealEstateCard({ product }: Props) {
 
                     <h3 className="mt-1 truncate text-sm text-slate-600 dark:text-slate-300">{product.name}</h3>
 
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                        {extras && typeof extras.bedrooms === 'number' && extras.bedrooms > 0 && (
-                            <span className="shrink-0">🛏 {extras.bedrooms} ch.</span>
-                        )}
-                        {extras && surfaceLabel(extras) && (
-                            <span className="shrink-0">📐 {surfaceLabel(extras)}</span>
-                        )}
-                        {extras?.district?.trim() ? (
-                            <span className="min-w-0 truncate">📍 {extras.district.trim()}</span>
-                        ) : null}
+                    <div className="mt-2 flex flex-wrap items-center gap-x-1 text-xs text-slate-500 dark:text-slate-400">
+                        {(() => {
+                            const chips: string[] = []
+                            if (extras && typeof extras.bedrooms === 'number' && extras.bedrooms > 0)
+                                chips.push(`🛏 ${extras.bedrooms} ch.`)
+                            if (extras && surfaceLabel(extras))
+                                chips.push(`📐 ${surfaceLabel(extras)}`)
+                            if (extras?.district?.trim())
+                                chips.push(`📍 ${extras.district.trim()}`)
+                            return chips.slice(0, 3).map((c, i) => (
+                                <span key={i} className="shrink-0 truncate">
+                                    {i > 0 && <span className="mx-1 text-slate-300 dark:text-slate-600">·</span>}
+                                    {c}
+                                </span>
+                            ))
+                        })()}
                     </div>
                 </div>
             </Link>

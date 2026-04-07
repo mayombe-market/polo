@@ -14,6 +14,7 @@ import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import ProductGallery from '../../../components/ProductGallery'
+import RealEstateGallery from '@/app/components/RealEstateGallery'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import NegotiationAction from '../../../components/NegotiationAction'
 import AddToCartButton from '../../../components/AddToCartButton'
@@ -341,7 +342,7 @@ export default function ProductDetailPage() {
 
     return (
         <div
-            className={`${isImmo ? 'max-w-lg' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20`}
+            className={`${isImmo ? 'max-w-5xl' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20`}
         >
 
             <div>
@@ -394,7 +395,85 @@ export default function ProductDetailPage() {
                     }`}
                 >
                     <div className={`min-w-0 ${!isImmo ? 'relative z-0' : ''}`}>
-                        <ProductGallery images={allImages} productName={product.name} priorityMain />
+                        {isImmo ? (
+                            <>
+                                <RealEstateGallery images={allImages} productName={product.name} />
+                                <div className="mt-6 space-y-4">
+                                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-x-8">
+                                        <div className="min-w-0 flex-1">
+                                            {realEstateExtras && (
+                                                <span
+                                                    className={`inline-flex rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${
+                                                        realEstateExtras.offerType === 'location'
+                                                            ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/80 dark:text-emerald-200'
+                                                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/80 dark:text-blue-200'
+                                                    }`}
+                                                >
+                                                    {realEstateExtras.offerType === 'location' ? 'Location' : 'Vente'}
+                                                </span>
+                                            )}
+                                            <h1 className="mt-2 text-2xl font-medium leading-tight tracking-tight text-slate-900 dark:text-white">
+                                                {product.name}
+                                            </h1>
+                                            {realEstateExtras &&
+                                                (realEstateExtras.district?.trim() || realEstateExtras.city?.trim()) && (
+                                                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                                                        📍{' '}
+                                                        {[realEstateExtras.district?.trim(), realEstateExtras.city?.trim()]
+                                                            .filter(Boolean)
+                                                            .join(', ')}
+                                                    </p>
+                                                )}
+                                        </div>
+                                        <div className="shrink-0 sm:text-right">
+                                            <p className="inline-flex flex-wrap items-baseline gap-1.5">
+                                                <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                                                    {formatRealEstatePriceLabel(Number(effectivePrice), realEstateExtras)}
+                                                </span>
+                                                {realEstateExtras?.offerType === 'location' && (
+                                                    <span className="text-sm font-medium text-slate-500 dark:text-slate-400">
+                                                        /mois
+                                                    </span>
+                                                )}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {realEstateExtras && (
+                                        <div className="flex flex-wrap gap-2">
+                                            {realEstateExtras.bedrooms != null && realEstateExtras.bedrooms > 0 && (
+                                                <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                                    🛏 {realEstateExtras.bedrooms} chambres
+                                                </span>
+                                            )}
+                                            {realEstateExtras.rooms != null && realEstateExtras.rooms > 0 && (
+                                                <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                                    🚿 {realEstateExtras.rooms} pièces
+                                                </span>
+                                            )}
+                                            {realEstateExtras.surfaceValue != null &&
+                                                realEstateExtras.surfaceValue > 0 && (
+                                                    <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                                        📐 {realEstateExtras.surfaceValue}{' '}
+                                                        {realEstateExtras.surfaceUnit === 'ares' ? 'ares' : 'm²'}
+                                                    </span>
+                                                )}
+                                            {realEstateExtras.propertyCondition?.trim() && (
+                                                <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                                    État : {realEstateExtras.propertyCondition.trim()}
+                                                </span>
+                                            )}
+                                            {realEstateExtras.landLegalStatus?.trim() && (
+                                                <span className="rounded-lg bg-slate-100 px-4 py-2 text-sm text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                                                    Juridique : {realEstateExtras.landLegalStatus.trim()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </>
+                        ) : (
+                            <ProductGallery images={allImages} productName={product.name} priorityMain />
+                        )}
                     </div>
 
                     <div
@@ -471,18 +550,20 @@ export default function ProductDetailPage() {
                     </Link>
 
                     {/* Category badge */}
-                    {product.subcategory && (
+                    {product.subcategory && !isImmo && (
                         <span className="inline-block text-[10px] bg-white/60 dark:bg-white/[0.06] backdrop-blur-md text-slate-500 dark:text-slate-400 px-3 py-1.5 rounded-full font-semibold mb-3 uppercase tracking-wider border border-white/10">
                             {product.subcategory}
                         </span>
                     )}
 
-                    {realEstateExtras && <RealEstateListingDetails extras={realEstateExtras} />}
+                    {realEstateExtras && !isImmo && <RealEstateListingDetails extras={realEstateExtras} />}
 
                     {/* Product name */}
+                    {!isImmo && (
                     <h1 className="text-3xl lg:text-[2rem] font-semibold text-slate-900 dark:text-white leading-[1.15] mb-2 tracking-tight">
                         {product.name}
                     </h1>
+                    )}
 
                     {/* Prix unique (rouge) — hors immo */}
                     {!isImmo && showNegotiationBlock && (

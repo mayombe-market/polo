@@ -231,3 +231,17 @@ body {
 .header-phone-pulse p {
     color: inherit;
 }
+
+/* Trust bar marquee */
+@keyframes trustMarquee {
+    0% { transform: translateX(0); }
+    100% { transform: translateX(-50%); }
+}
+
+.trust-marquee {
+    animation: trustMarquee 20s linear infinite;
+}
+
+.trust-marquee:hover {
+    animation-play-state: paused;
+}

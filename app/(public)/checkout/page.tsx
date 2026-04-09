@@ -27,6 +27,7 @@ import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
+import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import {
     MtnMomoLogo,
@@ -47,6 +48,7 @@ export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
     const [loadingProfile, setLoadingProfile] = useState(true)
     const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [needsCity, setNeedsCity] = useState(false)
     const [userEmail, setUserEmail] = useState('')
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
@@ -143,15 +145,20 @@ export default function CheckoutPage() {
 
                 if (profile) {
                     const p = profile as { full_name?: string | null; phone?: string | null; whatsapp_number?: string | null; city?: string | null; district?: string | null; landmark?: string | null }
+                    const displayCity = profileCityToCheckoutDisplay(p.city) || ''
+                    setNeedsCity(!displayCity)
                     reset({
                         ...CHECKOUT_DEFAULTS,
                         full_name: p.full_name || '',
                         phone: p.phone?.trim() || p.whatsapp_number?.trim() || '',
-                        city: profileCityToCheckoutDisplay(p.city) || '',
+                        city: displayCity,
                         district: p.district || '',
                         landmark: p.landmark || '',
                         payment_method: 'cod',
                     })
+                } else {
+                    setNeedsCity(true)
+                    reset({ ...CHECKOUT_DEFAULTS })
                 }
                 setUserEmail(user.email || '')
             }
@@ -162,6 +169,8 @@ export default function CheckoutPage() {
 
     const onSubmit = async (formData: CheckoutType) => {
         if (cart.length === 0) return alert("Votre panier est vide")
+
+        if (needsCity) return
 
         if (sellerIds.length > 0 && !sellerCitiesReady) {
             alert('Chargement des informations vendeurs… Réessayez dans une seconde.')
@@ -258,6 +267,13 @@ export default function CheckoutPage() {
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4">
+            <CitySelectModal
+                open={needsCity}
+                onSelected={(c) => {
+                    setNeedsCity(false)
+                    setValue('city', c)
+                }}
+            />
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12">
 
                 {/* COLONNE GAUCHE : FORMULAIRE */}
@@ -557,6 +573,7 @@ export default function CheckoutPage() {
                             type="submit"
                             disabled={
                                 loading ||
+                                needsCity ||
                                 cart.length === 0 ||
                                 (sellerIds.length > 0 && !sellerCitiesReady) ||
                                 (checkoutInterUrban && !interUrbanPayAck)

@@ -182,13 +182,32 @@ export async function proxy(request: NextRequest) {
         return res
     }
 
-    /** Ville obligatoire : pas sur onboarding / auth / cet écran. */
+    /** Ville obligatoire : pas sur onboarding / auth / pages info publiques. */
+    const PUBLIC_INFO_PAGES = new Set([
+        '/a-propos',
+        '/cgu',
+        '/cgv',
+        '/comment-commander',
+        '/conditions-vendeurs',
+        '/confidentialite',
+        '/cookies',
+        '/devenir-vendeur',
+        '/faq',
+        '/guide-vendeur',
+        '/livraison',
+        '/mentions-legales',
+        '/mission',
+        '/presse',
+        '/retours',
+        '/tarification',
+    ])
     const isCityGateExempt = (p: string) =>
         p.startsWith('/required-city') ||
         p.startsWith('/complete-profile') ||
         p.startsWith('/auth/callback') ||
         p === '/reset-password' ||
-        p === '/forgot-password'
+        p === '/forgot-password' ||
+        PUBLIC_INFO_PAGES.has(p)
 
     if (user && authStatus === 'ok' && !isCityGateExempt(pathname)) {
         try {

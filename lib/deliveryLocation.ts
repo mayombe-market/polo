@@ -6,7 +6,7 @@
 export const DISPLAY_BRAZZAVILLE = 'Brazzaville'
 export const DISPLAY_POINTE_NOIRE = 'Pointe-Noire'
 
-/** Codes stockés en base (`profiles.city`, checkout). */
+/** Codes internes (comparaisons) — pas le format stocké en `profiles.city`. */
 export type ServiceCityCode = 'brazzaville' | 'pointe-noire'
 
 /**
@@ -90,20 +90,19 @@ export function orderRequiresInterUrbanDelivery(
 }
 
 /**
- * Aligner la ville saisie au checkout (ex. « Brazzaville ») sur les codes profil (`brazzaville`, `pointe-noire`).
+ * Convertit toute variante reconnue vers le format **affiché / stocké** dans `profiles.city`
+ * (`Brazzaville` | `Pointe-Noire`), aligné sur `DELIVERY_CITY_LIST`.
  */
-export function orderCityToProfileCity(city: string | null | undefined): string {
-    const c = normalizeToServiceCityCode(city)
-    if (c) return c
-    return (city ?? '').trim()
+export function orderCityToProfileCity(city: string | null | undefined): string | null {
+    const code = normalizeToServiceCityCode(city)
+    if (code === 'brazzaville') return DISPLAY_BRAZZAVILLE
+    if (code === 'pointe-noire') return DISPLAY_POINTE_NOIRE
+    return null
 }
 
-/** Affichage checkout (DELIVERY_CITY_LIST) depuis une valeur profil `brazzaville` / `pointe-noire`. */
-export function profileCityToCheckoutDisplay(city: string | null | undefined): string {
-    const c = normalizeToServiceCityCode(city)
-    if (c === 'brazzaville') return DISPLAY_BRAZZAVILLE
-    if (c === 'pointe-noire') return DISPLAY_POINTE_NOIRE
-    return (city ?? '').trim()
+/** Libellé checkout depuis `profiles.city` (display ou anciennes variantes reconnues par normalize). */
+export function profileCityToCheckoutDisplay(city: string | null | undefined): string | null {
+    return orderCityToProfileCity(city)
 }
 
 /** Message UX résumé panier (inter-ville). */

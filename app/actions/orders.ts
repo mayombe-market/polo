@@ -762,11 +762,12 @@ export async function createOrder(input: {
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
 
-    // Synchroniser ville / quartier de livraison sur le profil acheteur (aligné sur la commande)
+    // Synchroniser ville / quartier de livraison sur le profil acheteur (format display Brazzaville / Pointe-Noire)
+    const syncedCity = orderCityToProfileCity(input.city)
     await supabase
         .from('profiles')
         .update({
-            city: orderCityToProfileCity(input.city),
+            ...(syncedCity != null ? { city: syncedCity } : {}),
             district: input.district?.trim() || null,
         })
         .eq('id', user.id)

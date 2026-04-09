@@ -6,7 +6,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
-import { orderCityToProfileCity } from '@/lib/deliveryLocation'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 
@@ -212,7 +211,7 @@ export default function CompleteProfilePage() {
                 last_name: lastName.trim(),
                 full_name: `${firstName.trim()} ${lastName.trim()}`,
                 phone: fullPhone,
-                city: orderCityToProfileCity(city.trim()),
+                city: city.trim(),
                 country: selectedCountry.code,
                 role,
                 ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),

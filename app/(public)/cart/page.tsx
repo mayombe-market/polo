@@ -194,7 +194,7 @@ export default function CartPage() {
             await supabase
                 .from('profiles')
                 .update({
-                    city: orderCityToProfileCity(selectedCity),
+                    city: orderCityToProfileCity(selectedCity) ?? selectedCity.trim(),
                     district: selectedDistrict.trim(),
                 })
                 .eq('id', u.id)

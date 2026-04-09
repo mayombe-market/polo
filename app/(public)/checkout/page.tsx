@@ -14,12 +14,12 @@ import {
     DELIVERY_FEES,
     DELIVERY_FEE_INTER_URBAN,
     INTER_URBAN_DELIVERY_TIMELINE,
-    INTER_URBAN_PRE_PAYMENT_ALERT,
 } from '@/lib/checkoutSchema'
 import {
     orderRequiresInterUrbanDelivery,
     profileCityToCheckoutDisplay,
     INTER_URBAN_AT_LOCATION_WARNING,
+    getFirstInterUrbanSellerCityDisplay,
 } from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
@@ -28,6 +28,7 @@ import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
+import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import {
     MtnMomoLogo,
@@ -49,6 +50,9 @@ export default function CheckoutPage() {
     const [loadingProfile, setLoadingProfile] = useState(true)
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [needsCity, setNeedsCity] = useState(false)
+    const [interUrbanModalOpen, setInterUrbanModalOpen] = useState(false)
+    const [interUrbanAccepted, setInterUrbanAccepted] = useState(false)
+    const [interUrbanModalDismissed, setInterUrbanModalDismissed] = useState(false)
     const [userEmail, setUserEmail] = useState('')
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
@@ -97,7 +101,7 @@ export default function CheckoutPage() {
         }
     }, [supabase, sellerIds])
 
-    const checkoutInterUrban = useMemo(
+    const needsInterUrbanDelivery = useMemo(
         () =>
             orderRequiresInterUrbanDelivery(
                 watchedCity,
@@ -106,23 +110,37 @@ export default function CheckoutPage() {
         [watchedCity, sellerIds, sellerCities]
     )
 
-    const [interUrbanPayAck, setInterUrbanPayAck] = useState(false)
+    const interUrbanFlowActive = needsInterUrbanDelivery && interUrbanAccepted
+
+    const interUrbanSellerLabel = useMemo(
+        () => getFirstInterUrbanSellerCityDisplay(watchedCity, sellerIds, sellerCities),
+        [watchedCity, sellerIds, sellerCities]
+    )
 
     useEffect(() => {
-        if (checkoutInterUrban) {
-            setValue('delivery_mode', 'inter_urban')
+        if (!needsInterUrbanDelivery) {
+            setInterUrbanAccepted(false)
+            setInterUrbanModalDismissed(false)
         }
-    }, [checkoutInterUrban, setValue])
+    }, [needsInterUrbanDelivery])
 
     useEffect(() => {
-        if (!checkoutInterUrban && getValues('delivery_mode') === 'inter_urban') {
+        setInterUrbanModalDismissed(false)
+    }, [watchedCity])
+
+    useEffect(() => {
+        if (needsInterUrbanDelivery && !interUrbanAccepted && !interUrbanModalDismissed) {
+            setInterUrbanModalOpen(true)
+        } else if (!needsInterUrbanDelivery || interUrbanAccepted) {
+            setInterUrbanModalOpen(false)
+        }
+    }, [needsInterUrbanDelivery, interUrbanAccepted, interUrbanModalDismissed])
+
+    useEffect(() => {
+        if (!needsInterUrbanDelivery && getValues('delivery_mode') === 'inter_urban') {
             resetField('delivery_mode')
         }
-    }, [checkoutInterUrban, getValues, resetField])
-
-    useEffect(() => {
-        if (!checkoutInterUrban) setInterUrbanPayAck(false)
-    }, [checkoutInterUrban])
+    }, [needsInterUrbanDelivery, getValues, resetField])
 
     const deliveryFee =
         selectedDelivery === 'inter_urban'
@@ -177,7 +195,7 @@ export default function CheckoutPage() {
             return
         }
 
-        if (checkoutInterUrban && !interUrbanPayAck) {
+        if (needsInterUrbanDelivery && !interUrbanAccepted) {
             return
         }
 
@@ -274,6 +292,21 @@ export default function CheckoutPage() {
                     setValue('city', c)
                 }}
             />
+            <InterUrbanWarningModal
+                open={interUrbanModalOpen}
+                buyerCity={watchedCity || ''}
+                sellerCity={interUrbanSellerLabel}
+                onAccept={() => {
+                    setInterUrbanAccepted(true)
+                    setInterUrbanModalOpen(false)
+                    setInterUrbanModalDismissed(false)
+                    setValue('delivery_mode', 'inter_urban')
+                }}
+                onCancel={() => {
+                    setInterUrbanModalOpen(false)
+                    setInterUrbanModalDismissed(true)
+                }}
+            />
             <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-12">
 
                 {/* COLONNE GAUCHE : FORMULAIRE */}
@@ -321,7 +354,7 @@ export default function CheckoutPage() {
                                 </div>
                             </div>
 
-                            {checkoutInterUrban && watchedCity ? (
+                            {needsInterUrbanDelivery && watchedCity ? (
                                 <div
                                     className="p-4 rounded-2xl border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40"
                                     role="alert"
@@ -352,7 +385,29 @@ export default function CheckoutPage() {
                                 <Truck size={18} /> Mode de livraison
                             </div>
 
-                            {checkoutInterUrban ? (
+                            {needsInterUrbanDelivery && !interUrbanAccepted ? (
+                                <div
+                                    className="p-6 rounded-3xl border-2 border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 space-y-3"
+                                    role="status"
+                                >
+                                    <p className="text-[11px] font-bold text-amber-900 dark:text-amber-100 text-center leading-relaxed">
+                                        Livraison inter-ville requise pour ce panier. Confirme dans la fenêtre ou ci-dessous
+                                        pour afficher les frais et continuer.
+                                    </p>
+                                    {interUrbanModalDismissed ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setInterUrbanModalDismissed(false)
+                                                setInterUrbanModalOpen(true)
+                                            }}
+                                            className="w-full rounded-2xl bg-amber-600 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-700"
+                                        >
+                                            Voir les conditions inter-ville
+                                        </button>
+                                    ) : null}
+                                </div>
+                            ) : interUrbanFlowActive ? (
                                 <>
                                     <input type="hidden" {...register('delivery_mode')} />
                                     <div className="p-6 rounded-3xl border-2 border-amber-400 dark:border-amber-600 bg-amber-50 dark:bg-amber-950/30">
@@ -547,28 +602,6 @@ export default function CheckoutPage() {
                             )}
                         </div>
 
-                        {checkoutInterUrban && (
-                            <div
-                                className="p-6 rounded-[2rem] border-2 border-orange-400 dark:border-orange-600 bg-orange-50 dark:bg-orange-950/40 space-y-4"
-                                role="alert"
-                            >
-                                <p className="text-[12px] font-bold text-orange-950 dark:text-orange-100 leading-relaxed text-center">
-                                    {INTER_URBAN_PRE_PAYMENT_ALERT}
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => setInterUrbanPayAck(true)}
-                                    className={`w-full py-4 rounded-2xl font-black uppercase text-xs tracking-widest transition-all ${
-                                        interUrbanPayAck
-                                            ? 'bg-green-600 text-white'
-                                            : 'bg-orange-500 text-white hover:bg-orange-600 shadow-lg shadow-orange-500/20'
-                                    }`}
-                                >
-                                    {interUrbanPayAck ? '✓ Continuer vers la commande' : 'Oui, continuer'}
-                                </button>
-                            </div>
-                        )}
-
                         <button
                             type="submit"
                             disabled={
@@ -576,7 +609,7 @@ export default function CheckoutPage() {
                                 needsCity ||
                                 cart.length === 0 ||
                                 (sellerIds.length > 0 && !sellerCitiesReady) ||
-                                (checkoutInterUrban && !interUrbanPayAck)
+                                (needsInterUrbanDelivery && !interUrbanAccepted)
                             }
                             className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
                         >

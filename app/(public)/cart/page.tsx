@@ -13,10 +13,7 @@ import AuthModal from '@/app/components/AuthModal'
 import StepIndicator from '@/app/components/checkout/StepIndicator'
 import LocationStep from '@/app/components/checkout/LocationStep'
 import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
-import {
-    InterUrbanDeliveryInfoStep,
-    InterUrbanPrePaymentStep,
-} from '@/app/components/checkout/InterUrbanCheckoutSteps'
+import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
 import PaymentMethodStep from '@/app/components/checkout/PaymentMethodStep'
 import TransferInfoStep from '@/app/components/checkout/TransferInfoStep'
 import EnterTransactionIdStep from '@/app/components/checkout/EnterTransactionIdStep'
@@ -25,7 +22,12 @@ import CashDeliveryStep from '@/app/components/checkout/CashDeliveryStep'
 import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
 import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { useAuth } from '@/hooks/useAuth'
-import { orderRequiresInterUrbanDelivery, orderCityToProfileCity, INTER_URBAN_DELIVERY_HINT } from '@/lib/deliveryLocation'
+import {
+    orderRequiresInterUrbanDelivery,
+    orderCityToProfileCity,
+    INTER_URBAN_DELIVERY_HINT,
+    getFirstInterUrbanSellerCityDisplay,
+} from '@/lib/deliveryLocation'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
@@ -33,8 +35,6 @@ import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
 type Step =
     | 'location'
     | 'delivery_mode'
-    | 'inter_urban_info'
-    | 'inter_urban_confirm'
     | 'payment_method'
     | 'transfer_info'
     | 'enter_id'
@@ -65,6 +65,7 @@ export default function CartPage() {
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
     const deliveryFee =
         deliveryMode === 'inter_urban'
@@ -144,7 +145,7 @@ export default function CartPage() {
 
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step)) return 1
+        if (step === 'delivery_mode') return 1
         if (['confirmed', 'rejected'].includes(step)) return 3
         return 2
     }
@@ -164,6 +165,7 @@ export default function CartPage() {
             setProfileGateOpen(true)
             return
         }
+        setInterUrbanWarningOpen(false)
         setIsCheckoutOpen(true)
         setStep('location')
     }
@@ -178,6 +180,7 @@ export default function CartPage() {
         setTransactionId('')
         setOrderId('')
         setOrderData(null)
+        setInterUrbanWarningOpen(false)
     }
 
     const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
@@ -203,8 +206,7 @@ export default function CartPage() {
         const sellerCityValues = sellerIds.map((sid) => sellerCities[sid])
         const inter = orderRequiresInterUrbanDelivery(selectedCity, sellerCityValues)
         if (inter) {
-            setDeliveryMode('inter_urban')
-            setStep('inter_urban_info')
+            setInterUrbanWarningOpen(true)
         } else {
             setDeliveryMode(null)
             setStep('delivery_mode')
@@ -508,6 +510,7 @@ export default function CartPage() {
 
             {/* MODAL CHECKOUT — portal */}
             {isCheckoutOpen && typeof document !== 'undefined' && createPortal(
+                <>
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={closeCheckout}>
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
@@ -550,7 +553,7 @@ export default function CartPage() {
                         <StepIndicator activeStep={getStepIndex()} />
 
                         {/* ÉTAPES */}
-                        {step === 'location' && (
+                        {step === 'location' && !interUrbanWarningOpen && (
                             <LocationStep
                                 onConfirm={handleLocationConfirm}
                                 onClose={closeCheckout}
@@ -560,27 +563,16 @@ export default function CartPage() {
                         {step === 'delivery_mode' && (
                             <DeliveryModeStep onSelect={handleDeliverySelect} onBack={() => setStep('location')} />
                         )}
-                        {step === 'inter_urban_info' && (
-                            <InterUrbanDeliveryInfoStep
-                                onContinue={() => setStep('inter_urban_confirm')}
-                                onBack={() => {
-                                    setDeliveryMode(null)
-                                    setStep('location')
-                                }}
-                            />
-                        )}
-                        {step === 'inter_urban_confirm' && (
-                            <InterUrbanPrePaymentStep
-                                onConfirm={() => setStep('payment_method')}
-                                onBack={() => setStep('inter_urban_info')}
-                            />
-                        )}
                         {step === 'payment_method' && (
                             <PaymentMethodStep
                                 onSelect={handlePaymentSelect}
                                 onBack={() => {
-                                    if (deliveryMode === 'inter_urban') setStep('inter_urban_confirm')
-                                    else setStep('delivery_mode')
+                                    if (deliveryMode === 'inter_urban') {
+                                        setDeliveryMode(null)
+                                        setStep('location')
+                                    } else {
+                                        setStep('delivery_mode')
+                                    }
                                 }}
                             />
                         )}
@@ -635,7 +627,22 @@ export default function CartPage() {
                             />
                         )}
                     </div>
-                </div>,
+                </div>
+                <InterUrbanWarningModal
+                    open={interUrbanWarningOpen}
+                    buyerCity={city}
+                    sellerCity={getFirstInterUrbanSellerCityDisplay(city, sellerIds, sellerCities)}
+                    onAccept={() => {
+                        setInterUrbanWarningOpen(false)
+                        setDeliveryMode('inter_urban')
+                        setStep('payment_method')
+                    }}
+                    onCancel={() => {
+                        setInterUrbanWarningOpen(false)
+                        setStep('location')
+                    }}
+                />
+                </>,
                 document.body
             )}
 

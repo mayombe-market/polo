@@ -4,7 +4,11 @@ import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
-import { orderRequiresInterUrbanDelivery, orderCityToProfileCity } from '@/lib/deliveryLocation'
+import {
+    orderRequiresInterUrbanDelivery,
+    orderCityToProfileCity,
+    profileCityToCheckoutDisplay,
+} from '@/lib/deliveryLocation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { ArrowRight } from 'lucide-react'
@@ -13,10 +17,7 @@ import CompleteProfileGateModal from './CompleteProfileGateModal'
 import StepIndicator from './checkout/StepIndicator'
 import LocationStep from './checkout/LocationStep'
 import DeliveryModeStep from './checkout/DeliveryModeStep'
-import {
-    InterUrbanDeliveryInfoStep,
-    InterUrbanPrePaymentStep,
-} from './checkout/InterUrbanCheckoutSteps'
+import InterUrbanWarningModal from './checkout/InterUrbanWarningModal'
 import PaymentMethodStep from './checkout/PaymentMethodStep'
 import TransferInfoStep from './checkout/TransferInfoStep'
 import EnterTransactionIdStep from './checkout/EnterTransactionIdStep'
@@ -27,8 +28,6 @@ import OrderConfirmedStep from './checkout/OrderConfirmedStep'
 type Step =
     | 'location'
     | 'delivery_mode'
-    | 'inter_urban_info'
-    | 'inter_urban_confirm'
     | 'payment_method'
     | 'transfer_info'
     | 'enter_id'
@@ -73,6 +72,7 @@ export default function OrderAction({
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [profileGateDetail, setProfileGateDetail] = useState<string | undefined>(undefined)
+    const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
     const deliveryFee =
         deliveryMode === 'inter_urban'
@@ -87,7 +87,7 @@ export default function OrderAction({
     // Step indicator index (4 steps: Retrait, Livraison, Paiement, Confirmation)
     const getStepIndex = () => {
         if (step === 'location') return 0
-        if (['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step)) return 1
+        if (step === 'delivery_mode') return 1
         if (['confirmed', 'rejected'].includes(step)) return 3
         return 2
     }
@@ -123,6 +123,7 @@ export default function OrderAction({
             return
         }
         setDeliveryMode(null)
+        setInterUrbanWarningOpen(false)
         setIsModalOpen(true)
         setStep('location')
     }
@@ -138,6 +139,7 @@ export default function OrderAction({
         setTransactionId('')
         setOrderId('')
         setOrderData(null)
+        setInterUrbanWarningOpen(false)
     }
 
     // Localisation confirmée
@@ -158,8 +160,7 @@ export default function OrderAction({
 
         const inter = orderRequiresInterUrbanDelivery(selectedCity, [shop?.city])
         if (inter) {
-            setDeliveryMode('inter_urban')
-            setStep('inter_urban_info')
+            setInterUrbanWarningOpen(true)
         } else {
             setDeliveryMode(null)
             setStep('delivery_mode')
@@ -327,6 +328,7 @@ export default function OrderAction({
 
             {/* MODAL CHECKOUT — portal pour sortir du transform parent */}
             {isModalOpen && createPortal(
+                <>
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={closeModal}>
                     {/* Backdrop */}
                     <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -359,8 +361,7 @@ export default function OrderAction({
                         <div className="text-center mb-4">
                             <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
                             <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
-                            {step !== 'location' &&
-                                !['delivery_mode', 'inter_urban_info', 'inter_urban_confirm'].includes(step) && (
+                            {step !== 'location' && step !== 'delivery_mode' && (
                                 <p className="text-[9px] font-bold text-slate-400 mt-0.5">
                                     {lineTotal.toLocaleString('fr-FR')} F{qty > 1 ? ` (${qty}×)` : ''} +{' '}
                                     {deliveryFee.toLocaleString('fr-FR')} F{' '}
@@ -372,7 +373,7 @@ export default function OrderAction({
                         <StepIndicator activeStep={getStepIndex()} />
 
                         {/* ÉTAPES */}
-                        {step === 'location' && (
+                        {step === 'location' && !interUrbanWarningOpen && (
                             <LocationStep
                                 onConfirm={handleLocationConfirm}
                                 onClose={closeModal}
@@ -389,29 +390,16 @@ export default function OrderAction({
                             />
                         )}
 
-                        {step === 'inter_urban_info' && (
-                            <InterUrbanDeliveryInfoStep
-                                onContinue={() => setStep('inter_urban_confirm')}
-                                onBack={() => {
-                                    setDeliveryMode(null)
-                                    setStep('location')
-                                }}
-                            />
-                        )}
-
-                        {step === 'inter_urban_confirm' && (
-                            <InterUrbanPrePaymentStep
-                                onConfirm={() => setStep('payment_method')}
-                                onBack={() => setStep('inter_urban_info')}
-                            />
-                        )}
-
                         {step === 'payment_method' && (
                             <PaymentMethodStep
                                 onSelect={handlePaymentSelect}
                                 onBack={() => {
-                                    if (deliveryMode === 'inter_urban') setStep('inter_urban_confirm')
-                                    else setStep('delivery_mode')
+                                    if (deliveryMode === 'inter_urban') {
+                                        setDeliveryMode(null)
+                                        setStep('location')
+                                    } else {
+                                        setStep('delivery_mode')
+                                    }
                                 }}
                             />
                         )}
@@ -471,7 +459,22 @@ export default function OrderAction({
                             />
                         )}
                     </div>
-                </div>,
+                </div>
+                <InterUrbanWarningModal
+                    open={interUrbanWarningOpen}
+                    buyerCity={city}
+                    sellerCity={profileCityToCheckoutDisplay(shop?.city) || shop?.city?.trim() || ''}
+                    onAccept={() => {
+                        setInterUrbanWarningOpen(false)
+                        setDeliveryMode('inter_urban')
+                        setStep('payment_method')
+                    }}
+                    onCancel={() => {
+                        setInterUrbanWarningOpen(false)
+                        setStep('location')
+                    }}
+                />
+                </>,
                 document.body
             )}
 

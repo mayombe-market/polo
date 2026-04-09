@@ -105,6 +105,23 @@ export function profileCityToCheckoutDisplay(city: string | null | undefined): s
     return orderCityToProfileCity(city)
 }
 
+/**
+ * Premier vendeur « en cause » pour l’UX inter-ville (libellé affichage).
+ */
+export function getFirstInterUrbanSellerCityDisplay(
+    buyerCity: string | null | undefined,
+    sellerIds: string[],
+    sellerCities: Record<string, string | null>
+): string {
+    for (const id of sellerIds) {
+        const sc = sellerCities[id]
+        if (orderRequiresInterUrbanDelivery(buyerCity, [sc])) {
+            return profileCityToCheckoutDisplay(sc) || sc?.trim() || ''
+        }
+    }
+    return ''
+}
+
 /** Message UX résumé panier (inter-ville). */
 export const INTER_URBAN_DELIVERY_HINT =
     'Livraison inter-ville : forfait 3 500 FCFA, délais 24 h à 96 h. Vous confirmerez avant le paiement.'

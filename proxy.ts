@@ -8,7 +8,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, NextRequest } from 'next/server'
 import { getContentSecurityPolicy } from '@/lib/content-security-policy'
-import { isValidServiceCity } from '@/lib/deliveryLocation'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** Conserve les cookies de session rafraîchis (setAll) sur une autre réponse. */
@@ -180,58 +179,6 @@ export async function proxy(request: NextRequest) {
     const finish = (res: NextResponse) => {
         applySecurityHeaders(pathname, res)
         return res
-    }
-
-    /** Ville obligatoire : pas sur onboarding / auth / pages info publiques. */
-    const PUBLIC_INFO_PAGES = new Set([
-        '/a-propos',
-        '/cgu',
-        '/cgv',
-        '/comment-commander',
-        '/conditions-vendeurs',
-        '/confidentialite',
-        '/cookies',
-        '/devenir-vendeur',
-        '/faq',
-        '/guide-vendeur',
-        '/livraison',
-        '/mentions-legales',
-        '/mission',
-        '/presse',
-        '/retours',
-        '/tarification',
-    ])
-    const isCityGateExempt = (p: string) =>
-        p.startsWith('/required-city') ||
-        p.startsWith('/complete-profile') ||
-        p.startsWith('/auth/callback') ||
-        p === '/reset-password' ||
-        p === '/forgot-password' ||
-        PUBLIC_INFO_PAGES.has(p)
-
-    if (user && authStatus === 'ok' && !isCityGateExempt(pathname)) {
-        try {
-            const { data: cityRow } = await withTimeout(
-                supabase.from('profiles').select('city, role').eq('id', user.id).maybeSingle()
-            )
-            // Admin : pas bloqué (ville hors périmètre possible)
-            const skipCityGate = cityRow?.role === 'admin'
-            // Ville obligatoire = uniquement Brazzaville ou Pointe-Noire (codes normalisés)
-            if (!skipCityGate && !isValidServiceCity(cityRow?.city)) {
-                const dest = new URL('/required-city', request.url)
-                const nextRaw = pathname + (request.nextUrl.search || '')
-                if (nextRaw.length <= 2048) {
-                    dest.searchParams.set('next', nextRaw)
-                }
-                return finish(redirectWithSession(supabaseResponse, dest))
-            }
-        } catch (err: any) {
-            // Réseau lent : ne pas bloquer la navigation avec ?auth_error=…
-            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
-                return finish(supabaseResponse)
-            }
-            return finish(supabaseResponse)
-        }
     }
 
     if (pathname.startsWith('/vendor')) {

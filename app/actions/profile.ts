@@ -4,7 +4,6 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 import { normalizeShopDescription } from '@/lib/shopDescription'
-import { orderCityToProfileCity, normalizeToServiceCityCode } from '@/lib/deliveryLocation'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -114,22 +113,4 @@ export async function updateProfile(
     }
 
     return { success: true }
-}
-
-/**
- * Mise à jour sécurisée de la ville uniquement (même client Supabase + RLS que updateProfile).
- * Utilisé par l’écran obligatoire /required-city.
- * Accepte les codes boutons (`brazzaville`, `pointe-noire`), le display ou variantes reconnues par normalizeToServiceCityCode.
- */
-export async function saveMandatoryCity(
-    city: string
-): Promise<{ success: true } | { success: false; error: string }> {
-    if (!normalizeToServiceCityCode(city)) {
-        return { success: false, error: 'Choisissez Brazzaville ou Pointe-Noire.' }
-    }
-    const display = orderCityToProfileCity(city)
-    if (!display) {
-        return { success: false, error: 'Choisissez Brazzaville ou Pointe-Noire.' }
-    }
-    return updateProfile({ city: display })
 }

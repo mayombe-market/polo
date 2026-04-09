@@ -8,6 +8,7 @@ import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSub
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
+import { LEGAL_SIGNUP } from '@/lib/legal/termsRoutes'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -26,7 +27,12 @@ export default function CompleteProfilePage() {
     const [shopName, setShopName] = useState('')
     const [vendorConfirmed, setVendorConfirmed] = useState(false)
     const [city, setCity] = useState('')
-    const [termsAccepted, setTermsAccepted] = useState(false)
+    /** CGU générales — toujours requises */
+    const [acceptGeneralTerms, setAcceptGeneralTerms] = useState(false)
+    /** Conditions acheteur — si rôle acheteur */
+    const [acceptClientTerms, setAcceptClientTerms] = useState(false)
+    /** Conditions vendeur — si rôle vendeur (signature) */
+    const [acceptVendorTerms, setAcceptVendorTerms] = useState(false)
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
     const [user, setUser] = useState<any>(null)
@@ -143,8 +149,20 @@ export default function CompleteProfilePage() {
             return
         }
 
-        if (!termsAccepted) {
-            setError('Veuillez accepter les conditions d\'utilisation pour continuer.')
+        if (!acceptGeneralTerms) {
+            setError('Veuillez lire et accepter les conditions générales d’utilisation.')
+            setLoading(false)
+            return
+        }
+
+        if (role === 'buyer' && !acceptClientTerms) {
+            setError('Veuillez accepter les conditions d’utilisation spécifiques aux acheteurs.')
+            setLoading(false)
+            return
+        }
+
+        if (role === 'vendor' && !acceptVendorTerms) {
+            setError('Veuillez accepter les conditions d’utilisation vendeur (contrat).')
             setLoading(false)
             return
         }
@@ -204,6 +222,7 @@ export default function CompleteProfilePage() {
 
             if (!accessToken) throw new Error('Session expirée — pas de token')
 
+            const now = new Date().toISOString()
             const profileData = {
                 id: user.id,
                 email: user.email,
@@ -215,8 +234,10 @@ export default function CompleteProfilePage() {
                 country: selectedCountry.code,
                 role,
                 ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),
-                terms_accepted_at: new Date().toISOString(),
-                updated_at: new Date().toISOString(),
+                terms_accepted_at: now,
+                client_terms_accepted_at: role === 'buyer' ? now : null,
+                vendor_terms_accepted_at: role === 'vendor' ? now : null,
+                updated_at: now,
             }
 
             const res = await fetch(`${supabaseUrl}/rest/v1/profiles`, {
@@ -523,7 +544,12 @@ export default function CompleteProfilePage() {
                             {/* ACHETEUR */}
                             <button
                                 type="button"
-                                onClick={() => { setRole('buyer'); setVendorConfirmed(false); setShopName('') }}
+                                onClick={() => {
+                                    setRole('buyer')
+                                    setVendorConfirmed(false)
+                                    setShopName('')
+                                    setAcceptVendorTerms(false)
+                                }}
                                 className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'buyer'
                                         ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
                                         : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
@@ -541,7 +567,10 @@ export default function CompleteProfilePage() {
                             {/* VENDEUR — bordure bleue */}
                             <button
                                 type="button"
-                                onClick={() => setRole('vendor')}
+                                onClick={() => {
+                                    setRole('vendor')
+                                    setAcceptClientTerms(false)
+                                }}
                                 className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'vendor'
                                         ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
                                         : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
@@ -601,35 +630,79 @@ export default function CompleteProfilePage() {
                         </div>
                     )}
 
-                    {/* ACCEPTATION DES CONDITIONS */}
-                    <div className="p-5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-2xl">
+                    {/* ENGAGEMENTS JURIDIQUES — après le formulaire */}
+                    <div className="space-y-4 p-5 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-2xl">
+                        <p className="text-[11px] font-black uppercase tracking-widest text-slate-500 dark:text-slate-400">
+                            Engagements juridiques
+                        </p>
+
                         <label className="flex items-start gap-3 cursor-pointer">
                             <input
                                 type="checkbox"
-                                checked={termsAccepted}
-                                onChange={(e) => setTermsAccepted(e.target.checked)}
+                                checked={acceptGeneralTerms}
+                                onChange={(e) => setAcceptGeneralTerms(e.target.checked)}
                                 className="w-5 h-5 accent-green-500 rounded mt-0.5 flex-shrink-0"
                             />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">
+                            <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
                                 J&apos;ai lu et j&apos;accepte les{' '}
-                                {role === 'vendor' ? (
-                                    <>
-                                        <a href="/conditions-vendeurs" target="_blank" className="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-700">
-                                            conditions vendeurs
-                                        </a>
-                                        {' '}et les{' '}
-                                        <a href="/cgu" target="_blank" className="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-700">
-                                            conditions générales d&apos;utilisation
-                                        </a>
-                                    </>
-                                ) : (
-                                    <a href="/cgu" target="_blank" className="text-green-600 dark:text-green-400 underline font-semibold hover:text-green-700">
-                                        conditions générales d&apos;utilisation
-                                    </a>
-                                )}
-                                {' '}de Mayombe Market.
+                                <a
+                                    href={LEGAL_SIGNUP.cgu}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-green-600 dark:text-green-400 underline font-semibold hover:text-green-700"
+                                >
+                                    conditions générales d&apos;utilisation
+                                </a>{' '}
+                                (document contractuel).
                             </span>
                         </label>
+
+                        {role === 'buyer' && (
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={acceptClientTerms}
+                                    onChange={(e) => setAcceptClientTerms(e.target.checked)}
+                                    className="w-5 h-5 accent-emerald-600 rounded mt-0.5 flex-shrink-0"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                    J&apos;ai lu et j&apos;accepte les{' '}
+                                    <a
+                                        href={LEGAL_SIGNUP.conditionsAcheteur}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-emerald-600 dark:text-emerald-400 underline font-semibold hover:text-emerald-700"
+                                    >
+                                        conditions d&apos;utilisation acheteur
+                                    </a>
+                                    .
+                                </span>
+                            </label>
+                        )}
+
+                        {role === 'vendor' && (
+                            <label className="flex items-start gap-3 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={acceptVendorTerms}
+                                    onChange={(e) => setAcceptVendorTerms(e.target.checked)}
+                                    className="w-5 h-5 accent-blue-600 rounded mt-0.5 flex-shrink-0"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+                                    J&apos;ai lu et j&apos;accepte les{' '}
+                                    <a
+                                        href={LEGAL_SIGNUP.conditionsVendeur}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-blue-600 dark:text-blue-400 underline font-semibold hover:text-blue-500"
+                                    >
+                                        conditions d&apos;utilisation vendeur
+                                    </a>{' '}
+                                    — engagement commercial et règles de la marketplace (signature électronique par
+                                    case à cocher).
+                                </span>
+                            </label>
+                        )}
                     </div>
 
                     {/* MESSAGE D'ERREUR */}
@@ -644,7 +717,9 @@ export default function CompleteProfilePage() {
                         type="submit"
                         disabled={
                             loading ||
-                            !termsAccepted ||
+                            !acceptGeneralTerms ||
+                            (role === 'buyer' && !acceptClientTerms) ||
+                            (role === 'vendor' && !acceptVendorTerms) ||
                             !city.trim() ||
                             (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) ||
                             !isPhoneValid

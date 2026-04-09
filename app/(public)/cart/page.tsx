@@ -13,6 +13,7 @@ import AuthModal from '@/app/components/AuthModal'
 import StepIndicator from '@/app/components/checkout/StepIndicator'
 import LocationStep from '@/app/components/checkout/LocationStep'
 import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
+import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
 import PaymentMethodStep from '@/app/components/checkout/PaymentMethodStep'
 import TransferInfoStep from '@/app/components/checkout/TransferInfoStep'
@@ -65,6 +66,7 @@ export default function CartPage() {
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
     const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
     const deliveryFee =
@@ -165,6 +167,7 @@ export default function CartPage() {
             setProfileGateOpen(true)
             return
         }
+        setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)
         setIsCheckoutOpen(true)
         setStep('location')
@@ -180,6 +183,7 @@ export default function CartPage() {
         setTransactionId('')
         setOrderId('')
         setOrderData(null)
+        setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)
     }
 
@@ -206,7 +210,7 @@ export default function CartPage() {
         const sellerCityValues = sellerIds.map((sid) => sellerCities[sid])
         const inter = orderRequiresInterUrbanDelivery(selectedCity, sellerCityValues)
         if (inter) {
-            setInterUrbanWarningOpen(true)
+            setInterUrbanPreAlertOpen(true)
         } else {
             setDeliveryMode(null)
             setStep('delivery_mode')
@@ -553,7 +557,7 @@ export default function CartPage() {
                         <StepIndicator activeStep={getStepIndex()} />
 
                         {/* ÉTAPES */}
-                        {step === 'location' && !interUrbanWarningOpen && (
+                        {step === 'location' && !interUrbanPreAlertOpen && !interUrbanWarningOpen && (
                             <LocationStep
                                 onConfirm={handleLocationConfirm}
                                 onClose={closeCheckout}
@@ -628,6 +632,17 @@ export default function CartPage() {
                         )}
                     </div>
                 </div>
+                <InterUrbanPrePaymentModal
+                    open={interUrbanPreAlertOpen}
+                    onContinue={() => {
+                        setInterUrbanPreAlertOpen(false)
+                        setInterUrbanWarningOpen(true)
+                    }}
+                    onCancel={() => {
+                        setInterUrbanPreAlertOpen(false)
+                        setStep('location')
+                    }}
+                />
                 <InterUrbanWarningModal
                     open={interUrbanWarningOpen}
                     buyerCity={city}

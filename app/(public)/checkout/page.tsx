@@ -28,6 +28,7 @@ import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
+import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import {
@@ -50,6 +51,9 @@ export default function CheckoutPage() {
     const [loadingProfile, setLoadingProfile] = useState(true)
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [needsCity, setNeedsCity] = useState(false)
+    const [interUrbanPreAlertModalOpen, setInterUrbanPreAlertModalOpen] = useState(false)
+    const [interUrbanPreAlertAccepted, setInterUrbanPreAlertAccepted] = useState(false)
+    const [interUrbanPreAlertDismissed, setInterUrbanPreAlertDismissed] = useState(false)
     const [interUrbanModalOpen, setInterUrbanModalOpen] = useState(false)
     const [interUrbanAccepted, setInterUrbanAccepted] = useState(false)
     const [interUrbanModalDismissed, setInterUrbanModalDismissed] = useState(false)
@@ -119,6 +123,8 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         if (!needsInterUrbanDelivery) {
+            setInterUrbanPreAlertAccepted(false)
+            setInterUrbanPreAlertDismissed(false)
             setInterUrbanAccepted(false)
             setInterUrbanModalDismissed(false)
         }
@@ -126,15 +132,45 @@ export default function CheckoutPage() {
 
     useEffect(() => {
         setInterUrbanModalDismissed(false)
+        setInterUrbanPreAlertDismissed(false)
+        setInterUrbanPreAlertAccepted(false)
     }, [watchedCity])
 
     useEffect(() => {
-        if (needsInterUrbanDelivery && !interUrbanAccepted && !interUrbanModalDismissed) {
+        if (
+            needsInterUrbanDelivery &&
+            !needsCity &&
+            !interUrbanPreAlertAccepted &&
+            !interUrbanPreAlertDismissed
+        ) {
+            setInterUrbanPreAlertModalOpen(true)
+        } else {
+            setInterUrbanPreAlertModalOpen(false)
+        }
+    }, [
+        needsInterUrbanDelivery,
+        needsCity,
+        interUrbanPreAlertAccepted,
+        interUrbanPreAlertDismissed,
+    ])
+
+    useEffect(() => {
+        if (
+            needsInterUrbanDelivery &&
+            interUrbanPreAlertAccepted &&
+            !interUrbanAccepted &&
+            !interUrbanModalDismissed
+        ) {
             setInterUrbanModalOpen(true)
         } else if (!needsInterUrbanDelivery || interUrbanAccepted) {
             setInterUrbanModalOpen(false)
         }
-    }, [needsInterUrbanDelivery, interUrbanAccepted, interUrbanModalDismissed])
+    }, [
+        needsInterUrbanDelivery,
+        interUrbanPreAlertAccepted,
+        interUrbanAccepted,
+        interUrbanModalDismissed,
+    ])
 
     useEffect(() => {
         if (!needsInterUrbanDelivery && getValues('delivery_mode') === 'inter_urban') {
@@ -195,7 +231,7 @@ export default function CheckoutPage() {
             return
         }
 
-        if (needsInterUrbanDelivery && !interUrbanAccepted) {
+        if (needsInterUrbanDelivery && (!interUrbanPreAlertAccepted || !interUrbanAccepted)) {
             return
         }
 
@@ -290,6 +326,16 @@ export default function CheckoutPage() {
                 onSelected={(c) => {
                     setNeedsCity(false)
                     setValue('city', c)
+                }}
+            />
+            <InterUrbanPrePaymentModal
+                open={interUrbanPreAlertModalOpen}
+                onContinue={() => {
+                    setInterUrbanPreAlertAccepted(true)
+                    setInterUrbanPreAlertDismissed(false)
+                }}
+                onCancel={() => {
+                    setInterUrbanPreAlertDismissed(true)
                 }}
             />
             <InterUrbanWarningModal
@@ -391,19 +437,29 @@ export default function CheckoutPage() {
                                     role="status"
                                 >
                                     <p className="text-[11px] font-bold text-amber-900 dark:text-amber-100 text-center leading-relaxed">
-                                        Livraison inter-ville requise pour ce panier. Confirme dans la fenêtre ou ci-dessous
-                                        pour afficher les frais et continuer.
+                                        Livraison inter-ville : d&apos;abord l&apos;alerte « ville différente », puis les
+                                        frais forfaitaires. Utilise les boutons ci-dessous si tu as fermé une fenêtre.
                                     </p>
-                                    {interUrbanModalDismissed ? (
+                                    {!interUrbanPreAlertAccepted && interUrbanPreAlertDismissed ? (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setInterUrbanPreAlertDismissed(false)
+                                            }}
+                                            className="w-full rounded-2xl bg-orange-600 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-orange-700"
+                                        >
+                                            Voir l&apos;alerte ville différente
+                                        </button>
+                                    ) : null}
+                                    {interUrbanPreAlertAccepted && interUrbanModalDismissed ? (
                                         <button
                                             type="button"
                                             onClick={() => {
                                                 setInterUrbanModalDismissed(false)
-                                                setInterUrbanModalOpen(true)
                                             }}
                                             className="w-full rounded-2xl bg-amber-600 py-3 text-[10px] font-black uppercase tracking-widest text-white hover:bg-amber-700"
                                         >
-                                            Voir les conditions inter-ville
+                                            Voir les frais inter-ville
                                         </button>
                                     ) : null}
                                 </div>
@@ -609,7 +665,8 @@ export default function CheckoutPage() {
                                 needsCity ||
                                 cart.length === 0 ||
                                 (sellerIds.length > 0 && !sellerCitiesReady) ||
-                                (needsInterUrbanDelivery && !interUrbanAccepted)
+                                (needsInterUrbanDelivery &&
+                                    (!interUrbanPreAlertAccepted || !interUrbanAccepted))
                             }
                             className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
                         >

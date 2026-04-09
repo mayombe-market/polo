@@ -17,6 +17,7 @@ import CompleteProfileGateModal from './CompleteProfileGateModal'
 import StepIndicator from './checkout/StepIndicator'
 import LocationStep from './checkout/LocationStep'
 import DeliveryModeStep from './checkout/DeliveryModeStep'
+import InterUrbanPrePaymentModal from './checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from './checkout/InterUrbanWarningModal'
 import PaymentMethodStep from './checkout/PaymentMethodStep'
 import TransferInfoStep from './checkout/TransferInfoStep'
@@ -72,6 +73,7 @@ export default function OrderAction({
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [profileGateDetail, setProfileGateDetail] = useState<string | undefined>(undefined)
+    const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
     const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
     const deliveryFee =
@@ -123,6 +125,7 @@ export default function OrderAction({
             return
         }
         setDeliveryMode(null)
+        setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)
         setIsModalOpen(true)
         setStep('location')
@@ -139,6 +142,7 @@ export default function OrderAction({
         setTransactionId('')
         setOrderId('')
         setOrderData(null)
+        setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)
     }
 
@@ -160,7 +164,7 @@ export default function OrderAction({
 
         const inter = orderRequiresInterUrbanDelivery(selectedCity, [shop?.city])
         if (inter) {
-            setInterUrbanWarningOpen(true)
+            setInterUrbanPreAlertOpen(true)
         } else {
             setDeliveryMode(null)
             setStep('delivery_mode')
@@ -373,7 +377,7 @@ export default function OrderAction({
                         <StepIndicator activeStep={getStepIndex()} />
 
                         {/* ÉTAPES */}
-                        {step === 'location' && !interUrbanWarningOpen && (
+                        {step === 'location' && !interUrbanPreAlertOpen && !interUrbanWarningOpen && (
                             <LocationStep
                                 onConfirm={handleLocationConfirm}
                                 onClose={closeModal}
@@ -460,6 +464,17 @@ export default function OrderAction({
                         )}
                     </div>
                 </div>
+                <InterUrbanPrePaymentModal
+                    open={interUrbanPreAlertOpen}
+                    onContinue={() => {
+                        setInterUrbanPreAlertOpen(false)
+                        setInterUrbanWarningOpen(true)
+                    }}
+                    onCancel={() => {
+                        setInterUrbanPreAlertOpen(false)
+                        setStep('location')
+                    }}
+                />
                 <InterUrbanWarningModal
                     open={interUrbanWarningOpen}
                     buyerCity={city}

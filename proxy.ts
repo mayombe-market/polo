@@ -75,6 +75,22 @@ function applySecurityHeaders(pathname: string, response: NextResponse) {
 export async function proxy(request: NextRequest) {
     const pathname = request.nextUrl.pathname
 
+    // ── Quota Vercel Image Optimization : bloque tout accès direct à /_next/image.
+    // Le code applicatif n'utilise plus next/image (unoptimized:true), mais des bots et
+    // d'anciens liens cachés (Google, partages) hit encore /_next/image?url=… ce qui
+    // déclenche des Transformations facturées. Si l'URL est externe (Cloudinary/Supabase),
+    // on redirige le client vers la source ; sinon 404.
+    if (pathname === '/_next/image') {
+        const u = request.nextUrl.searchParams.get('url')
+        if (u && /^https?:\/\//i.test(u)) {
+            return NextResponse.redirect(u, 301)
+        }
+        if (u && u.startsWith('/')) {
+            return NextResponse.redirect(new URL(u, request.url), 301)
+        }
+        return new NextResponse('Not Found', { status: 404 })
+    }
+
     const MAINTENANCE_ENABLED = false
     if (MAINTENANCE_ENABLED) {
         if (pathname === '/maintenance') {
@@ -325,6 +341,8 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
     matcher: [
-        '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+        // _next/image volontairement inclus : on l'intercepte pour bloquer les bots
+        // qui consomment du quota Vercel Image Optimization (voir handler proxy()).
+        '/((?!_next/static|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
     ],
 }

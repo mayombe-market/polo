@@ -15,6 +15,7 @@ import {
     isBuyerPaymentNoticeType,
     type BuyerPaymentNoticeType,
 } from '@/lib/buyerPaymentNotice'
+import { assertAdminCanActOnOrder, assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -157,6 +158,9 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const zoneErr = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneErr.error) return { error: zoneErr.error }
+
     const { data: order } = await supabase
         .from('orders')
         .select('transaction_id, payment_method, order_type, subscription_plan_id, subscription_billing, user_id, status, items, delivery_mode, delivery_fee')
@@ -295,6 +299,9 @@ export async function adminRejectOrder(orderId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const zoneReject = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneReject.error) return { error: zoneReject.error }
+
     // Récupérer les infos du client avant la mise à jour
     const { data: orderData } = await supabase
         .from('orders')
@@ -407,6 +414,9 @@ export async function adminSetBuyerPaymentNotice(orderId: string, noticeType: st
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const zoneNotice = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneNotice.error) return { error: zoneNotice.error }
+
     if (!isBuyerPaymentNoticeType(noticeType)) return { error: 'Type d’avis invalide' }
 
     const { data: row } = await supabase
@@ -504,6 +514,9 @@ export async function adminReleaseFunds(orderId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const zoneRelease = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneRelease.error) return { error: zoneRelease.error }
+
     // ═══ LIBÉRATION ATOMIQUE DES FONDS (via RPC avec FOR UPDATE) ═══
     const { data: rpcResult, error: rpcError } = await supabase.rpc('admin_release_funds', {
         p_order_id: orderId,
@@ -529,6 +542,9 @@ export async function adminDeleteOrder(orderId: string) {
         .single()
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zoneDel = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneDel.error) return { error: zoneDel.error }
 
     const { data: existing } = await supabase
         .from('orders')
@@ -799,6 +815,11 @@ export async function deleteProduct(productId: string) {
 
     if (product.seller_id !== user.id && profile?.role !== 'admin') {
         return { error: 'Non autorisé' }
+    }
+
+    if (profile?.role === 'admin') {
+        const z = await assertAdminCanActOnVendorCity(supabase, user.id, product.seller_id)
+        if (z.error) return { error: z.error }
     }
 
     const { error } = await supabase
@@ -1215,6 +1236,9 @@ export async function adminCancelSubscription(orderId: string) {
         .single()
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zoneSub = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneSub.error) return { error: zoneSub.error }
 
     // Récupérer la commande d'abonnement
     const { data: order } = await supabase

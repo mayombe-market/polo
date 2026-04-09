@@ -1,5 +1,6 @@
 'use server'
 
+import { assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
@@ -45,10 +46,9 @@ async function requireAdmin() {
         data: { user },
     } = await supabase.auth.getUser()
     if (!user) throw new Error('Non authentifié')
-    const { data: profile } = await supabase.from('profiles').select('role, city').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (profile?.role !== 'admin') throw new Error('Accès refusé')
-    const adminCity = (profile?.city || '').trim() || ''
-    return { supabase, user, adminCity }
+    return { supabase, user }
 }
 
 export type SubmitVendorAdCampaignInput = {
@@ -203,6 +203,9 @@ export async function adminApproveVendorAdCampaign(
     const { data: row } = await supabase.from('vendor_ad_campaigns').select('*').eq('id', campaignId).single()
 
     if (!row) return { error: 'Campagne introuvable' }
+
+    const z = await assertAdminCanActOnVendorCity(supabase, user.id, row.seller_id as string)
+    if (z.error) return { error: z.error }
     if (row.status !== 'pending_review') return { error: 'La campagne doit être en attente de validation (paiement déclaré)' }
 
     const start = options?.startDateIso ? new Date(options.startDateIso) : new Date()
@@ -235,6 +238,11 @@ export async function adminRejectVendorAdCampaign(campaignId: string, reason: st
     const r = reason?.trim()
     if (!r) return { error: 'Motif obligatoire' }
 
+    const { data: pre } = await supabase.from('vendor_ad_campaigns').select('seller_id').eq('id', campaignId).single()
+    if (!pre) return { error: 'Campagne introuvable' }
+    const zr = await assertAdminCanActOnVendorCity(supabase, user.id, pre.seller_id as string)
+    if (zr.error) return { error: zr.error }
+
     const { error } = await supabase
         .from('vendor_ad_campaigns')
         .update({
@@ -256,19 +264,10 @@ export type AdminListCampaignsResult =
     | { ok: true; campaigns: any[] }
     | { ok: false; campaigns: []; error: string }
 
-/** Liste admin filtree par ville. */
+/** Liste admin : toutes les campagnes (filtre visuel / actions côté client selon zone). */
 export async function adminListVendorAdCampaigns(): Promise<AdminListCampaignsResult> {
     try {
-        const { supabase, adminCity } = await requireAdmin()
-
-        if (adminCity) {
-            const sellersRes = await supabase.from('profiles').select('id').eq('role', 'vendor').ilike('city', adminCity)
-            const ids: string[] = (sellersRes.data || []).map((s: any) => s.id as string)
-            if (ids.length === 0) return { ok: true, campaigns: [] }
-            const res = await supabase.from('vendor_ad_campaigns').select('*').in('seller_id', ids).order('created_at', { ascending: false })
-            if (res.error) return { ok: false, campaigns: [], error: res.error.message }
-            return { ok: true, campaigns: res.data || [] }
-        }
+        const { supabase } = await requireAdmin()
 
         const all = await supabase.from('vendor_ad_campaigns').select('*').order('created_at', { ascending: false })
         if (all.error) return { ok: false, campaigns: [], error: all.error.message }

@@ -1,5 +1,6 @@
 'use server'
 
+import { assertAdminCanActOnOrder } from '@/lib/adminZoneServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { sendPickupNotificationEmail, sendDeliveryConfirmationRequestEmail, sendVendorDeliveryNotificationEmail } from '@/app/actions/emails'
@@ -228,6 +229,9 @@ export async function assignLogistician(orderId: string, logisticianId: string) 
         .single()
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zoneAssign = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneAssign.error) return { error: zoneAssign.error }
 
     // Vérifier que la commande est dans un état assignable
     const { data: order } = await supabase

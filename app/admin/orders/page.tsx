@@ -25,6 +25,8 @@ import {
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
+import { getAdminScopeFromProfileCity, type AdminZoneScope } from '@/lib/adminZone'
+import { normalizeToServiceCityCode, type ServiceCityCode } from '@/lib/deliveryLocation'
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -37,9 +39,10 @@ export default function AdminOrders() {
     const [assigningOrder, setAssigningOrder] = useState<string | null>(null)
     const [dateFilter, setDateFilter] = useState('all')
     const [cityFilter, setCityFilter] = useState('all')
-    /** IDs des vendeurs de la ville de l'admin — null = super-admin (voit tout). */
-    const [adminSellerIds, setAdminSellerIds] = useState<Set<string> | null>(null)
-    const [adminCity, setAdminCity] = useState<string | null>(null)
+    /** `all` = super-admin (ville profil absente ou non reconnue). */
+    const [adminScope, setAdminScope] = useState<AdminZoneScope>('all')
+    /** Abonnements : ville du vendeur (user_id) pour zone + style. */
+    const [subscriptionVendorCity, setSubscriptionVendorCity] = useState<Record<string, string | null>>({})
 
     const supabase = getSupabaseBrowserClient()
 
@@ -87,26 +90,12 @@ export default function AdminOrders() {
                 const { user } = await safeGetUser(supabase)
                 if (!user) return
 
-                // Récupérer la ville de l'admin
                 const { data: adminProfile } = await supabase
                     .from('profiles')
                     .select('city')
                     .eq('id', user.id)
                     .maybeSingle()
-                const city = adminProfile?.city?.trim()?.toLowerCase() || null
-                setAdminCity(city)
-
-                // Si admin a une ville, récupérer les vendeurs de cette ville
-                let sellerIds: Set<string> | null = null
-                if (city) {
-                    const { data: sellers } = await supabase
-                        .from('profiles')
-                        .select('id')
-                        .eq('role', 'vendor')
-                        .ilike('city', city)
-                    sellerIds = new Set((sellers || []).map(s => s.id))
-                    setAdminSellerIds(sellerIds)
-                }
+                setAdminScope(getAdminScopeFromProfileCity(adminProfile?.city))
 
                 const { data, error } = await withTimeout(supabase
                     .from('orders')
@@ -116,16 +105,7 @@ export default function AdminOrders() {
 
                 if (error) console.error('Erreur chargement:', error)
 
-                let allOrders = data || []
-                // Filtrer par vendeurs de la ville de l'admin
-                if (sellerIds) {
-                    allOrders = allOrders.filter(order => {
-                        const items = order.items || []
-                        return items.some((item: any) => sellerIds!.has(item.seller_id))
-                    })
-                }
-
-                setOrders(allOrders)
+                setOrders(data || [])
             } catch (err) {
                 console.error('Erreur:', err)
             } finally {
@@ -139,15 +119,70 @@ export default function AdminOrders() {
 
     }, [supabase])
 
-    // Realtime via shared channel — filtre par ville admin
+    useEffect(() => {
+        const subIds = [
+            ...new Set(
+                orders
+                    .filter((o) => o.order_type === 'subscription' && o.user_id)
+                    .map((o) => o.user_id as string)
+            ),
+        ]
+        if (subIds.length === 0) {
+            setSubscriptionVendorCity({})
+            return
+        }
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase.from('profiles').select('id, city').in('id', subIds)
+            if (cancelled) return
+            const map: Record<string, string | null> = {}
+            for (const row of data || []) {
+                map[row.id] = row.city ?? null
+            }
+            setSubscriptionVendorCity(map)
+        })()
+        return () => {
+            cancelled = true
+        }
+    }, [orders, supabase])
+
+    const canActOnOrder = useCallback(
+        (order: any): boolean => {
+            if (adminScope === 'all') return true
+            let z: ServiceCityCode | null = null
+            if (order.order_type === 'subscription' && order.user_id) {
+                z = normalizeToServiceCityCode(subscriptionVendorCity[order.user_id])
+            } else {
+                z = normalizeToServiceCityCode(order.city)
+            }
+            if (!z) return false
+            return z === adminScope
+        },
+        [adminScope, subscriptionVendorCity]
+    )
+
+    const orderZoneStyle = useCallback(
+        (order: any) => {
+            let z: ServiceCityCode | null = null
+            if (order.order_type === 'subscription' && order.user_id) {
+                z = normalizeToServiceCityCode(subscriptionVendorCity[order.user_id])
+            } else {
+                z = normalizeToServiceCityCode(order.city)
+            }
+            if (z === 'brazzaville') {
+                return 'border-2 border-blue-400 dark:border-blue-600 bg-blue-50/70 dark:bg-blue-950/30'
+            }
+            if (z === 'pointe-noire') {
+                return 'border-2 border-orange-400 dark:border-orange-600 bg-orange-50/70 dark:bg-orange-950/30'
+            }
+            return 'border-2 border-slate-300 dark:border-slate-600 bg-slate-50/60 dark:bg-slate-900/50'
+        },
+        [subscriptionVendorCity]
+    )
+
+    // Realtime : toutes les commandes (vision globale)
     useRealtime('order:insert', (payload) => {
         const order = payload.new as any
-        // Filtrer : si admin a une ville, ne montrer que les commandes de ses vendeurs
-        if (adminSellerIds) {
-            const items = order.items || []
-            const isMyCity = items.some((item: any) => adminSellerIds.has(item.seller_id))
-            if (!isMyCity) return
-        }
         setOrders(prev => [order, ...prev])
         const when = formatAdminDateTime(order.created_at)
         if (order.order_type === 'subscription') {
@@ -433,6 +468,11 @@ export default function AdminOrders() {
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2">
                         Système Double Verrou — Confirmez les paiements et libérez les fonds
                     </p>
+                    <p className="text-[9px] font-black uppercase text-slate-500 mt-3 tracking-widest">
+                        {adminScope === 'all'
+                            ? 'Super-admin — actions sur toutes les zones'
+                            : `Zone admin : ${adminScope === 'brazzaville' ? 'Brazzaville' : 'Pointe-Noire'} — lecture seule hors zone`}
+                    </p>
                 </div>
             </div>
 
@@ -563,17 +603,17 @@ export default function AdminOrders() {
                             const commission = order.commission_amount || Math.round((order.total_amount || 0) * 0.10)
                             const vendorPayout = order.vendor_payout || Math.round((order.total_amount || 0) * 0.90)
                             const isSubscription = order.order_type === 'subscription'
+                            const canAct = canActOnOrder(order)
 
                             return (
-                                <div key={order.id} className={`bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 transition-all hover:shadow-md ${
-                                    isSubscription
-                                        ? 'border-2 border-blue-300 dark:border-blue-700'
-                                        : 'border-2 border-amber-200 dark:border-amber-700'
-                                }`}>
+                                <div
+                                    key={order.id}
+                                    className={`rounded-[2.5rem] p-6 md:p-8 transition-all hover:shadow-md ${orderZoneStyle(order)}`}
+                                >
                                     {/* EN-TÊTE */}
                                     <div className="flex justify-between items-start mb-6">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-2xl bg-slate-50 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                                            <div className="w-10 h-10 rounded-2xl bg-white/80 dark:bg-slate-800/80 flex items-center justify-center text-slate-400">
                                                 <Package size={18} />
                                             </div>
                                             <div>
@@ -582,6 +622,14 @@ export default function AdminOrders() {
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-1.5">
+                                            {!canAct && (
+                                                <span
+                                                    className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                                    title="Actions réservées à l’admin de cette ville"
+                                                >
+                                                    Lecture seule
+                                                </span>
+                                            )}
                                             {isSubscription && (
                                                 <span className="px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                                                     🔷 Abonnement {order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : ''}
@@ -730,7 +778,9 @@ export default function AdminOrders() {
                                                         setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
                                                     }}
                                                     placeholder="ID du SMS (10 chiffres)"
-                                                    className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                    disabled={!canAct}
+                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                    className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
                                                 />
                                             </div>
 
@@ -771,8 +821,9 @@ export default function AdminOrders() {
                                                             onChange={(e) => {
                                                                 if (e.target.value) handleAssignLogistician(order.id, e.target.value)
                                                             }}
-                                                            disabled={assigningOrder === order.id}
-                                                            className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors"
+                                                            disabled={assigningOrder === order.id || !canAct}
+                                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                            className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors disabled:opacity-40"
                                                             defaultValue=""
                                                         >
                                                             <option value="" disabled>Choisir un livreur...</option>
@@ -795,7 +846,8 @@ export default function AdminOrders() {
                                             <div className="flex flex-col sm:flex-row flex-wrap gap-3">
                                                 <button
                                                     onClick={() => confirmPayment(order.id)}
-                                                    disabled={updating === order.id}
+                                                    disabled={updating === order.id || !canAct}
+                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                     className="flex-1 min-w-[140px] bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                                 >
                                                     {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
@@ -803,7 +855,8 @@ export default function AdminOrders() {
                                                 </button>
                                                 <button
                                                     onClick={() => rejectOrder(order.id)}
-                                                    disabled={updating === order.id}
+                                                    disabled={updating === order.id || !canAct}
+                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                     className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50 shrink-0"
                                                 >
                                                     <Ban size={14} /> Rejeter
@@ -821,7 +874,8 @@ export default function AdminOrders() {
                                                     <button
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'invalid_code')}
-                                                        disabled={updating === order.id}
+                                                        disabled={updating === order.id || !canAct}
+                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase hover:bg-amber-200/80 dark:hover:bg-amber-900/50 disabled:opacity-50 transition-colors"
                                                     >
                                                         <AlertTriangle size={12} /> Code invalide
@@ -829,7 +883,8 @@ export default function AdminOrders() {
                                                     <button
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'partial_payment')}
-                                                        disabled={updating === order.id}
+                                                        disabled={updating === order.id || !canAct}
+                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/25 text-orange-900 dark:text-orange-100 text-[9px] font-black uppercase hover:bg-orange-200/70 dark:hover:bg-orange-900/40 disabled:opacity-50 transition-colors"
                                                     >
                                                         <Banknote size={12} /> Paiement incomplet
@@ -837,7 +892,8 @@ export default function AdminOrders() {
                                                     <button
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'no_payment')}
-                                                        disabled={updating === order.id}
+                                                        disabled={updating === order.id || !canAct}
+                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-[9px] font-black uppercase hover:bg-red-200/60 dark:hover:bg-red-950/60 disabled:opacity-50 transition-colors"
                                                     >
                                                         <Ban size={12} /> Aucun paiement
@@ -845,7 +901,8 @@ export default function AdminOrders() {
                                                     <button
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'resend_code')}
-                                                        disabled={updating === order.id}
+                                                        disabled={updating === order.id || !canAct}
+                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 text-[9px] font-black uppercase hover:bg-violet-200/70 dark:hover:bg-violet-900/45 disabled:opacity-50 transition-colors"
                                                     >
                                                         <RefreshCw size={12} /> Renvoi du code
@@ -861,7 +918,8 @@ export default function AdminOrders() {
                                             canReleaseFunds(order) ? (
                                                 <button
                                                     onClick={() => releaseFunds(order.id)}
-                                                    disabled={updating === order.id}
+                                                    disabled={updating === order.id || !canAct}
+                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                     className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
                                                 >
                                                     {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
@@ -881,7 +939,8 @@ export default function AdminOrders() {
                                         {isSubscription && order.status === 'confirmed' && (
                                             <button
                                                 onClick={() => cancelSubscription(order.id)}
-                                                disabled={updating === order.id}
+                                                disabled={updating === order.id || !canAct}
+                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                                 className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
                                             >
                                                 {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
@@ -892,8 +951,11 @@ export default function AdminOrders() {
                                         {/* Reçu PDF */}
                                         {order.status !== 'pending' && (
                                             <button
+                                                type="button"
                                                 onClick={() => generateInvoice(order)}
-                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all"
+                                                disabled={!canAct}
+                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all disabled:opacity-40 disabled:pointer-events-none"
                                             >
                                                 <Download size={14} /> Reçu PDF
                                             </button>
@@ -901,18 +963,28 @@ export default function AdminOrders() {
 
                                         {/* Contacter le client */}
                                         {order.phone && (
-                                            <a
-                                                href={`tel:${order.phone}`}
-                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95"
-                                            >
-                                                <Phone size={14} /> Appeler
-                                            </a>
+                                            canAct ? (
+                                                <a
+                                                    href={`tel:${order.phone}`}
+                                                    className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                                >
+                                                    <Phone size={14} /> Appeler
+                                                </a>
+                                            ) : (
+                                                <span
+                                                    title="Actions réservées à l’admin de cette ville"
+                                                    className="bg-slate-100 dark:bg-slate-800 text-slate-400 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
+                                                >
+                                                    <Phone size={14} /> Appeler
+                                                </span>
+                                            )
                                         )}
 
                                         <button
                                             type="button"
                                             onClick={() => deleteOrderFromDb(order.id, formatOrderNumber(order))}
-                                            disabled={updating === order.id}
+                                            disabled={updating === order.id || !canAct}
+                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
                                             className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-900 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all disabled:opacity-50"
                                         >
                                             {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

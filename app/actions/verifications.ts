@@ -1,5 +1,6 @@
 'use server'
 
+import { assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createNotification } from '@/app/actions/notifications'
@@ -187,6 +188,17 @@ export async function adminApproveVerification(verificationId: string) {
 
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
+    const { data: verRow } = await supabase
+        .from('vendor_verifications')
+        .select('vendor_id')
+        .eq('id', verificationId)
+        .single()
+
+    if (!verRow?.vendor_id) return { error: 'Demande introuvable' }
+
+    const zAp = await assertAdminCanActOnVendorCity(supabase, user.id, verRow.vendor_id)
+    if (zAp.error) return { error: zAp.error }
+
     // Appeler la fonction RPC
     const { error } = await supabase.rpc('approve_vendor_verification', {
         p_verification_id: verificationId,
@@ -230,6 +242,17 @@ export async function adminRejectVerification(verificationId: string, reason: st
     if (profile?.role !== 'admin') return { error: 'Non autorisé' }
 
     if (!reason.trim()) return { error: 'Le motif de refus est obligatoire' }
+
+    const { data: verRej } = await supabase
+        .from('vendor_verifications')
+        .select('vendor_id')
+        .eq('id', verificationId)
+        .single()
+
+    if (!verRej?.vendor_id) return { error: 'Demande introuvable' }
+
+    const zRej = await assertAdminCanActOnVendorCity(supabase, user.id, verRej.vendor_id)
+    if (zRej.error) return { error: zRej.error }
 
     const { error } = await supabase.rpc('reject_vendor_verification', {
         p_verification_id: verificationId,

@@ -151,7 +151,7 @@ export default function ProductDetailPage() {
                             supabase
                                 .from('profiles')
                                 .select(
-                                    'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number',
+                                    'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number, city',
                                 )
                                 .eq('id', prod.seller_id)
                                 .maybeSingle(),

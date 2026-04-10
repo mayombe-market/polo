@@ -591,6 +591,8 @@ export async function createOrder(input: {
     landmark?: string
     delivery_mode?: string
     delivery_fee?: number
+    /** Points fidélité à utiliser sur cette commande (FCFA entiers). */
+    loyalty_points_to_use?: number
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -777,6 +779,32 @@ export async function createOrder(input: {
 
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
+
+    // ═══ PROGRAMME FIDÉLITÉ : application des points demandés ═══
+    // Appelé APRÈS création de la commande. En cas d'échec, la commande
+    // reste créée au prix plein (pas de rollback). On log uniquement.
+    const pointsRequested = Math.max(0, Math.round(Number(input.loyalty_points_to_use) || 0))
+    if (pointsRequested > 0 && process.env.NEXT_PUBLIC_LOYALTY_ENABLED === '1') {
+        const { error: spendError } = await supabase.rpc('loyalty_spend', {
+            p_order_id: order.id,
+            p_user_id: user.id,
+            p_amount: pointsRequested,
+        })
+        if (spendError) {
+            console.error('[createOrder] loyalty_spend failed (order kept at full price):', spendError.message, {
+                orderId: order.id,
+                pointsRequested,
+            })
+        } else {
+            // Relire l'ordre pour renvoyer le bon total au client
+            const { data: updatedOrder } = await supabase
+                .from('orders')
+                .select('*')
+                .eq('id', order.id)
+                .single()
+            if (updatedOrder) Object.assign(order, updatedOrder)
+        }
+    }
 
     // Synchroniser ville / quartier de livraison sur le profil acheteur (format display Brazzaville / Pointe-Noire)
     const syncedCity = orderCityToProfileCity(input.city)

@@ -30,6 +30,10 @@ import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
+import LoyaltyPointsApplier from '@/app/components/loyalty/LoyaltyPointsApplier'
+import { getMyLoyaltyUiState } from '@/app/actions/loyalty'
+import { isLoyaltyEnabled, formatFcfa } from '@/lib/loyalty/rules'
+import type { LoyaltyUiState } from '@/lib/loyalty/types'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import {
     MtnMomoLogo,
@@ -184,7 +188,27 @@ export default function CheckoutPage() {
             : selectedDelivery === 'standard' || selectedDelivery === 'express'
               ? DELIVERY_FEES[selectedDelivery]
               : 0
-    const grandTotal = total + deliveryFee
+    const totalBeforeLoyalty = total + deliveryFee
+
+    // ═══ PROGRAMME FIDÉLITÉ ═══
+    const [loyaltyState, setLoyaltyState] = useState<LoyaltyUiState | null>(null)
+    const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0)
+
+    useEffect(() => {
+        if (!isLoyaltyEnabled()) return
+        getMyLoyaltyUiState().then((s) => {
+            if (s) setLoyaltyState(s)
+        }).catch(() => {})
+    }, [])
+
+    // Clamp si le total change (ex: changement de mode livraison)
+    useEffect(() => {
+        if (loyaltyPointsToUse > totalBeforeLoyalty) {
+            setLoyaltyPointsToUse(totalBeforeLoyalty)
+        }
+    }, [totalBeforeLoyalty, loyaltyPointsToUse])
+
+    const grandTotal = Math.max(0, totalBeforeLoyalty - loyaltyPointsToUse)
 
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
@@ -255,6 +279,8 @@ export default function CheckoutPage() {
                     ? DELIVERY_FEE_INTER_URBAN
                     : DELIVERY_FEES[formData.delivery_mode]
             const totalWithDelivery = total + currentDeliveryFee
+            // Points fidélité : clamp final au total (au cas où)
+            const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
 
             const items = cart.map(item => ({
                 id: item.product_id || item.id,
@@ -276,6 +302,7 @@ export default function CheckoutPage() {
                 landmark: formData.landmark,
                 delivery_mode: formData.delivery_mode,
                 delivery_fee: currentDeliveryFee,
+                loyalty_points_to_use: pointsToUse,
             })
 
             if (result.error) {
@@ -699,6 +726,17 @@ export default function CheckoutPage() {
                             ))}
                         </div>
 
+                        {/* Programme fidélité : appliquer la cagnotte */}
+                        {isLoyaltyEnabled() && loyaltyState && loyaltyState.balanceAvailable > 0 && (
+                            <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                                <LoyaltyPointsApplier
+                                    balanceAvailable={loyaltyState.balanceAvailable}
+                                    orderTotal={totalBeforeLoyalty}
+                                    onChange={setLoyaltyPointsToUse}
+                                />
+                            </div>
+                        )}
+
                         <div className="space-y-3 pt-6 border-t border-slate-100 dark:border-slate-800">
                             <div className="flex justify-between text-[10px] font-bold uppercase text-slate-400">
                                 <span>Sous-total</span>
@@ -730,6 +768,16 @@ export default function CheckoutPage() {
                                     {selectedDelivery ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'À calculer'}
                                 </span>
                             </div>
+                            {loyaltyPointsToUse > 0 && (
+                                <div className="flex justify-between text-[10px] font-bold uppercase">
+                                    <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
+                                        🎁 <span>Cagnotte fidélité</span>
+                                    </span>
+                                    <span className="text-orange-600 dark:text-orange-400 italic">
+                                        −{loyaltyPointsToUse.toLocaleString('fr-FR')} FCFA
+                                    </span>
+                                </div>
+                            )}
                             <div className="flex justify-between items-end pt-4">
                                 <span className="font-black uppercase italic text-lg">Total</span>
                                 <div className="text-right">

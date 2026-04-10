@@ -746,19 +746,18 @@ function BuyerHome({
 
             <BecomeVendorCta variant="dashboard" />
 
-            {/* Loyalty points banner */}
-            {loyaltyPoints > 0 && (
-                <div className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 rounded-3xl border border-amber-200/50 dark:border-amber-800/30">
+            {/* Ma cagnotte fidélité — lien vers /account/cagnotte */}
+            {process.env.NEXT_PUBLIC_LOYALTY_ENABLED === '1' && (
+                <Link
+                    href="/account/cagnotte"
+                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 rounded-3xl border border-amber-200/50 dark:border-amber-800/30 hover:shadow-md transition-shadow"
+                >
                     <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-2xl flex-shrink-0">🎁</div>
-                    <div className="flex-1">
-                        <p className="text-sm font-black dark:text-white">{fmt(loyaltyPoints)} <span className="text-amber-600">points de fidélité</span></p>
-                        <p className="text-[10px] text-slate-400 font-bold">
-                            {loyaltyPoints >= 1000
-                                ? `Vous avez ${fmt(Math.floor(loyaltyPoints / 1000) * 2000)} F de réduction disponible !`
-                                : `Encore ${fmt(1000 - (loyaltyPoints % 1000))} points pour débloquer 2 000 F de réduction`}
-                        </p>
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-black dark:text-white">Ma cagnotte fidélité</p>
+                        <p className="text-[10px] text-slate-400 font-bold">Consulter mon solde et l'historique →</p>
                     </div>
-                </div>
+                </Link>
             )}
 
             {/* Orders needing confirmation */}

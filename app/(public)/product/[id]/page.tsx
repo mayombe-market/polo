@@ -14,6 +14,7 @@ import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import ProductGallery from '../../../components/ProductGallery'
+import LoyaltyEarnBadge from '@/app/components/loyalty/LoyaltyEarnBadge'
 import RealEstateGallery from '@/app/components/RealEstateGallery'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import NegotiationAction from '../../../components/NegotiationAction'
@@ -785,6 +786,7 @@ export default function ProductDetailPage() {
                                     </span>
                                 )}
                             </div>
+                            <LoyaltyEarnBadge price={Number(effectivePrice)} className="mt-2" />
                         </div>
                     )}
 

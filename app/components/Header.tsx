@@ -8,7 +8,7 @@ import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import HeaderContactPhones from './HeaderContactPhones'
 import TrustBar from './TrustBar'
-import { Menu, X, Bell, LayoutGrid } from 'lucide-react'
+import { Menu, X, Bell, LayoutGrid, ChevronDown } from 'lucide-react'
 
 // Lazy load AuthModal — ne se charge que quand l'user clique "Connexion"
 const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
@@ -29,6 +29,7 @@ export default function Header() {
     /** Catégories menu burger (chargées une fois à l’ouverture) */
     /** `null` = pas encore chargé (première ouverture du menu) */
     const [burgerCategories, setBurgerCategories] = useState<{ id: string; name: string }[] | null>(null)
+    const [categoriesOpen, setCategoriesOpen] = useState(false)
     const burgerCategoriesLoadedRef = useRef(false)
     const menuRef = useRef<HTMLDivElement>(null)
     const router = useRouter()
@@ -262,31 +263,41 @@ export default function Header() {
                         </div>
 
                         <div className="rounded-2xl border border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-800/40 overflow-hidden">
-                            <div className="flex items-center gap-2 px-3 py-2.5 border-b border-slate-100 dark:border-slate-800 bg-white/60 dark:bg-slate-900/50">
+                            <button
+                                type="button"
+                                onClick={() => setCategoriesOpen(!categoriesOpen)}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 bg-white/60 dark:bg-slate-900/50 text-left"
+                            >
                                 <LayoutGrid size={16} className="text-orange-500 shrink-0" />
-                                <span className="text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
+                                <span className="flex-1 text-[11px] font-black uppercase tracking-widest text-slate-600 dark:text-slate-300">
                                     Nos catégories
                                 </span>
-                            </div>
-                            <div className="max-h-[min(50vh,280px)] overflow-y-auto overscroll-contain px-1 py-1">
-                                {burgerCategories === null && (
-                                    <p className="px-3 py-3 text-xs text-slate-500">Chargement…</p>
-                                )}
-                                {burgerCategories !== null && burgerCategories.length === 0 && (
-                                    <p className="px-3 py-3 text-xs text-slate-500">Aucune catégorie pour le moment.</p>
-                                )}
-                                {burgerCategories !== null &&
-                                    burgerCategories.map((cat) => (
-                                        <Link
-                                            key={cat.id}
-                                            href={`/category/${encodeURIComponent(cat.name)}`}
-                                            onClick={() => setMobileMenuOpen(false)}
-                                            className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors no-underline text-sm font-medium text-slate-700 dark:text-slate-200"
-                                        >
-                                            <span className="truncate">{cat.name}</span>
-                                        </Link>
-                                    ))}
-                            </div>
+                                <ChevronDown
+                                    size={16}
+                                    className={`text-slate-400 transition-transform duration-200 ${categoriesOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
+                            {categoriesOpen && (
+                                <div className="max-h-[min(50vh,280px)] overflow-y-auto overscroll-contain px-1 py-1 border-t border-slate-100 dark:border-slate-800">
+                                    {burgerCategories === null && (
+                                        <p className="px-3 py-3 text-xs text-slate-500">Chargement…</p>
+                                    )}
+                                    {burgerCategories !== null && burgerCategories.length === 0 && (
+                                        <p className="px-3 py-3 text-xs text-slate-500">Aucune catégorie pour le moment.</p>
+                                    )}
+                                    {burgerCategories !== null &&
+                                        burgerCategories.map((cat) => (
+                                            <Link
+                                                key={cat.id}
+                                                href={`/category/${encodeURIComponent(cat.name)}`}
+                                                onClick={() => setMobileMenuOpen(false)}
+                                                className="flex items-center gap-2 px-3 py-2.5 rounded-xl hover:bg-white dark:hover:bg-slate-800 transition-colors no-underline text-sm font-medium text-slate-700 dark:text-slate-200"
+                                            >
+                                                <span className="truncate">{cat.name}</span>
+                                            </Link>
+                                        ))}
+                                </div>
+                            )}
                         </div>
 
                         <button onClick={toggleDarkMode} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-left">

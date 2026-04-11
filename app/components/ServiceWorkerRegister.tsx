@@ -1,12 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { diagError } from '@/lib/diagnostics'
 
 export default function ServiceWorkerRegister() {
     const [showUpdate, setShowUpdate] = useState(false)
     const [waitingWorker, setWaitingWorker] = useState<ServiceWorker | null>(null)
+    // Ne reload la page que si l'utilisateur a cliqué « Actualiser ». Sinon, le SW
+    // qui prend le contrôle au premier visit déclenche un reload fantôme qui fait
+    // doubler le LCP (observé dans PageSpeed).
+    const userTriggeredUpdate = useRef(false)
 
     useEffect(() => {
         if (!('serviceWorker' in navigator)) return
@@ -40,8 +44,11 @@ export default function ServiceWorkerRegister() {
                 })
             })
 
-        // Handle controller change (after skipWaiting)
-        const onControllerChange = () => window.location.reload()
+        // Handle controller change (after skipWaiting) — reload uniquement si le user
+        // a explicitement demandé la mise à jour via le bouton.
+        const onControllerChange = () => {
+            if (userTriggeredUpdate.current) window.location.reload()
+        }
         navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
 
         return () => {
@@ -51,6 +58,7 @@ export default function ServiceWorkerRegister() {
 
     const handleUpdate = () => {
         if (waitingWorker) {
+            userTriggeredUpdate.current = true
             waitingWorker.postMessage({ type: 'SKIP_WAITING' })
         }
     }

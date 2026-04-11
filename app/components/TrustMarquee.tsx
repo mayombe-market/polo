@@ -1,7 +1,5 @@
 'use client'
 
-import './TrustMarquee.css'
-
 const ITEMS = [
     'Déjà adopté et adoré par nos premiers clients',
     'Paiement via Mobile Money/Airtel Money ou cash',

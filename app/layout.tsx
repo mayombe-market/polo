@@ -7,7 +7,6 @@ import Script from 'next/script'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 import DiagnosticsListener from '@/app/components/DiagnosticsListener'
-import WelcomePopup from '@/app/components/WelcomePopup'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -99,10 +98,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="m-0 p-0">
         <Script
           src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-          strategy="afterInteractive"
+          strategy="lazyOnload"
           crossOrigin="anonymous"
         />
-        <Script id="google-analytics" strategy="afterInteractive">
+        <Script id="google-analytics" strategy="lazyOnload">
           {`
 window.dataLayer = window.dataLayer || [];
 function gtag(){dataLayer.push(arguments);}
@@ -119,9 +118,6 @@ gtag('config', '${GA_MEASUREMENT_ID}');
 
         {/* Erreurs JS / promises non gérées → Console [Mayombe] */}
         <DiagnosticsListener />
-
-        {/* Popup de bienvenue (première visite uniquement) */}
-        <WelcomePopup />
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>

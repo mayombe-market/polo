@@ -11,6 +11,7 @@ import PubProductMixSlider from '@/app/components/PubProductMixSlider'
 import { Truck, Store, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { UnifiedHeroSlide } from '@/lib/mergeHeroSlides'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
+import { heroImageUrl, heroImageSrcSet } from '@/lib/heroImageUrl'
 
 /** Visuel central « confiance » (hors catalogue) — livraison / soin colis ; remplaçable par une image maison. */
 const REASSURANCE_HERO_IMAGE =
@@ -214,6 +215,16 @@ export default function ClientHomePage({
             <section className="w-full overflow-x-clip overflow-y-hidden bg-white py-4 dark:bg-neutral-950 sm:py-6">
                 {safeHeroSlides.length > 0 ? (
                     <>
+                        {safeHeroSlides[0]?.img ? (
+                            <link
+                                rel="preload"
+                                as="image"
+                                href={heroImageUrl(safeHeroSlides[0].img, 1280)}
+                                imageSrcSet={heroImageSrcSet(safeHeroSlides[0].img)}
+                                imageSizes="(max-width: 768px) 100vw, 54vw"
+                                fetchPriority="high"
+                            />
+                        ) : null}
                         {/* Hauteur ×0,8 vs avant (largeur inchangée) */}
                         <div
                             className="relative mx-auto h-[min(70.4vh,656px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900"
@@ -273,7 +284,8 @@ export default function ClientHomePage({
                                             <div className="relative min-h-[min(33.6vh,304px)] w-full min-w-0 flex-1 overflow-hidden md:min-h-0">
                                                 {/* Cadre fixe : l’image ne dépasse pas (cover + clip) */}
                                                 <img
-                                                    src={slide.img || '/placeholder-image.svg'}
+                                                    src={heroImageUrl(slide.img, 1280) || '/placeholder-image.svg'}
+                                                    srcSet={slide.img ? heroImageSrcSet(slide.img) : undefined}
                                                     alt={slide.title}
                                                     className="absolute inset-0 box-border h-full w-full max-w-full object-cover object-center"
                                                     loading={index === 0 ? 'eager' : 'lazy'}

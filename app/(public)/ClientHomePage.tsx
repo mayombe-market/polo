@@ -500,11 +500,11 @@ export default function ClientHomePage({
                     <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800">
                         <SophieSectionTitle label="Nouveautés" title="Dernières arrivées" />
                         <div className="grid grid-flow-dense grid-cols-2 gap-x-3 gap-y-10 sm:grid-cols-3 md:grid-cols-5 md:gap-x-4 md:gap-y-12">
-                            {displayedNewProducts.map((product, index) => (
+                            {displayedNewProducts.map((product) => (
                                 <ProductCard
                                     key={product.id}
                                     product={product}
-                                    aboveFold={index < 8}
+                                    aboveFold={false}
                                 />
                             ))}
                         </div>
@@ -640,7 +640,7 @@ export default function ClientHomePage({
                         <SophieSectionTitle label="Focus" title="En lumière" />
                         <div className="grid grid-flow-dense grid-cols-1 gap-5 md:grid-cols-3 md:gap-6">
                             <div className="md:col-span-2">
-                                <ProductCard product={asymmetricPair[0]} aboveFold />
+                                <ProductCard product={asymmetricPair[0]} aboveFold={false} />
                             </div>
                             <div className="md:col-span-1">
                                 <ProductCard product={asymmetricPair[1]} aboveFold={false} />

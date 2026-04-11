@@ -92,12 +92,12 @@ export default function TrendsProductSlider({ products }: { products: ProductCar
                   — 1,5 / 3,5 / 5,5 colonnes (gap-3 = 0,75rem ; n = slidesPerView − 0,5 arrondi aux gaps entre colonnes visibles).
                 */}
                 <div className="-ml-1 flex gap-3 pl-1">
-                    {ready.map((product, index) => (
+                    {ready.map((product) => (
                         <div
                             key={product.id}
                             className="min-w-0 shrink-0 grow-0 basis-[calc((100%-0.75rem)/1.5)] md:basis-[calc((100%-2.25rem)/3.5)] lg:basis-[calc((100%-3.75rem)/5.5)]"
                         >
-                            <TrendProductCard product={product} aboveFold={index < 6} />
+                            <TrendProductCard product={product} aboveFold={false} />
                         </div>
                     ))}
                 </div>

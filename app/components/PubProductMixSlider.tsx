@@ -121,7 +121,7 @@ export default function PubProductMixSlider({
                     {slides.map((slide, index) => (
                         <div key={slide.type === 'product' ? `p-${slide.product.id}-${index}` : `t-${slide.campaign.id}-${slide.slot}-${index}`} className={SLIDE_BASIS}>
                             {slide.type === 'product' ? (
-                                <TrendProductCard product={slide.product} aboveFold={index < 8} />
+                                <TrendProductCard product={slide.product} aboveFold={false} />
                             ) : (
                                 <TileSlide campaign={slide.campaign} />
                             )}

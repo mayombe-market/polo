@@ -8,7 +8,7 @@ import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
 import TrendsProductSlider from '@/app/components/TrendsProductSlider'
 import PubProductMixSlider from '@/app/components/PubProductMixSlider'
-import { Truck, Store, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Truck, Store, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
 import type { UnifiedHeroSlide } from '@/lib/mergeHeroSlides'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 
@@ -179,6 +179,34 @@ export default function ClientHomePage({
         return () => clearInterval(interval)
     }, [safeHeroSlides.length])
 
+    const goPrevHero = useCallback(() => {
+        if (safeHeroSlides.length <= 1) return
+        setCurrentAdIndex((prev) => (prev - 1 + safeHeroSlides.length) % safeHeroSlides.length)
+    }, [safeHeroSlides.length])
+
+    const goNextHero = useCallback(() => {
+        if (safeHeroSlides.length <= 1) return
+        setCurrentAdIndex((prev) => (prev + 1) % safeHeroSlides.length)
+    }, [safeHeroSlides.length])
+
+    // Swipe tactile mobile
+    const [touchStartX, setTouchStartX] = useState<number | null>(null)
+    const handleHeroTouchStart = useCallback((e: React.TouchEvent) => {
+        setTouchStartX(e.touches[0].clientX)
+    }, [])
+    const handleHeroTouchEnd = useCallback(
+        (e: React.TouchEvent) => {
+            if (touchStartX === null) return
+            const dx = e.changedTouches[0].clientX - touchStartX
+            if (Math.abs(dx) > 40) {
+                if (dx < 0) goNextHero()
+                else goPrevHero()
+            }
+            setTouchStartX(null)
+        },
+        [touchStartX, goNextHero, goPrevHero]
+    )
+
     return (
         <div className="bg-white pb-28 pt-0 dark:bg-neutral-950">
             <VendorMarketDrawer open={vendorDrawerOpen} onClose={() => setVendorDrawerOpen(false)} />
@@ -187,7 +215,31 @@ export default function ClientHomePage({
                 {safeHeroSlides.length > 0 ? (
                     <>
                         {/* Hauteur ×0,8 vs avant (largeur inchangée) */}
-                        <div className="relative mx-auto h-[min(70.4vh,656px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900">
+                        <div
+                            className="relative mx-auto h-[min(70.4vh,656px)] w-[90%] min-w-0 max-w-[1400px] overflow-hidden rounded-2xl bg-[#ebe8e2] sm:w-[80%] dark:bg-neutral-900"
+                            onTouchStart={handleHeroTouchStart}
+                            onTouchEnd={handleHeroTouchEnd}
+                        >
+                            {safeHeroSlides.length > 1 && (
+                                <>
+                                    <button
+                                        type="button"
+                                        onClick={goPrevHero}
+                                        aria-label="Bannière précédente"
+                                        className="absolute left-3 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-neutral-900 shadow-md backdrop-blur transition hover:bg-white sm:left-5 sm:h-12 sm:w-12 dark:bg-neutral-900/70 dark:text-white dark:hover:bg-neutral-900"
+                                    >
+                                        <ChevronLeft size={22} />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={goNextHero}
+                                        aria-label="Bannière suivante"
+                                        className="absolute right-3 top-1/2 z-20 -translate-y-1/2 inline-flex h-10 w-10 items-center justify-center rounded-full bg-white/80 text-neutral-900 shadow-md backdrop-blur transition hover:bg-white sm:right-5 sm:h-12 sm:w-12 dark:bg-neutral-900/70 dark:text-white dark:hover:bg-neutral-900"
+                                    >
+                                        <ChevronRight size={22} />
+                                    </button>
+                                </>
+                            )}
                             {safeHeroSlides.map((slide, index) => {
                                 const active = index === currentAdIndex
                                 return (

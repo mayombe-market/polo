@@ -97,11 +97,19 @@ export default async function CategoryPage(props: any) {
                 productQuery = productQuery.or(orConditions);
             } else {
                 // REQUÊTE MIXTE : Nom catégorie flou OU category_id OU sub_category_uuid
-                // dans la liste (ce dernier n'est ajouté que pour Immobilier).
+                // dans la liste OU subcategory texte flou sur chacun des noms de
+                // sous-catégories (pour Immobilier uniquement). Cette dernière clause
+                // rattrape les anciens produits qui n'ont QUE `subcategory='Villas'`
+                // renseigné, sans category / category_id / sub_category_uuid.
                 const safeCategoryName = sanitizePostgrestValue(categoryName);
                 let orBase = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
                 if (immoSubUuids.length > 0) {
                     orBase += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`
+                }
+                if (isImmobilier) {
+                    for (const s of (category.sub_category as { id: string; name: string }[] | undefined) || []) {
+                        orBase += `,subcategory.ilike.%${sanitizePostgrestValue(s.name)}%`
+                    }
                 }
                 productQuery = productQuery.or(orBase);
             }
@@ -111,59 +119,48 @@ export default async function CategoryPage(props: any) {
 
             if (isImmobilier) {
                 const safeCategoryName = sanitizePostgrestValue(categoryName);
+                const subs = (category.sub_category as { id: string; name: string }[] | undefined) || []
 
-                // Même filtre que la requête "Tout" : catégorie texte/ID OU rattachement
-                // direct via sub_category_uuid. On sélectionne les 2 clefs utiles pour
-                // bucketiser chaque produit en mémoire.
-                let countOr = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
-                if (immoSubUuids.length > 0) {
-                    countOr += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`
-                }
-                const { data: countRows } = await excludeExpiredSellers(
-                    supabase.from('products').select('subcategory, sub_category_uuid'),
-                    expiredIds,
+                // COMPTEUR PAR SOUS-CATÉGORIE : on utilise EXACTEMENT la même clause OR
+                // que la requête produits quand on clique sur une sous-catégorie. Comme
+                // ça le compteur affiché = le nombre de cartes qui s'affichent.
+                //   -> match sur subcategory texte OU sur sub_category_uuid.
+                // On parallélise les N count queries (head: true = pas de data, rapide).
+                await Promise.all(
+                    subs.map(async (sub) => {
+                        immoSubCounts[sub.name] = 0
+                        const safeSub = sanitizePostgrestValue(sub.name)
+                        const { count } = await excludeExpiredSellers(
+                            supabase
+                                .from('products')
+                                .select('*', { count: 'exact', head: true }),
+                            expiredIds,
+                        ).or(`subcategory.ilike.%${safeSub}%,sub_category_uuid.eq.${sub.id}`)
+                        immoSubCounts[sub.name] = count || 0
+                    }),
                 )
-                    .or(countOr)
-                    .limit(5000);
 
-                // Index UUID → nom canonique et map lowercase → nom canonique
-                const uuidToName: Record<string, string> = {}
-                const nameByLower: Record<string, string> = {}
-                for (const s of (category.sub_category as { id: string; name: string }[] | undefined) || []) {
-                    uuidToName[s.id] = s.name
-                    nameByLower[s.name.toLowerCase()] = s.name
-                    immoSubCounts[s.name] = 0
+                // COMPTEUR "TOUT" : union de toutes les conditions de rattachement
+                //   - category texte flou
+                //   - category_id
+                //   - sub_category_uuid dans la liste
+                //   - subcategory texte flou pour CHAQUE nom de sous-catégorie
+                // Cette dernière clause rattrape les produits qui n'ont QUE le champ
+                // texte `subcategory` renseigné sans aucun lien vers la catégorie.
+                let totalOr = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
+                if (immoSubUuids.length > 0) {
+                    totalOr += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`
                 }
-
-                for (const r of countRows || []) {
-                    immoTotal += 1
-                    const row = r as { subcategory?: string | null; sub_category_uuid?: string | null }
-
-                    // 1. UUID prioritaire (source de vérité)
-                    if (row.sub_category_uuid && uuidToName[row.sub_category_uuid]) {
-                        const name = uuidToName[row.sub_category_uuid]
-                        immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
-                        continue
-                    }
-
-                    // 2. Match texte (exact puis partiel) — pour les anciens produits
-                    //    qui n'ont que le champ `subcategory` renseigné.
-                    if (row.subcategory) {
-                        const needle = row.subcategory.trim().toLowerCase()
-                        if (nameByLower[needle]) {
-                            const name = nameByLower[needle]
-                            immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
-                            continue
-                        }
-                        for (const lower in nameByLower) {
-                            if (needle.includes(lower) || lower.includes(needle)) {
-                                const name = nameByLower[lower]
-                                immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
-                                break
-                            }
-                        }
-                    }
+                for (const sub of subs) {
+                    totalOr += `,subcategory.ilike.%${sanitizePostgrestValue(sub.name)}%`
                 }
+                const { count: totalCount } = await excludeExpiredSellers(
+                    supabase
+                        .from('products')
+                        .select('*', { count: 'exact', head: true }),
+                    expiredIds,
+                ).or(totalOr)
+                immoTotal = totalCount || 0
             }
         }
     } catch (e) {

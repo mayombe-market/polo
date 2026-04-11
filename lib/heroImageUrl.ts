@@ -73,7 +73,9 @@ export function heroImageUrl(rawUrl: string | null | undefined, width: number): 
  * Génère un attribut `srcSet` multi-largeurs pour le hero (mobile → desktop).
  */
 export function heroImageSrcSet(rawUrl: string | null | undefined): string {
-    const widths = [640, 960, 1280, 1600]
+    // Trimmé à 3 largeurs : mobile Lighthouse pioche 960w (412 CSS px × DPR 1.75).
+    // Moins de variantes = moins de cache-misses côté Unsplash/Supabase en cold.
+    const widths = [640, 960, 1280]
     return widths.map((w) => `${heroImageUrl(rawUrl, w)} ${w}w`).join(', ')
 }
 

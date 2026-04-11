@@ -89,11 +89,30 @@ export const metadata = {
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim() || 'G-SLRPK4NETV'
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Origine Supabase Storage (hero + catalogue) — calculée au build pour
+  // ouvrir la connexion TLS avant même la découverte du <link rel="preload">.
+  let supabaseOrigin: string | null = null
+  try {
+    if (process.env.NEXT_PUBLIC_SUPABASE_URL) {
+      supabaseOrigin = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL).origin
+    }
+  } catch {}
+
   return (
     <html lang="fr" className={`${inter.variable} antialiased dark`}>
       <head>
+        {/* Préconnexions critiques au LCP : évite 300-600 ms de DNS+TLS
+            sur l'image hero (souvent Unsplash ou Supabase Storage). */}
+        <link rel="dns-prefetch" href="https://images.unsplash.com" />
+        <link rel="preconnect" href="https://images.unsplash.com" crossOrigin="anonymous" />
         <link rel="dns-prefetch" href="https://res.cloudinary.com" />
         <link rel="preconnect" href="https://res.cloudinary.com" crossOrigin="anonymous" />
+        {supabaseOrigin ? (
+          <>
+            <link rel="dns-prefetch" href={supabaseOrigin} />
+            <link rel="preconnect" href={supabaseOrigin} crossOrigin="anonymous" />
+          </>
+        ) : null}
       </head>
       <body className="m-0 p-0">
         <Script

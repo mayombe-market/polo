@@ -3,10 +3,10 @@ import { Inter } from 'next/font/google'
 import { AuthProvider } from '@/hooks/useAuth'
 import { RealtimeProvider } from '@/hooks/useRealtime'
 import { CartProvider } from '@/hooks/userCart'
-import Script from 'next/script'
 import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 import DiagnosticsListener from '@/app/components/DiagnosticsListener'
+import GtmDeferred from '@/app/components/GtmDeferred'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -115,19 +115,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         ) : null}
       </head>
       <body className="m-0 p-0">
-        <Script
-          src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
-          strategy="lazyOnload"
-          crossOrigin="anonymous"
-        />
-        <Script id="google-analytics" strategy="lazyOnload">
-          {`
-window.dataLayer = window.dataLayer || [];
-function gtag(){dataLayer.push(arguments);}
-gtag('js', new Date());
-gtag('config', '${GA_MEASUREMENT_ID}');
-`}
-        </Script>
+        {/* Google Analytics : chargé SEULEMENT à la 1ʳᵉ interaction utilisateur
+            (scroll/click/keydown) ou après 10 s d'inactivité. Libère ~215 ms de
+            main thread pendant la fenêtre LCP et supprime le "User Timing" GTM
+            de 3.6 s qui polluait le TBT. */}
+        <GtmDeferred measurementId={GA_MEASUREMENT_ID} />
 
         {/* Zod v4 : jitless côté client (léger ; gardé synchrone pour éviter toute course aux formulaires) */}
         <ZodClientInit />

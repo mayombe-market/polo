@@ -122,8 +122,10 @@ export default function Header() {
                     <img
                         src="/logo.png"
                         alt="Logo"
-                        width={128}
-                        height={128}
+                        width={200}
+                        height={104}
+                        decoding="async"
+                        fetchPriority="low"
                         className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform"
                     />
                 </Link>

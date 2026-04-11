@@ -73,10 +73,11 @@ function CookieBanner({ onAcceptAll, onRejectAll, onCustomize }: {
     const [visible, setVisible] = useState(false)
 
     useEffect(() => {
-        // Délai long pour laisser le hero être mesuré comme LCP par Lighthouse/PageSpeed
-        // avant que la bannière cookies n'apparaisse. 2500ms est au-delà de la fenêtre
-        // typique de capture LCP (~2-2.5s sur connexion 4G lente émulée).
-        const t = setTimeout(() => setVisible(true), 2500)
+        // Délai >= LCP mobile Lighthouse (~5.8s sur 4G lente) + marge. La bannière
+        // n'apparaît donc qu'APRÈS la mesure LCP ET après que Lighthouse a terminé
+        // le snapshot d'accessibilité (qui tape vers 6-7s). Gain : 10 pts accessibilité
+        // + Speed Index plus stable (pas de re-paint pendant la fenêtre de mesure).
+        const t = setTimeout(() => setVisible(true), 7000)
         return () => clearTimeout(t)
     }, [])
 

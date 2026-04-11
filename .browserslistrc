@@ -1,0 +1,13 @@
+# Cibles modernes — évite les polyfills ES2017+ (Array.at, flat, flatMap,
+# Object.fromEntries, Object.hasOwn, String.trimStart/trimEnd, etc.)
+# qui ajoutent 14 KiB au chunk principal pour aucun utilisateur réel.
+#
+# Next.js / Turbopack lit ce fichier EN PRIORITÉ sur le champ `browserslist`
+# de package.json pour les transformations SWC côté client.
+
+chrome >= 96
+firefox >= 93
+safari >= 15.4
+edge >= 96
+not dead
+not op_mini all

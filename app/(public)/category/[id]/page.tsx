@@ -74,6 +74,15 @@ export default async function CategoryPage(props: any) {
 
         if (category) {
             const expiredIds = await getExpiredSellerIds(supabase)
+            const isImmobilier = (category.name || '').trim().toLowerCase() === 'immobilier'
+
+            // UUIDs de toutes les sous-catégories Immobilier : permet au filtre "Tout"
+            // de rattraper les produits uniquement liés via sub_category_uuid (sans
+            // category / category_id renseignés).
+            const immoSubUuids: string[] = isImmobilier
+                ? ((category.sub_category as { id: string; name: string }[] | undefined) || []).map((s) => s.id)
+                : []
+
             let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds);
 
             if (selectedSub) {
@@ -87,26 +96,73 @@ export default async function CategoryPage(props: any) {
                 }
                 productQuery = productQuery.or(orConditions);
             } else {
-                // REQUÊTE MIXTE : Cherche par Nom flou OU par ID numérique de l'ancienne base
+                // REQUÊTE MIXTE : Nom catégorie flou OU category_id OU sub_category_uuid
+                // dans la liste (ce dernier n'est ajouté que pour Immobilier).
                 const safeCategoryName = sanitizePostgrestValue(categoryName);
-                productQuery = productQuery.or(`category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`);
+                let orBase = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
+                if (immoSubUuids.length > 0) {
+                    orBase += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`
+                }
+                productQuery = productQuery.or(orBase);
             }
 
             const { data: prodData } = await productQuery.order('created_at', { ascending: false }).limit(100);
             products = prodData || [];
 
-            if (category.name === 'Immobilier') {
+            if (isImmobilier) {
                 const safeCategoryName = sanitizePostgrestValue(categoryName);
+
+                // Même filtre que la requête "Tout" : catégorie texte/ID OU rattachement
+                // direct via sub_category_uuid. On sélectionne les 2 clefs utiles pour
+                // bucketiser chaque produit en mémoire.
+                let countOr = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
+                if (immoSubUuids.length > 0) {
+                    countOr += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`
+                }
                 const { data: countRows } = await excludeExpiredSellers(
-                    supabase.from('products').select('subcategory'),
+                    supabase.from('products').select('subcategory, sub_category_uuid'),
                     expiredIds,
                 )
-                    .or(`category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`)
-                    .limit(2500);
+                    .or(countOr)
+                    .limit(5000);
+
+                // Index UUID → nom canonique et map lowercase → nom canonique
+                const uuidToName: Record<string, string> = {}
+                const nameByLower: Record<string, string> = {}
+                for (const s of (category.sub_category as { id: string; name: string }[] | undefined) || []) {
+                    uuidToName[s.id] = s.name
+                    nameByLower[s.name.toLowerCase()] = s.name
+                    immoSubCounts[s.name] = 0
+                }
+
                 for (const r of countRows || []) {
-                    immoTotal += 1;
-                    const s = ((r as { subcategory?: string | null }).subcategory || '').trim();
-                    if (s) immoSubCounts[s] = (immoSubCounts[s] || 0) + 1;
+                    immoTotal += 1
+                    const row = r as { subcategory?: string | null; sub_category_uuid?: string | null }
+
+                    // 1. UUID prioritaire (source de vérité)
+                    if (row.sub_category_uuid && uuidToName[row.sub_category_uuid]) {
+                        const name = uuidToName[row.sub_category_uuid]
+                        immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
+                        continue
+                    }
+
+                    // 2. Match texte (exact puis partiel) — pour les anciens produits
+                    //    qui n'ont que le champ `subcategory` renseigné.
+                    if (row.subcategory) {
+                        const needle = row.subcategory.trim().toLowerCase()
+                        if (nameByLower[needle]) {
+                            const name = nameByLower[needle]
+                            immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
+                            continue
+                        }
+                        for (const lower in nameByLower) {
+                            if (needle.includes(lower) || lower.includes(needle)) {
+                                const name = nameByLower[lower]
+                                immoSubCounts[name] = (immoSubCounts[name] || 0) + 1
+                                break
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -118,7 +174,7 @@ export default async function CategoryPage(props: any) {
         return <div className="p-20 text-center font-bold">Chargement ou catégorie "{categoryName}" introuvable... <br /><Link href="/" className="text-green-600 underline">Retour</Link></div>
     }
 
-    if (category.name === 'Immobilier') {
+    if ((category.name || '').trim().toLowerCase() === 'immobilier') {
         return (
             <div className="flex min-h-screen flex-col bg-white dark:bg-slate-900">
                 <Suspense

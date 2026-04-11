@@ -21,6 +21,18 @@ const IMMO_SUBS = [
     'Locations',
 ] as const
 
+/**
+ * Anciennes sous-catégories supprimées côté DB (seed v1). On les filtre côté
+ * client par sécurité au cas où elles traînent encore dans Supabase le temps
+ * que le user exécute le SQL de cleanup.
+ */
+const IMMO_SUBS_BLOCKLIST = new Set<string>([
+    'Terrains & Parcelles',
+    'Maisons & Villas (Vente)',
+    'Locations (Maisons, Studios, Chambres)',
+    'Commerces & Bureaux (Magasins à louer)',
+])
+
 type Props = {
     category: { id: string; name: string; sub_category?: { id: string; name: string }[] }
     products: any[]
@@ -134,12 +146,10 @@ export default function ImmobilierCategoryClient({
         setSubSelect(selectedSub || '')
     }, [selectedSub])
 
-    const stats = useMemo(() => {
-        return IMMO_SUBS.map((name) => ({
-            name,
-            count: immoSubCounts[name] ?? 0,
-        }))
-    }, [immoSubCounts])
+    // `stats` n'est plus affiché dans le hero (on a retiré la rangée de compteurs
+    // redondante) mais on garde le mapping pour le <select> qui doit rester trié
+    // selon l'ordre canonique IMMO_SUBS.
+    void IMMO_SUBS
 
     const filteredProducts = useMemo(() => {
         let list = applyImmoChips(products, chipCity, chipOffer)
@@ -213,20 +223,17 @@ export default function ImmobilierCategoryClient({
 
     return (
         <>
-            <section className="w-full bg-gradient-to-br from-[#0C447C] via-[#185FA5] to-[#378ADD] px-4 py-8 text-white sm:py-10 md:py-12">
+            <section className="w-full bg-gradient-to-br from-[#0C447C] via-[#185FA5] to-[#378ADD] px-4 py-6 text-white sm:py-8 md:py-10">
                 <div className="mx-auto max-w-4xl text-center">
-                    <p className="mb-4 inline-block rounded-full border border-white/25 bg-white/10 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-white/95 sm:text-[11px]">
-                        Immobilier au Congo
-                    </p>
-                    <h1 className="text-3xl font-light tracking-tight text-white md:text-4xl">Trouvez votre bien idéal</h1>
-                    <p className="mx-auto mt-3 max-w-xl text-sm text-white/75 md:text-base">
-                        Maisons, terrains, appartements — Brazzaville & Pointe-Noire
+                    <h1 className="text-2xl font-light tracking-tight text-white md:text-3xl">Trouvez votre bien idéal</h1>
+                    <p className="mx-auto mt-2 max-w-xl text-sm text-white/75 md:text-base">
+                        Maisons, terrains, appartements — Brazzaville &amp; Pointe-Noire
                     </p>
                 </div>
 
                 <form
                     onSubmit={onSearch}
-                    className="mx-auto mt-8 max-w-2xl rounded-xl bg-white p-4 shadow-xl dark:bg-white"
+                    className="mx-auto mt-5 max-w-2xl rounded-xl bg-white p-4 shadow-xl dark:bg-white"
                     role="search"
                 >
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-stretch">
@@ -267,18 +274,9 @@ export default function ImmobilierCategoryClient({
                         </button>
                     </div>
                 </form>
-
-                <div className="mx-auto mt-8 flex max-w-3xl flex-wrap justify-center gap-6 gap-y-4 text-center sm:gap-8">
-                    {stats.map(({ name, count }) => (
-                        <div key={name} className="min-w-[120px] px-2">
-                            <p className="text-2xl font-bold tabular-nums text-white md:text-3xl">{count}</p>
-                            <p className="mt-1 text-[10px] font-medium leading-tight text-white/80 sm:text-xs">{name}</p>
-                        </div>
-                    ))}
-                </div>
             </section>
 
-            <div className="mx-auto w-full max-w-7xl flex-grow overflow-x-hidden px-4 py-12">
+            <div className="mx-auto w-full max-w-7xl flex-grow overflow-x-hidden px-4 py-6 md:py-8">
                 <nav className="mb-4 text-sm font-medium text-gray-500 dark:text-gray-400">
                     <Link href="/" className="transition-colors hover:text-green-600 dark:hover:text-green-500">
                         Accueil
@@ -288,7 +286,9 @@ export default function ImmobilierCategoryClient({
 
                 <ImmobilierFilters
                     categoryName={categoryName}
-                    subCategories={category.sub_category}
+                    subCategories={(category.sub_category || []).filter(
+                        (s) => !IMMO_SUBS_BLOCKLIST.has(s.name.trim()),
+                    )}
                     selectedSub={selectedSub}
                     subCounts={immoSubCounts}
                     totalCount={immoTotal}

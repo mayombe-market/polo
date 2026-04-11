@@ -22,7 +22,12 @@ function isSupabaseObjectPublic(u: string): boolean {
 }
 
 function isUnsplash(u: string): boolean {
-    return /(^|\.)images\.unsplash\.com/.test(u)
+    try {
+        const host = new URL(u).hostname
+        return host === 'images.unsplash.com' || host.endsWith('.unsplash.com') || host === 'unsplash.com'
+    } catch {
+        return false
+    }
 }
 
 /**

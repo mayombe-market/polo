@@ -353,8 +353,9 @@ export default function ProductDetailPage() {
                 {/* ── BACK BAR ── */}
                 <div className="flex items-center justify-between p-4 lg:px-8 pb-2">
                     <Link
-                        href="/"
+                        href={product.category ? `/category/${encodeURIComponent(product.category)}` : '/'}
                         className="w-10 h-10 rounded-[14px] bg-white/70 dark:bg-white/[0.06] backdrop-blur-md border border-white/10 flex items-center justify-center text-slate-500 dark:text-slate-300 hover:bg-white/90 dark:hover:bg-white/10 transition-all shadow-sm"
+                        aria-label={product.category ? `Retour à ${product.category}` : 'Retour au marché'}
                     >
                         <ArrowLeft size={18} />
                     </Link>
@@ -385,7 +386,12 @@ export default function ProductDetailPage() {
                     <span className="text-slate-300 dark:text-slate-600">/</span>
                     {product.category ? (
                         <>
-                            <span className="text-slate-500 dark:text-slate-500 max-w-[120px] truncate">{product.category}</span>
+                            <Link
+                                href={`/category/${encodeURIComponent(product.category)}`}
+                                className="max-w-[120px] truncate text-slate-500 transition-colors hover:text-blue-600 dark:text-slate-500 dark:hover:text-blue-400"
+                            >
+                                {product.category}
+                            </Link>
                             <span className="text-slate-300 dark:text-slate-600">/</span>
                         </>
                     ) : null}

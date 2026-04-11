@@ -12,6 +12,23 @@ import { isPromoActive, getPromoPrice } from '@/lib/promo'
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
 export const dynamic = 'force-dynamic'
 
+/**
+ * Noms canoniques des sous-catégories Immobilier. Sert de fallback quand la
+ * table `sub_category` est vide côté DB (après cleanup) : on utilise quand même
+ * ces 7 noms pour matcher les produits taggés uniquement par texte et pour
+ * générer les boutons de filtre côté UI. Doit rester aligné avec `IMMO_SUBS`
+ * défini dans `ImmobilierCategoryClient.tsx`.
+ */
+const IMMO_CANONICAL_SUBS = [
+    'Maisons',
+    'Appartements',
+    'Terrains',
+    'Luxe',
+    'Hôtels',
+    'Villas',
+    'Locations',
+] as const
+
 function categoryTitleFromParam(rawId: string): string {
     try {
         const categoryName = decodeURIComponent(rawId).replace(/%26/g, '&')
@@ -76,11 +93,37 @@ export default async function CategoryPage(props: any) {
             const expiredIds = await getExpiredSellerIds(supabase)
             const isImmobilier = (category.name || '').trim().toLowerCase() === 'immobilier'
 
-            // UUIDs de toutes les sous-catégories Immobilier : permet au filtre "Tout"
-            // de rattraper les produits uniquement liés via sub_category_uuid (sans
-            // category / category_id renseignés).
+            // Sous-catégories DB (peut être vide après cleanup).
+            const dbSubs: { id: string; name: string }[] =
+                (category.sub_category as { id: string; name: string }[] | undefined) || []
+
+            // Pour Immobilier, on fusionne les subs DB avec la liste canonique
+            // hardcodée. Les subs DB sont conservées (UUID réel), les subs
+            // manquantes sont ajoutées avec un id factice `canonical:<nom>` qui
+            // n'est jamais utilisé pour matcher en base (on matchera par texte).
+            const immoSubs: { id: string; name: string }[] = isImmobilier
+                ? (() => {
+                      const existingLower = new Set(dbSubs.map((s) => s.name.trim().toLowerCase()))
+                      const merged = [...dbSubs]
+                      for (const name of IMMO_CANONICAL_SUBS) {
+                          if (!existingLower.has(name.toLowerCase())) {
+                              merged.push({ id: `canonical:${name}`, name })
+                          }
+                      }
+                      return merged
+                  })()
+                : dbSubs
+
+            // On expose ces subs fusionnées à l'UI en remplaçant `category.sub_category`
+            // pour que le filtre client les affiche toutes (avec le nom canonique).
+            if (isImmobilier) {
+                category = { ...category, sub_category: immoSubs }
+            }
+
+            // UUIDs RÉELS uniquement (exclut les ids factices `canonical:*`) pour
+            // les requêtes `sub_category_uuid.in.(...)`.
             const immoSubUuids: string[] = isImmobilier
-                ? ((category.sub_category as { id: string; name: string }[] | undefined) || []).map((s) => s.id)
+                ? immoSubs.filter((s) => !s.id.startsWith('canonical:')).map((s) => s.id)
                 : []
 
             let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds);
@@ -89,9 +132,10 @@ export default async function CategoryPage(props: any) {
                 const subObj = category.sub_category?.find((s: any) => s.name === selectedSub);
                 const safeSub = sanitizePostgrestValue(selectedSub);
 
-                // REQUÊTE MIXTE : Cherche par Nom flou OU par UUID de l'ancienne base
+                // REQUÊTE MIXTE : Cherche par Nom flou OU par UUID réel de Supabase
+                // (on skip les ids factices `canonical:*` injectés comme fallback UI).
                 let orConditions = `subcategory.ilike.%${safeSub}%`;
-                if (subObj) {
+                if (subObj && !String(subObj.id).startsWith('canonical:')) {
                     orConditions += `,sub_category_uuid.eq.${subObj.id}`;
                 }
                 productQuery = productQuery.or(orConditions);
@@ -119,23 +163,25 @@ export default async function CategoryPage(props: any) {
 
             if (isImmobilier) {
                 const safeCategoryName = sanitizePostgrestValue(categoryName);
-                const subs = (category.sub_category as { id: string; name: string }[] | undefined) || []
+                const subs = immoSubs
 
-                // COMPTEUR PAR SOUS-CATÉGORIE : on utilise EXACTEMENT la même clause OR
-                // que la requête produits quand on clique sur une sous-catégorie. Comme
-                // ça le compteur affiché = le nombre de cartes qui s'affichent.
-                //   -> match sur subcategory texte OU sur sub_category_uuid.
-                // On parallélise les N count queries (head: true = pas de data, rapide).
+                // COMPTEUR PAR SOUS-CATÉGORIE : même clause OR que la requête produits
+                // quand on clique sur une sous-catégorie -> count = nombre de cartes.
+                // Pour les subs canoniques (id factice), on ne matche QUE par texte.
                 await Promise.all(
                     subs.map(async (sub) => {
                         immoSubCounts[sub.name] = 0
                         const safeSub = sanitizePostgrestValue(sub.name)
+                        const isCanonical = String(sub.id).startsWith('canonical:')
+                        const orClause = isCanonical
+                            ? `subcategory.ilike.%${safeSub}%`
+                            : `subcategory.ilike.%${safeSub}%,sub_category_uuid.eq.${sub.id}`
                         const { count } = await excludeExpiredSellers(
                             supabase
                                 .from('products')
                                 .select('*', { count: 'exact', head: true }),
                             expiredIds,
-                        ).or(`subcategory.ilike.%${safeSub}%,sub_category_uuid.eq.${sub.id}`)
+                        ).or(orClause)
                         immoSubCounts[sub.name] = count || 0
                     }),
                 )
@@ -143,10 +189,8 @@ export default async function CategoryPage(props: any) {
                 // COMPTEUR "TOUT" : union de toutes les conditions de rattachement
                 //   - category texte flou
                 //   - category_id
-                //   - sub_category_uuid dans la liste
-                //   - subcategory texte flou pour CHAQUE nom de sous-catégorie
-                // Cette dernière clause rattrape les produits qui n'ont QUE le champ
-                // texte `subcategory` renseigné sans aucun lien vers la catégorie.
+                //   - sub_category_uuid dans la liste des UUIDs réels
+                //   - subcategory texte flou pour CHAQUE nom canonique/DB
                 let totalOr = `category.ilike.%${safeCategoryName}%,category_id.eq.${category.id}`
                 if (immoSubUuids.length > 0) {
                     totalOr += `,sub_category_uuid.in.(${immoSubUuids.join(',')})`

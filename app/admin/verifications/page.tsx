@@ -5,7 +5,6 @@ import { ShieldCheck, Check, X, Loader2, Clock, Eye, ChevronDown, ChevronUp, Use
 import { toast } from 'sonner'
 import { safeGetUser } from '@/lib/supabase-utils'
 import { useRealtime } from '@/hooks/useRealtime'
-import AdminNav from '../AdminNav'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     adminGetPendingVerifications,
@@ -93,10 +92,7 @@ export default function AdminVerificationsPage() {
     }
 
     return (
-        <>
-            <AdminNav />
-
-            <div className="max-w-4xl mx-auto p-4 md:p-8">
+        <div className="max-w-4xl mx-auto p-4 md:p-8">
                 {/* Header */}
                 <div className="flex items-center justify-between mb-6">
                     <div>
@@ -325,25 +321,24 @@ export default function AdminVerificationsPage() {
                         </div>
                     )
                 })}
-            </div>
 
-            {/* Modal zoom image */}
-            {zoomImage && (
-                <div
-                    className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
-                    onClick={() => setZoomImage(null)}
-                >
-                    <div className="relative w-full max-w-3xl aspect-video rounded-2xl overflow-hidden">
-                        <img src={zoomImage} alt="Zoom" className="absolute inset-0 h-full w-full object-contain" loading="lazy" decoding="async" />
-                    </div>
-                    <button
+                {/* Modal zoom image */}
+                {zoomImage && (
+                    <div
+                        className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
                         onClick={() => setZoomImage(null)}
-                        className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
                     >
-                        <X size={20} />
-                    </button>
-                </div>
-            )}
-        </>
+                        <div className="relative w-full max-w-3xl aspect-video rounded-2xl overflow-hidden">
+                            <img src={zoomImage} alt="Zoom" className="absolute inset-0 h-full w-full object-contain" loading="lazy" decoding="async" />
+                        </div>
+                        <button
+                            onClick={() => setZoomImage(null)}
+                            className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20"
+                        >
+                            <X size={20} />
+                        </button>
+                    </div>
+                )}
+            </div>
     )
 }

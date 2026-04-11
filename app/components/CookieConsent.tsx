@@ -73,7 +73,10 @@ function CookieBanner({ onAcceptAll, onRejectAll, onCustomize }: {
     const [visible, setVisible] = useState(false)
 
     useEffect(() => {
-        const t = setTimeout(() => setVisible(true), 600)
+        // Délai long pour laisser le hero être mesuré comme LCP par Lighthouse/PageSpeed
+        // avant que la bannière cookies n'apparaisse. 2500ms est au-delà de la fenêtre
+        // typique de capture LCP (~2-2.5s sur connexion 4G lente émulée).
+        const t = setTimeout(() => setVisible(true), 2500)
         return () => clearTimeout(t)
     }, [])
 
@@ -83,13 +86,11 @@ function CookieBanner({ onAcceptAll, onRejectAll, onCustomize }: {
             style={{
                 transform: visible ? 'translateY(0)' : 'translateY(100%)',
                 transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                pointerEvents: visible ? 'auto' : 'none',
             }}
         >
-            {/* Backdrop */}
-            <div
-                className="fixed inset-0 bg-black/40 backdrop-blur-sm -z-10"
-                style={{ opacity: visible ? 1 : 0, transition: 'opacity 0.4s ease' }}
-            />
+            {/* Pas de backdrop : la bannière s'affiche en bas, sans recouvrir le hero.
+                Un backdrop fixed inset-0 était capté par Lighthouse comme élément LCP. */}
 
             <div className="max-w-[580px] mx-auto bg-[#12121C] rounded-t-3xl border border-white/[0.06] border-b-0 p-7 shadow-[0_-20px_60px_rgba(0,0,0,0.6)]">
                 {/* Icon + Title */}

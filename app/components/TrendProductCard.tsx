@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
+import { catalogImageUrl } from '@/lib/heroImageUrl'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import type { ProductCardProduct } from '@/app/components/ProductCard'
@@ -53,7 +54,7 @@ export default function TrendProductCard({ product, aboveFold = false }: TrendPr
     const basePrice = typeof product.price === 'number' && Number.isFinite(product.price) ? product.price : 0
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
     const imageSrc = resolveImageSrc(product)
-    const displayUrl = useMemo(() => withCloudinaryCatalogThumb(imageSrc), [imageSrc])
+    const displayUrl = useMemo(() => catalogImageUrl(withCloudinaryCatalogThumb(imageSrc)), [imageSrc])
     const [imgBroken, setImgBroken] = useState(false)
 
     useEffect(() => {

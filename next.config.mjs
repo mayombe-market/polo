@@ -26,14 +26,25 @@ const nextConfig = {
                 value: 'private, no-cache, no-store, must-revalidate',
             },
         ]
+        // Home : SWR court côté edge (TTFB ~625 ms observé avec no-store plein,
+        // causé par 10 requêtes Supabase parallèles à chaque hit). 30 s de cache
+        // edge + revalidation en arrière-plan = TTFB ~50-100 ms pour la majorité
+        // des visites, sans sacrifier la fraîcheur des nouveaux produits.
+        const homeSwr = [
+            {
+                key: 'Cache-Control',
+                value: 'public, max-age=0, s-maxage=30, stale-while-revalidate=300',
+            },
+        ]
         return [
             // Service worker : pas de cache long — chaque déploiement doit être vu vite (évite « rien ne change » côté PWA).
             {
                 source: '/sw.js',
                 headers: [{ key: 'Cache-Control', value: 'public, max-age=0, must-revalidate' }],
             },
+            // Home : cache edge court pour couper le TTFB.
+            { source: '/', headers: homeSwr },
             // Pages publiques dynamiques (liste produits, RSC ?_rsc=…) : limiter les 304 fantômes au refresh.
-            { source: '/', headers: noStoreCatalog },
             { source: '/search', headers: noStoreCatalog },
             { source: '/feed', headers: noStoreCatalog },
             { source: '/category/:path*', headers: noStoreCatalog },

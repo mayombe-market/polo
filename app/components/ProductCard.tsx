@@ -17,6 +17,7 @@
 import Link from 'next/link'
 import { debugImageSrc } from '@/lib/debugImageSrc'
 import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
+import { catalogImageUrl } from '@/lib/heroImageUrl'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
 import { ShoppingBag, Eye } from 'lucide-react'
 import LikeButton from './LikeButton'
@@ -151,7 +152,7 @@ function ProductCardInner({
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
     const timeRemaining = hasPromo ? getPromoTimeRemaining(product.promo_end_date) : ''
     const imageSrc = resolveImageSrc(product)
-    const displayUrl = useMemo(() => withCloudinaryCatalogThumb(imageSrc), [imageSrc])
+    const displayUrl = useMemo(() => catalogImageUrl(withCloudinaryCatalogThumb(imageSrc)), [imageSrc])
     const [imgBroken, setImgBroken] = useState(false)
 
     useEffect(() => {

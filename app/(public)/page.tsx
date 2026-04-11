@@ -3,13 +3,16 @@ import ClientHomePage from './ClientHomePage'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 import { mergeHeroSlides } from '@/lib/mergeHeroSlides'
+import { heroImageUrl, heroImageSrcSet } from '@/lib/heroImageUrl'
 
 /**
- * Rendu dynamique : évite qu’un segment ISR (anciennes lignes sans `img`) ne soit servi
- * puis remplacé au refresh — clignotement « image → placeholder ».
- * L’invalidation on-demand (revalidateProductCatalog) reste utile après publish.
+ * ISR 30 s avec revalidation on-demand via `revalidateProductCatalog` après chaque
+ * publish / modif produit. Auparavant en `force-dynamic` + `no-store`, ce qui
+ * produisait un TTFB de 625 ms (10 requêtes Supabase en parallèle à chaque hit).
+ * Avec 30 s de SWR côté edge + invalidation on-demand, la majorité des visites
+ * servent le HTML pré-rendu en ~50-100 ms sans sacrifier la fraîcheur.
  */
-export const dynamic = 'force-dynamic'
+export const revalidate = 30
 
 export default async function HomePage() {
   const supabase = createClient(
@@ -92,8 +95,25 @@ export default async function HomePage() {
 
   const heroSlides = mergeHeroSlides(ads || [], heroCampaignRows)
 
+  // Preload de l'image du premier slide hero (LCP candidate) — rendu en server
+  // component pour que le hint soit directement dans le HTML initial et découvert
+  // par le navigateur avant même la livraison des chunks JS.
+  const firstHeroImg = heroSlides[0]?.img
+  const heroPreloadHref = firstHeroImg ? heroImageUrl(firstHeroImg, 960) : null
+  const heroPreloadSrcSet = firstHeroImg ? heroImageSrcSet(firstHeroImg) : null
+
   return (
     <main className="min-h-screen flex flex-col">
+      {heroPreloadHref ? (
+        <link
+          rel="preload"
+          as="image"
+          href={heroPreloadHref}
+          imageSrcSet={heroPreloadSrcSet ?? undefined}
+          imageSizes="(max-width: 768px) 100vw, 54vw"
+          fetchPriority="high"
+        />
+      ) : null}
       <div className="flex-grow">
         <ClientHomePage
           heroSlides={heroSlides}

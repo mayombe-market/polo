@@ -76,3 +76,12 @@ export function heroImageSrcSet(rawUrl: string | null | undefined): string {
     const widths = [640, 960, 1280, 1600]
     return widths.map((w) => `${heroImageUrl(rawUrl, w)} ${w}w`).join(', ')
 }
+
+/**
+ * Version vignette catalogue : même logique que heroImageUrl, mais largeur
+ * par défaut beaucoup plus petite (540 px, suffisant pour les grilles 270×365
+ * avec DPR 2). Utilisé par ProductCard / TrendProductCard.
+ */
+export function catalogImageUrl(rawUrl: string | null | undefined, width: number = 540): string {
+    return heroImageUrl(rawUrl, width)
+}

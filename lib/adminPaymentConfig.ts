@@ -11,12 +11,12 @@ export const ADMIN_PAYMENT_NUMBERS: Record<
     { mobile_money: string; airtel_money: string }
 > = {
     brazzaville: {
-        mobile_money: '06 938 71 69',
-        airtel_money: '05 XXX XX XX',
+        mobile_money: '06 495 62 79',
+        airtel_money: '05 559 93 53',
     },
     'pointe-noire': {
-        mobile_money: '06 XXX XX XX',
-        airtel_money: '05 XXX XX XX',
+        mobile_money: '06 495 62 79',
+        airtel_money: '05 559 93 53',
     },
 }
 

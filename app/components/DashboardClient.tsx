@@ -1709,17 +1709,14 @@ function OrdersPage({
                                         <span className="text-lg font-black text-green-600">
                                             {(order.vendor_payout || Math.round((order.total_amount || 0) * 0.9))?.toLocaleString('fr-FR')} F
                                         </span>
-                                        {order.status !== 'delivered' && (
+                                        {order.status === 'confirmed' && (
                                             <button
-                                                onClick={() => {
-                                                    const next = order.status === 'confirmed' ? 'shipped' : order.status === 'shipped' ? 'delivered' : 'confirmed'
-                                                    updateStatus(order.id, next)
-                                                }}
+                                                onClick={() => updateStatus(order.id, 'shipped')}
                                                 disabled={updating === order.id}
                                                 className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-orange-500 hover:text-white dark:hover:bg-orange-500 dark:hover:text-white transition-all"
                                             >
                                                 {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
-                                                {order.status === 'confirmed' ? 'Expédier' : order.status === 'shipped' ? 'Livrée' : 'Confirmer'}
+                                                Expédier
                                             </button>
                                         )}
                                         <button

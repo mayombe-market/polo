@@ -7,6 +7,7 @@ import { ZodClientInit } from '@/app/components/ZodClientInit'
 import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 import DiagnosticsListener from '@/app/components/DiagnosticsListener'
 import GtmDeferred from '@/app/components/GtmDeferred'
+import OnlineRefresh from '@/app/components/OnlineRefresh'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -129,6 +130,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
         {/* Erreurs JS / promises non gérées → Console [Mayombe] */}
         <DiagnosticsListener />
+
+        {/* Rechargement automatique au retour en ligne après coupure réseau */}
+        <OnlineRefresh />
 
         {/* CONTENU DE LA PAGE */}
         <AuthProvider>

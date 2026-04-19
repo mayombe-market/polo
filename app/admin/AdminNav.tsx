@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, CreditCard } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = getSupabaseBrowserClient()
@@ -16,28 +16,41 @@ const links = [
     { href: '/admin/products', label: 'Produits', icon: ShoppingBag, badgeKey: null },
     { href: '/admin/verifications', label: 'Vérifications', icon: ShieldCheck, badgeKey: 'verifications' as const },
     { href: '/admin/vendors', label: 'Vendeurs', icon: Users, badgeKey: null },
+    { href: '/admin/subscriptions', label: 'Abonnements', icon: CreditCard, badgeKey: 'subscriptions' as const },
     { href: '/admin/logisticians', label: 'Logisticiens', icon: Truck, badgeKey: null },
     { href: '/admin/ads', label: 'Pubs', icon: Megaphone, badgeKey: 'ad_campaigns' as const },
 ]
 
 export default function AdminNav() {
     const pathname = usePathname()
-    const [badges, setBadges] = useState<{ orders: number; verifications: number; ad_campaigns: number }>({
+    const [badges, setBadges] = useState<{ orders: number; verifications: number; ad_campaigns: number; subscriptions: number }>({
         orders: 0,
         verifications: 0,
         ad_campaigns: 0,
+        subscriptions: 0,
     })
 
     const fetchCounts = useCallback(async () => {
-        const [ordersRes, verificationsRes, adCampRes] = await Promise.all([
+        const soonCutoff = new Date()
+        soonCutoff.setDate(soonCutoff.getDate() + 7)
+
+        const [ordersRes, verificationsRes, adCampRes, subRes] = await Promise.all([
             supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('vendor_ad_campaigns').select('*', { count: 'exact', head: true }).eq('status', 'pending_review'),
+            // Abonnements expirés ou expirant dans 7 jours
+            supabase.from('profiles')
+                .select('*', { count: 'exact', head: true })
+                .eq('role', 'vendor')
+                .not('subscription_plan', 'is', null)
+                .not('subscription_plan', 'in', '("gratuit","free")')
+                .lte('subscription_end_date', soonCutoff.toISOString()),
         ])
         setBadges({
             orders: ordersRes.count || 0,
             verifications: verificationsRes.count || 0,
             ad_campaigns: adCampRes.count || 0,
+            subscriptions: subRes.count || 0,
         })
     }, [])
 
@@ -61,7 +74,9 @@ export default function AdminNav() {
                               ? badges.verifications
                               : badgeKey === 'ad_campaigns'
                                 ? badges.ad_campaigns
-                                : 0
+                                : badgeKey === 'subscriptions'
+                                  ? badges.subscriptions
+                                  : 0
 
                     return (
                         <Link

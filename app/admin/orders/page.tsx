@@ -41,8 +41,8 @@ export default function AdminOrders() {
     const [cityFilter, setCityFilter] = useState('all')
     /** `all` = super-admin (ville profil absente ou non reconnue). */
     const [adminScope, setAdminScope] = useState<AdminZoneScope>('all')
-    /** Abonnements : ville du vendeur (user_id) pour zone + style. */
-    const [subscriptionVendorCity, setSubscriptionVendorCity] = useState<Record<string, string | null>>({})
+    /** Ville du vendeur par user_id (abonnements) ou seller_id (commandes produit). */
+    const [vendorCityMap, setVendorCityMap] = useState<Record<string, string | null>>({})
 
     const supabase = getSupabaseBrowserClient()
 
@@ -120,55 +120,71 @@ export default function AdminOrders() {
     }, [supabase])
 
     useEffect(() => {
-        const subIds = [
-            ...new Set(
-                orders
-                    .filter((o) => o.order_type === 'subscription' && o.user_id)
-                    .map((o) => o.user_id as string)
-            ),
-        ]
-        if (subIds.length === 0) {
-            setSubscriptionVendorCity({})
+        // Collecter tous les seller_id dont on a besoin de connaître la ville
+        const allSellerIds = new Set<string>()
+
+        for (const o of orders) {
+            if (o.order_type === 'subscription' && o.user_id) {
+                allSellerIds.add(o.user_id)
+            } else {
+                const items: any[] = Array.isArray(o.items) ? o.items : []
+                for (const item of items) {
+                    if (item.seller_id) allSellerIds.add(item.seller_id)
+                }
+            }
+        }
+
+        const ids = [...allSellerIds]
+        if (ids.length === 0) {
+            setVendorCityMap({})
             return
         }
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase.from('profiles').select('id, city').in('id', subIds)
+            const { data } = await supabase.from('profiles').select('id, city').in('id', ids)
             if (cancelled) return
             const map: Record<string, string | null> = {}
             for (const row of data || []) {
                 map[row.id] = row.city ?? null
             }
-            setSubscriptionVendorCity(map)
+            setVendorCityMap(map)
         })()
         return () => {
             cancelled = true
         }
     }, [orders, supabase])
 
+    /** Résout la zone d'une commande à partir de la ville du vendeur. */
+    const resolveOrderZone = useCallback(
+        (order: any): ServiceCityCode | null => {
+            if (order.order_type === 'subscription' && order.user_id) {
+                return normalizeToServiceCityCode(vendorCityMap[order.user_id])
+            }
+            const items: any[] = Array.isArray(order.items) ? order.items : []
+            const zones = [...new Set(
+                items
+                    .map((i: any) => i.seller_id)
+                    .filter(Boolean)
+                    .map((sid: string) => normalizeToServiceCityCode(vendorCityMap[sid]))
+            )]
+            return zones.length === 1 ? zones[0] : null
+        },
+        [vendorCityMap]
+    )
+
     const canActOnOrder = useCallback(
         (order: any): boolean => {
             if (adminScope === 'all') return true
-            let z: ServiceCityCode | null = null
-            if (order.order_type === 'subscription' && order.user_id) {
-                z = normalizeToServiceCityCode(subscriptionVendorCity[order.user_id])
-            } else {
-                z = normalizeToServiceCityCode(order.city)
-            }
+            const z = resolveOrderZone(order)
             if (!z) return false
             return z === adminScope
         },
-        [adminScope, subscriptionVendorCity]
+        [adminScope, resolveOrderZone]
     )
 
     const orderZoneStyle = useCallback(
         (order: any) => {
-            let z: ServiceCityCode | null = null
-            if (order.order_type === 'subscription' && order.user_id) {
-                z = normalizeToServiceCityCode(subscriptionVendorCity[order.user_id])
-            } else {
-                z = normalizeToServiceCityCode(order.city)
-            }
+            const z = resolveOrderZone(order)
             if (z === 'brazzaville') {
                 return 'border-2 border-blue-400 dark:border-blue-600 bg-blue-50/70 dark:bg-blue-950/30'
             }
@@ -177,7 +193,7 @@ export default function AdminOrders() {
             }
             return 'border-2 border-slate-300 dark:border-slate-600 bg-slate-50/60 dark:bg-slate-900/50'
         },
-        [subscriptionVendorCity]
+        [resolveOrderZone]
     )
 
     // Realtime : toutes les commandes (vision globale)
@@ -406,9 +422,9 @@ export default function AdminOrders() {
         else if (activeFilter === 'all') base = productOrders
         else base = productOrders.filter(order => order.status === activeFilter)
 
-        // City filter
+        // City filter — basé sur la ville du vendeur (pas du client)
         if (cityFilter !== 'all') {
-            base = base.filter(order => (order.city || '').toLowerCase() === cityFilter.toLowerCase())
+            base = base.filter(order => resolveOrderZone(order) === cityFilter)
         }
 
         // Date filter

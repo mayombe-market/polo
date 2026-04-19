@@ -45,7 +45,7 @@ export async function assertAdminCanActOnOrder(
 
     const { data: order } = await supabase
         .from('orders')
-        .select('city, order_type, user_id')
+        .select('city, order_type, user_id, items')
         .eq('id', orderId)
         .single()
 
@@ -53,10 +53,25 @@ export async function assertAdminCanActOnOrder(
 
     let orderZone: ServiceCityCode | null = null
     if (order.order_type === 'subscription' && order.user_id) {
+        // Abonnement → ville du vendeur (user_id)
         const { data: vend } = await supabase.from('profiles').select('city').eq('id', order.user_id).maybeSingle()
         orderZone = normalizeToServiceCityCode(vend?.city)
     } else {
-        orderZone = normalizeToServiceCityCode(order.city)
+        // Commande produit → ville du (premier) vendeur dans les items
+        const items: any[] = Array.isArray(order.items) ? order.items : []
+        const sellerIds = [...new Set(items.map((i: any) => i.seller_id).filter(Boolean))] as string[]
+        if (sellerIds.length === 0) {
+            // Pas de vendeur identifiable → super-admin seulement
+            orderZone = null
+        } else if (sellerIds.length === 1) {
+            const { data: seller } = await supabase.from('profiles').select('city').eq('id', sellerIds[0]).maybeSingle()
+            orderZone = normalizeToServiceCityCode(seller?.city)
+        } else {
+            // Multi-vendeurs : vérifier que tous sont dans la même zone
+            const { data: sellers } = await supabase.from('profiles').select('city').in('id', sellerIds)
+            const zones = [...new Set((sellers || []).map(s => normalizeToServiceCityCode(s.city)))]
+            orderZone = zones.length === 1 ? zones[0] : null // zones mixtes → super-admin
+        }
     }
 
     if (orderZone === null) return { error: SUPER_ONLY }

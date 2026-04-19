@@ -301,17 +301,38 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
         }
     }
 
-    // Notifications avec produit + mode livraison
-    const productNames = (order.items || []).filter((i: any) => i.id && !i.id.startsWith('subscription_')).map((i: any) => i.name).join(', ')
-    const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
-    const sellerIds = [...new Set((order.items || []).map((i: any) => i.seller_id).filter(Boolean))]
-    for (const sellerId of sellerIds) {
-        const sellerItems = (order.items || []).filter((i: any) => i.seller_id === sellerId).map((i: any) => i.name).join(', ')
-        createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/account/dashboard?tab=orders`).catch(() => {})
-    }
-    // Notifier l'acheteur
-    if (order.user_id) {
-        createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé ✓', `${productNames} · ${dlvLabel} · Votre commande est en cours de préparation.`, `/account/dashboard?tab=orders`).catch(() => {})
+    if (order.order_type === 'subscription') {
+        // ── Notification abonnement (vendeur uniquement) ──
+        if (order.user_id) {
+            const planNames: Record<string, string> = { starter: 'Starter', pro: 'Pro', premium: 'Premium' }
+            const planEmojis: Record<string, string> = { starter: '🚀', pro: '⭐', premium: '👑' }
+            const planId = order.subscription_plan_id || ''
+            const planLabel = planNames[planId] || planId
+
+            createNotification(
+                order.user_id,
+                'subscription_confirmed',
+                `Abonnement ${planLabel} activé ${planEmojis[planId] || ''}`,
+                `Votre abonnement ${planLabel} est actif. Bonne vente sur Mayombe Market !`,
+                '/vendor/dashboard'
+            ).catch(() => {})
+        }
+    } else {
+        // ── Notifications commande produit ──
+        const productNames = (order.items || []).map((i: any) => i.name).join(', ')
+        const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
+        const sellerIds = [...new Set((order.items || []).map((i: any) => i.seller_id).filter(Boolean))]
+
+        // Notifier chaque vendeur impliqué
+        for (const sellerId of sellerIds) {
+            const sellerItems = (order.items || []).filter((i: any) => i.seller_id === sellerId).map((i: any) => i.name).join(', ')
+            createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/account/dashboard?tab=orders`).catch(() => {})
+        }
+
+        // Notifier l'acheteur
+        if (order.user_id) {
+            createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé ✓', `${productNames} · ${dlvLabel} · Votre commande est en cours de préparation.`, `/account/dashboard?tab=orders`).catch(() => {})
+        }
     }
 
     return { success: true, tracking_number }

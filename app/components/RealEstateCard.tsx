@@ -36,7 +36,33 @@ export default function RealEstateCard({ product }: Props) {
         '/placeholder-image.svg'
 
     const isLocation = extras?.offerType === 'location'
-    const subBadge = IMMO_SUBCATEGORY_BADGES[product.subcategory || ''] ?? null
+
+    // Badge : d'abord match exact sur la sous-catégorie, sinon match flou
+    // (contient le nom singulier/pluriel), sinon fallback générique "Bien".
+    // Objectif : TOUTES les cartes immobilier affichent un badge.
+    const resolveBadge = () => {
+        const raw = (product.subcategory || '').trim()
+        const exact = IMMO_SUBCATEGORY_BADGES[raw]
+        if (exact) return exact
+        const lower = raw.toLowerCase()
+        if (lower) {
+            for (const [key, value] of Object.entries(IMMO_SUBCATEGORY_BADGES)) {
+                const k = key.toLowerCase()
+                const singular = k.replace(/s$/, '')
+                if (lower.includes(k) || lower.includes(singular)) return value
+            }
+        }
+        // Fallback offre location vs vente
+        if (extras?.offerType === 'location') return IMMO_SUBCATEGORY_BADGES['Locations']
+        return {
+            label: 'Bien',
+            bg: 'bg-slate-100',
+            text: 'text-slate-700',
+            darkBg: 'dark:bg-slate-800',
+            darkText: 'dark:text-slate-200',
+        }
+    }
+    const subBadge = resolveBadge()
 
     return (
         <div className="relative">
@@ -55,13 +81,11 @@ export default function RealEstateCard({ product }: Props) {
                     />
 
                     <div className="pointer-events-none absolute left-3 top-3 z-[1] flex max-w-[75%] flex-col gap-1.5">
-                        {subBadge && (
-                            <span
-                                className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${subBadge.bg} ${subBadge.text} ${subBadge.darkBg} ${subBadge.darkText}`}
-                            >
-                                {subBadge.label}
-                            </span>
-                        )}
+                        <span
+                            className={`inline-flex w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${subBadge.bg} ${subBadge.text} ${subBadge.darkBg} ${subBadge.darkText}`}
+                        >
+                            {subBadge.label}
+                        </span>
                         {hasPromo && (
                             <span className="inline-flex w-fit items-center gap-1 rounded-full bg-red-600 px-2 py-0.5 text-[9px] font-black uppercase text-white">
                                 🔥 PROMO -{product.promo_percentage}%

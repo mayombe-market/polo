@@ -42,7 +42,7 @@ import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
-import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName } from './SellerSubscription'
+import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName, PLANS } from './SellerSubscription'
 import { getSubscriptionStatus, getDaysRemaining } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
@@ -131,10 +131,22 @@ export default function DashboardClient({ products: initialProducts, profile, us
     } as const
 
     const [showLimitWarning, setShowLimitWarning] = useState(false)
+    const [showReactivation, setShowReactivation] = useState(false)
     const [showUpgradePricing, setShowUpgradePricing] = useState(false)
     const [showUpgradeCheckout, setShowUpgradeCheckout] = useState(false)
     const [upgradeBilling, setUpgradeBilling] = useState('monthly')
     const [upgradeSelectedPlan, setUpgradeSelectedPlan] = useState<any>(null)
+
+    /** Ouvre le bon écran selon le statut : réactivation si plan expiré, grille si free. */
+    const openUpgradeFlow = useCallback(() => {
+        const isPaidExpired = (isExpired || isGrace) &&
+            ['starter', 'pro', 'premium'].includes(currentPlan)
+        if (isPaidExpired) {
+            setShowReactivation(true)
+        } else {
+            setShowUpgradePricing(true)
+        }
+    }, [isExpired, isGrace, currentPlan])
 
     /** Singleton navigateur — `useMemo` évite de recréer le client à chaque rendu. */
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
@@ -144,7 +156,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
         if (typeof window === 'undefined') return
         const params = new URLSearchParams(window.location.search)
         if (params.get('upgrade') !== '1') return
-        setShowUpgradePricing(true)
+        openUpgradeFlow()
         params.delete('upgrade')
         const q = params.toString()
         const next = q ? `${window.location.pathname}?${q}` : window.location.pathname
@@ -517,7 +529,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <div className="px-3 pb-3 shrink-0">
                         <button
                             type="button"
-                            onClick={() => setShowUpgradePricing(true)}
+                            onClick={() => openUpgradeFlow()}
                             title={sidebarOpen ? undefined : 'Activer mon abonnement'}
                             className="w-full flex items-center justify-center gap-2 rounded-2xl py-2.5 px-3 text-white text-[9px] font-black uppercase tracking-wide shadow-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
                             style={vendorPlanBtnStyle}
@@ -588,7 +600,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <div className="md:hidden px-3 pt-3 pb-1">
                         <button
                             type="button"
-                            onClick={() => setShowUpgradePricing(true)}
+                            onClick={() => openUpgradeFlow()}
                             className="w-full flex items-center justify-center gap-2 rounded-2xl py-3 px-4 text-white text-[10px] font-black uppercase tracking-wide shadow-lg transition-transform active:scale-[0.98]"
                             style={vendorPlanBtnStyle}
                         >
@@ -672,7 +684,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         subscriptionStatus={subscriptionStatus}
                         daysRemaining={daysRemaining}
                         totalDays={totalDays}
-                        onUpgrade={() => setShowUpgradePricing(true)}
+                        onUpgrade={() => openUpgradeFlow()}
                     />
                 )}
 
@@ -692,7 +704,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         currentPlan={currentPlan}
                         maxProducts={maxProducts}
                         currentProductCount={currentProductCount}
-                        onUpgrade={() => setShowUpgradePricing(true)}
+                        onUpgrade={() => openUpgradeFlow()}
                         onProductsChange={setProducts}
                     />
                 )}
@@ -731,7 +743,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     </span>
                                     {isApproachingLimit && (
                                         <button
-                                            onClick={() => setShowUpgradePricing(true)}
+                                            onClick={() => openUpgradeFlow()}
                                             className="text-[10px] font-black uppercase text-orange-500 hover:underline"
                                         >
                                             ⚡ Upgrader
@@ -759,7 +771,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     Renouvelez pour les réactiver et continuer à publier.
                                 </p>
                                 <button
-                                    onClick={() => setShowUpgradePricing(true)}
+                                    onClick={() => openUpgradeFlow()}
                                     className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-red-500/20"
                                 >
                                     🔄 Renouveler mon abonnement
@@ -775,7 +787,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     Passez au niveau supérieur pour continuer à publier.
                                 </p>
                                 <button
-                                    onClick={() => setShowUpgradePricing(true)}
+                                    onClick={() => openUpgradeFlow()}
                                     className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-orange-500/20"
                                 >
                                     🚀 Voir les plans supérieurs
@@ -887,10 +899,166 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     currentProducts={currentProductCount}
                     maxProducts={maxProducts}
                     currentPlan={getPlanName(currentPlan)}
-                    onUpgrade={() => { setShowLimitWarning(false); setShowUpgradePricing(true) }}
+                    onUpgrade={() => { setShowLimitWarning(false); openUpgradeFlow() }}
                     onClose={() => setShowLimitWarning(false)}
                 />
             )}
+
+            {/* ═══ OVERLAY : Réactivation rapide ═══ */}
+            {showReactivation && (() => {
+                const planObj = PLANS.find(p => p.id === currentPlan)
+                if (!planObj) return null
+                const price = upgradeBilling === 'yearly' ? planObj.yearlyPrice : planObj.price
+                const billingLabel = upgradeBilling === 'yearly' ? '/ an' : '/ mois'
+                const savings = Math.round(((planObj.price * 12 - planObj.yearlyPrice) / (planObj.price * 12)) * 100)
+                return (
+                    <div style={{
+                        position: "fixed", inset: 0, zIndex: 1000,
+                        background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
+                        overflowY: "auto",
+                    }}>
+                        <div style={{
+                            maxWidth: 480, margin: "0 auto", padding: "28px 16px",
+                            minHeight: "100vh",
+                            background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)",
+                            fontFamily: SYSTEM_FONT_STACK,
+                        }}>
+                            {/* Retour */}
+                            <button
+                                onClick={() => setShowReactivation(false)}
+                                style={{
+                                    display: "flex", alignItems: "center", gap: 6,
+                                    background: "none", border: "none", color: "#888",
+                                    fontSize: 13, cursor: "pointer", marginBottom: 24, padding: 0,
+                                }}
+                            >
+                                ← Retour au dashboard
+                            </button>
+
+                            {/* Titre */}
+                            <div style={{ textAlign: "center", marginBottom: 28 }}>
+                                <div style={{
+                                    display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                    width: 64, height: 64, borderRadius: 20,
+                                    background: planObj.gradient,
+                                    fontSize: 32, marginBottom: 16,
+                                    boxShadow: `0 8px 24px ${planObj.shadowColor}`,
+                                }}>
+                                    {planObj.emoji}
+                                </div>
+                                <h2 style={{ color: "#F0ECE2", fontSize: 22, fontWeight: 800, margin: "0 0 6px" }}>
+                                    Réactiver votre abonnement
+                                </h2>
+                                <p style={{ color: "#888", fontSize: 14, margin: 0 }}>
+                                    Retrouvez votre plan <span style={{ color: planObj.color, fontWeight: 700 }}>{planObj.name}</span> et remettez vos produits en ligne.
+                                </p>
+                            </div>
+
+                            {/* Toggle mensuel / annuel */}
+                            <div style={{
+                                display: "flex", justifyContent: "center", gap: 0,
+                                background: "#1A1A28", borderRadius: 14, padding: 4,
+                                marginBottom: 24, border: "1px solid rgba(255,255,255,0.06)",
+                            }}>
+                                {(['monthly', 'yearly'] as const).map(b => (
+                                    <button
+                                        key={b}
+                                        onClick={() => setUpgradeBilling(b)}
+                                        style={{
+                                            flex: 1, padding: "10px 0", borderRadius: 10,
+                                            background: upgradeBilling === b ? planObj.color : "transparent",
+                                            color: upgradeBilling === b ? "#fff" : "#888",
+                                            fontWeight: 700, fontSize: 13, border: "none",
+                                            cursor: "pointer", transition: "all 0.2s",
+                                        }}
+                                    >
+                                        {b === 'monthly' ? 'Mensuel' : `Annuel`}
+                                        {b === 'yearly' && (
+                                            <span style={{
+                                                marginLeft: 6, fontSize: 10, fontWeight: 800,
+                                                background: upgradeBilling === 'yearly' ? "rgba(255,255,255,0.25)" : "#2A2A3A",
+                                                color: upgradeBilling === 'yearly' ? "#fff" : "#4ADE80",
+                                                padding: "1px 6px", borderRadius: 6,
+                                            }}>
+                                                -{savings}%
+                                            </span>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Carte plan */}
+                            <div style={{
+                                background: "#12121C", borderRadius: 24,
+                                border: `1.5px solid ${planObj.color}40`,
+                                padding: "24px 20px", marginBottom: 20,
+                                boxShadow: `0 8px 32px ${planObj.shadowColor}`,
+                            }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                                    <div>
+                                        <span style={{ color: planObj.color, fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+                                            Votre plan
+                                        </span>
+                                        <h3 style={{ color: "#F0ECE2", fontSize: 24, fontWeight: 900, margin: "4px 0 0" }}>
+                                            {planObj.icon} {planObj.name}
+                                        </h3>
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                        <div style={{ color: planObj.color, fontSize: 28, fontWeight: 900, lineHeight: 1 }}>
+                                            {new Intl.NumberFormat("fr-FR").format(price)} F
+                                        </div>
+                                        <div style={{ color: "#666", fontSize: 12, marginTop: 2 }}>{billingLabel}</div>
+                                    </div>
+                                </div>
+                                <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14 }}>
+                                    {planObj.features.filter(f => f.included).slice(0, 4).map((f, i) => (
+                                        <div key={i} style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                            <span style={{ fontSize: 14 }}>{f.icon}</span>
+                                            <span style={{ color: "#C0BAA8", fontSize: 13 }}>{f.text}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Bouton réactiver */}
+                            <button
+                                onClick={() => {
+                                    setUpgradeSelectedPlan(planObj)
+                                    setShowReactivation(false)
+                                    setShowUpgradeCheckout(true)
+                                }}
+                                style={{
+                                    width: "100%", padding: "16px",
+                                    background: planObj.gradient,
+                                    color: "#fff", fontWeight: 800, fontSize: 16,
+                                    borderRadius: 16, border: "none", cursor: "pointer",
+                                    boxShadow: `0 8px 24px ${planObj.shadowColor}`,
+                                    marginBottom: 16,
+                                }}
+                            >
+                                Réactiver mon abonnement {planObj.name} {planObj.icon}
+                            </button>
+
+                            {/* Lien changer de formule */}
+                            <div style={{ textAlign: "center" }}>
+                                <button
+                                    onClick={() => {
+                                        setShowReactivation(false)
+                                        setShowUpgradePricing(true)
+                                    }}
+                                    style={{
+                                        background: "none", border: "none",
+                                        color: "#888", fontSize: 13, cursor: "pointer",
+                                        textDecoration: "underline", textUnderlineOffset: 3,
+                                    }}
+                                >
+                                    Changer de formule →
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            })()}
 
             {/* ═══ OVERLAY : Pricing upgrade ═══ */}
             {showUpgradePricing && (

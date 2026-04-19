@@ -85,3 +85,17 @@ export function isSubscriptionExpiredPastGrace(profile: {
 }): boolean {
     return getSubscriptionStatus(profile) === 'expired'
 }
+
+/**
+ * Retourne le plan différé si présent (changement de plan planifié).
+ */
+export function getPendingPlan(profile: {
+    subscription_next_plan?: string | null
+    subscription_next_end_date?: string | null
+}): { plan: string; endDate: string } | null {
+    if (!profile.subscription_next_plan || !profile.subscription_next_end_date) return null
+    return {
+        plan: profile.subscription_next_plan,
+        endDate: profile.subscription_next_end_date,
+    }
+}

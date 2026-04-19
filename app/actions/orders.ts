@@ -204,36 +204,69 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
         const billing = (order.subscription_billing || 'monthly') as 'monthly' | 'yearly'
 
-        // Récupérer la date de fin actuelle pour le calcul de renouvellement
+        // Récupérer le profil actuel pour connaître le plan et la date de fin
         const { data: currentVendorProfile } = await supabase
             .from('profiles')
-            .select('subscription_end_date')
+            .select('subscription_plan, subscription_end_date')
             .eq('id', order.user_id)
             .single()
 
-        const newEndDate = computeNewEndDate(
-            currentVendorProfile?.subscription_end_date || null,
-            billing
-        )
+        const currentPlan = currentVendorProfile?.subscription_plan || null
+        const currentEndDate = currentVendorProfile?.subscription_end_date || null
+        const newPlan = order.subscription_plan_id
 
-        // RPC SECURITY DEFINER : contourne les échecs RLS sur profiles.update pour un autre utilisateur
-        const { data: subscriptionUpdated, error: planError } = await supabase.rpc(
-            'admin_update_vendor_subscription',
-            {
+        // Déterminer si l'abonnement actuel est encore actif
+        const isCurrentlyActive = currentEndDate && new Date(currentEndDate) > new Date()
+
+        // ── Option A : changement de plan sur abonnement actif ──
+        // Le nouveau plan attend la fin de l'abonnement en cours.
+        const isPlanChange = isCurrentlyActive && currentPlan && currentPlan !== newPlan
+            && ['starter', 'pro', 'premium'].includes(currentPlan)
+
+        if (isPlanChange) {
+            // Calculer la date de fin du prochain plan à partir de la fin actuelle
+            const daysToAdd = billing === 'monthly' ? 30 : 365
+            const nextEndDate = new Date(
+                new Date(currentEndDate!).getTime() + daysToAdd * 24 * 60 * 60 * 1000
+            ).toISOString()
+
+            const { error: scheduleError } = await supabase.rpc('admin_schedule_next_plan', {
                 p_user_id: order.user_id,
-                p_subscription_plan: order.subscription_plan_id,
-                p_subscription_billing: billing,
-                p_subscription_start_date: new Date().toISOString(),
-                p_subscription_end_date: newEndDate,
-            }
-        )
+                p_next_plan: newPlan,
+                p_next_billing: billing,
+                p_next_end_date: nextEndDate,
+            })
 
-        if (planError || !subscriptionUpdated) {
-            console.error('[adminConfirmPayment] activation abonnement:', planError?.message || 'RPC false (profil introuvable ?)')
-            await supabase.from('orders').update({ status: 'pending' }).eq('id', orderId)
-            return {
-                error: planError?.message
-                    || 'L\'activation du plan a échoué. Exécutez le script SQL supabase-profiles-rls-and-subscription-rpc.sql dans Supabase, puis réessayez.',
+            if (scheduleError) {
+                console.error('[adminConfirmPayment] planification plan différé:', scheduleError.message)
+                await supabase.from('orders').update({ status: 'pending' }).eq('id', orderId)
+                return {
+                    error: scheduleError.message
+                        || 'La planification du plan a échoué. Exécutez supabase-subscription-next-plan.sql dans Supabase, puis réessayez.',
+                }
+            }
+        } else {
+            // ── Activation immédiate : renouvellement même plan ou plan expiré ──
+            const newEndDate = computeNewEndDate(currentEndDate, billing)
+
+            const { data: subscriptionUpdated, error: planError } = await supabase.rpc(
+                'admin_update_vendor_subscription',
+                {
+                    p_user_id: order.user_id,
+                    p_subscription_plan: newPlan,
+                    p_subscription_billing: billing,
+                    p_subscription_start_date: new Date().toISOString(),
+                    p_subscription_end_date: newEndDate,
+                }
+            )
+
+            if (planError || !subscriptionUpdated) {
+                console.error('[adminConfirmPayment] activation abonnement:', planError?.message || 'RPC false (profil introuvable ?)')
+                await supabase.from('orders').update({ status: 'pending' }).eq('id', orderId)
+                return {
+                    error: planError?.message
+                        || 'L\'activation du plan a échoué. Exécutez le script SQL supabase-profiles-rls-and-subscription-rpc.sql dans Supabase, puis réessayez.',
+                }
             }
         }
     }
@@ -1311,4 +1344,31 @@ export async function adminCancelSubscription(orderId: string) {
     ).catch(() => {})
 
     return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Appliquer le plan différé si l'abonnement actuel est expiré
+// Appelé côté client (dashboard vendeur) au chargement.
+// ──────────────────────────────────────────────────────────────────────────
+export async function applyPendingPlan() {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { applied: false }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('subscription_end_date, subscription_next_plan')
+        .eq('id', user.id)
+        .single()
+
+    // Rien à faire si pas de plan en attente
+    if (!profile?.subscription_next_plan) return { applied: false }
+
+    // Rien à faire si l'abonnement actuel n'est pas encore expiré
+    if (profile.subscription_end_date && new Date(profile.subscription_end_date) > new Date()) {
+        return { applied: false }
+    }
+
+    const { data: applied } = await supabase.rpc('apply_pending_plan', { p_user_id: user.id })
+    return { applied: !!applied }
 }

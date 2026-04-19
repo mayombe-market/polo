@@ -31,7 +31,7 @@ import {
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
-import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo } from '@/app/actions/orders'
+import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan } from '@/app/actions/orders'
 import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
@@ -43,7 +43,7 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName, PLANS } from './SellerSubscription'
-import { getSubscriptionStatus, getDaysRemaining } from '@/lib/subscription'
+import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
@@ -117,6 +117,19 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const isExpired = subscriptionStatus === 'expired'
     const isGrace = subscriptionStatus === 'grace'
     const totalDays = profile?.subscription_billing === 'yearly' ? 365 : 30
+
+    // Plan différé (Option A : changement de plan en cours d'abonnement)
+    const pendingPlan = getPendingPlan(profile)
+
+    // Si l'abonnement actuel est expiré et qu'un plan différé existe → l'appliquer automatiquement
+    useEffect(() => {
+        if (!pendingPlan) return
+        if (subscriptionStatus !== 'expired' && subscriptionStatus !== 'grace') return
+        applyPendingPlan().then(({ applied }) => {
+            if (applied) window.location.reload()
+        }).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
 
     /** Même logique que BecomeVendorCta : masquer si plan payant actif ou legacy */
     const planKey = String(currentPlan || '').toLowerCase()
@@ -615,6 +628,21 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {/* Bannière vérification */}
                 <VerificationBanner verificationStatus={profile?.verification_status} />
+
+                {/* Bannière plan différé */}
+                {pendingPlan && subscriptionStatus === 'active' && (() => {
+                    const planNames: Record<string, string> = { starter: 'Starter', pro: 'Pro', premium: 'Premium' }
+                    const planEmojis: Record<string, string> = { starter: '🚀', pro: '⭐', premium: '👑' }
+                    const endDate = new Date(profile?.subscription_end_date).toLocaleDateString('fr-FR', { day: '2-digit', month: 'long', year: 'numeric' })
+                    return (
+                        <div className="mx-4 md:mx-8 mt-4 flex items-center gap-3 rounded-2xl border border-blue-200 dark:border-blue-800/40 bg-blue-50 dark:bg-blue-950/30 px-4 py-3 text-sm">
+                            <span className="text-xl">{planEmojis[pendingPlan.plan] || '📅'}</span>
+                            <p className="text-blue-800 dark:text-blue-200 font-semibold">
+                                Votre plan <strong>{planNames[pendingPlan.plan] || pendingPlan.plan}</strong> démarrera automatiquement le <strong>{endDate}</strong> à la fin de votre abonnement actuel.
+                            </p>
+                        </div>
+                    )
+                })()}
 
                 {/* État global données vendeur : visible sur toutes les pages sans bloquer la navigation latérale. */}
                 {sellerBootstrapPhase === 'error' && (

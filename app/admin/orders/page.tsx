@@ -283,8 +283,8 @@ export default function AdminOrders() {
                         : o,
                 ),
             )
-            toast.success('Message affiché chez l’acheteur (espace client)', {
-                description: 'Sans e-mail ni SMS — carte à la connexion.',
+            toast.success("Message affiché chez l'acheteur (espace client)", {
+                description: "Sans e-mail ni SMS — carte à la connexion.",
             })
         } catch (err: any) {
             toast.error(err?.message || 'Erreur')
@@ -389,8 +389,8 @@ export default function AdminOrders() {
         switch (status) {
             case 'delivered': return { label: 'Livrée', style: 'bg-green-100 text-green-700' }
             case 'picked_up': return { label: 'Récupérée', style: 'bg-violet-100 text-violet-700' }
-            case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
-            case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
+            case 'shipped': return { label: 'Colis prêt', style: 'bg-purple-100 text-purple-700' }
+            case 'confirmed': return { label: 'En préparation', style: 'bg-blue-100 text-blue-700' }
             case 'rejected': return { label: 'Rejetée', style: 'bg-red-100 text-red-700' }
             default: return { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' }
         }
@@ -582,8 +582,8 @@ export default function AdminOrders() {
                     {[
                         { id: 'all', label: 'Toutes' },
                         { id: 'pending', label: 'En attente' },
-                        { id: 'confirmed', label: 'Confirmées' },
-                        { id: 'shipped', label: 'Expédiées' },
+                        { id: 'confirmed', label: 'En préparation' },
+                        { id: 'shipped', label: 'Colis prêts' },
                         { id: 'picked_up', label: 'Récupérées' },
                         { id: 'delivered', label: 'Livrées' },
                         { id: 'subscriptions', label: '🔷 Abonnements' },
@@ -641,7 +641,7 @@ export default function AdminOrders() {
                                             {!canAct && (
                                                 <span
                                                     className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                                                    title="Actions réservées à l’admin de cette ville"
+                                                    title="Actions réservées à l'admin de cette ville"
                                                 >
                                                     Lecture seule
                                                 </span>
@@ -795,7 +795,7 @@ export default function AdminOrders() {
                                                     }}
                                                     placeholder="ID du SMS (10 chiffres)"
                                                     disabled={!canAct}
-                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                     className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
                                                 />
                                             </div>
@@ -821,6 +821,15 @@ export default function AdminOrders() {
                                     {(order.status === 'confirmed' || order.status === 'shipped' || order.status === 'picked_up') && !isSubscription && (
                                         <div className="mb-6 bg-violet-50/50 dark:bg-violet-500/5 p-5 rounded-[2rem] border border-violet-200 dark:border-violet-800/30">
                                             <p className="text-[8px] font-black uppercase text-violet-600 mb-3 tracking-[0.2em]">🏍️ Livreur assigné</p>
+
+                                            {/* Vendeur pas encore prêt */}
+                                            {order.status === 'confirmed' && !order.logistician_id && (
+                                                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                                    <AlertTriangle size={14} className="shrink-0" />
+                                                    <p className="text-[11px] font-bold">En attente du vendeur — le colis n&apos;est pas encore prêt.</p>
+                                                </div>
+                                            )}
+
                                             {order.logistician_id ? (
                                                 <div className="flex items-center gap-3">
                                                     <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
@@ -830,7 +839,7 @@ export default function AdminOrders() {
                                                         {logisticians.find(l => l.id === order.logistician_id)?.full_name || 'Livreur assigné'}
                                                     </span>
                                                 </div>
-                                            ) : (
+                                            ) : order.status === 'shipped' && (
                                                 <div>
                                                     {logisticians.length > 0 ? (
                                                         <select
@@ -838,7 +847,7 @@ export default function AdminOrders() {
                                                                 if (e.target.value) handleAssignLogistician(order.id, e.target.value)
                                                             }}
                                                             disabled={assigningOrder === order.id || !canAct}
-                                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                             className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors disabled:opacity-40"
                                                             defaultValue=""
                                                         >
@@ -863,7 +872,7 @@ export default function AdminOrders() {
                                                 <button
                                                     onClick={() => confirmPayment(order.id)}
                                                     disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                     className="flex-1 min-w-[140px] bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
                                                 >
                                                     {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
@@ -872,7 +881,7 @@ export default function AdminOrders() {
                                                 <button
                                                     onClick={() => rejectOrder(order.id)}
                                                     disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                     className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50 shrink-0"
                                                 >
                                                     <Ban size={14} /> Rejeter
@@ -880,7 +889,7 @@ export default function AdminOrders() {
                                             </div>
                                         )}
 
-                                        {/* Messages acheteur in-app (pas d’e-mail / SMS) */}
+                                        {/* Messages acheteur in-app (pas d'e-mail / SMS) */}
                                         {order.status === 'pending' && (
                                             <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
                                                 <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">
@@ -891,7 +900,7 @@ export default function AdminOrders() {
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'invalid_code')}
                                                         disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase hover:bg-amber-200/80 dark:hover:bg-amber-900/50 disabled:opacity-50 transition-colors"
                                                     >
                                                         <AlertTriangle size={12} /> Code invalide
@@ -900,7 +909,7 @@ export default function AdminOrders() {
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'partial_payment')}
                                                         disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/25 text-orange-900 dark:text-orange-100 text-[9px] font-black uppercase hover:bg-orange-200/70 dark:hover:bg-orange-900/40 disabled:opacity-50 transition-colors"
                                                     >
                                                         <Banknote size={12} /> Paiement incomplet
@@ -909,7 +918,7 @@ export default function AdminOrders() {
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'no_payment')}
                                                         disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-[9px] font-black uppercase hover:bg-red-200/60 dark:hover:bg-red-950/60 disabled:opacity-50 transition-colors"
                                                     >
                                                         <Ban size={12} /> Aucun paiement
@@ -918,7 +927,7 @@ export default function AdminOrders() {
                                                         type="button"
                                                         onClick={() => sendBuyerNotice(order.id, 'resend_code')}
                                                         disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                         className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 text-[9px] font-black uppercase hover:bg-violet-200/70 dark:hover:bg-violet-900/45 disabled:opacity-50 transition-colors"
                                                     >
                                                         <RefreshCw size={12} /> Renvoi du code
@@ -935,7 +944,7 @@ export default function AdminOrders() {
                                                 <button
                                                     onClick={() => releaseFunds(order.id)}
                                                     disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                     className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
                                                 >
                                                     {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
@@ -956,7 +965,7 @@ export default function AdminOrders() {
                                             <button
                                                 onClick={() => cancelSubscription(order.id)}
                                                 disabled={updating === order.id || !canAct}
-                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                 className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
                                             >
                                                 {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
@@ -970,7 +979,7 @@ export default function AdminOrders() {
                                                 type="button"
                                                 onClick={() => generateInvoice(order)}
                                                 disabled={!canAct}
-                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                 className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all disabled:opacity-40 disabled:pointer-events-none"
                                             >
                                                 <Download size={14} /> Reçu PDF
@@ -988,7 +997,7 @@ export default function AdminOrders() {
                                                 </a>
                                             ) : (
                                                 <span
-                                                    title="Actions réservées à l’admin de cette ville"
+                                                    title="Actions réservées à l'admin de cette ville"
                                                     className="bg-slate-100 dark:bg-slate-800 text-slate-400 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
                                                 >
                                                     <Phone size={14} /> Appeler
@@ -1000,7 +1009,7 @@ export default function AdminOrders() {
                                             type="button"
                                             onClick={() => deleteOrderFromDb(order.id, formatOrderNumber(order))}
                                             disabled={updating === order.id || !canAct}
-                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                             className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-900 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all disabled:opacity-50"
                                         >
                                             {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}

@@ -241,8 +241,11 @@ export async function assignLogistician(orderId: string, logisticianId: string) 
         .single()
 
     if (!order) return { error: 'Commande introuvable' }
-    if (!['confirmed', 'shipped'].includes(order.status)) {
-        return { error: 'La commande doit être confirmée ou expédiée pour assigner un logisticien' }
+    if (order.status === 'confirmed') {
+        return { error: 'Le vendeur doit d\'abord préparer le colis avant qu\'un logisticien puisse être assigné.' }
+    }
+    if (order.status !== 'shipped') {
+        return { error: 'La commande doit être prête (colis préparé par le vendeur) pour assigner un logisticien.' }
     }
 
     // Vérifier que le logisticien existe

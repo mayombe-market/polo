@@ -472,8 +472,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const getStatusDetails = (status: string) => {
         switch (status) {
             case 'delivered': return { label: 'Livrée', style: 'bg-green-100 text-green-700' }
-            case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
-            case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
+            case 'shipped': return { label: 'Colis prêt', style: 'bg-purple-100 text-purple-700' }
+            case 'confirmed': return { label: 'À préparer', style: 'bg-orange-100 text-orange-700' }
             default: return { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' }
         }
     }
@@ -1909,10 +1909,10 @@ function OrdersPage({
                                             <button
                                                 onClick={() => updateStatus(order.id, 'shipped')}
                                                 disabled={updating === order.id}
-                                                className="bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-orange-500 hover:text-white dark:hover:bg-orange-500 dark:hover:text-white transition-all"
+                                                className="bg-orange-500 text-white px-5 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-orange-600 transition-all"
                                             >
-                                                {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
-                                                Expédier
+                                                {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Package size={12} />}
+                                                Colis prêt ✓
                                             </button>
                                         )}
                                         <button

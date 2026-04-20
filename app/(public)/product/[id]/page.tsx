@@ -26,6 +26,7 @@ import SimilarProducts from '../../../components/SimilarProducts'
 import MessageButton from '../../../components/MessageButton'
 import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { isHotelListing } from '@/lib/hotelListing'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import VerifiedBadge from '@/app/components/VerifiedBadge'
@@ -620,14 +621,33 @@ export default function ProductDetailPage() {
                                                         </div>
                                                     </div>
                                                     <div className="flex w-full flex-col gap-2 sm:ml-auto sm:w-auto sm:flex-shrink-0 sm:flex-row sm:justify-end">
-                                                        {shop.phone?.trim() && (
-                                                            <a
-                                                                href={`tel:${String(shop.phone).replace(/\s/g, '')}`}
-                                                                className="inline-flex w-full items-center justify-center rounded-lg border border-slate-300 px-4 py-2 text-center text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
-                                                            >
-                                                                Appeler
-                                                            </a>
-                                                        )}
+                                                        {(() => {
+                                                            const isHotel = isHotelListing(product?.listing_extras)
+                                                            const plan = shop?.subscription_plan || ''
+                                                            // hotel_free : téléphone jamais visible (incitatif upgrade)
+                                                            const hotelPhoneBlocked = isHotel && plan === 'hotel_free'
+                                                            // Pas de numéro renseigné
+                                                            if (!shop?.phone?.trim() || hotelPhoneBlocked) return null
+                                                            // Non connecté → bouton "Se connecter"
+                                                            if (!user?.id) return (
+                                                                <Link
+                                                                    href="/login"
+                                                                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-center text-sm font-semibold text-amber-700 hover:bg-amber-100 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-400 dark:hover:bg-amber-900/30 sm:w-auto"
+                                                                >
+                                                                    🔒 Connectez-vous pour voir le numéro
+                                                                </Link>
+                                                            )
+                                                            // Connecté → bouton appel
+                                                            const label = isHotel ? '📞 Appeler pour réserver' : '📞 Appeler'
+                                                            return (
+                                                                <a
+                                                                    href={`tel:${String(shop.phone).replace(/\s/g, '')}`}
+                                                                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-slate-300 px-4 py-2 text-center text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800 sm:w-auto"
+                                                                >
+                                                                    {label}
+                                                                </a>
+                                                            )
+                                                        })()}
                                                         <MessageButton
                                                             sellerId={product.seller_id}
                                                             productId={product.id}

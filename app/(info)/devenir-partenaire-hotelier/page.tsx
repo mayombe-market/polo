@@ -7,7 +7,7 @@ import { SYSTEM_FONT_STACK } from "@/lib/systemFontStack"
 
 const steps = [
     { num: "1", icon: "📝", title: "Créez votre compte", desc: "Inscrivez-vous gratuitement et choisissez le profil Hôtellerie." },
-    { num: "2", icon: "🏨", title: "Choisissez votre plan", desc: "Indépendant (gratuit), Hôtel Pro ou Chaîne selon votre établissement." },
+    { num: "2", icon: "🏨", title: "Choisissez votre plan", desc: "Chambre / Auberge (gratuit), Hôtel de Quartier ou Grand Hôtel selon votre établissement." },
     { num: "3", icon: "✅", title: "Validation admin", desc: "Les comptes Indépendant sont modérés. Hôtel Pro et Chaîne publient directement." },
     { num: "4", icon: "📋", title: "Publiez vos chambres", desc: "Ajoutez photos, prix/nuit, équipements, type de chambre et recevez des contacts." },
 ]
@@ -97,8 +97,8 @@ export default function DevenirPartenaireHotelierPage() {
                 <div style={{ display: "flex", justifyContent: "center", gap: 40, marginTop: 48, flexWrap: "wrap" }}>
                     {[
                         { val: "3", label: "chambres gratuites" },
-                        { val: "20", label: "chambres / mois Pro" },
-                        { val: "∞", label: "chambres Chaîne" },
+                        { val: "20", label: "chambres Hôtel de Quartier" },
+                        { val: "∞", label: "chambres Grand Hôtel" },
                     ].map((s, i) => (
                         <div key={i} style={{ textAlign: "center" }}>
                             <div style={{ color: "#F59E0B", fontSize: 32, fontWeight: 900 }}>{s.val}</div>

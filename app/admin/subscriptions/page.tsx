@@ -70,9 +70,9 @@ function PlanBadge({ plan }: { plan: string }) {
         immo_free:    { label: '🏠 Particulier',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
         immo_agent:   { label: '🏅 Agent',         cls: 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300' },
         immo_agence:  { label: '🥇 Agence',        cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' },
-        hotel_free:   { label: '🏨 Indépendant',   cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
-        hotel_pro:    { label: '🌟 Hôtel Pro',     cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
-        hotel_chain:  { label: '⭐ Chaîne',        cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' },
+        hotel_free:   { label: '🏠 Chambre/Auberge',     cls: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400' },
+        hotel_pro:    { label: '🏨 Hôtel de Quartier',  cls: 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-300' },
+        hotel_chain:  { label: '⭐ Grand Hôtel',         cls: 'bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-300' },
     }
     const p = map[plan]
     if (!p) return null
@@ -92,9 +92,9 @@ const IMMO_PLANS = [
     { id: 'immo_agence', label: '🥇 Agence', free: false },
 ]
 const HOTEL_PLANS = [
-    { id: 'hotel_free', label: '🏨 Indépendant', free: true },
-    { id: 'hotel_pro', label: '🌟 Hôtel Pro', free: false },
-    { id: 'hotel_chain', label: '⭐ Chaîne', free: false },
+    { id: 'hotel_free', label: '🏠 Chambre / Auberge', free: true },
+    { id: 'hotel_pro', label: '🏨 Hôtel de Quartier', free: false },
+    { id: 'hotel_chain', label: '⭐ Grand Hôtel', free: false },
 ]
 
 function AdminSubscriptionModal({

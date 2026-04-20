@@ -82,8 +82,8 @@ const ROW_TOOLTIPS: Record<string, string> = {
     'Chambres simultanées': 'Nombre de chambres actives en même temps. Supprimer ou archiver une annonce libère une place.',
     'Durée par annonce': 'Au-delà de cette durée, la chambre est masquée automatiquement. Renouvelable depuis votre tableau de bord.',
     'Photos par chambre': 'Les annonces avec 8+ photos reçoivent en moyenne 3× plus de contacts. Photographiez en lumière naturelle.',
-    'Publication directe': 'Indépendant : vos annonces passent par une modération (48h max). Hôtel Pro et Chaîne publient instantanément.',
-    'Badge sur annonces': 'Badge "Hôtel Pro" ou "Hôtel Certifié" affiché sur chaque chambre et votre profil hôtelier.',
+    'Publication directe': 'Chambre / Auberge : vos annonces passent par une modération (48h max). Hôtel de Quartier et Grand Hôtel publient instantanément.',
+    'Badge sur annonces': 'Badge "Hôtel Vérifié" ou "Grand Hôtel" affiché sur chaque chambre et votre profil hôtelier.',
     'Téléphone visible': 'Votre numéro apparaît directement sur l\'annonce. Les voyageurs vous appellent sans intermédiaire.',
     'Lien vidéo YouTube': 'Intégrez une visite virtuelle YouTube. Les clients visualisent la chambre et l\'hôtel avant de réserver.',
     'Statistiques': 'Vues et demandes par chambre. Indispensable pour ajuster vos tarifs et améliorer vos photos.',
@@ -97,12 +97,12 @@ const ROW_TOOLTIPS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════
 export function HotelPlanComparisonModal({ onClose }: { onClose: () => void }) {
     const rows: { label: string; icon: string; values: (string | boolean)[] }[] = [
-        { label: 'Prix mensuel',           icon: '💰', values: ['Gratuit', '8 000 FCFA', '20 000 FCFA'] },
+        { label: 'Prix mensuel',           icon: '💰', values: ['Gratuit', '15 000 FCFA', '50 000 FCFA'] },
         { label: 'Chambres simultanées',   icon: '🛏️', values: ['3', '20', 'Illimitées ∞'] },
         { label: 'Durée par annonce',      icon: '📅', values: ['30 jours', '60 jours', 'Permanente'] },
         { label: 'Photos par chambre',     icon: '📷', values: ['5', '12', '20'] },
         { label: 'Publication directe',    icon: '⚡', values: [false, true, true] },
-        { label: 'Badge sur annonces',     icon: '🏅', values: ['Aucun', '"Hôtel Pro"', '"Hôtel Certifié" ⭐'] },
+        { label: 'Badge sur annonces',     icon: '🏅', values: ['Aucun', '"Hôtel Vérifié" 🏅', '"Grand Hôtel" ⭐'] },
         { label: 'Téléphone visible',      icon: '📞', values: [false, true, true] },
         { label: 'Lien vidéo YouTube',     icon: '🎥', values: [false, true, true] },
         { label: 'Statistiques',           icon: '📊', values: ['Aucune', 'Basiques', 'Complètes'] },
@@ -215,7 +215,7 @@ export function HotelPlanComparisonModal({ onClose }: { onClose: () => void }) {
 
                 <div style={{ margin: '0 16px 24px', padding: '14px 16px', borderRadius: 14, background: 'rgba(245,158,11,0.04)', border: '1px solid rgba(245,158,11,0.12)' }}>
                     <p style={{ color: '#F59E0B', fontSize: 11, fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
-                        🔒 <strong>Un seul compte par numéro de téléphone.</strong> Les annonces du plan Indépendant sont modérées avant publication pour garantir la qualité des offres.
+                        🔒 <strong>Un seul compte par numéro de téléphone.</strong> Les annonces du plan Chambre / Auberge sont modérées avant publication pour garantir la qualité des offres.
                     </p>
                 </div>
             </div>
@@ -411,7 +411,7 @@ export function HotelPricingSection({
                                         boxShadow: plan.popular ? `0 6px 20px ${plan.shadowColor}` : 'none',
                                         border: plan.popular ? 'none' : `1.5px solid ${plan.color}30`,
                                     }}>
-                                        {plan.popular ? '🌟 Passer au plan Hôtel Pro' : `Choisir ${plan.name}`}
+                                        {plan.popular ? '🏨 Passer à Hôtel de Quartier' : `Choisir ${plan.name}`}
                                     </button>
                                 )}
                             </div>
@@ -423,7 +423,7 @@ export function HotelPricingSection({
             <div style={{ marginTop: 20, padding: '14px 16px', borderRadius: 16, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', display: 'flex', gap: 10 }}>
                 <span style={{ fontSize: 16, flexShrink: 0 }}>🔒</span>
                 <p style={{ color: '#666', fontSize: 11, margin: 0, lineHeight: 1.6 }}>
-                    Un seul compte par numéro de téléphone. Les annonces du plan Indépendant sont modérées avant publication. Paiement via MTN Mobile Money ou Airtel Money.
+                    Un seul compte par numéro de téléphone. Les annonces du plan Chambre / Auberge sont modérées avant publication. Paiement via MTN Mobile Money ou Airtel Money.
                 </p>
             </div>
         </div>

@@ -36,9 +36,9 @@ export interface HotelPlan {
 export const HOTEL_PLANS: HotelPlan[] = [
     {
         id: 'hotel_free',
-        name: 'Indépendant',
-        icon: '🏨',
-        emoji: '🏨',
+        name: 'Chambre / Auberge',
+        icon: '🏠',
+        emoji: '🏠',
         price: 0,
         yearlyPrice: 0,
         color: '#6B7280',
@@ -54,27 +54,27 @@ export const HOTEL_PLANS: HotelPlan[] = [
         boostsPerMonth: 0,
         statsLevel: 0,
         approvalRequired: true,
-        tagline: 'Pour les petits hôtels et chambres d\'hôtes',
+        tagline: 'Pour les chambres meublées et petites auberges',
         features: [
-            { text: '3 chambres simultanées', icon: '🛏️', included: true },
-            { text: '5 photos par chambre',   icon: '📷', included: true },
-            { text: 'Annonce visible 30 jours', icon: '📅', included: true },
-            { text: 'Modération admin requise', icon: '⏳', included: true },
-            { text: 'Badge "Hôtel Pro"',       icon: '🏅', included: false },
-            { text: 'Téléphone visible',        icon: '📞', included: false },
-            { text: 'Lien vidéo YouTube',       icon: '🎥', included: false },
-            { text: 'Publication directe',      icon: '⚡', included: false },
-            { text: 'Statistiques',             icon: '📊', included: false },
-            { text: 'Mise en avant / mois',     icon: '⬆️', included: false },
+            { text: '3 chambres simultanées',    icon: '🛏️', included: true },
+            { text: '5 photos par chambre',      icon: '📷', included: true },
+            { text: 'Annonce visible 30 jours',  icon: '📅', included: true },
+            { text: 'Modération admin requise',  icon: '⏳', included: true },
+            { text: 'Badge "Hôtel Vérifié"',     icon: '🏅', included: false },
+            { text: 'Téléphone visible',          icon: '📞', included: false },
+            { text: 'Lien vidéo YouTube',         icon: '🎥', included: false },
+            { text: 'Publication directe',        icon: '⚡', included: false },
+            { text: 'Statistiques',               icon: '📊', included: false },
+            { text: 'Mise en avant / mois',       icon: '⬆️', included: false },
         ],
     },
     {
         id: 'hotel_pro',
-        name: 'Hôtel Pro',
-        icon: '🌟',
-        emoji: '🌟',
-        price: 8000,
-        yearlyPrice: 76800,
+        name: 'Hôtel de Quartier',
+        icon: '🏨',
+        emoji: '🏨',
+        price: 15000,
+        yearlyPrice: 150000,
         color: '#F59E0B',
         gradient: 'linear-gradient(135deg, #F59E0B, #D97706)',
         shadowColor: 'rgba(245,158,11,0.3)',
@@ -82,33 +82,33 @@ export const HOTEL_PLANS: HotelPlan[] = [
         maxRooms: 20,
         listingDurationDays: 60,
         maxPhotos: 12,
-        badgeLabel: 'Hôtel Pro',
+        badgeLabel: 'Hôtel Vérifié',
         youtubeLink: true,
         phoneVisible: true,
         boostsPerMonth: 1,
         statsLevel: 1,
         approvalRequired: false,
-        tagline: 'Pour les hôtels indépendants professionnels',
+        tagline: 'Pour les petits hôtels de quartier',
         features: [
-            { text: '20 chambres simultanées', icon: '🛏️', included: true, highlight: true },
-            { text: '12 photos par chambre',   icon: '📷', included: true },
+            { text: '20 chambres simultanées',  icon: '🛏️', included: true, highlight: true },
+            { text: '12 photos par chambre',    icon: '📷', included: true },
             { text: 'Annonce visible 60 jours', icon: '📅', included: true },
-            { text: 'Publication directe',     icon: '⚡', included: true, highlight: true },
-            { text: 'Badge "Hôtel Pro" 🏅',   icon: '🏅', included: true, highlight: true },
-            { text: 'Téléphone visible',       icon: '📞', included: true },
-            { text: 'Lien vidéo YouTube',      icon: '🎥', included: true },
-            { text: 'Statistiques basiques',   icon: '📊', included: true },
-            { text: '1 mise en avant / mois',  icon: '⬆️', included: true },
-            { text: 'Page hôtel dédiée',       icon: '🏗️', included: false },
+            { text: 'Publication directe',      icon: '⚡', included: true, highlight: true },
+            { text: 'Badge "Hôtel Vérifié" 🏅', icon: '🏅', included: true, highlight: true },
+            { text: 'Téléphone visible',        icon: '📞', included: true },
+            { text: 'Lien vidéo YouTube',       icon: '🎥', included: true },
+            { text: 'Statistiques basiques',    icon: '📊', included: true },
+            { text: '1 mise en avant / mois',   icon: '⬆️', included: true },
+            { text: 'Page hôtel dédiée',        icon: '🏗️', included: false },
         ],
     },
     {
         id: 'hotel_chain',
-        name: 'Chaîne',
+        name: 'Grand Hôtel',
         icon: '⭐',
         emoji: '🏙️',
-        price: 20000,
-        yearlyPrice: 192000,
+        price: 50000,
+        yearlyPrice: 500000,
         color: '#8B5CF6',
         gradient: 'linear-gradient(135deg, #8B5CF6, #6D28D9)',
         shadowColor: 'rgba(139,92,246,0.3)',
@@ -116,24 +116,24 @@ export const HOTEL_PLANS: HotelPlan[] = [
         maxRooms: -1,
         listingDurationDays: -1,
         maxPhotos: 20,
-        badgeLabel: 'Hôtel Certifié',
+        badgeLabel: 'Grand Hôtel',
         youtubeLink: true,
         phoneVisible: true,
         boostsPerMonth: 5,
         statsLevel: 2,
         approvalRequired: false,
-        tagline: 'Pour les chaînes hôtelières et grands établissements',
+        tagline: 'Pour les grands hôtels établis en ville',
         features: [
-            { text: 'Chambres illimitées ∞',       icon: '🛏️', included: true, highlight: true },
-            { text: '20 photos par chambre',        icon: '📷', included: true, highlight: true },
-            { text: 'Annonces permanentes',         icon: '📅', included: true, highlight: true },
-            { text: 'Publication directe',          icon: '⚡', included: true },
-            { text: 'Badge "Hôtel Certifié" ⭐',   icon: '🏅', included: true, highlight: true },
-            { text: 'Téléphone visible',            icon: '📞', included: true },
-            { text: 'Lien vidéo YouTube',           icon: '🎥', included: true },
-            { text: 'Statistiques complètes',       icon: '📊', included: true, highlight: true },
-            { text: '5 mises en avant / mois',     icon: '⬆️', included: true, highlight: true },
-            { text: 'Page hôtel dédiée',            icon: '🏗️', included: true, highlight: true },
+            { text: 'Chambres illimitées ∞',        icon: '🛏️', included: true, highlight: true },
+            { text: '20 photos par chambre',         icon: '📷', included: true, highlight: true },
+            { text: 'Annonces permanentes',          icon: '📅', included: true, highlight: true },
+            { text: 'Publication directe',           icon: '⚡', included: true },
+            { text: 'Badge "Grand Hôtel" ⭐',        icon: '🏅', included: true, highlight: true },
+            { text: 'Téléphone visible',             icon: '📞', included: true },
+            { text: 'Lien vidéo YouTube',            icon: '🎥', included: true },
+            { text: 'Statistiques complètes',        icon: '📊', included: true, highlight: true },
+            { text: '5 mises en avant / mois',      icon: '⬆️', included: true, highlight: true },
+            { text: 'Page hôtel dédiée',             icon: '🏗️', included: true, highlight: true },
         ],
     },
 ]
@@ -158,8 +158,8 @@ export function getHotelListingDurationDays(plan: string): number {
 
 export function getHotelBadgeLabel(plan: string): string | null {
     switch (plan) {
-        case 'hotel_pro':   return 'Hôtel Pro'
-        case 'hotel_chain': return 'Hôtel Certifié'
+        case 'hotel_pro':   return 'Hôtel Vérifié'
+        case 'hotel_chain': return 'Grand Hôtel'
         default: return null
     }
 }
@@ -191,9 +191,9 @@ export function isHotelPlan(plan: string | null | undefined): boolean {
 
 export function getHotelPlanName(plan: string): string {
     switch (plan) {
-        case 'hotel_free':  return 'Indépendant'
-        case 'hotel_pro':   return 'Hôtel Pro'
-        case 'hotel_chain': return 'Chaîne'
-        default: return 'Indépendant'
+        case 'hotel_free':  return 'Chambre / Auberge'
+        case 'hotel_pro':   return 'Hôtel de Quartier'
+        case 'hotel_chain': return 'Grand Hôtel'
+        default: return 'Chambre / Auberge'
     }
 }

@@ -43,6 +43,8 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName, PLANS } from './SellerSubscription'
+import { ImmoPricingSection, ImmoReactivationOverlay, ImmoUpgradeOverlay } from './ImmoSubscription'
+import { getImmoMaxListings } from '@/lib/immoPlans'
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
@@ -104,9 +106,12 @@ export default function DashboardClient({ products: initialProducts, profile, us
         setSellerDataRetryKey((k) => k + 1)
     }, [])
 
+    // ═══ Type de vendeur (marketplace ou immobilier) ═══
+    const isImmo = profile?.vendor_type === 'immobilier'
+
     // ═══ Système d'abonnement & limites ═══
-    const currentPlan = profile?.subscription_plan || 'free'
-    const maxProducts = getPlanMaxProducts(currentPlan)
+    const currentPlan = profile?.subscription_plan || (isImmo ? 'immo_free' : 'free')
+    const maxProducts = isImmo ? getImmoMaxListings(currentPlan) : getPlanMaxProducts(currentPlan)
     const currentProductCount = products?.length || productCount || 0
     const isAtLimit = maxProducts !== -1 && currentProductCount >= maxProducts
     const isApproachingLimit = maxProducts !== -1 && currentProductCount >= maxProducts * 0.7
@@ -131,9 +136,9 @@ export default function DashboardClient({ products: initialProducts, profile, us
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
 
-    /** Même logique que BecomeVendorCta : masquer si plan payant actif ou legacy */
+    /** Masquer le CTA upgrade si plan payant actif ou legacy */
     const planKey = String(currentPlan || '').toLowerCase()
-    const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit'
+    const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit' || planKey === 'immo_free'
     const vendorHasPaidCoverage =
         !isFreeTier && (subscriptionStatus === 'active' || subscriptionStatus === 'legacy')
     const showVendorPlanCta = !vendorHasPaidCoverage
@@ -152,8 +157,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     /** Ouvre le bon écran selon le statut : réactivation si plan expiré, grille si free. */
     const openUpgradeFlow = useCallback(() => {
-        const isPaidExpired = (isExpired || isGrace) &&
-            ['starter', 'pro', 'premium'].includes(currentPlan)
+        const paidMarketplacePlans = ['starter', 'pro', 'premium']
+        const paidImmoPlan = ['immo_agent', 'immo_agence']
+        const isPaidExpired = (isExpired || isGrace) && (
+            paidMarketplacePlans.includes(currentPlan) || paidImmoPlan.includes(currentPlan)
+        )
         if (isPaidExpired) {
             setShowReactivation(true)
         } else {
@@ -932,8 +940,20 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 />
             )}
 
-            {/* ═══ OVERLAY : Réactivation rapide ═══ */}
-            {showReactivation && (() => {
+            {/* ═══ OVERLAY : Réactivation rapide (immobilier) ═══ */}
+            {showReactivation && isImmo && (
+                <ImmoReactivationOverlay
+                    currentPlan={currentPlan}
+                    onClose={() => setShowReactivation(false)}
+                    onChangeFormula={() => {
+                        setShowReactivation(false)
+                        setShowUpgradePricing(true)
+                    }}
+                />
+            )}
+
+            {/* ═══ OVERLAY : Réactivation rapide (marketplace) ═══ */}
+            {showReactivation && !isImmo && (() => {
                 const planObj = PLANS.find(p => p.id === currentPlan)
                 if (!planObj) return null
                 const price = upgradeBilling === 'yearly' ? planObj.yearlyPrice : planObj.price
@@ -1088,8 +1108,16 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 )
             })()}
 
-            {/* ═══ OVERLAY : Pricing upgrade ═══ */}
-            {showUpgradePricing && (
+            {/* ═══ OVERLAY : Pricing upgrade (immobilier) ═══ */}
+            {showUpgradePricing && isImmo && (
+                <ImmoUpgradeOverlay
+                    currentPlan={currentPlan}
+                    onClose={() => setShowUpgradePricing(false)}
+                />
+            )}
+
+            {/* ═══ OVERLAY : Pricing upgrade (marketplace) ═══ */}
+            {showUpgradePricing && !isImmo && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 1000,
                     background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",

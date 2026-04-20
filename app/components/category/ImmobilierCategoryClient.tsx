@@ -470,25 +470,42 @@ export default function ImmobilierCategoryClient({
                     )}
                 </div>
 
-                <div className="mt-12 rounded-2xl bg-slate-50 p-8 text-center dark:bg-slate-800/50">
-                    <h2 className="text-lg font-medium text-slate-900 dark:text-white">
+                <div className="mt-12 rounded-2xl bg-gradient-to-br from-[#0C447C]/10 to-[#185FA5]/5 border border-blue-200/40 dark:border-blue-800/30 p-8 text-center">
+                    <div className="mb-3 text-3xl">🏠</div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white">
                         Vous avez un bien à vendre ou à louer ?
                     </h2>
-                    <p className="mt-2 text-sm text-slate-500">
-                        Publiez votre annonce et touchez des acheteurs qualifiés
+                    <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
+                        Particulier, agent indépendant ou agence — publiez vos annonces et touchez
+                        des acheteurs qualifiés dans tout le Congo.
                     </p>
-                    <div className="mt-6 flex flex-col flex-wrap items-stretch justify-center gap-3 sm:flex-row sm:items-center">
+
+                    {/* 3 plans en miniature */}
+                    <div className="mt-6 flex flex-wrap justify-center gap-3 mb-6">
+                        {[
+                            { label: 'Particulier', sub: '3 annonces gratuites', color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800' },
+                            { label: '🏅 Agent', sub: '20 annonces · 8 000 F/mois', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                            { label: '🥇 Agence', sub: 'Illimitées · 20 000 F/mois', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+                        ].map((p, i) => (
+                            <div key={i} className={`${p.bg} rounded-xl px-4 py-2.5 text-center`}>
+                                <p className={`text-xs font-bold ${p.color}`}>{p.label}</p>
+                                <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">{p.sub}</p>
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="flex flex-col flex-wrap items-stretch justify-center gap-3 sm:flex-row sm:items-center">
                         <Link
                             href="/vendor/dashboard"
-                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-medium text-white transition hover:bg-blue-700"
+                            className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition hover:bg-blue-700"
                         >
                             Publier mon annonce
                         </Link>
                         <Link
-                            href="/devenir-vendeur"
-                            className="inline-flex items-center justify-center rounded-lg border border-slate-300 px-6 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+                            href="/devenir-agent-immobilier"
+                            className="inline-flex items-center justify-center rounded-lg border border-blue-300 dark:border-blue-700 px-6 py-3 text-sm font-semibold text-blue-700 dark:text-blue-300 transition hover:bg-blue-50 dark:hover:bg-blue-900/20"
                         >
-                            Devenir vendeur
+                            Créer mon compte →
                         </Link>
                     </div>
                 </div>

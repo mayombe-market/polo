@@ -10,6 +10,7 @@ import {
     type RealEstateListingExtrasV1,
 } from '@/lib/realEstateListing'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
+import { getImmoBadgeLabel } from '@/lib/immoPlans'
 
 type Props = {
     product: any
@@ -91,6 +92,22 @@ export default function RealEstateCard({ product }: Props) {
                                 🔥 PROMO -{product.promo_percentage}%
                             </span>
                         )}
+                        {/* Badge Agent / Agence certifiée selon le plan du vendeur */}
+                        {(() => {
+                            const sellerPlan = product.seller_subscription_plan || product.profiles?.subscription_plan
+                            const agentBadge = getImmoBadgeLabel(sellerPlan)
+                            if (!agentBadge) return null
+                            const isAgence = agentBadge === 'Agence certifiée'
+                            return (
+                                <span className={`inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-bold ${
+                                    isAgence
+                                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300'
+                                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                                }`}>
+                                    {isAgence ? '🥇' : '🏅'} {agentBadge}
+                                </span>
+                            )
+                        })()}
                     </div>
                 </div>
 

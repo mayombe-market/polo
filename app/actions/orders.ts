@@ -993,15 +993,20 @@ function getPlanCommissionRate(plan: string): number {
     }
 }
 
-// ═══ Limites par plan d'abonnement ═══
+// ═══ Limites par plan d'abonnement (marketplace + immobilier) ═══
 function getPlanMaxProducts(plan: string): number {
     switch (plan) {
+        // Marketplace
         case 'gratuit':
         case 'free': return 5
         case 'intermediaire':
         case 'starter': return 30
-        case 'premium':
         case 'pro': return 100
+        case 'premium': return -1
+        // Immobilier
+        case 'immo_free': return 3
+        case 'immo_agent': return 20
+        case 'immo_agence': return -1
         default: return 5
     }
 }
@@ -1193,12 +1198,15 @@ export async function createProduct(input: {
             return { error: 'Votre compte doit être vérifié avant de publier des produits. Rendez-vous dans Vérification depuis votre dashboard.' }
         }
 
-        // ═══ Vérification de la limite de produits selon le plan ═══
+        // ═══ Vérification de la limite d'annonces/produits selon le plan ═══
         const plan = profile?.subscription_plan || 'gratuit'
+        const isImmoPlan = plan.startsWith('immo_')
         const maxProducts = getPlanMaxProducts(plan)
+        const freePlans = ['gratuit', 'free', 'immo_free']
 
-        if (plan !== 'gratuit' && plan !== 'free' && isSubscriptionExpiredPastGrace(profile)) {
-            return { error: 'Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des produits.' }
+        if (!freePlans.includes(plan) && isSubscriptionExpiredPastGrace(profile)) {
+            const label = isImmoPlan ? 'annonces immobilières' : 'produits'
+            return { error: `Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des ${label}.` }
         }
 
         if (maxProducts !== -1) {
@@ -1208,8 +1216,14 @@ export async function createProduct(input: {
                 .eq('seller_id', user.id)
 
             if ((count || 0) >= maxProducts) {
-                const planName = plan === 'free' ? 'Gratuit' : plan.charAt(0).toUpperCase() + plan.slice(1)
-                return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} produits. Passez au niveau supérieur pour continuer à publier.` }
+                const planDisplayNames: Record<string, string> = {
+                    'free': 'Gratuit', 'gratuit': 'Gratuit',
+                    'immo_free': 'Particulier', 'immo_agent': 'Agent', 'immo_agence': 'Agence',
+                    'starter': 'Starter', 'pro': 'Pro', 'premium': 'Premium',
+                }
+                const planName = planDisplayNames[plan] ?? plan
+                const label = isImmoPlan ? 'annonces' : 'produits'
+                return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} ${label}. Passez au niveau supérieur pour continuer à publier.` }
             }
         }
 
@@ -1392,4 +1406,118 @@ export async function applyPendingPlan() {
 
     const { data: applied } = await supabase.rpc('apply_pending_plan', { p_user_id: user.id })
     return { applied: !!applied }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Admin : activer / modifier manuellement un abonnement
+// ──────────────────────────────────────────────────────────────────────────
+export async function adminForceActivateSubscription(
+    userId: string,
+    plan: string,
+    billing: 'monthly' | 'yearly',
+) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non authentifié' }
+
+    // Vérifier que le caller est admin
+    const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+    if (adminProfile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    // Récupérer la date de fin actuelle pour prolonger si encore active
+    const { data: vendorProfile } = await supabase
+        .from('profiles')
+        .select('subscription_end_date, first_name, last_name')
+        .eq('id', userId)
+        .single()
+
+    const freePlans = ['gratuit', 'free', 'immo_free']
+    const newEndDate = freePlans.includes(plan)
+        ? null
+        : computeNewEndDate(vendorProfile?.subscription_end_date, billing)
+    const newStartDate = freePlans.includes(plan) ? null : new Date().toISOString()
+
+    const { data: ok, error: rpcError } = await supabase.rpc('admin_update_vendor_subscription', {
+        p_user_id: userId,
+        p_subscription_plan: plan,
+        p_subscription_billing: freePlans.includes(plan) ? null : billing,
+        p_subscription_start_date: newStartDate,
+        p_subscription_end_date: newEndDate,
+    })
+
+    if (rpcError || !ok) {
+        return { error: rpcError?.message || 'La mise à jour a échoué.' }
+    }
+
+    // Notification au vendeur
+    const planLabels: Record<string, string> = {
+        starter: 'Starter', pro: 'Pro', premium: 'Premium',
+        immo_free: 'Particulier', immo_agent: 'Agent', immo_agence: 'Agence',
+        gratuit: 'Gratuit', free: 'Gratuit',
+    }
+    const planLabel = planLabels[plan] || plan
+    await createNotification(
+        userId,
+        'subscription_activated',
+        'Abonnement activé par l\'administrateur',
+        `Votre plan ${planLabel} a été activé manuellement par un administrateur.${newEndDate ? ` Il expire le ${new Date(newEndDate).toLocaleDateString('fr-FR')}.` : ''}`,
+        '/vendor/dashboard',
+    )
+
+    revalidatePath('/admin/subscriptions')
+    return { success: true }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Admin : désactiver / réinitialiser un abonnement (passer au plan gratuit)
+// ──────────────────────────────────────────────────────────────────────────
+export async function adminForceDeactivateSubscription(userId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non authentifié' }
+
+    // Vérifier que le caller est admin
+    const { data: adminProfile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+    if (adminProfile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    // Déterminer le plan gratuit selon vendor_type
+    const { data: vendorProfile } = await supabase
+        .from('profiles')
+        .select('vendor_type')
+        .eq('id', userId)
+        .single()
+
+    const freePlan = vendorProfile?.vendor_type === 'immobilier' ? 'immo_free' : 'gratuit'
+
+    const { data: ok, error: rpcError } = await supabase.rpc('admin_update_vendor_subscription', {
+        p_user_id: userId,
+        p_subscription_plan: freePlan,
+        p_subscription_billing: null,
+        p_subscription_start_date: null,
+        p_subscription_end_date: null,
+    })
+
+    if (rpcError || !ok) {
+        return { error: rpcError?.message || 'La désactivation a échoué.' }
+    }
+
+    // Notification au vendeur
+    await createNotification(
+        userId,
+        'subscription_cancelled',
+        'Abonnement désactivé par l\'administrateur',
+        'Votre abonnement payant a été désactivé par un administrateur. Vous êtes repassé au plan gratuit.',
+        '/vendor/dashboard',
+    )
+
+    revalidatePath('/admin/subscriptions')
+    return { success: true }
 }

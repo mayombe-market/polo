@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
+import { ImmoPricingSection } from '@/app/components/ImmoSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
@@ -42,6 +43,15 @@ export default function CompleteProfilePage() {
     const [profileStep, setProfileStep] = useState<'form' | 'subscription' | 'checkout'>('form')
     const [billing, setBilling] = useState('monthly')
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
+
+    // ═══ Type de vendeur (pré-sélectionné via ?type=immobilier) ═══
+    const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier'>(() => {
+        if (typeof window !== 'undefined') {
+            const p = new URLSearchParams(window.location.search)
+            if (p.get('type') === 'immobilier') return 'immobilier'
+        }
+        return 'marketplace'
+    })
 
     const router = useRouter()
     const { user: authUser, loading: authLoading, supabase } = useAuth()
@@ -233,7 +243,11 @@ export default function CompleteProfilePage() {
                 city: city.trim(),
                 country: selectedCountry.code,
                 role,
-                ...(role === 'vendor' ? { shop_name: shopName.trim(), subscription_plan: 'gratuit' } : {}),
+                ...(role === 'vendor' ? {
+                    shop_name: shopName.trim(),
+                    subscription_plan: vendorType === 'immobilier' ? 'immo_free' : 'gratuit',
+                    vendor_type: vendorType,
+                } : {}),
                 terms_accepted_at: now,
                 client_terms_accepted_at: role === 'buyer' ? now : null,
                 vendor_terms_accepted_at: role === 'vendor' ? now : null,
@@ -352,32 +366,56 @@ export default function CompleteProfilePage() {
                 <div style={{ textAlign: "center", marginBottom: 20 }}>
                     <div style={{
                         width: 64, height: 64, borderRadius: 20,
-                        background: "linear-gradient(135deg, #3B82F6, #2563EB)",
+                        background: vendorType === 'immobilier'
+                            ? "linear-gradient(135deg, #3B82F6, #2563EB)"
+                            : "linear-gradient(135deg, #E8A838, #D4782F)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 32, margin: "0 auto 16px",
-                        boxShadow: "0 8px 24px rgba(59,130,246,0.3)",
-                    }}>🏪</div>
+                        boxShadow: vendorType === 'immobilier'
+                            ? "0 8px 24px rgba(59,130,246,0.3)"
+                            : "0 8px 24px rgba(232,168,56,0.3)",
+                    }}>
+                        {vendorType === 'immobilier' ? '🏠' : '🏪'}
+                    </div>
                     <h1 style={{ color: "#F0ECE2", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>
                         Bienvenue, {firstName} !
                     </h1>
                     <p style={{ color: "#888", fontSize: 13, margin: 0 }}>
-                        Choisissez votre plan pour commencer à vendre sur Mayombe Market
+                        {vendorType === 'immobilier'
+                            ? 'Choisissez votre plan pour publier vos annonces immobilières'
+                            : 'Choisissez votre plan pour commencer à vendre sur Mayombe Market'}
                     </p>
                 </div>
 
-                <PricingSection
-                    currentPlan="free"
-                    billing={billing}
-                    setBilling={setBilling}
-                    onSelectPlan={(plan: any) => {
-                        setSelectedPlan(plan)
-                        setProfileStep('checkout')
-                    }}
-                    onSkip={async () => {
-                        await saveSubscriptionPlan('free')
-                        router.push('/vendor/dashboard')
-                    }}
-                />
+                {vendorType === 'immobilier' ? (
+                    <ImmoPricingSection
+                        currentPlan="immo_free"
+                        billing={billing}
+                        setBilling={setBilling}
+                        onSelectPlan={(plan: any) => {
+                            setSelectedPlan(plan)
+                            setProfileStep('checkout')
+                        }}
+                        onSkip={async () => {
+                            await saveSubscriptionPlan('immo_free')
+                            router.push('/vendor/dashboard')
+                        }}
+                    />
+                ) : (
+                    <PricingSection
+                        currentPlan="free"
+                        billing={billing}
+                        setBilling={setBilling}
+                        onSelectPlan={(plan: any) => {
+                            setSelectedPlan(plan)
+                            setProfileStep('checkout')
+                        }}
+                        onSkip={async () => {
+                            await saveSubscriptionPlan('free')
+                            router.push('/vendor/dashboard')
+                        }}
+                    />
+                )}
             </div>
         )
     }
@@ -602,15 +640,64 @@ export default function CompleteProfilePage() {
                                 </div>
                             </div>
 
+                            {/* TYPE DE VENDEUR */}
+                            <div>
+                                <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">
+                                    Que souhaitez-vous vendre ? *
+                                </label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setVendorType('marketplace')}
+                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                            vendorType === 'marketplace'
+                                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
+                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-blue-400 bg-white dark:bg-slate-800'
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">🛍️</div>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
+                                            Marketplace
+                                        </p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                                            Mode, beauté, accessoires…
+                                        </p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setVendorType('immobilier')}
+                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                            vendorType === 'immobilier'
+                                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
+                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-blue-400 bg-white dark:bg-slate-800'
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">🏠</div>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
+                                            Immobilier
+                                        </p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                                            Maisons, terrains, locations…
+                                        </p>
+                                    </button>
+                                </div>
+                            </div>
+
                             <div>
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
-                                    Nom de votre boutique *
+                                    {vendorType === 'immobilier'
+                                        ? 'Nom de votre agence / société *'
+                                        : 'Nom de votre boutique *'}
                                 </label>
                                 <input
                                     type="text"
                                     value={shopName}
                                     onChange={(e) => setShopName(e.target.value)}
-                                    placeholder="Ex: Boutique Élégance, Tech Store..."
+                                    placeholder={
+                                        vendorType === 'immobilier'
+                                            ? 'Ex: Agence Brazza Immo, Particulier...'
+                                            : 'Ex: Boutique Élégance, Tech Store...'
+                                    }
                                     className="w-full p-3 border-2 border-blue-200 dark:border-blue-800/30 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 dark:text-white"
                                     required={role === 'vendor'}
                                 />

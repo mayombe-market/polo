@@ -1005,7 +1005,7 @@ function getPlanMaxProducts(plan: string): number {
         case 'premium': return -1
         // Immobilier
         case 'immo_free': return 3
-        case 'immo_agent': return 20
+        case 'immo_agent': return 15
         case 'immo_agence': return -1
         // Hôtellerie
         case 'hotel_free': return 3

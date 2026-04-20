@@ -74,13 +74,13 @@ export const IMMO_PLANS: ImmoPlan[] = [
         name: 'Agent',
         icon: '🏢',
         emoji: '🔑',
-        price: 8000,
-        yearlyPrice: 76800,
+        price: 20000,
+        yearlyPrice: 200000,
         color: '#3B82F6',
         gradient: 'linear-gradient(135deg, #3B82F6, #2563EB)',
         shadowColor: 'rgba(59,130,246,0.25)',
         popular: true,
-        maxListings: 20,
+        maxListings: 15,
         listingDurationDays: 60,
         maxPhotos: 12,
         badgeLabel: 'Agent',
@@ -91,7 +91,7 @@ export const IMMO_PLANS: ImmoPlan[] = [
         approvalRequired: false,
         tagline: 'Pour les agents immobiliers indépendants',
         features: [
-            { text: '20 annonces simultanées', icon: '📋', included: true, highlight: true },
+            { text: '15 annonces simultanées', icon: '📋', included: true, highlight: true },
             { text: '12 photos par annonce', icon: '📷', included: true },
             { text: 'Annonce visible 60 jours', icon: '📅', included: true },
             { text: 'Publication directe', icon: '⚡', included: true, highlight: true },
@@ -108,8 +108,8 @@ export const IMMO_PLANS: ImmoPlan[] = [
         name: 'Agence',
         icon: '🏗️',
         emoji: '🏙️',
-        price: 20000,
-        yearlyPrice: 192000,
+        price: 50000,
+        yearlyPrice: 500000,
         color: '#A855F7',
         gradient: 'linear-gradient(135deg, #A855F7, #7C3AED)',
         shadowColor: 'rgba(168,85,247,0.3)',
@@ -143,7 +143,7 @@ export const IMMO_PLANS: ImmoPlan[] = [
 export function getImmoMaxListings(plan: string): number {
     switch (plan) {
         case 'immo_free': return 3
-        case 'immo_agent': return 20
+        case 'immo_agent': return 15
         case 'immo_agence': return -1
         default: return 3
     }

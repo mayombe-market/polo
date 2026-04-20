@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { IMMO_PLANS, type ImmoPlan } from '@/lib/immoPlans'
 import { SubscriptionCheckout } from './SellerSubscription'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
@@ -8,70 +8,109 @@ import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
 // ═══════════════════════════════════════════════════════
+// TOOLTIP DARK — réutilisable dans tout ce fichier
+// ═══════════════════════════════════════════════════════
+function ImmoTooltip({ text, alignRight }: { text: string; alignRight?: boolean }) {
+    const [open, setOpen] = useState(false)
+    const ref = useRef<HTMLDivElement>(null)
+
+    useEffect(() => {
+        if (!open) return
+        function handler(e: MouseEvent) {
+            if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false)
+        }
+        document.addEventListener('mousedown', handler)
+        return () => document.removeEventListener('mousedown', handler)
+    }, [open])
+
+    return (
+        <div ref={ref} style={{ position: 'relative', display: 'inline-flex', flexShrink: 0 }}>
+            <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setOpen(v => !v) }}
+                style={{
+                    width: 16, height: 16, borderRadius: 5,
+                    background: open ? 'rgba(59,130,246,0.25)' : 'rgba(59,130,246,0.12)',
+                    border: '1px solid rgba(59,130,246,0.3)',
+                    color: '#3B82F6', fontSize: 9, fontWeight: 900,
+                    cursor: 'pointer',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    lineHeight: 1, transition: 'all 0.15s',
+                }}
+            >
+                ?
+            </button>
+            {open && (
+                <div style={{
+                    position: 'absolute',
+                    top: 22,
+                    ...(alignRight ? { right: 0 } : { left: 0 }),
+                    zIndex: 9999,
+                    width: 220,
+                    background: '#1A1A2E',
+                    border: '1px solid rgba(59,130,246,0.2)',
+                    borderRadius: 12,
+                    padding: '10px 12px',
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.7)',
+                    pointerEvents: 'none',
+                }}>
+                    <p style={{ color: '#C0BAA8', fontSize: 11, margin: 0, lineHeight: 1.7 }}>
+                        {text}
+                    </p>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// Descriptions des fonctionnalités (lookup partagé modal + cards)
+const FEATURE_TOOLTIPS: Record<string, string> = {
+    '📋': 'Nombre de biens que vous pouvez avoir en ligne en même temps. Supprimer une annonce libère immédiatement une place.',
+    '📷': 'Nombre maximum de photos par annonce. Les annonces avec 8+ photos reçoivent en moyenne 3× plus de contacts.',
+    '📅': 'Durée avant masquage automatique de l\'annonce. Vous recevrez un rappel pour la renouveler depuis votre tableau de bord.',
+    '⏳': 'Nos équipes vérifient la conformité et l\'authenticité de l\'annonce avant publication (délai max 48h).',
+    '🏅': 'Badge "Agent" ou "Agence certifiée" affiché sur chaque annonce et votre profil. Il rassure les acheteurs sur votre sérieux.',
+    '📞': 'Votre numéro de téléphone s\'affiche directement sur l\'annonce. Les prospects vous appellent en un clic, sans passer par le chat.',
+    '🎥': 'Intégrez l\'URL d\'une visite virtuelle filmée sur YouTube. Les acheteurs visualisent le bien avant même de vous contacter.',
+    '⚡': 'Vos annonces sont en ligne instantanément, 24h/24, sans validation préalable de notre équipe.',
+    '📊': 'Consultez les vues de chaque annonce et les demandes de contact reçues. Permet d\'ajuster prix et photos pour maximiser l\'intérêt.',
+    '⬆️': 'Propulsez une annonce en tête des résultats et dans la section "Recommandés" pendant 7 jours. Idéal pour les biens urgents.',
+    '🏗️': 'Une page publique avec logo, description et toutes vos annonces regroupées. Partageable sur WhatsApp comme carte de visite digitale.',
+}
+
+// Descriptions des lignes de la modale de comparaison
+const ROW_TOOLTIPS: Record<string, string> = {
+    'Prix mensuel': 'Prélevé chaque 30 jours ou en paiement annuel unique (−20%). Paiement par MTN MoMo ou Airtel Money directement depuis votre téléphone.',
+    'Annonces simultanées': 'Nombre de biens actifs en même temps. Supprimer ou archiver une annonce libère immédiatement une place.',
+    'Durée par annonce': 'Au-delà de cette durée, l\'annonce est masquée automatiquement. Vous recevrez un rappel pour la renouveler.',
+    'Photos par annonce': 'Les annonces avec 8+ photos reçoivent en moyenne 3× plus de contacts. Privilégiez des photos en lumière naturelle.',
+    'Publication directe': 'Particulier : vos annonces passent par une modération (48h max) avant d\'être visibles sur la plateforme. Agent et Agence publient instantanément.',
+    'Badge sur annonces': 'Un badge "Agent" ou "Agence certifiée" s\'affiche sur chaque annonce et votre profil. Il distingue les pros des particuliers.',
+    'Téléphone visible': 'Votre numéro apparaît directement sur l\'annonce. Les prospects vous appellent en un clic, sans intermédiaire.',
+    'Lien vidéo YouTube': 'Intégrez une URL YouTube pour une visite virtuelle. Les acheteurs visualisent le bien avant même de vous appeler.',
+    'Statistiques': 'Nombre de vues et demandes de contact par annonce. Indispensable pour ajuster vos prix et améliorer vos photos.',
+    'Mises en avant / mois': 'Chaque boost positionne une annonce en tête des résultats et dans la section "Recommandés" pendant 7 jours.',
+    'Page agence dédiée': 'Une page publique avec votre logo, vos coordonnées et toutes vos annonces. Partageable sur WhatsApp comme carte de visite.',
+    'Numéro unique obligatoire': 'Un seul compte vendeur par numéro de téléphone. Protège les acheteurs des faux profils et des doublons.',
+}
+
+// ═══════════════════════════════════════════════════════
 // MODAL COMPARAISON — table complète des 3 plans
 // ═══════════════════════════════════════════════════════
 export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
     const rows: { label: string; icon: string; values: (string | boolean)[] }[] = [
-        {
-            label: 'Prix mensuel',
-            icon: '💰',
-            values: ['Gratuit', '8 000 FCFA', '20 000 FCFA'],
-        },
-        {
-            label: 'Annonces simultanées',
-            icon: '📋',
-            values: ['3', '20', 'Illimitées ∞'],
-        },
-        {
-            label: 'Durée par annonce',
-            icon: '📅',
-            values: ['30 jours', '60 jours', 'Permanente'],
-        },
-        {
-            label: 'Photos par annonce',
-            icon: '📷',
-            values: ['5', '12', '20'],
-        },
-        {
-            label: 'Publication directe',
-            icon: '⚡',
-            values: [false, true, true],
-        },
-        {
-            label: 'Badge sur annonces',
-            icon: '🏅',
-            values: ['Aucun', '"Agent"', '"Agence certifiée" 🥇'],
-        },
-        {
-            label: 'Téléphone visible',
-            icon: '📞',
-            values: [false, true, true],
-        },
-        {
-            label: 'Lien vidéo YouTube',
-            icon: '🎥',
-            values: [false, true, true],
-        },
-        {
-            label: 'Statistiques',
-            icon: '📊',
-            values: ['Aucune', 'Basiques', 'Complètes'],
-        },
-        {
-            label: 'Mises en avant / mois',
-            icon: '⬆️',
-            values: ['0', '1', '5'],
-        },
-        {
-            label: 'Page agence dédiée',
-            icon: '🏗️',
-            values: [false, false, true],
-        },
-        {
-            label: 'Numéro unique obligatoire',
-            icon: '🔒',
-            values: [true, true, true],
-        },
+        { label: 'Prix mensuel',           icon: '💰', values: ['Gratuit', '8 000 FCFA', '20 000 FCFA'] },
+        { label: 'Annonces simultanées',   icon: '📋', values: ['3', '20', 'Illimitées ∞'] },
+        { label: 'Durée par annonce',      icon: '📅', values: ['30 jours', '60 jours', 'Permanente'] },
+        { label: 'Photos par annonce',     icon: '📷', values: ['5', '12', '20'] },
+        { label: 'Publication directe',    icon: '⚡', values: [false, true, true] },
+        { label: 'Badge sur annonces',     icon: '🏅', values: ['Aucun', '"Agent"', '"Agence certifiée" 🥇'] },
+        { label: 'Téléphone visible',      icon: '📞', values: [false, true, true] },
+        { label: 'Lien vidéo YouTube',     icon: '🎥', values: [false, true, true] },
+        { label: 'Statistiques',           icon: '📊', values: ['Aucune', 'Basiques', 'Complètes'] },
+        { label: 'Mises en avant / mois',  icon: '⬆️', values: ['0', '1', '5'] },
+        { label: 'Page agence dédiée',     icon: '🏗️', values: [false, false, true] },
+        { label: 'Numéro unique obligatoire', icon: '🔒', values: [true, true, true] },
     ]
 
     const COLS = IMMO_PLANS
@@ -93,7 +132,7 @@ export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
                     width: '100%', maxWidth: 700,
                     background: '#12121C',
                     borderRadius: 28, border: '1px solid rgba(255,255,255,0.08)',
-                    overflow: 'hidden',
+                    overflow: 'visible',
                 }}
             >
                 {/* Header */}
@@ -101,13 +140,15 @@ export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
                     padding: '24px 24px 16px',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                     borderBottom: '1px solid rgba(255,255,255,0.06)',
+                    borderRadius: '28px 28px 0 0',
+                    background: '#12121C',
                 }}>
                     <div>
                         <h2 style={{ color: '#F0ECE2', fontSize: 20, fontWeight: 800, margin: 0 }}>
                             Comparaison des plans immobilier
                         </h2>
                         <p style={{ color: '#666', fontSize: 12, margin: '4px 0 0' }}>
-                            Choisissez le plan adapté à votre activité
+                            Cliquez sur <span style={{ color: '#3B82F6', fontWeight: 700 }}>?</span> pour comprendre chaque fonctionnalité
                         </p>
                     </div>
                     <button
@@ -171,11 +212,15 @@ export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
                             padding: '10px 8px',
                             borderRadius: 10,
                             background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
+                            position: 'relative',
                         }}>
-                            {/* Label */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <span style={{ fontSize: 14 }}>{row.icon}</span>
+                            {/* Label + tooltip */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                <span style={{ fontSize: 14, flexShrink: 0 }}>{row.icon}</span>
                                 <span style={{ color: '#C0BAA8', fontSize: 12 }}>{row.label}</span>
+                                {ROW_TOOLTIPS[row.label] && (
+                                    <ImmoTooltip text={ROW_TOOLTIPS[row.label]} />
+                                )}
                             </div>
                             {/* Values */}
                             {row.values.map((val, j) => {
@@ -227,7 +272,7 @@ export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
 }
 
 // ═══════════════════════════════════════════════════════
-// PRICING SECTION IMMOBILIER — avec bouton "?"
+// PRICING SECTION IMMOBILIER — avec boutons "?"
 // ═══════════════════════════════════════════════════════
 export function ImmoPricingSection({
     currentPlan,
@@ -261,7 +306,7 @@ export function ImmoPricingSection({
                     </span>
                 </div>
 
-                {/* Titre + bouton ? */}
+                {/* Titre + bouton ? (ouvre la modale de comparaison complète) */}
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
                     <h2 style={{ color: '#F0ECE2', fontSize: 24, fontWeight: 800, margin: 0 }}>
                         Choisissez votre plan
@@ -286,7 +331,7 @@ export function ImmoPricingSection({
                     Annonces immobilières au Congo-Brazzaville
                 </p>
 
-                {/* Toggle mensuel / annuel (caché pour Particulier gratuit) */}
+                {/* Toggle mensuel / annuel */}
                 <div style={{
                     display: 'inline-flex', alignItems: 'center', gap: 0,
                     padding: 4, borderRadius: 14,
@@ -336,7 +381,7 @@ export function ImmoPricingSection({
 
                     return (
                         <div key={plan.id} style={{
-                            borderRadius: 24, overflow: 'hidden',
+                            borderRadius: 24, overflow: 'visible',
                             background: plan.popular ? `${plan.color}06` : 'rgba(255,255,255,0.02)',
                             border: plan.popular ? `2px solid ${plan.color}30` : '1px solid rgba(255,255,255,0.04)',
                             position: 'relative',
@@ -347,6 +392,7 @@ export function ImmoPricingSection({
                                 <div style={{
                                     background: plan.gradient,
                                     padding: '6px 0', textAlign: 'center',
+                                    borderRadius: '22px 22px 0 0',
                                 }}>
                                     <span style={{ color: '#fff', fontSize: 11, fontWeight: 800, letterSpacing: 1 }}>
                                         🏅 LE CHOIX DES PROFESSIONNELS
@@ -362,6 +408,7 @@ export function ImmoPricingSection({
                                         background: plan.gradient,
                                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                                         fontSize: 26, boxShadow: `0 4px 16px ${plan.shadowColor}`,
+                                        flexShrink: 0,
                                     }}>
                                         {plan.emoji}
                                     </div>
@@ -373,7 +420,7 @@ export function ImmoPricingSection({
                                             {plan.tagline}
                                         </p>
                                     </div>
-                                    <div style={{ textAlign: 'right' }}>
+                                    <div style={{ textAlign: 'right', flexShrink: 0 }}>
                                         {plan.price === 0 ? (
                                             <div style={{ color: '#4ADE80', fontSize: 24, fontWeight: 800 }}>
                                                 Gratuit
@@ -396,57 +443,61 @@ export function ImmoPricingSection({
                                     </div>
                                 </div>
 
-                                {/* Key metrics */}
+                                {/* Key metrics avec tooltips */}
                                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                                    <div style={{
-                                        flex: 1, padding: '10px', borderRadius: 12,
-                                        background: 'rgba(255,255,255,0.03)',
-                                        border: '1px solid rgba(255,255,255,0.04)',
-                                        textAlign: 'center',
-                                    }}>
-                                        <div style={{ color: plan.color, fontSize: 18, fontWeight: 800 }}>
-                                            {plan.maxListings === -1 ? '∞' : plan.maxListings}
+                                    {[
+                                        {
+                                            value: plan.maxListings === -1 ? '∞' : String(plan.maxListings),
+                                            label: 'Annonces',
+                                            tip: FEATURE_TOOLTIPS['📋'],
+                                        },
+                                        {
+                                            value: plan.listingDurationDays === -1 ? '∞' : `${plan.listingDurationDays}j`,
+                                            label: 'Durée',
+                                            tip: FEATURE_TOOLTIPS['📅'],
+                                        },
+                                        {
+                                            value: String(plan.maxPhotos),
+                                            label: 'Photos',
+                                            tip: FEATURE_TOOLTIPS['📷'],
+                                        },
+                                    ].map((metric, mi) => (
+                                        <div key={mi} style={{
+                                            flex: 1, padding: '10px', borderRadius: 12,
+                                            background: 'rgba(255,255,255,0.03)',
+                                            border: '1px solid rgba(255,255,255,0.04)',
+                                            textAlign: 'center',
+                                            position: 'relative',
+                                        }}>
+                                            <div style={{ color: plan.color, fontSize: 18, fontWeight: 800 }}>
+                                                {metric.value}
+                                            </div>
+                                            <div style={{
+                                                color: '#666', fontSize: 10,
+                                                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 2,
+                                            }}>
+                                                {metric.label}
+                                                <ImmoTooltip text={metric.tip} alignRight={mi === 2} />
+                                            </div>
                                         </div>
-                                        <div style={{ color: '#666', fontSize: 10 }}>Annonces</div>
-                                    </div>
-                                    <div style={{
-                                        flex: 1, padding: '10px', borderRadius: 12,
-                                        background: 'rgba(255,255,255,0.03)',
-                                        border: '1px solid rgba(255,255,255,0.04)',
-                                        textAlign: 'center',
-                                    }}>
-                                        <div style={{ color: plan.color, fontSize: 18, fontWeight: 800 }}>
-                                            {plan.listingDurationDays === -1 ? '∞' : `${plan.listingDurationDays}j`}
-                                        </div>
-                                        <div style={{ color: '#666', fontSize: 10 }}>Durée</div>
-                                    </div>
-                                    <div style={{
-                                        flex: 1, padding: '10px', borderRadius: 12,
-                                        background: 'rgba(255,255,255,0.03)',
-                                        border: '1px solid rgba(255,255,255,0.04)',
-                                        textAlign: 'center',
-                                    }}>
-                                        <div style={{ color: plan.color, fontSize: 18, fontWeight: 800 }}>
-                                            {plan.maxPhotos}
-                                        </div>
-                                        <div style={{ color: '#666', fontSize: 10 }}>Photos</div>
-                                    </div>
+                                    ))}
                                 </div>
 
-                                {/* Features */}
+                                {/* Features avec tooltips */}
                                 <div style={{
                                     display: 'grid', gridTemplateColumns: '1fr 1fr',
                                     gap: 6, marginBottom: 18,
                                 }}>
                                     {plan.features.map((f, i) => (
                                         <div key={i} style={{
-                                            display: 'flex', alignItems: 'center', gap: 8,
+                                            display: 'flex', alignItems: 'center', gap: 6,
                                             padding: '6px 8px', borderRadius: 8,
                                             background: f.highlight ? `${plan.color}08` : 'transparent',
                                         }}>
                                             <span style={{
                                                 width: 18, height: 18, borderRadius: 6, fontSize: 8,
                                                 display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                                flexShrink: 0,
                                                 background: f.included ? `${plan.color}15` : 'rgba(255,255,255,0.03)',
                                                 color: f.included ? plan.color : '#333',
                                             }}>
@@ -455,9 +506,13 @@ export function ImmoPricingSection({
                                             <span style={{
                                                 color: f.included ? (f.highlight ? '#F0ECE2' : '#999') : '#333',
                                                 fontSize: 11, fontWeight: f.highlight ? 700 : 400,
+                                                flex: 1,
                                             }}>
                                                 {f.text}
                                             </span>
+                                            {FEATURE_TOOLTIPS[f.icon] && (
+                                                <ImmoTooltip text={FEATURE_TOOLTIPS[f.icon]} alignRight />
+                                            )}
                                         </div>
                                     ))}
                                 </div>
@@ -582,9 +637,7 @@ export function ImmoUpgradeOverlay({
                         plan={selectedPlan}
                         billing={billing}
                         onBack={() => setView('pricing')}
-                        onComplete={() => {
-                            window.location.reload()
-                        }}
+                        onComplete={() => { window.location.reload() }}
                     />
                 )}
             </div>
@@ -746,7 +799,10 @@ export function ImmoReactivationOverlay({
                         {planObj.features.filter(f => f.included).slice(0, 4).map((f, i) => (
                             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                                 <span style={{ fontSize: 14 }}>{f.icon}</span>
-                                <span style={{ color: '#C0BAA8', fontSize: 13 }}>{f.text}</span>
+                                <span style={{ color: '#C0BAA8', fontSize: 13, flex: 1 }}>{f.text}</span>
+                                {FEATURE_TOOLTIPS[f.icon] && (
+                                    <ImmoTooltip text={FEATURE_TOOLTIPS[f.icon]} alignRight />
+                                )}
                             </div>
                         ))}
                     </div>

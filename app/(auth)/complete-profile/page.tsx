@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
 import { ImmoPricingSection } from '@/app/components/ImmoSubscription'
+import { HotelPricingSection } from '@/app/components/HotelSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
@@ -44,11 +45,12 @@ export default function CompleteProfilePage() {
     const [billing, setBilling] = useState('monthly')
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
-    // ═══ Type de vendeur (pré-sélectionné via ?type=immobilier) ═══
-    const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier'>(() => {
+    // ═══ Type de vendeur (pré-sélectionné via ?type=immobilier ou ?type=hotel) ═══
+    const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier' | 'hotel'>(() => {
         if (typeof window !== 'undefined') {
             const p = new URLSearchParams(window.location.search)
             if (p.get('type') === 'immobilier') return 'immobilier'
+            if (p.get('type') === 'hotel') return 'hotel'
         }
         return 'marketplace'
     })
@@ -245,7 +247,7 @@ export default function CompleteProfilePage() {
                 role,
                 ...(role === 'vendor' ? {
                     shop_name: shopName.trim(),
-                    subscription_plan: vendorType === 'immobilier' ? 'immo_free' : 'gratuit',
+                    subscription_plan: vendorType === 'immobilier' ? 'immo_free' : vendorType === 'hotel' ? 'hotel_free' : 'gratuit',
                     vendor_type: vendorType,
                 } : {}),
                 terms_accepted_at: now,
@@ -368,14 +370,18 @@ export default function CompleteProfilePage() {
                         width: 64, height: 64, borderRadius: 20,
                         background: vendorType === 'immobilier'
                             ? "linear-gradient(135deg, #3B82F6, #2563EB)"
-                            : "linear-gradient(135deg, #E8A838, #D4782F)",
+                            : vendorType === 'hotel'
+                                ? "linear-gradient(135deg, #F59E0B, #D97706)"
+                                : "linear-gradient(135deg, #E8A838, #D4782F)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 32, margin: "0 auto 16px",
                         boxShadow: vendorType === 'immobilier'
                             ? "0 8px 24px rgba(59,130,246,0.3)"
-                            : "0 8px 24px rgba(232,168,56,0.3)",
+                            : vendorType === 'hotel'
+                                ? "0 8px 24px rgba(245,158,11,0.3)"
+                                : "0 8px 24px rgba(232,168,56,0.3)",
                     }}>
-                        {vendorType === 'immobilier' ? '🏠' : '🏪'}
+                        {vendorType === 'immobilier' ? '🏠' : vendorType === 'hotel' ? '🏨' : '🏪'}
                     </div>
                     <h1 style={{ color: "#F0ECE2", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>
                         Bienvenue, {firstName} !
@@ -383,7 +389,9 @@ export default function CompleteProfilePage() {
                     <p style={{ color: "#888", fontSize: 13, margin: 0 }}>
                         {vendorType === 'immobilier'
                             ? 'Choisissez votre plan pour publier vos annonces immobilières'
-                            : 'Choisissez votre plan pour commencer à vendre sur Mayombe Market'}
+                            : vendorType === 'hotel'
+                                ? "Choisissez votre plan pour publier vos chambres d'hôtel"
+                                : 'Choisissez votre plan pour commencer à vendre sur Mayombe Market'}
                     </p>
                 </div>
 
@@ -398,6 +406,20 @@ export default function CompleteProfilePage() {
                         }}
                         onSkip={async () => {
                             await saveSubscriptionPlan('immo_free')
+                            router.push('/vendor/dashboard')
+                        }}
+                    />
+                ) : vendorType === 'hotel' ? (
+                    <HotelPricingSection
+                        currentPlan="hotel_free"
+                        billing={billing}
+                        setBilling={setBilling}
+                        onSelectPlan={(plan: any) => {
+                            setSelectedPlan(plan)
+                            setProfileStep('checkout')
+                        }}
+                        onSkip={async () => {
+                            await saveSubscriptionPlan('hotel_free')
                             router.push('/vendor/dashboard')
                         }}
                     />
@@ -645,7 +667,7 @@ export default function CompleteProfilePage() {
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">
                                     Que souhaitez-vous vendre ? *
                                 </label>
-                                <div className="grid grid-cols-2 gap-3">
+                                <div className="grid grid-cols-3 gap-3">
                                     <button
                                         type="button"
                                         onClick={() => setVendorType('marketplace')}
@@ -660,7 +682,7 @@ export default function CompleteProfilePage() {
                                             Marketplace
                                         </p>
                                         <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                            Mode, beauté, accessoires…
+                                            Mode, beauté…
                                         </p>
                                     </button>
                                     <button
@@ -677,7 +699,24 @@ export default function CompleteProfilePage() {
                                             Immobilier
                                         </p>
                                         <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                            Maisons, terrains, locations…
+                                            Maisons, terrains…
+                                        </p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setVendorType('hotel')}
+                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                            vendorType === 'hotel'
+                                                ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
+                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-amber-400 bg-white dark:bg-slate-800'
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">🏨</div>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
+                                            Hôtellerie
+                                        </p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
+                                            Chambres, hôtels…
                                         </p>
                                     </button>
                                 </div>
@@ -687,7 +726,9 @@ export default function CompleteProfilePage() {
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
                                     {vendorType === 'immobilier'
                                         ? 'Nom de votre agence / société *'
-                                        : 'Nom de votre boutique *'}
+                                        : vendorType === 'hotel'
+                                            ? 'Nom de votre hôtel *'
+                                            : 'Nom de votre boutique *'}
                                 </label>
                                 <input
                                     type="text"
@@ -696,7 +737,9 @@ export default function CompleteProfilePage() {
                                     placeholder={
                                         vendorType === 'immobilier'
                                             ? 'Ex: Agence Brazza Immo, Particulier...'
-                                            : 'Ex: Boutique Élégance, Tech Store...'
+                                            : vendorType === 'hotel'
+                                                ? 'Ex: Hôtel Brazzaville Palace, La Résidence...'
+                                                : 'Ex: Boutique Élégance, Tech Store...'
                                     }
                                     className="w-full p-3 border-2 border-blue-200 dark:border-blue-800/30 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 dark:text-white"
                                     required={role === 'vendor'}

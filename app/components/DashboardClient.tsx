@@ -44,7 +44,9 @@ import MessagesPanel from './MessagesPanel'
 import VerificationBanner from './VerificationBanner'
 import { LimitWarning, PricingSection, SubscriptionCheckout, getPlanMaxProducts, getPlanName, PLANS } from './SellerSubscription'
 import { ImmoPricingSection, ImmoReactivationOverlay, ImmoUpgradeOverlay } from './ImmoSubscription'
+import { HotelUpgradeOverlay, HotelReactivationOverlay } from './HotelSubscription'
 import { getImmoMaxListings } from '@/lib/immoPlans'
+import { getHotelMaxRooms } from '@/lib/hotelPlans'
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
@@ -106,12 +108,17 @@ export default function DashboardClient({ products: initialProducts, profile, us
         setSellerDataRetryKey((k) => k + 1)
     }, [])
 
-    // ═══ Type de vendeur (marketplace ou immobilier) ═══
+    // ═══ Type de vendeur (marketplace, immobilier ou hotel) ═══
     const isImmo = profile?.vendor_type === 'immobilier'
+    const isHotel = profile?.vendor_type === 'hotel'
 
     // ═══ Système d'abonnement & limites ═══
-    const currentPlan = profile?.subscription_plan || (isImmo ? 'immo_free' : 'free')
-    const maxProducts = isImmo ? getImmoMaxListings(currentPlan) : getPlanMaxProducts(currentPlan)
+    const currentPlan = profile?.subscription_plan || (isImmo ? 'immo_free' : isHotel ? 'hotel_free' : 'free')
+    const maxProducts = isImmo
+        ? getImmoMaxListings(currentPlan)
+        : isHotel
+            ? getHotelMaxRooms(currentPlan)
+            : getPlanMaxProducts(currentPlan)
     const currentProductCount = products?.length || productCount || 0
     const isAtLimit = maxProducts !== -1 && currentProductCount >= maxProducts
     const isApproachingLimit = maxProducts !== -1 && currentProductCount >= maxProducts * 0.7
@@ -138,7 +145,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     /** Masquer le CTA upgrade si plan payant actif ou legacy */
     const planKey = String(currentPlan || '').toLowerCase()
-    const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit' || planKey === 'immo_free'
+    const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit' || planKey === 'immo_free' || planKey === 'hotel_free'
     const vendorHasPaidCoverage =
         !isFreeTier && (subscriptionStatus === 'active' || subscriptionStatus === 'legacy')
     const showVendorPlanCta = !vendorHasPaidCoverage
@@ -159,8 +166,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const openUpgradeFlow = useCallback(() => {
         const paidMarketplacePlans = ['starter', 'pro', 'premium']
         const paidImmoPlan = ['immo_agent', 'immo_agence']
+        const paidHotelPlans = ['hotel_pro', 'hotel_chain']
         const isPaidExpired = (isExpired || isGrace) && (
-            paidMarketplacePlans.includes(currentPlan) || paidImmoPlan.includes(currentPlan)
+            paidMarketplacePlans.includes(currentPlan) ||
+            paidImmoPlan.includes(currentPlan) ||
+            paidHotelPlans.includes(currentPlan)
         )
         if (isPaidExpired) {
             setShowReactivation(true)
@@ -952,8 +962,20 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 />
             )}
 
+            {/* ═══ OVERLAY : Réactivation rapide (hôtellerie) ═══ */}
+            {showReactivation && isHotel && (
+                <HotelReactivationOverlay
+                    currentPlan={currentPlan}
+                    onClose={() => setShowReactivation(false)}
+                    onChangeFormula={() => {
+                        setShowReactivation(false)
+                        setShowUpgradePricing(true)
+                    }}
+                />
+            )}
+
             {/* ═══ OVERLAY : Réactivation rapide (marketplace) ═══ */}
-            {showReactivation && !isImmo && (() => {
+            {showReactivation && !isImmo && !isHotel && (() => {
                 const planObj = PLANS.find(p => p.id === currentPlan)
                 if (!planObj) return null
                 const price = upgradeBilling === 'yearly' ? planObj.yearlyPrice : planObj.price
@@ -1116,8 +1138,16 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 />
             )}
 
+            {/* ═══ OVERLAY : Pricing upgrade (hôtellerie) ═══ */}
+            {showUpgradePricing && isHotel && (
+                <HotelUpgradeOverlay
+                    currentPlan={currentPlan}
+                    onClose={() => setShowUpgradePricing(false)}
+                />
+            )}
+
             {/* ═══ OVERLAY : Pricing upgrade (marketplace) ═══ */}
-            {showUpgradePricing && !isImmo && (
+            {showUpgradePricing && !isImmo && !isHotel && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 1000,
                     background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",

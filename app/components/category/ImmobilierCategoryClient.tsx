@@ -5,11 +5,13 @@ import { useCallback, useMemo, useState, useEffect, type CSSProperties, type For
 import { useRouter, useSearchParams } from 'next/navigation'
 import { ChevronDown } from 'lucide-react'
 import RealEstateCard from '@/app/components/RealEstateCard'
+import HotelCard from '@/app/components/HotelCard'
 import ImmobilierFilters, {
     type ImmoChipCity,
     type ImmoChipOffer,
 } from '@/app/components/ImmobilierFilters'
 import { parseListingExtras, IMMO_SUBCATEGORY_HEADERS } from '@/lib/realEstateListing'
+import { isHotelListing } from '@/lib/hotelListing'
 
 const IMMO_SUBS = [
     'Maisons',
@@ -414,7 +416,9 @@ export default function ImmobilierCategoryClient({
                                     className="min-w-0 opacity-0 animate-fadeIn"
                                     style={cardFadeStyle(i)}
                                 >
-                                    <RealEstateCard product={p} />
+                                    {isHotelListing(p.listing_extras)
+                                        ? <HotelCard product={p} />
+                                        : <RealEstateCard product={p} />}
                                 </div>
                             ))}
                             {displayProducts.length >= 1 && (
@@ -444,7 +448,9 @@ export default function ImmobilierCategoryClient({
                                     className="min-w-0 opacity-0 animate-fadeIn"
                                     style={cardFadeStyle(6 + i)}
                                 >
-                                    <RealEstateCard product={p} />
+                                    {isHotelListing(p.listing_extras)
+                                        ? <HotelCard product={p} />
+                                        : <RealEstateCard product={p} />}
                                 </div>
                             ))}
                         </>

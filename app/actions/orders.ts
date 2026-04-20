@@ -1007,6 +1007,10 @@ function getPlanMaxProducts(plan: string): number {
         case 'immo_free': return 3
         case 'immo_agent': return 20
         case 'immo_agence': return -1
+        // Hôtellerie
+        case 'hotel_free': return 3
+        case 'hotel_pro': return 20
+        case 'hotel_chain': return -1
         default: return 5
     }
 }
@@ -1201,11 +1205,12 @@ export async function createProduct(input: {
         // ═══ Vérification de la limite d'annonces/produits selon le plan ═══
         const plan = profile?.subscription_plan || 'gratuit'
         const isImmoPlan = plan.startsWith('immo_')
+        const isHotelPlan = plan.startsWith('hotel_')
         const maxProducts = getPlanMaxProducts(plan)
-        const freePlans = ['gratuit', 'free', 'immo_free']
+        const freePlans = ['gratuit', 'free', 'immo_free', 'hotel_free']
 
         if (!freePlans.includes(plan) && isSubscriptionExpiredPastGrace(profile)) {
-            const label = isImmoPlan ? 'annonces immobilières' : 'produits'
+            const label = isImmoPlan ? 'annonces immobilières' : isHotelPlan ? 'chambres' : 'produits'
             return { error: `Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des ${label}.` }
         }
 
@@ -1219,10 +1224,11 @@ export async function createProduct(input: {
                 const planDisplayNames: Record<string, string> = {
                     'free': 'Gratuit', 'gratuit': 'Gratuit',
                     'immo_free': 'Particulier', 'immo_agent': 'Agent', 'immo_agence': 'Agence',
+                    'hotel_free': 'Indépendant', 'hotel_pro': 'Hôtel Pro', 'hotel_chain': 'Chaîne',
                     'starter': 'Starter', 'pro': 'Pro', 'premium': 'Premium',
                 }
                 const planName = planDisplayNames[plan] ?? plan
-                const label = isImmoPlan ? 'annonces' : 'produits'
+                const label = isImmoPlan ? 'annonces' : isHotelPlan ? 'chambres' : 'produits'
                 return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} ${label}. Passez au niveau supérieur pour continuer à publier.` }
             }
         }
@@ -1435,7 +1441,7 @@ export async function adminForceActivateSubscription(
         .eq('id', userId)
         .single()
 
-    const freePlans = ['gratuit', 'free', 'immo_free']
+    const freePlans = ['gratuit', 'free', 'immo_free', 'hotel_free']
     const newEndDate = freePlans.includes(plan)
         ? null
         : computeNewEndDate(vendorProfile?.subscription_end_date, billing)
@@ -1495,7 +1501,10 @@ export async function adminForceDeactivateSubscription(userId: string) {
         .eq('id', userId)
         .single()
 
-    const freePlan = vendorProfile?.vendor_type === 'immobilier' ? 'immo_free' : 'gratuit'
+    const freePlan =
+        vendorProfile?.vendor_type === 'immobilier' ? 'immo_free' :
+        vendorProfile?.vendor_type === 'hotel' ? 'hotel_free' :
+        'gratuit'
 
     const { data: ok, error: rpcError } = await supabase.rpc('admin_update_vendor_subscription', {
         p_user_id: userId,

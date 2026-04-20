@@ -35,6 +35,11 @@ function VendorTypeBadge({ vendorType }: { vendorType?: string }) {
             🏠 Immo
         </span>
     )
+    if (vendorType === 'hotel') return (
+        <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-amber-50 text-amber-600 border border-amber-200 dark:bg-amber-900/20 dark:text-amber-300 dark:border-amber-800/30">
+            🏨 Hôtel
+        </span>
+    )
     return null
 }
 
@@ -96,7 +101,8 @@ export default function AdminVendorsPage() {
     const verifiedCount = vendors.filter(v => v.verification_status === 'verified').length
     const pendingCount = vendors.filter(v => v.verification_status === 'pending').length
     const immoCount = vendors.filter(v => v.vendor_type === 'immobilier').length
-    const marketplaceCount = vendors.filter(v => v.vendor_type !== 'immobilier').length
+    const hotelCount = vendors.filter(v => v.vendor_type === 'hotel').length
+    const marketplaceCount = vendors.filter(v => v.vendor_type !== 'immobilier' && v.vendor_type !== 'hotel').length
 
     // Filtrage
     const filteredVendors = (() => {
@@ -105,7 +111,8 @@ export default function AdminVendorsPage() {
         else if (filter === 'unverified') base = base.filter(v => v.verification_status === 'unverified' || !v.verification_status)
         else if (filter === 'pending') base = base.filter(v => v.verification_status === 'pending')
         else if (filter === 'immobilier') base = base.filter(v => v.vendor_type === 'immobilier')
-        else if (filter === 'marketplace') base = base.filter(v => v.vendor_type !== 'immobilier')
+        else if (filter === 'hotel') base = base.filter(v => v.vendor_type === 'hotel')
+        else if (filter === 'marketplace') base = base.filter(v => v.vendor_type !== 'immobilier' && v.vendor_type !== 'hotel')
 
         if (searchQuery.trim()) {
             const q = searchQuery.trim().toLowerCase()
@@ -201,6 +208,11 @@ export default function AdminVendorsPage() {
                         <p className="text-2xl font-black italic tracking-tighter text-orange-600">{marketplaceCount}</p>
                         <p className="text-[9px] font-black uppercase text-orange-500 tracking-widest mt-1">Marketplace</p>
                     </div>
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-amber-200 dark:border-amber-800/30">
+                        <div className="text-amber-500 mb-2 text-lg">🏨</div>
+                        <p className="text-2xl font-black italic tracking-tighter text-amber-600">{hotelCount}</p>
+                        <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest mt-1">Hôtellerie</p>
+                    </div>
                 </div>
 
                 {/* RECHERCHE */}
@@ -225,6 +237,7 @@ export default function AdminVendorsPage() {
                     {[
                         { id: 'all', label: 'Tous' },
                         { id: 'immobilier', label: `🏠 Immobilier (${immoCount})` },
+                        { id: 'hotel', label: `🏨 Hôtellerie (${hotelCount})` },
                         { id: 'marketplace', label: `🛍️ Marketplace (${marketplaceCount})` },
                         { id: 'verified', label: 'Vérifiés' },
                         { id: 'unverified', label: 'Non vérifiés' },

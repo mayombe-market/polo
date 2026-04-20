@@ -1179,7 +1179,7 @@ export default function SellerUpgradeSystem() {
                   Débloquez plus de produits
                 </span>
                 <p style={{ color: "#888", fontSize: 11, margin: "2px 0 0" }}>
-                  Passez au plan Starter dès {fmt(5000)} F/mois
+                  Passez au plan Starter dès {fmt(20000)} F/mois
                 </p>
               </div>
               <span style={{ marginLeft: "auto", color: "#E8A838", fontSize: 16 }}>→</span>

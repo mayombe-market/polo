@@ -490,8 +490,8 @@ export default function ImmobilierCategoryClient({
                     <div className="mt-6 flex flex-wrap justify-center gap-3 mb-6">
                         {[
                             { label: 'Particulier', sub: '3 annonces gratuites', color: 'text-slate-500', bg: 'bg-slate-100 dark:bg-slate-800' },
-                            { label: '🏅 Agent', sub: '20 annonces · 8 000 F/mois', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-                            { label: '🥇 Agence', sub: 'Illimitées · 20 000 F/mois', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20' },
+                            { label: '🏅 Agent', sub: '15 annonces · 20 000 F/mois', color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-900/20' },
+                            { label: '🥇 Agence', sub: 'Illimitées · 50 000 F/mois', color: 'text-purple-600 dark:text-purple-400', bg: 'bg-purple-50 dark:bg-purple-900/20' },
                         ].map((p, i) => (
                             <div key={i} className={`${p.bg} rounded-xl px-4 py-2.5 text-center`}>
                                 <p className={`text-xs font-bold ${p.color}`}>{p.label}</p>

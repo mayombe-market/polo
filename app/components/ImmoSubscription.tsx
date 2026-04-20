@@ -99,8 +99,8 @@ const ROW_TOOLTIPS: Record<string, string> = {
 // ═══════════════════════════════════════════════════════
 export function ImmoPlanComparisonModal({ onClose }: { onClose: () => void }) {
     const rows: { label: string; icon: string; values: (string | boolean)[] }[] = [
-        { label: 'Prix mensuel',           icon: '💰', values: ['Gratuit', '8 000 FCFA', '20 000 FCFA'] },
-        { label: 'Annonces simultanées',   icon: '📋', values: ['3', '20', 'Illimitées ∞'] },
+        { label: 'Prix mensuel',           icon: '💰', values: ['Gratuit', '20 000 FCFA', '50 000 FCFA'] },
+        { label: 'Annonces simultanées',   icon: '📋', values: ['3', '15', 'Illimitées ∞'] },
         { label: 'Durée par annonce',      icon: '📅', values: ['30 jours', '60 jours', 'Permanente'] },
         { label: 'Photos par annonce',     icon: '📷', values: ['5', '12', '20'] },
         { label: 'Publication directe',    icon: '⚡', values: [false, true, true] },

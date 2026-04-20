@@ -219,13 +219,27 @@ export default function AdminVerificationsPage() {
                                             </div>
                                         </div>
                                         <div>
-                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Photo CNI</p>
-                                            <div
-                                                className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
-                                                onClick={() => setZoomImage(v.cni_photo_url)}
-                                            >
-                                                <img src={v.cni_photo_url} alt="CNI" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
-                                            </div>
+                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                                                {v.id_type === 'passport' ? '📗 Passeport' : '🪪 CNI'}
+                                            </p>
+                                            {(v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url) ? (
+                                                <div
+                                                    className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                    onClick={() => setZoomImage(v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url)}
+                                                >
+                                                    <img
+                                                        src={v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url}
+                                                        alt="Pièce d'identité"
+                                                        className="absolute inset-0 h-full w-full object-cover"
+                                                        loading="lazy"
+                                                        decoding="async"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="w-full aspect-video rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 text-xs">
+                                                    Non fournie
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -234,7 +248,9 @@ export default function AdminVerificationsPage() {
                                         <p className="text-[10px] font-bold uppercase text-slate-400 mb-3">Comparaison des noms</p>
                                         <div className="grid grid-cols-2 gap-4">
                                             <div>
-                                                <p className="text-[10px] text-slate-400">Nom sur la CNI</p>
+                                                <p className="text-[10px] text-slate-400">
+                                                    Nom sur {v.id_type === 'passport' ? 'le passeport' : 'la CNI'}
+                                                </p>
                                                 <p className="text-sm font-bold dark:text-white">{v.cni_name}</p>
                                             </div>
                                             <div>
@@ -258,6 +274,15 @@ export default function AdminVerificationsPage() {
                                                 {v.momo_operator === 'MTN' ? '🟡' : '🔴'} {v.momo_operator} — +242 {v.momo_number}
                                             </p>
                                         </div>
+
+                                        {v.niu_number && (
+                                            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                <p className="text-[10px] text-slate-400">NIU / RCCM</p>
+                                                <p className="text-sm font-bold dark:text-white font-mono">
+                                                    🏢 {v.niu_number}
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* Motif de rejet si applicable */}

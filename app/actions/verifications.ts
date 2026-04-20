@@ -26,12 +26,15 @@ async function getSupabase() {
 
 /** Soumettre une demande de vérification vendeur */
 export async function submitVerification(input: {
+    idType: 'cni' | 'passport'
     shopPhotoUrl: string
-    cniPhotoUrl: string
+    cniPhotoUrl?: string
+    passportPhotoUrl?: string
     cniName: string
     momoName: string
     momoNumber: string
     momoOperator: 'MTN' | 'Airtel'
+    niuNumber?: string
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -61,12 +64,15 @@ export async function submitVerification(input: {
         .from('vendor_verifications')
         .insert({
             vendor_id: user.id,
+            id_type: payload.idType ?? 'cni',
             shop_photo_url: payload.shopPhotoUrl,
-            cni_photo_url: payload.cniPhotoUrl,
+            cni_photo_url: payload.cniPhotoUrl ?? null,
+            passport_photo_url: payload.passportPhotoUrl ?? null,
             cni_name: payload.cniName,
             momo_name: payload.momoName,
             momo_number: payload.momoNumber,
             momo_operator: payload.momoOperator,
+            niu_number: payload.niuNumber ?? null,
         })
 
     if (insertError) return { error: insertError.message }

@@ -289,3 +289,113 @@ export async function listMyVendorAdCampaigns() {
     if (error) return { error: error.message, campaigns: [] }
     return { campaigns: data || [] }
 }
+
+/**
+ * Retourne pour chaque jour des 90 prochains jours le nombre de slots Hero occupés.
+ * Comptabilise active + pending_review (Option A : les campagnes en attente de validation réservent le slot).
+ * Max = MAX_HERO_SLIDES (7). Utilisé par le calendrier intelligent du modal pub.
+ */
+export async function getHeroSlotsByDay(): Promise<{ ok: true; slots: Record<string, number> } | { ok: false; error: string }> {
+    try {
+        const supabase = await getSupabase()
+        const today = new Date()
+        const horizon = new Date(today)
+        horizon.setDate(horizon.getDate() + 90)
+
+        const { data, error } = await supabase
+            .from('vendor_ad_campaigns')
+            .select('start_date, end_date, status, duration_days')
+            .eq('placement', 'hero')
+            .in('status', ['active', 'pending_review'])
+            .not('start_date', 'is', null)
+            .not('end_date', 'is', null)
+
+        if (error) return { ok: false, error: error.message }
+
+        // Construire un map jour → count
+        const slots: Record<string, number> = {}
+
+        for (const row of data || []) {
+            const start = new Date(row.start_date!)
+            const end = new Date(row.end_date!)
+            const cur = new Date(start)
+            while (cur < end) {
+                if (cur >= today && cur <= horizon) {
+                    const key = cur.toISOString().slice(0, 10)
+                    slots[key] = (slots[key] || 0) + 1
+                }
+                cur.setDate(cur.getDate() + 1)
+            }
+        }
+
+        return { ok: true, slots }
+    } catch (e: unknown) {
+        return { ok: false, error: e instanceof Error ? e.message : 'Erreur' }
+    }
+}
+
+/**
+ * Crée une campagne ET déclare immédiatement le paiement en une seule action.
+ * Utilisé depuis le modal post-publication produit.
+ */
+export async function submitVendorAdCampaignWithPayment(input: SubmitVendorAdCampaignInput & {
+    payment_method: VendorAdPaymentMethod
+    transaction_id: string
+    preferred_start_date?: string | null
+}) {
+    const { supabase, user } = await requireVendor()
+
+    const img = input.imageUrl?.trim()
+    const link = input.linkUrl?.trim()
+    if (!img || !link) return { error: 'Image et lien obligatoires' }
+    if (!isDurationDays(input.durationDays)) return { error: 'Durée invalide' }
+    if (input.placement !== 'hero' && input.placement !== 'tile') return { error: 'Emplacement invalide' }
+
+    const digits = String(input.transaction_id ?? '').replace(/\D/g, '')
+    if (!/^\d{10}$/.test(digits)) return { error: 'Le code de transaction doit contenir exactement 10 chiffres' }
+
+    const method = input.payment_method
+    if (method !== 'mobile_money' && method !== 'airtel_money') return { error: 'Mode de paiement invalide' }
+
+    const price_fcfa = priceForCampaign(input.placement, input.durationDays)
+
+    if (input.linkType === 'product') {
+        const productId = extractUuidFromPath(link, 'product')
+        if (!productId) return { error: 'Lien produit invalide' }
+        const { data: p } = await supabase.from('products').select('seller_id').eq('id', productId).single()
+        if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
+    } else {
+        const storeId = extractUuidFromPath(link, 'store')
+        if (!storeId || storeId !== user.id) return { error: "Lien boutique invalide" }
+    }
+
+    const { data: campaign, error: insertError } = await supabase
+        .from('vendor_ad_campaigns')
+        .insert({
+            seller_id: user.id,
+            link_url: link,
+            link_type: input.linkType,
+            image_url: img,
+            title: input.title?.trim() || null,
+            description: input.description?.trim() || null,
+            placement: input.placement,
+            duration_days: input.durationDays,
+            price_fcfa,
+            status: 'pending_review',
+            payment_method: method,
+            transaction_id: digits,
+            payment_note: `${method === 'mobile_money' ? 'MTN Mobile Money' : 'Airtel Money'} — ID: ${digits}`,
+            paid_at: new Date().toISOString(),
+            // start_date stockée comme préférence vendeur — l'admin choisit la date finale
+            start_date: input.preferred_start_date ? new Date(input.preferred_start_date).toISOString() : null,
+        })
+        .select('id')
+        .single()
+
+    if (insertError) return { error: insertError.message }
+    if (!campaign) return { error: 'Campagne non créée' }
+
+    revalidatePath('/vendor/ad-campaigns')
+    revalidatePath('/admin/ads')
+    return { success: true, campaignId: campaign.id }
+}

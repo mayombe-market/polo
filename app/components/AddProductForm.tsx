@@ -14,7 +14,8 @@
  * - Session / compression / erreurs JWT : logique inchangée fonctionnellement, documentée dans les helpers existants.
  */
 import type { Session } from '@supabase/supabase-js'
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
+const AdCampaignModal = lazy(() => import('@/app/components/AdCampaignModal'))
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -646,6 +647,9 @@ export default function AddProductForm({
     const [publishLabel, setPublishLabel] = useState('')
     const [imageHint, setImageHint] = useState<string | null>(null)
 
+    // ── Modal campagne pub post-publication ──
+    const [adModal, setAdModal] = useState<{ productId: string; productName: string; images: string[] } | null>(null)
+
     // Step 1: Infos de base
     const [name, setName] = useState('')
     const [selectedCategory, setSelectedCategory] = useState('')
@@ -1156,8 +1160,15 @@ export default function AddProductForm({
 
             setPublishProgress(100)
             setPublishLabel('Terminé !')
-            alert('Produit mis en ligne !')
-            window.location.href = '/vendor/dashboard?tab=products'
+
+            // Ouvrir le modal pub (non-bloquant, remplace l'alert)
+            if ('product' in result && result.product) {
+                const p = result.product as any
+                const allImages = [p.img, ...(p.images_gallery || [])].filter(Boolean) as string[]
+                setAdModal({ productId: p.id, productName: p.name || name, images: allImages })
+            } else {
+                window.location.href = '/vendor/dashboard?tab=products'
+            }
         } finally {
             // Déverrouiller et réinitialiser la barre uniquement pour l’envoi actif (évite d’écraser un 2e envoi).
             if (ownsPublishUi()) {
@@ -1173,6 +1184,7 @@ export default function AddProductForm({
     const progress = ((step - 1) / (STEPS.length - 1)) * 100
 
     return (
+        <>
         <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden">
             {/* Step indicator */}
             <div className="p-6 border-b border-slate-100 dark:border-slate-800">
@@ -1904,5 +1916,19 @@ export default function AddProductForm({
                 )}
             </div>
         </div>
+
+        {/* ── Modal campagne pub post-publication ── */}
+        {adModal && (
+            <Suspense fallback={null}>
+                <AdCampaignModal
+                    productId={adModal.productId}
+                    productName={adModal.productName}
+                    productImages={adModal.images}
+                    onClose={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
+                    onSuccess={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
+                />
+            </Suspense>
+        )}
+        </>
     )
 }

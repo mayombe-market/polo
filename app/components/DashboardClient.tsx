@@ -26,7 +26,7 @@ import {
     ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles, Megaphone
+    Crown, Sparkles, Megaphone, Star, Send, Camera
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -47,6 +47,7 @@ import { ImmoPricingSection, ImmoReactivationOverlay, ImmoUpgradeOverlay } from 
 import { HotelUpgradeOverlay, HotelReactivationOverlay } from './HotelSubscription'
 import { getImmoMaxListings } from '@/lib/immoPlans'
 import { getHotelMaxRooms } from '@/lib/hotelPlans'
+import { requestHotelReview, getHotelReviewRequests, getHotelProductReviews, addHotelReply } from '@/app/actions/hotel-reviews'
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 
@@ -55,15 +56,16 @@ const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.
     ssr: false
 })
 
-type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings'
+type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews'
 
-const getMenuItems = (verificationStatus?: string): { id: Page; label: string; icon: any }[] => {
+const getMenuItems = (verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
     const items: { id: Page; label: string; icon: any }[] = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'products', label: 'Produits', icon: Package },
-        { id: 'add', label: 'Ajouter', icon: Plus },
+        { id: 'products', label: isHotelVendor ? 'Chambres' : 'Produits', icon: Package },
+        { id: 'add', label: isHotelVendor ? 'Ajouter chambre' : 'Ajouter', icon: Plus },
         { id: 'orders', label: 'Commandes', icon: ShoppingCart },
         { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
+        ...(isHotelVendor ? [{ id: 'hotel_reviews' as Page, label: 'Avis clients', icon: Star }] : []),
         { id: 'messages', label: 'Messages', icon: MessageCircle },
         { id: 'notifs', label: 'Notifications', icon: Bell },
         { id: 'stats', label: 'Statistiques', icon: BarChart3 },
@@ -73,9 +75,6 @@ const getMenuItems = (verificationStatus?: string): { id: Page; label: string; i
     ]
     return items
 }
-
-// Keep backward compat
-const menuItems = getMenuItems()
 
 export default function DashboardClient({ products: initialProducts, profile, user, productCount }: any) {
     const router = useRouter()
@@ -111,6 +110,9 @@ export default function DashboardClient({ products: initialProducts, profile, us
     // ═══ Type de vendeur (marketplace, immobilier ou hotel) ═══
     const isImmo = profile?.vendor_type === 'immobilier'
     const isHotel = profile?.vendor_type === 'hotel'
+
+    // Menu dynamique selon le type de vendeur
+    const menuItems = getMenuItems(profile?.verification_status, isHotel)
 
     // ═══ Système d'abonnement & limites ═══
     const currentPlan = profile?.subscription_plan || (isImmo ? 'immo_free' : isHotel ? 'hotel_free' : 'free')
@@ -932,6 +934,10 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {activePage === 'wallet' && (
                     <WalletPage orders={orders} currentVendorId={user?.id} />
+                )}
+
+                {activePage === 'hotel_reviews' && isHotel && (
+                    <HotelReviewsPage hotelId={user?.id} products={products} profile={profile} />
                 )}
 
                 {activePage === 'settings' && (
@@ -2747,6 +2753,321 @@ function NegotiationsPage({ negotiations, negotiationsLoading, negotiationsError
                 <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
                     <MessageSquare size={48} className="mx-auto text-slate-200 dark:text-slate-600 mb-4" />
                     <p className="text-xs font-black uppercase italic text-slate-400">Aucune négociation dans cette catégorie</p>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ════════════════════════════════════════════════════════════
+// HotelReviewsPage
+// Section avis clients pour les hôteliers.
+// ════════════════════════════════════════════════════════════
+function HotelReviewsPage({ hotelId, products, profile }: { hotelId: string; products: any[]; profile: any }) {
+    const [tab, setTab] = useState<'ask' | 'requests' | 'received'>('ask')
+    const [guestEmail, setGuestEmail] = useState('')
+    const [guestName, setGuestName] = useState('')
+    const [selectedProductId, setSelectedProductId] = useState(products[0]?.id || '')
+    const [sending, setSending] = useState(false)
+    const [sentOk, setSentOk] = useState(false)
+
+    const [requests, setRequests] = useState<any[]>([])
+    const [requestsLoading, setRequestsLoading] = useState(false)
+
+    const [receivedReviews, setReceivedReviews] = useState<any[]>([])
+    const [reviewsLoading, setReviewsLoading] = useState(false)
+
+    const [replyingId, setReplyingId] = useState<string | null>(null)
+    const [replyText, setReplyText] = useState('')
+    const [savingReply, setSavingReply] = useState(false)
+
+    const hotelName = profile?.shop_name || 'Votre hôtel'
+
+    useEffect(() => {
+        if (tab === 'requests' && hotelId) {
+            setRequestsLoading(true)
+            getHotelReviewRequests(hotelId).then(res => {
+                setRequests(res.data || [])
+                setRequestsLoading(false)
+            })
+        }
+        if (tab === 'received' && hotelId) {
+            setReviewsLoading(true)
+            getHotelProductReviews(hotelId).then(res => {
+                setReceivedReviews(res.data || [])
+                setReviewsLoading(false)
+            })
+        }
+    }, [tab, hotelId])
+
+    const handleSend = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!guestEmail || !selectedProductId) return
+        setSending(true)
+        const selectedProduct = products.find(p => p.id === selectedProductId)
+        const res = await requestHotelReview({
+            hotelId,
+            productId: selectedProductId,
+            productName: selectedProduct?.name || 'Chambre',
+            hotelName,
+            guestEmail,
+            guestName: guestName || undefined,
+        })
+        setSending(false)
+        if (res.success) {
+            setSentOk(true)
+            setGuestEmail('')
+            setGuestName('')
+            setTimeout(() => setSentOk(false), 4000)
+        } else {
+            toast.error(res.error || 'Erreur lors de l\'envoi')
+        }
+    }
+
+    const handleReply = async (reviewId: string) => {
+        if (!replyText.trim()) return
+        setSavingReply(true)
+        const res = await addHotelReply({ reviewId, hotelId, reply: replyText })
+        setSavingReply(false)
+        if (res.success) {
+            setReceivedReviews(prev => prev.map(r =>
+                r.id === reviewId ? { ...r, hotel_reply: replyText, hotel_reply_at: new Date().toISOString() } : r
+            ))
+            setReplyingId(null)
+            setReplyText('')
+            toast.success('Réponse publiée')
+        } else {
+            toast.error(res.error || 'Erreur')
+        }
+    }
+
+    const statusLabel: Record<string, { label: string; color: string }> = {
+        pending:   { label: 'En attente', color: '#F59E0B' },
+        completed: { label: 'Avis reçu', color: '#22C55E' },
+        expired:   { label: 'Expiré', color: '#888' },
+    }
+
+    return (
+        <div className="p-4 md:p-8 max-w-3xl mx-auto">
+            <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 rounded-2xl bg-amber-50 dark:bg-amber-950/40 flex items-center justify-center">
+                    <Star size={20} className="text-amber-500" />
+                </div>
+                <div>
+                    <h1 className="text-lg font-black text-slate-900 dark:text-white">Avis clients</h1>
+                    <p className="text-xs text-slate-400">Invitez vos clients à noter leur séjour</p>
+                </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="flex gap-2 mb-6 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl">
+                {([
+                    { id: 'ask', label: '✉️ Demander un avis' },
+                    { id: 'requests', label: '📋 Demandes envoyées' },
+                    { id: 'received', label: '⭐ Avis reçus' },
+                ] as { id: typeof tab; label: string }[]).map(t => (
+                    <button
+                        key={t.id}
+                        onClick={() => setTab(t.id)}
+                        className={`flex-1 py-2 px-3 rounded-xl text-xs font-bold transition-all ${
+                            tab === t.id
+                                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                        }`}
+                    >
+                        {t.label}
+                    </button>
+                ))}
+            </div>
+
+            {/* ── Tab: Demander un avis ── */}
+            {tab === 'ask' && (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6">
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6 leading-relaxed">
+                        À la sortie du client, entrez ses coordonnées ci-dessous. Il recevra un email avec un lien unique pour noter son séjour.
+                    </p>
+
+                    {sentOk && (
+                        <div className="mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-950/40 border border-green-200/60 dark:border-green-800/40 text-green-700 dark:text-green-400 text-sm font-semibold flex items-center gap-2">
+                            <Check size={16} /> Email envoyé avec succès !
+                        </div>
+                    )}
+
+                    <form onSubmit={handleSend} className="space-y-4">
+                        {/* Chambre */}
+                        <div>
+                            <label className="block text-xs font-black uppercase text-slate-400 mb-1.5">Chambre / Annonce</label>
+                            <select
+                                value={selectedProductId}
+                                onChange={e => setSelectedProductId(e.target.value)}
+                                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                required
+                            >
+                                {products.length === 0 && <option value="">Aucune chambre publiée</option>}
+                                {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Nom */}
+                        <div>
+                            <label className="block text-xs font-black uppercase text-slate-400 mb-1.5">Nom du client <span className="font-normal normal-case text-slate-300">(optionnel)</span></label>
+                            <input
+                                type="text"
+                                value={guestName}
+                                onChange={e => setGuestName(e.target.value)}
+                                placeholder="Ex : Jean Mbemba"
+                                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                        </div>
+
+                        {/* Email */}
+                        <div>
+                            <label className="block text-xs font-black uppercase text-slate-400 mb-1.5">Email du client <span className="text-red-400">*</span></label>
+                            <input
+                                type="email"
+                                value={guestEmail}
+                                onChange={e => setGuestEmail(e.target.value)}
+                                placeholder="client@exemple.com"
+                                required
+                                className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                            />
+                        </div>
+
+                        <button
+                            type="submit"
+                            disabled={sending || products.length === 0}
+                            className="w-full py-4 rounded-2xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white font-black text-sm flex items-center justify-center gap-2 transition-all"
+                        >
+                            {sending ? <Loader2 size={18} className="animate-spin" /> : <><Send size={16} /> Envoyer la demande d&apos;avis</>}
+                        </button>
+                    </form>
+                </div>
+            )}
+
+            {/* ── Tab: Demandes envoyées ── */}
+            {tab === 'requests' && (
+                <div>
+                    {requestsLoading ? (
+                        <div className="py-20 text-center"><Loader2 size={28} className="animate-spin mx-auto text-amber-400" /></div>
+                    ) : requests.length === 0 ? (
+                        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+                            <p className="text-xs font-black uppercase italic text-slate-400">Aucune demande envoyée pour l&apos;instant</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {requests.map(req => {
+                                const s = statusLabel[req.status] || { label: req.status, color: '#888' }
+                                const room = (req.products as any)?.name || '—'
+                                return (
+                                    <div key={req.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 flex items-center justify-between gap-4">
+                                        <div className="min-w-0">
+                                            <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{req.guest_name || req.guest_email}</p>
+                                            <p className="text-[11px] text-slate-400 truncate">{req.guest_email} · {room}</p>
+                                            <p className="text-[10px] text-slate-300 mt-0.5">
+                                                {new Date(req.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                            </p>
+                                        </div>
+                                        <span className="text-[10px] font-bold px-2.5 py-1 rounded-full flex-shrink-0"
+                                            style={{ background: `${s.color}18`, color: s.color }}>
+                                            {s.label}
+                                        </span>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* ── Tab: Avis reçus ── */}
+            {tab === 'received' && (
+                <div>
+                    {reviewsLoading ? (
+                        <div className="py-20 text-center"><Loader2 size={28} className="animate-spin mx-auto text-amber-400" /></div>
+                    ) : receivedReviews.length === 0 ? (
+                        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800">
+                            <p className="text-xs font-black uppercase italic text-slate-400">Aucun avis reçu pour l&apos;instant</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            {receivedReviews.map(rev => {
+                                const room = (rev.products as any)?.name || '—'
+                                return (
+                                    <div key={rev.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+                                        {/* En-tête */}
+                                        <div className="flex items-start justify-between gap-3 mb-3">
+                                            <div>
+                                                <p className="text-sm font-bold text-slate-900 dark:text-white">{rev.user_name}</p>
+                                                <p className="text-[11px] text-amber-500 font-medium">{room}</p>
+                                            </div>
+                                            <div className="text-right flex-shrink-0">
+                                                <div className="flex gap-0.5 justify-end mb-0.5">
+                                                    {[1,2,3,4,5].map(s => (
+                                                        <span key={s} className={`text-[13px] ${s <= rev.rating ? 'text-amber-400' : 'text-slate-200 dark:text-slate-700'}`}>★</span>
+                                                    ))}
+                                                </div>
+                                                <p className="text-[10px] text-slate-400">
+                                                    {new Date(rev.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        {/* Commentaire */}
+                                        {rev.content && (
+                                            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed mb-3">{rev.content}</p>
+                                        )}
+
+                                        {/* Réponse existante */}
+                                        {rev.hotel_reply && (
+                                            <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/50 dark:border-amber-800/40 mb-3">
+                                                <p className="text-[10px] font-bold text-amber-600 dark:text-amber-400 uppercase mb-1">🏨 Votre réponse</p>
+                                                <p className="text-[12px] text-slate-600 dark:text-slate-300 leading-relaxed">{rev.hotel_reply}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Formulaire réponse */}
+                                        {!rev.hotel_reply && replyingId !== rev.id && (
+                                            <button
+                                                onClick={() => { setReplyingId(rev.id); setReplyText('') }}
+                                                className="text-[11px] font-bold text-amber-500 hover:text-amber-600 flex items-center gap-1"
+                                            >
+                                                <MessageCircle size={13} /> Répondre à cet avis
+                                            </button>
+                                        )}
+
+                                        {replyingId === rev.id && (
+                                            <div className="space-y-2">
+                                                <textarea
+                                                    value={replyText}
+                                                    onChange={e => setReplyText(e.target.value)}
+                                                    placeholder="Merci pour votre séjour ! Nous sommes ravis que..."
+                                                    rows={3}
+                                                    className="w-full p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-400 resize-none"
+                                                />
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => handleReply(rev.id)}
+                                                        disabled={savingReply || !replyText.trim()}
+                                                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 disabled:opacity-50 text-white text-xs font-bold transition-all"
+                                                    >
+                                                        {savingReply ? <Loader2 size={13} className="animate-spin" /> : <><Send size={13} /> Publier</>}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => setReplyingId(null)}
+                                                        className="px-4 py-2 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 transition-all"
+                                                    >
+                                                        Annuler
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

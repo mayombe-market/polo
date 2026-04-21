@@ -4,7 +4,7 @@ import StarRating from './StarRating'
 import { Send, Loader2, Camera, X } from 'lucide-react'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
-export default function ReviewForm({ productId, user, onReviewSubmit }: { productId: string, user: any, onReviewSubmit: () => void }) {
+export default function ReviewForm({ productId, user, onReviewSubmit, isHotel = false }: { productId: string, user: any, onReviewSubmit: () => void, isHotel?: boolean }) {
     const [rating, setRating] = useState(5)
     const [comment, setComment] = useState('')
     const [submitting, setSubmitting] = useState(false)
@@ -91,7 +91,7 @@ export default function ReviewForm({ productId, user, onReviewSubmit }: { produc
         }
     }
 
-    if (!user) return <div className="p-6 text-center italic text-slate-400">Connectez-vous pour noter ce produit.</div>
+    if (!user) return <div className="p-6 text-center italic text-slate-400">{isHotel ? 'Connectez-vous pour noter cet hôtel.' : 'Connectez-vous pour noter ce produit.'}</div>
 
     return (
         <form onSubmit={handleSubmit} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800 space-y-6 shadow-sm mb-10">
@@ -103,7 +103,9 @@ export default function ReviewForm({ productId, user, onReviewSubmit }: { produc
             <textarea
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                placeholder="Qualité, livraison, taille... partagez votre expérience !"
+                placeholder={isHotel
+                    ? "Propreté, accueil, confort, rapport qualité/prix... partagez votre séjour !"
+                    : "Qualité, livraison, taille... partagez votre expérience !"}
                 className="w-full bg-slate-50 dark:bg-slate-800 p-5 rounded-2xl border-none focus:ring-2 focus:ring-green-500 font-medium"
                 rows={3}
             />
@@ -137,7 +139,7 @@ export default function ReviewForm({ productId, user, onReviewSubmit }: { produc
                 disabled={submitting}
                 className="w-full bg-black dark:bg-white text-white dark:text-black py-5 rounded-2xl font-black uppercase italic flex items-center justify-center gap-3 hover:bg-green-600 hover:text-white transition-all shadow-xl disabled:opacity-50"
             >
-                {submitting ? <Loader2 className="animate-spin" /> : <><Send size={18} /> Envoyer mon avis</>}
+                {submitting ? <Loader2 className="animate-spin" /> : <><Send size={18} /> {isHotel ? 'Publier mon avis' : 'Envoyer mon avis'}</>}
             </button>
         </form>
     )

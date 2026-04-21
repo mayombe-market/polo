@@ -40,6 +40,7 @@ import {
 } from '@/lib/realEstateListing'
 import RealEstateListingDetails from '@/app/components/RealEstateListingDetails'
 import ProductDetailSkeleton from '@/app/components/skeletons/ProductDetailSkeleton'
+import ReviewForm from '@/app/components/ReviewForm'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
@@ -187,7 +188,26 @@ export default function ProductDetailPage() {
                         { label: 'product/[id] get_product_reviews', maxAttempts: 4 },
                     )
                     if (cancelled) return
-                    setReviews(productRatings)
+                    // Pour les hôtels, enrichir avec hotel_reply (colonne non couverte par le RPC)
+                    let finalRatings = productRatings
+                    if (productRatings.length > 0) {
+                        const ids = productRatings.map((r: any) => r.id).filter(Boolean)
+                        if (ids.length > 0) {
+                            const { data: replies } = await supabase
+                                .from('reviews')
+                                .select('id, hotel_reply, hotel_reply_at')
+                                .in('id', ids)
+                            if (replies?.length) {
+                                const replyMap = Object.fromEntries(replies.map(r => [r.id, r]))
+                                finalRatings = productRatings.map((r: any) => ({
+                                    ...r,
+                                    hotel_reply: replyMap[r.id]?.hotel_reply ?? null,
+                                    hotel_reply_at: replyMap[r.id]?.hotel_reply_at ?? null,
+                                }))
+                            }
+                        }
+                    }
+                    setReviews(finalRatings)
                     setReviewsRpcFailed(false)
                 } catch (rpcErr) {
                     console.error('[product page] Avis : échec après retries, liste vide.', rpcErr)
@@ -311,7 +331,7 @@ export default function ProductDetailPage() {
         (Number(basePrice) >= 100 && !realEstateExtras?.priceOnRequest)
 
     const isImmo = isRealEstateProduct(product)
-
+    const isHotelProduct = isHotelListing(product?.listing_extras)
 
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
         const count = reviews.filter((r: any) => r.rating === stars).length
@@ -1217,7 +1237,9 @@ export default function ProductDetailPage() {
                                                 <span className="text-slate-400 text-[11px] block">
                                                     {new Date(rev.created_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}
                                                 </span>
-                                                <span className="text-[8px] font-bold text-green-600 dark:text-green-400">✓ Achat vérifié</span>
+                                                <span className="text-[8px] font-bold text-green-600 dark:text-green-400">
+                                                    {isHotelProduct ? '✓ Séjour vérifié' : '✓ Achat vérifié'}
+                                                </span>
                                             </div>
                                         </div>
 
@@ -1238,9 +1260,42 @@ export default function ProductDetailPage() {
                                                 {rev.comment}
                                             </p>
                                         )}
+
+                                        {/* Réponse de l'hôtel */}
+                                        {isHotelProduct && rev.hotel_reply && (
+                                            <div className="ml-11 mt-3 p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200/60 dark:border-amber-800/40">
+                                                <p className="text-[10px] font-bold text-amber-700 dark:text-amber-400 uppercase mb-1">🏨 Réponse de l&apos;établissement</p>
+                                                <p className="text-slate-600 dark:text-slate-300 text-[12px] leading-relaxed">{rev.hotel_reply}</p>
+                                                {rev.hotel_reply_at && (
+                                                    <p className="text-slate-400 text-[10px] mt-1">
+                                                        {new Date(rev.hotel_reply_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                 )) : (
                                     <div className="text-center py-10 text-slate-400 text-sm italic">Aucun avis pour le moment.</div>
+                                )}
+                            </div>
+
+                            {/* Formulaire laisser un avis */}
+                            <div className="mt-6 pt-6 border-t border-slate-100 dark:border-white/[0.04]">
+                                {isHotelProduct ? (
+                                    <div className="text-center py-6 px-4 rounded-2xl bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/40 dark:border-amber-800/30">
+                                        <span className="text-2xl block mb-2">🏨</span>
+                                        <p className="text-slate-700 dark:text-slate-300 text-[13px] font-semibold mb-1">Les avis sont collectés à la sortie</p>
+                                        <p className="text-slate-400 text-[11px] leading-relaxed">Le personnel de l&apos;hôtel vous envoie un lien par email à votre départ pour partager votre expérience.</p>
+                                    </div>
+                                ) : (
+                                    <>
+                                        <p className="text-[11px] font-black uppercase text-slate-400 italic mb-4">Laisser un avis</p>
+                                        <ReviewForm
+                                            productId={product.id}
+                                            user={user}
+                                            onReviewSubmit={() => setRetryNonce(n => n + 1)}
+                                        />
+                                    </>
                                 )}
                             </div>
                         </div>

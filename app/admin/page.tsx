@@ -8,10 +8,11 @@ import { useRealtime } from '@/hooks/useRealtime'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Package, DollarSign, Clock, ShieldCheck, Users, ShoppingBag, Truck,
-    ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle
+    ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle, Zap, Hotel, Star, UserPlus
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
+import { adminGetEnrichedStats } from '@/app/actions/admin'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -42,6 +43,10 @@ export default function AdminDashboard() {
         totalProducts: 0,
         totalLogisticians: 0,
         pendingPayouts: 0,
+        // enriched
+        totalHotels: 0,
+        totalReviews: 0,
+        newUsersToday: 0,
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
 
@@ -76,6 +81,7 @@ export default function AdminDashboard() {
             ]), NETWORK_TIMEOUT_MS)
 
             const revenueToday = (ordersRes.data || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
+            const enriched = await adminGetEnrichedStats()
 
             setStats({
                 ordersToday: ordersTodayRes.count || 0,
@@ -87,6 +93,9 @@ export default function AdminDashboard() {
                 totalProducts: productsRes.count || 0,
                 totalLogisticians: logisticiansRes.count || 0,
                 pendingPayouts: pendingPayoutsRes.count || 0,
+                totalHotels: enriched.totalHotels || 0,
+                totalReviews: enriched.totalReviews || 0,
+                newUsersToday: enriched.newUsersToday || 0,
             })
             setRecentOrders(recentRes.data || [])
         } catch (err) {
@@ -172,6 +181,34 @@ export default function AdminDashboard() {
                             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-0.5">{s.label}</p>
                         </div>
                     ))}
+                </div>
+
+                {/* ═══ KPIs ENRICHIS ═══ */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <Link href="/admin/hotels" className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-amber-200 dark:hover:border-amber-800/40 transition-all no-underline">
+                        <div className="flex items-center justify-between mb-2">
+                            <span className="text-xl">🏨</span>
+                            <ArrowRight size={14} className="text-slate-300 group-hover:text-amber-500 group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                        <p className="text-2xl font-black italic tracking-tighter text-amber-500">{stats.totalHotels}</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Hôtels inscrits</p>
+                    </Link>
+                    <Link href="/admin/reviews" className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-yellow-200 dark:hover:border-yellow-800/40 transition-all no-underline">
+                        <div className="flex items-center justify-between mb-2">
+                            <Star size={18} className="text-yellow-400" />
+                            <ArrowRight size={14} className="text-slate-300 group-hover:text-yellow-500 group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                        <p className="text-2xl font-black italic tracking-tighter text-yellow-500">{stats.totalReviews}</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Avis publiés</p>
+                    </Link>
+                    <Link href="/admin/activity" className="group bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-orange-200 dark:hover:border-orange-800/40 transition-all no-underline">
+                        <div className="flex items-center justify-between mb-2">
+                            <UserPlus size={18} className="text-orange-500" />
+                            <ArrowRight size={14} className="text-slate-300 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all" />
+                        </div>
+                        <p className="text-2xl font-black italic tracking-tighter text-orange-500">{stats.newUsersToday}</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Nouveaux utilisateurs aujourd&apos;hui</p>
+                    </Link>
                 </div>
 
                 {/* ═══ ACTIONS RAPIDES ═══ */}

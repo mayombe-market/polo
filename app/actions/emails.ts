@@ -503,6 +503,92 @@ export async function sendVendorDeliveryNotificationEmail(
     }
 }
 
+// ─────────────────────────────────────────────────────────
+// Email de demande d'avis hôtelier (envoyé au client à la sortie)
+// ─────────────────────────────────────────────────────────
+export async function sendHotelReviewRequestEmail({
+    guestEmail,
+    guestName,
+    hotelName,
+    productName,
+    reviewUrl,
+}: {
+    guestEmail: string
+    guestName: string
+    hotelName: string
+    productName: string
+    reviewUrl: string
+}) {
+    const safeGuest   = escapeHtml(guestName)
+    const safeHotel   = escapeHtml(hotelName)
+    const safeProduct = escapeHtml(productName)
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: guestEmail,
+            subject: `Votre avis compte — ${safeHotel}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+
+                    <!-- Header -->
+                    <div style="background: #08080E; padding: 30px; text-align: center; border-radius: 0 0 0 0;">
+                        <h1 style="color: #F59E0B; margin: 0; font-size: 22px; font-style: italic; text-transform: uppercase; font-weight: 900; letter-spacing: 1px;">
+                            Mayombe Market
+                        </h1>
+                        <p style="color: #888; font-size: 12px; margin: 6px 0 0 0;">Plateforme hôtelière au Congo-Brazzaville</p>
+                    </div>
+
+                    <!-- Corps -->
+                    <div style="padding: 36px 30px; text-align: center;">
+                        <div style="width: 70px; height: 70px; background: rgba(245,158,11,0.12); border-radius: 22px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 36px;">
+                            🏨
+                        </div>
+
+                        <h2 style="color: #0f172a; margin: 0 0 10px; font-size: 22px;">
+                            Merci de votre séjour, ${safeGuest} !
+                        </h2>
+                        <p style="color: #64748b; font-size: 15px; line-height: 1.6; margin: 0 0 8px;">
+                            Vous avez récemment séjourné à <strong style="color: #F59E0B;">${safeHotel}</strong>
+                            (${safeProduct}).
+                        </p>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6; margin: 0 0 32px;">
+                            Votre expérience nous aide à améliorer nos services et guide d'autres voyageurs.
+                            <br/>Cela ne prend que 30 secondes !
+                        </p>
+
+                        <!-- CTA -->
+                        <a href="${reviewUrl}"
+                           style="display: inline-block; padding: 18px 48px; border-radius: 14px;
+                                  background: linear-gradient(135deg, #F59E0B, #D97706);
+                                  color: #ffffff; font-size: 16px; font-weight: 800;
+                                  text-decoration: none; letter-spacing: 0.3px;
+                                  box-shadow: 0 6px 24px rgba(245,158,11,0.35);">
+                            ⭐ Laisser mon avis
+                        </a>
+
+                        <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0;">
+                            Ce lien est valable 30 jours et ne peut être utilisé qu'une seule fois.
+                        </p>
+                    </div>
+
+                    <!-- Note étoiles déco -->
+                    <div style="background: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                        <div style="font-size: 22px; letter-spacing: 4px; margin-bottom: 6px;">★★★★★</div>
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">
+                            Mayombe Market — contact@mayombe-market.com
+                        </p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('[sendHotelReviewRequestEmail] error:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de réponse à une négociation (envoyé à l'acheteur)
 export async function sendNegotiationResponseEmail(
     buyerEmail: string,

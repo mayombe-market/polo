@@ -139,6 +139,10 @@ export function RealtimeProvider({ children }: { children: ReactNode }) {
                     .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders', filter: `logistician_id=eq.${userId}` }, handleEvent)
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` }, handleEvent)
+            } else if (role === 'comptable') {
+                channel = channel
+                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' }, handleEvent)
+                    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' }, handleEvent)
             }
 
             return channel

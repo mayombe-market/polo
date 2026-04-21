@@ -10,20 +10,21 @@ import { sendRetourRequestEmail, sendRetourAckEmail } from '@/app/actions/emails
 import {
     ShieldCheck, PackageX, ChevronDown, ChevronLeft,
     ImagePlus, X, Loader2, CheckCircle2, Phone,
-    Mail, User, Hash, MessageSquare, ChevronRight
+    Mail, User, Hash, MessageSquare, ChevronRight,
+    PackageOpen, RotateCcw, Ban, Clock, Truck
 } from 'lucide-react'
 
 // ─── Politique de retour ────────────────────────────────────────────────────────
 const POLICIES = [
     {
-        icon: '📦',
+        icon: PackageOpen,
         title: 'Produit endommagé ou incorrect',
         color: '#ef4444',
         text: 'Si le produit reçu est endommagé, défectueux ou ne correspond pas à votre commande, nous proposons un remboursement complet ou un échange sans complication.',
         badge: 'Remboursement garanti',
     },
     {
-        icon: '🔄',
+        icon: RotateCcw,
         title: 'Changement d\'avis',
         color: '#f97316',
         text: 'Si le produit ne correspond pas à vos attentes mais est en parfait état (non utilisé, emballage intact), nous offrons un échange contre un produit de valeur équivalente.',
@@ -31,20 +32,20 @@ const POLICIES = [
         note: 'Le produit doit être non utilisé, non lavé et dans son emballage d\'origine.',
     },
     {
-        icon: '❌',
+        icon: Ban,
         title: 'Produits non éligibles',
         color: '#6b7280',
         text: 'Les produits périssables, personnalisés, sous-vêtements et articles d\'hygiène ne sont pas éligibles aux retours pour des raisons sanitaires.',
     },
     {
-        icon: '⏱️',
+        icon: Clock,
         title: 'Délai de réclamation',
         color: '#3b82f6',
         text: 'Vous disposez de 48 heures après réception du colis pour signaler un problème. Passé ce délai, nous ne pourrons malheureusement plus traiter votre demande.',
         badge: 'Dans les 48h',
     },
     {
-        icon: '🚚',
+        icon: Truck,
         title: 'Retour du produit',
         color: '#8b5cf6',
         text: 'Selon votre localisation, nous pouvons organiser la collecte du produit par notre équipe ou vous indiquer un point de dépôt. Les frais de retour sont à notre charge si la faute nous incombe.',
@@ -53,6 +54,7 @@ const POLICIES = [
 
 function PolicyCard({ policy }: { policy: typeof POLICIES[0] }) {
     const [open, setOpen] = useState(false)
+    const Icon = policy.icon
     return (
         <div
             className="rounded-2xl border transition-all overflow-hidden"
@@ -62,7 +64,12 @@ function PolicyCard({ policy }: { policy: typeof POLICIES[0] }) {
                 onClick={() => setOpen(o => !o)}
                 className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50"
             >
-                <span className="text-2xl flex-shrink-0">{policy.icon}</span>
+                <div
+                    className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 transition-all"
+                    style={{ background: open ? policy.color : policy.color + '15' }}
+                >
+                    <Icon size={18} style={{ color: open ? 'white' : policy.color }} strokeWidth={1.75} />
+                </div>
                 <div className="flex-1 min-w-0">
                     <p className="font-black text-sm dark:text-white">{policy.title}</p>
                     {policy.badge && !open && (
@@ -75,11 +82,11 @@ function PolicyCard({ policy }: { policy: typeof POLICIES[0] }) {
                 <ChevronDown size={16} className="flex-shrink-0 text-slate-400 transition-transform" style={{ transform: open ? 'rotate(180deg)' : 'none' }} />
             </button>
             {open && (
-                <div className="px-5 pb-5 pl-[72px]">
+                <div className="px-5 pb-5 pl-[68px]">
                     <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed">{policy.text}</p>
                     {policy.note && (
                         <div className="mt-3 text-xs italic text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-800 rounded-xl p-3 border-l-2" style={{ borderColor: policy.color }}>
-                            ⚠️ {policy.note}
+                            {policy.note}
                         </div>
                     )}
                     {policy.badge && (

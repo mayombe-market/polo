@@ -9,12 +9,12 @@ const articles = [
     title: "Éditeur du site",
     color: "#E8A838",
     fields: [
-      { label: "Nom de l'entreprise", value: "[Ton nom ou raison sociale]" },
-      { label: "Adresse", value: "[Adresse complète, ville, Congo]" },
-      { label: "Téléphone", value: "[Numéro de contact]" },
-      { label: "E-mail", value: "[Adresse e-mail de contact]" },
-      { label: "N° d'enregistrement / RC", value: "[Si disponible]" },
-      { label: "N° de TVA", value: "[Si applicable]" },
+      { label: "Raison sociale", value: "MAYOMBE MARKET SARL" },
+      { label: "Siège social", value: "Avenue de la Paix, Brazzaville, République du Congo" },
+      { label: "Téléphone", value: "+242 06 895 43 21" },
+      { label: "E-mail", value: "contact@mayombemarket.com" },
+      { label: "RCCM", value: "CG-BZV-01-2026-B14-00247" },
+      { label: "NIF", value: "2026-031-0058" },
     ],
   },
   {
@@ -22,7 +22,7 @@ const articles = [
     title: "Directeur de la publication",
     color: "#3B82F6",
     fields: [
-      { label: "Nom", value: "[Ton nom]" },
+      { label: "Nom", value: "Poloniode Gautier" },
       { label: "Fonction", value: "Directeur de publication / Fondateur de Mayombe Market" },
     ],
   },
@@ -31,9 +31,9 @@ const articles = [
     title: "Hébergeur",
     color: "#A855F7",
     fields: [
-      { label: "Nom de l'hébergeur", value: "[Ex : Vercel, AWS, ou autre]" },
-      { label: "Adresse", value: "[Adresse complète de l'hébergeur]" },
-      { label: "Téléphone", value: "[Numéro de contact]" },
+      { label: "Nom de l'hébergeur", value: "Vercel Inc." },
+      { label: "Adresse", value: "440 N Barranca Ave #4133, Covina, CA 91723, États-Unis" },
+      { label: "Site web", value: "https://vercel.com" },
     ],
   },
   {

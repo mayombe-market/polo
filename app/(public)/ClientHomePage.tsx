@@ -352,7 +352,7 @@ export default function ClientHomePage({
                             <ArrowRight className="h-5 w-5 shrink-0 text-neutral-400" />
                         </button>
                         <Link
-                            href="/account/dashboard"
+                            href="/retours-litiges"
                             className="flex w-full items-center justify-between gap-4 bg-orange-50/60 px-6 py-6 transition hover:bg-orange-50 dark:bg-orange-950/20 dark:hover:bg-orange-950/40 no-underline"
                         >
                             <div className="flex items-center gap-5">

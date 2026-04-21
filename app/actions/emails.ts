@@ -589,6 +589,113 @@ export async function sendHotelReviewRequestEmail({
     }
 }
 
+// ─── Email : demande de retour/litige (envoyé à l'admin) ──────────────────
+export async function sendRetourRequestEmail({
+    name,
+    email,
+    phone,
+    orderRef,
+    motif,
+    description,
+    images,
+}: {
+    name: string
+    email: string
+    phone?: string
+    orderRef?: string
+    motif: string
+    description?: string
+    images?: string[]
+}) {
+    const safeName  = escapeHtml(name)
+    const safeEmail = escapeHtml(email)
+    const safeMotif = escapeHtml(motif)
+    const safeDesc  = description ? escapeHtml(description) : null
+    const safePhone = phone ? escapeHtml(phone) : null
+    const safeRef   = orderRef ? escapeHtml(orderRef) : null
+
+    const imagesHtml = images && images.length > 0
+        ? images.map((u, i) => `<a href="${u}" target="_blank"><img src="${u}" alt="Photo ${i+1}" style="width:120px;height:120px;object-fit:cover;border-radius:8px;margin:4px;" /></a>`).join('')
+        : ''
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: 'contact@mayombe-market.com',
+            replyTo: email,
+            subject: `[Retour/Litige] ${safeName} — ${safeMotif}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 24px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 20px; font-style: italic; text-transform: uppercase;">Mayombe Market — Nouvelle réclamation</h1>
+                    </div>
+                    <div style="padding: 24px; space-y: 16px;">
+                        <table style="width:100%; border-collapse:collapse; font-size:14px;">
+                            <tr><td style="padding:8px 0; color:#64748b; width:140px;">Nom</td><td style="padding:8px 0; font-weight:bold;">${safeName}</td></tr>
+                            <tr><td style="padding:8px 0; color:#64748b;">Email</td><td style="padding:8px 0;"><a href="mailto:${safeEmail}">${safeEmail}</a></td></tr>
+                            ${safePhone ? `<tr><td style="padding:8px 0; color:#64748b;">Téléphone</td><td style="padding:8px 0;">${safePhone}</td></tr>` : ''}
+                            ${safeRef ? `<tr><td style="padding:8px 0; color:#64748b;">N° commande</td><td style="padding:8px 0; font-family:monospace; background:#f8fafc; padding:4px 8px; border-radius:4px;">${safeRef}</td></tr>` : ''}
+                            <tr><td style="padding:8px 0; color:#64748b;">Motif</td><td style="padding:8px 0; color:#f97316; font-weight:bold;">${safeMotif}</td></tr>
+                        </table>
+                        ${safeDesc ? `<div style="margin-top:16px; background:#f8fafc; padding:16px; border-radius:8px; border-left:3px solid #f97316;"><p style="font-size:11px;color:#94a3b8;text-transform:uppercase;margin:0 0 8px;">Description</p><p style="font-size:14px;color:#334155;margin:0;line-height:1.6;">${safeDesc}</p></div>` : ''}
+                        ${imagesHtml ? `<div style="margin-top:16px;"><p style="font-size:11px;color:#94a3b8;text-transform:uppercase;margin:0 0 8px;">Photos jointes</p><div>${imagesHtml}</div></div>` : ''}
+                    </div>
+                    <div style="background:#f8fafc; padding:16px; text-align:center;">
+                        <p style="color:#94a3b8; font-size:11px; margin:0;">Répondre directement à cet email pour contacter le client.</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email retour:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
+// ─── Email : accusé de réception (envoyé au client) ───────────────────────
+export async function sendRetourAckEmail({
+    name,
+    email,
+    motif,
+}: {
+    name: string
+    email: string
+    motif: string
+}) {
+    const safeName  = escapeHtml(name)
+    const safeMotif = escapeHtml(motif)
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: email,
+            subject: `Réclamation reçue — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+                    <div style="padding: 30px; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: #f9731620; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;"><span style="font-size: 28px;">📬</span></div>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${safeName},</h2>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">Nous avons bien reçu votre réclamation concernant :<br/><strong style="color:#f97316;">${safeMotif}</strong></p>
+                        <div style="background:#f0fdf4; border:1px solid #bbf7d0; padding:16px; border-radius:12px; margin:24px 0;">
+                            <p style="color:#166534; font-size:14px; margin:0;">Notre équipe examinera votre dossier et vous recontactera <strong>sous 24 à 48 heures</strong> par email ou téléphone.</p>
+                        </div>
+                    </div>
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email accusé:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // ─── Email : litige accepté (envoyé à l'acheteur) ─────────────────────────
 export async function sendDisputeAcceptedEmail({
     buyerEmail,

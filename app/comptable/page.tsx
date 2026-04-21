@@ -11,14 +11,28 @@ const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 export default function ComptableDashboard() {
     const [data, setData] = useState<any>(null)
     const [loading, setLoading] = useState(true)
+    const [error, setError] = useState(false)
 
     useEffect(() => {
-        getFinancialDashboard().then(d => { setData(d); setLoading(false) })
+        getFinancialDashboard()
+            .then(d => { setData(d); setLoading(false) })
+            .catch(() => { setError(true); setLoading(false) })
     }, [])
 
     if (loading) return (
         <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950">
             <Loader2 size={36} className="animate-spin text-green-500" />
+        </div>
+    )
+
+    if (error || !data) return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-4 bg-slate-50 dark:bg-slate-950 px-4 text-center">
+            <p className="text-2xl">⚙️</p>
+            <p className="font-black text-slate-700 dark:text-white">Configuration manquante</p>
+            <p className="text-sm text-slate-400 max-w-sm">
+                La clé <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-xs">SUPABASE_SERVICE_ROLE_KEY</code> n'est pas configurée dans <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded text-xs">.env.local</code>.
+                Récupère-la dans Supabase → Settings → API.
+            </p>
         </div>
     )
 

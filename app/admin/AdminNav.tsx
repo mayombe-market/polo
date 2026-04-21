@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, CreditCard, Zap, Hotel, Star, UsersRound } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, CreditCard, Zap, Hotel, Star, UsersRound, AlertTriangle } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = getSupabaseBrowserClient()
@@ -21,25 +21,27 @@ const links = [
     { href: '/admin/reviews',       label: 'Avis',         icon: Star,            badgeKey: null },
     { href: '/admin/subscriptions', label: 'Abonnements',  icon: CreditCard,      badgeKey: 'subscriptions' as const },
     { href: '/admin/equipe',        label: 'Équipe',       icon: UsersRound,      badgeKey: null },
+    { href: '/admin/litiges',       label: 'Litiges',      icon: AlertTriangle,   badgeKey: 'litiges' as const },
     { href: '/admin/ads',           label: 'Pubs',         icon: Megaphone,       badgeKey: 'ad_campaigns' as const },
 ]
 
 export default function AdminNav() {
     const pathname = usePathname()
-    const [badges, setBadges] = useState<{ orders: number; verifications: number; ad_campaigns: number; subscriptions: number; hotels: number; activity: number }>({
+    const [badges, setBadges] = useState<{ orders: number; verifications: number; ad_campaigns: number; subscriptions: number; hotels: number; activity: number; litiges: number }>({
         orders: 0,
         verifications: 0,
         ad_campaigns: 0,
         subscriptions: 0,
         hotels: 0,
         activity: 0,
+        litiges: 0,
     })
 
     const fetchCounts = useCallback(async () => {
         const soonCutoff = new Date()
         soonCutoff.setDate(soonCutoff.getDate() + 7)
 
-        const [ordersRes, verificationsRes, adCampRes, subRes, hotelRes] = await Promise.all([
+        const [ordersRes, verificationsRes, adCampRes, subRes, hotelRes, litigesRes] = await Promise.all([
             supabase.from('orders').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('vendor_verifications').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
             supabase.from('vendor_ad_campaigns').select('*', { count: 'exact', head: true }).eq('status', 'pending_review'),
@@ -55,6 +57,7 @@ export default function AdminNav() {
                 .eq('role', 'vendor')
                 .eq('vendor_type', 'hotel')
                 .eq('subscription_plan', 'hotel_free'),
+            supabase.from('disputes').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
         ])
         setBadges({
             orders: ordersRes.count || 0,
@@ -63,6 +66,7 @@ export default function AdminNav() {
             subscriptions: subRes.count || 0,
             hotels: hotelRes.count || 0,
             activity: 0,
+            litiges: litigesRes.count || 0,
         })
     }, [])
 
@@ -80,11 +84,12 @@ export default function AdminNav() {
                 {links.map(({ href, label, icon: Icon, badgeKey }) => {
                     const active = pathname === href
                     const count =
-                        badgeKey === 'orders'        ? badges.orders
+                        badgeKey === 'orders'          ? badges.orders
                         : badgeKey === 'verifications' ? badges.verifications
                         : badgeKey === 'ad_campaigns'  ? badges.ad_campaigns
                         : badgeKey === 'subscriptions' ? badges.subscriptions
-                        : badgeKey === 'hotels'         ? badges.hotels
+                        : badgeKey === 'hotels'        ? badges.hotels
+                        : badgeKey === 'litiges'       ? badges.litiges
                         : 0
 
                     return (

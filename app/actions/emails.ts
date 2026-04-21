@@ -589,6 +589,129 @@ export async function sendHotelReviewRequestEmail({
     }
 }
 
+// ─── Email : litige accepté (envoyé à l'acheteur) ─────────────────────────
+export async function sendDisputeAcceptedEmail({
+    buyerEmail,
+    buyerName,
+    note,
+}: {
+    buyerEmail: string
+    buyerName: string
+    note?: string
+}) {
+    const safeName = escapeHtml(buyerName)
+    const safeNote = note ? escapeHtml(note) : null
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: buyerEmail,
+            subject: `Votre réclamation a été acceptée — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+
+                    <div style="padding: 30px; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: #22c55e20; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 28px;">✅</span>
+                        </div>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonne nouvelle, ${safeName} !</h2>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+                            Votre réclamation a été <strong style="color: #22c55e;">acceptée</strong> par notre équipe.<br/>
+                            Nous allons vous contacter dans les prochaines <strong>24 heures</strong> pour traiter votre dossier.
+                        </p>
+
+                        ${safeNote ? `
+                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 12px; margin: 24px 0; text-align: left;">
+                            <p style="font-size: 11px; color: #16a34a; font-weight: bold; text-transform: uppercase; margin: 0 0 8px 0;">Message de notre équipe</p>
+                            <p style="color: #15803d; font-size: 14px; margin: 0; line-height: 1.5;">${safeNote}</p>
+                        </div>
+                        ` : ''}
+
+                        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin: 20px 0;">
+                            <p style="color: #64748b; font-size: 13px; margin: 0;">
+                                Pensez à garder votre téléphone accessible.<br/>
+                                Notre équipe vous contactera par téléphone ou email.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email litige accepté:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
+// ─── Email : litige rejeté (envoyé à l'acheteur) ──────────────────────────
+export async function sendDisputeRejectedEmail({
+    buyerEmail,
+    buyerName,
+    note,
+}: {
+    buyerEmail: string
+    buyerName: string
+    note?: string
+}) {
+    const safeName = escapeHtml(buyerName)
+    const safeNote = note ? escapeHtml(note) : null
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: buyerEmail,
+            subject: `Réponse concernant votre réclamation — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <div style="background: #000000; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
+                    </div>
+
+                    <div style="padding: 30px; text-align: center;">
+                        <div style="width: 60px; height: 60px; background: #ef444420; border-radius: 50%; margin: 0 auto 16px; display: flex; align-items: center; justify-content: center;">
+                            <span style="font-size: 28px;">ℹ️</span>
+                        </div>
+                        <h2 style="color: #0f172a; margin-bottom: 8px;">Bonjour ${safeName},</h2>
+                        <p style="color: #64748b; font-size: 14px; line-height: 1.6;">
+                            Après examen de votre dossier, notre équipe n'a pas pu donner suite à votre réclamation.
+                        </p>
+
+                        ${safeNote ? `
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 16px; border-radius: 12px; margin: 24px 0; text-align: left;">
+                            <p style="font-size: 11px; color: #dc2626; font-weight: bold; text-transform: uppercase; margin: 0 0 8px 0;">Raison</p>
+                            <p style="color: #991b1b; font-size: 14px; margin: 0; line-height: 1.5;">${safeNote}</p>
+                        </div>
+                        ` : ''}
+
+                        <div style="background: #f8fafc; padding: 16px; border-radius: 12px; margin: 20px 0;">
+                            <p style="color: #64748b; font-size: 13px; margin: 0;">
+                                Si vous pensez qu'il y a une erreur, n'hésitez pas à nous contacter<br/>
+                                à l'adresse <strong>contact@mayombe-market.com</strong>.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('Erreur envoi email litige rejeté:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de réponse à une négociation (envoyé à l'acheteur)
 export async function sendNegotiationResponseEmail(
     buyerEmail: string,

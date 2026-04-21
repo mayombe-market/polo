@@ -1061,6 +1061,19 @@ function BuyerOrders({
                                         <p className="text-[10px] font-black uppercase text-green-600 text-center">✅ Réception confirmée</p>
                                     </div>
                                 )}
+
+                                {/* Bouton litige */}
+                                {['delivered', 'confirmed', 'processing', 'shipped', 'picked_up'].includes(order.status) && (
+                                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800">
+                                        <Link
+                                            href={`/litige/${order.id}`}
+                                            className="w-full flex items-center justify-center gap-1.5 text-[9px] font-black uppercase text-slate-300 dark:text-slate-600 hover:text-orange-400 dark:hover:text-orange-400 transition-colors py-1 no-underline"
+                                        >
+                                            <AlertTriangle size={10} />
+                                            Signaler un problème
+                                        </Link>
+                                    </div>
+                                )}
                             </div>
                         )
                     })}

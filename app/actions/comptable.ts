@@ -370,6 +370,35 @@ export async function createBankTransfer({
 }
 
 // ════════════════════════════════════════════════════════
+// JOURNAL QUOTIDIEN
+// ════════════════════════════════════════════════════════
+export async function getOrdersJournal({
+    startDate,
+    endDate,
+}: {
+    startDate: string
+    endDate: string
+}) {
+    const { data, error } = await svc()
+        .from('orders')
+        .select(`
+            id, created_at, status, total_amount, commission_amount, vendor_payout,
+            payout_status, payout_date, payout_reference, payout_phone,
+            customer_name, customer_phone, customer_city,
+            transaction_id, items, received_sim, notes,
+            profiles:seller_id (id, shop_name, full_name)
+        `)
+        .neq('order_type', 'subscription')
+        .gte('created_at', startDate)
+        .lte('created_at', endDate + 'T23:59:59')
+        .order('created_at', { ascending: false })
+        .limit(500)
+
+    if (error) return { data: [], error: error.message }
+    return { data: data || [] }
+}
+
+// ════════════════════════════════════════════════════════
 // EXPORT — données brutes pour CSV
 // ════════════════════════════════════════════════════════
 export async function getExportData({

@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Wallet, CreditCard, Building2, Download, LogOut } from 'lucide-react'
+import { LayoutDashboard, Wallet, CreditCard, Building2, Download, TableProperties } from 'lucide-react'
 
 const links = [
     { href: '/comptable',              label: 'Dashboard',     icon: LayoutDashboard },
+    { href: '/comptable/journal',      label: 'Journal',       icon: TableProperties },
     { href: '/comptable/payouts',      label: 'Payouts',       icon: Wallet },
     { href: '/comptable/abonnements',  label: 'Abonnements',   icon: CreditCard },
     { href: '/comptable/virements',    label: 'Virements',     icon: Building2 },

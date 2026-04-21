@@ -32,7 +32,7 @@ export async function promoteToComptable(userId: string) {
     const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (me?.role !== 'admin') return { error: 'Non autorisé' }
 
-    const { data: target } = await svc().from('profiles').select('role').eq('id', userId).single()
+    const { data: target } = await supabase.from('profiles').select('role').eq('id', userId).single()
     if (!target) return { error: 'Utilisateur introuvable' }
     if (target.role === 'admin') return { error: 'Impossible de modifier un admin' }
     if (target.role === 'comptable') return { error: 'Déjà comptable' }
@@ -50,7 +50,7 @@ export async function demoteComptable(userId: string) {
     const { data: me } = await supabase.from('profiles').select('role').eq('id', user.id).single()
     if (me?.role !== 'admin') return { error: 'Non autorisé' }
 
-    const { data: target } = await svc().from('profiles').select('role').eq('id', userId).single()
+    const { data: target } = await supabase.from('profiles').select('role').eq('id', userId).single()
     if (!target) return { error: 'Utilisateur introuvable' }
     if (target.role !== 'comptable') return { error: "Cet utilisateur n'est pas comptable" }
 

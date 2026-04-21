@@ -8,7 +8,7 @@ import VendorMarketDrawer from '@/app/components/VendorMarketDrawer'
 import TrustMarquee from '@/app/components/TrustMarquee'
 import TrendsProductSlider from '@/app/components/TrendsProductSlider'
 import PubProductMixSlider from '@/app/components/PubProductMixSlider'
-import { Truck, Store, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Truck, Store, ArrowRight, ShieldCheck, ChevronLeft, ChevronRight, PackageX } from 'lucide-react'
 import type { UnifiedHeroSlide } from '@/lib/mergeHeroSlides'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import { heroImageUrl, heroImageSrcSet } from '@/lib/heroImageUrl'
@@ -327,9 +327,9 @@ export default function ClientHomePage({
             </section>
 
             <div className="mx-auto max-w-[1320px] space-y-24 px-5 pt-10 sm:px-8 lg:px-10 lg:pt-14">
-                {/* Sous le hero : livraison | Vendeurs (drawer boutiques + CTA) */}
+                {/* Sous le hero : livraison | Vendeurs | Retours & Litiges */}
                 <section className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-neutral-800">
-                    <div className="grid gap-0 bg-neutral-50/80 md:grid-cols-2 dark:bg-neutral-900/50">
+                    <div className="grid gap-0 bg-neutral-50/80 md:grid-cols-3 dark:bg-neutral-900/50">
                         <div className="flex items-center gap-5 border-b border-neutral-200/80 px-6 py-6 md:border-b-0 md:border-r dark:border-neutral-800">
                             <Truck className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
                             <div>
@@ -340,7 +340,7 @@ export default function ClientHomePage({
                         <button
                             type="button"
                             onClick={() => setVendorDrawerOpen(true)}
-                            className="flex w-full items-center justify-between gap-4 px-6 py-6 text-left transition hover:bg-white dark:hover:bg-neutral-800/80"
+                            className="flex w-full items-center justify-between gap-4 border-b border-neutral-200/80 px-6 py-6 text-left transition hover:bg-white md:border-b-0 md:border-r dark:border-neutral-800 dark:hover:bg-neutral-800/80"
                         >
                             <div className="flex items-center gap-5">
                                 <Store className="h-6 w-6 shrink-0 text-neutral-700 dark:text-neutral-300" strokeWidth={1.25} />
@@ -351,6 +351,19 @@ export default function ClientHomePage({
                             </div>
                             <ArrowRight className="h-5 w-5 shrink-0 text-neutral-400" />
                         </button>
+                        <Link
+                            href="/account/dashboard"
+                            className="flex w-full items-center justify-between gap-4 bg-orange-50/60 px-6 py-6 transition hover:bg-orange-50 dark:bg-orange-950/20 dark:hover:bg-orange-950/40 no-underline"
+                        >
+                            <div className="flex items-center gap-5">
+                                <PackageX className="h-6 w-6 shrink-0 text-orange-500" strokeWidth={1.25} />
+                                <div>
+                                    <p className="text-xs font-medium uppercase tracking-[0.2em] text-orange-500">Retours & Litiges</p>
+                                    <p className="mt-1 text-sm text-neutral-800 dark:text-neutral-200">Signaler un problème</p>
+                                </div>
+                            </div>
+                            <ArrowRight className="h-5 w-5 shrink-0 text-orange-400" />
+                        </Link>
                     </div>
                 </section>
 

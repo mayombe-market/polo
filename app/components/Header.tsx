@@ -307,6 +307,17 @@ export default function Header() {
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{isDarkMode ? 'Mode clair' : 'Mode sombre'}</span>
                         </button>
 
+                        <Link href="/comment-commander" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl transition-colors no-underline" style={{ background: "linear-gradient(135deg, rgba(232,168,56,0.08), rgba(232,168,56,0.04))", border: "1px solid rgba(232,168,56,0.2)" }}>
+                            <div style={{ width: 36, height: 36, borderRadius: 10, background: "linear-gradient(135deg, #E8A838, #D4782F)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, boxShadow: "0 4px 12px rgba(232,168,56,0.3)" }}>
+                                <span className="text-base">🛒</span>
+                            </div>
+                            <div>
+                                <span className="text-sm font-black text-orange-500 dark:text-orange-400 block">Comment commander ?</span>
+                                <span className="text-xs text-slate-400">Guide visuel étape par étape</span>
+                            </div>
+                            <span className="ml-auto text-orange-400 text-sm">→</span>
+                        </Link>
+
                         <Link href="/faq" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors no-underline">
                             <span className="text-lg">🙋‍♂️</span>
                             <span className="text-sm font-medium text-gray-700 dark:text-gray-300">FAQ</span>

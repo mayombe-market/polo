@@ -166,64 +166,82 @@ export async function getConversations() {
 
     if (!user) return { conversations: [] }
 
-    // Toutes les conversations de l'utilisateur
+    // 1. Toutes les conversations de l'utilisateur
     const { data: conversations } = await supabase
         .from('conversations')
         .select('*')
         .or(`buyer_id.eq.${user.id},seller_id.eq.${user.id}`)
         .order('last_message_at', { ascending: false })
+        .limit(100)
 
     if (!conversations || conversations.length === 0) return { conversations: [] }
 
-    // Pour chaque conversation, récupérer le profil de l'autre + le dernier message + unread count
-    const enriched = await Promise.all(
-        conversations.map(async (conv) => {
-            const otherId = conv.buyer_id === user.id ? conv.seller_id : conv.buyer_id
+    const convIds = conversations.map(c => c.id)
+    const otherIds = [...new Set(conversations.map(c =>
+        c.buyer_id === user.id ? c.seller_id : c.buyer_id
+    ))]
+    const productIds = [...new Set(
+        conversations.filter(c => c.product_id).map(c => c.product_id)
+    )]
 
-            // Profil de l'autre personne
-            const { data: otherProfile } = await supabase
-                .from('profiles')
-                .select('id, full_name, store_name, shop_name, avatar_url')
-                .eq('id', otherId)
-                .single()
+    // 2. Batch : 4 requêtes au lieu de N×4
+    const [profilesRes, recentMsgsRes, unreadMsgsRes, productsRes] = await Promise.all([
+        // Profils des interlocuteurs
+        supabase
+            .from('profiles')
+            .select('id, full_name, store_name, shop_name, avatar_url')
+            .in('id', otherIds),
+        // Messages récents (pour extraire le dernier par conversation)
+        supabase
+            .from('messages')
+            .select('conversation_id, content, sender_id, created_at')
+            .in('conversation_id', convIds)
+            .order('created_at', { ascending: false })
+            .limit(500),
+        // Messages non lus
+        supabase
+            .from('messages')
+            .select('conversation_id')
+            .in('conversation_id', convIds)
+            .neq('sender_id', user.id)
+            .eq('is_read', false),
+        // Noms des produits liés
+        productIds.length > 0
+            ? supabase.from('products').select('id, name').in('id', productIds)
+            : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    ])
 
-            // Dernier message
-            const { data: lastMessage } = await supabase
-                .from('messages')
-                .select('content, sender_id, created_at')
-                .eq('conversation_id', conv.id)
-                .order('created_at', { ascending: false })
-                .limit(1)
-                .maybeSingle()
-
-            // Nombre de messages non lus
-            const { count: unreadCount } = await supabase
-                .from('messages')
-                .select('*', { count: 'exact', head: true })
-                .eq('conversation_id', conv.id)
-                .neq('sender_id', user.id)
-                .eq('is_read', false)
-
-            // Nom du produit si lié
-            let productName = null
-            if (conv.product_id) {
-                const { data: product } = await supabase
-                    .from('products')
-                    .select('name')
-                    .eq('id', conv.product_id)
-                    .single()
-                productName = product?.name || null
-            }
-
-            return {
-                ...conv,
-                otherProfile,
-                lastMessage,
-                unreadCount: unreadCount || 0,
-                productName,
-            }
-        })
+    // 3. Construire les maps pour lookup O(1)
+    const profileMap = Object.fromEntries(
+        (profilesRes.data || []).map(p => [p.id, p])
     )
+    // Premier message rencontré = le plus récent (déjà trié DESC)
+    const lastMessageMap: Record<string, any> = {}
+    for (const msg of (recentMsgsRes.data || [])) {
+        if (!lastMessageMap[msg.conversation_id]) {
+            lastMessageMap[msg.conversation_id] = msg
+        }
+    }
+    // Compter non-lus par conversation en JS
+    const unreadMap: Record<string, number> = {}
+    for (const msg of (unreadMsgsRes.data || [])) {
+        unreadMap[msg.conversation_id] = (unreadMap[msg.conversation_id] || 0) + 1
+    }
+    const productMap = Object.fromEntries(
+        ((productsRes as any).data || []).map((p: any) => [p.id, p.name])
+    )
+
+    // 4. Enrichir sans aucune requête supplémentaire
+    const enriched = conversations.map(conv => {
+        const otherId = conv.buyer_id === user.id ? conv.seller_id : conv.buyer_id
+        return {
+            ...conv,
+            otherProfile: profileMap[otherId] || null,
+            lastMessage: lastMessageMap[conv.id] || null,
+            unreadCount: unreadMap[conv.id] || 0,
+            productName: conv.product_id ? productMap[conv.product_id] || null : null,
+        }
+    })
 
     return { conversations: JSON.parse(JSON.stringify(enriched)) }
 }

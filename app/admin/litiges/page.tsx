@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import AdminNav from '@/app/admin/AdminNav'
 import { Toaster, toast } from 'sonner'
 import {
     adminGetDisputes,
@@ -256,7 +255,6 @@ export default function AdminLitigesPage() {
 
     return (
         <>
-            <AdminNav />
             <Toaster position="top-right" richColors closeButton />
 
             <div className="min-h-screen bg-slate-50 dark:bg-slate-950">

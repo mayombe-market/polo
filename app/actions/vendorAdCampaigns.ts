@@ -269,7 +269,7 @@ export async function adminListVendorAdCampaigns(): Promise<AdminListCampaignsRe
     try {
         const { supabase } = await requireAdmin()
 
-        const all = await supabase.from('vendor_ad_campaigns').select('*').order('created_at', { ascending: false })
+        const all = await supabase.from('vendor_ad_campaigns').select('*').order('created_at', { ascending: false }).limit(500)
         if (all.error) return { ok: false, campaigns: [], error: all.error.message }
         return { ok: true, campaigns: all.data || [] }
     } catch (e: unknown) {

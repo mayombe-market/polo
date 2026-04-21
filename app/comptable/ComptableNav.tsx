@@ -19,12 +19,12 @@ export default function ComptableNav() {
         <nav className="bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800">
             <div className="max-w-7xl mx-auto px-4 flex items-center gap-1 overflow-x-auto no-scrollbar">
                 {/* Logo */}
-                <div className="flex items-center gap-2 pr-4 py-3 border-r border-slate-100 dark:border-slate-800 mr-2 flex-shrink-0">
+                <Link href="/comptable" className="flex items-center gap-2 pr-4 py-3 border-r border-slate-100 dark:border-slate-800 mr-2 flex-shrink-0 no-underline hover:opacity-80 transition-opacity">
                     <div className="w-7 h-7 rounded-lg bg-green-500 flex items-center justify-center">
                         <span className="text-white text-xs font-black">₣</span>
                     </div>
                     <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Comptabilité</span>
-                </div>
+                </Link>
 
                 {links.map(({ href, label, icon: Icon }) => {
                     const active = pathname === href

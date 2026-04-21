@@ -6,11 +6,8 @@ import Link from 'next/link'
 import Header from '@/app/components/Header'
 import { Toaster, toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
-import {
-    DISPUTE_MOTIFS,
-    createDispute,
-    getDisputeByOrder,
-} from '@/app/actions/disputes'
+import { DISPUTE_MOTIFS } from '@/lib/disputeMotifs'
+import { createDispute, getDisputeByOrder } from '@/app/actions/disputes'
 import {
     ShieldCheck, AlertTriangle, CheckCircle2, XCircle,
     Clock, ChevronLeft, Upload, X, Loader2, ImagePlus,

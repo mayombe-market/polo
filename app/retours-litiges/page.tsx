@@ -5,7 +5,7 @@ import Link from 'next/link'
 import Header from '@/app/components/Header'
 import { Toaster, toast } from 'sonner'
 import { useAuth } from '@/hooks/useAuth'
-import { DISPUTE_MOTIFS } from '@/app/actions/disputes'
+import { DISPUTE_MOTIFS } from '@/lib/disputeMotifs'
 import { sendRetourRequestEmail, sendRetourAckEmail } from '@/app/actions/emails'
 import {
     ShieldCheck, PackageX, ChevronDown, ChevronLeft,

@@ -37,10 +37,15 @@ export default function AdminEquipePage() {
 
     const loadAll = async () => {
         setLoading(true)
-        const [c, l] = await Promise.all([getComptables(), getAvailableLogisticians()])
-        setComptables(c.data || [])
-        setLogisticians(l.logisticians || [])
-        setLoading(false)
+        try {
+            const [c, l] = await Promise.all([getComptables(), getAvailableLogisticians()])
+            setComptables(c.data || [])
+            setLogisticians(l.logisticians || [])
+        } catch (e) {
+            console.error('Erreur chargement équipe:', e)
+        } finally {
+            setLoading(false)
+        }
     }
 
     const handleSearch = async () => {

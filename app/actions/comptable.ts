@@ -60,19 +60,20 @@ export async function demoteComptable(userId: string) {
 }
 
 export async function getComptables() {
-    const { data, error } = await svc()
+    const supabase = await getSupabaseUser()
+    const { data, error } = await supabase
         .from('profiles')
         .select('id, full_name, first_name, last_name, email, phone, avatar_url, created_at')
         .eq('role', 'comptable')
         .order('created_at', { ascending: false })
-    if (error) return { error: error.message }
+    if (error) return { data: [] }
     return { data: data || [] }
 }
 
 export async function searchUsersForPromotion(query: string) {
-    const service = svc()
+    const supabase = await getSupabaseUser()
     if (query.length < 2) {
-        const { data } = await service.from('profiles')
+        const { data } = await supabase.from('profiles')
             .select('id, full_name, first_name, last_name, phone, email, role')
             .in('role', ['user', 'buyer', 'vendor'])
             .order('created_at', { ascending: false })
@@ -80,7 +81,7 @@ export async function searchUsersForPromotion(query: string) {
         return { users: data || [] }
     }
     const q = query.replace(/[%_\\]/g, '\\$&')
-    const { data } = await service.from('profiles')
+    const { data } = await supabase.from('profiles')
         .select('id, full_name, first_name, last_name, phone, email, role')
         .or(`full_name.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%,phone.ilike.%${q}%,email.ilike.%${q}%`)
         .not('role', 'in', '("admin","comptable","logistician")')

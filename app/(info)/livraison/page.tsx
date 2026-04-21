@@ -24,21 +24,30 @@ const features = [
 const deliveryOptions = [
   {
     title: "Livraison standard",
-    delay: "1 à 5 jours",
-    detail: "Selon votre localisation",
+    price: "1 000 FCFA",
+    delay: "24h – 48h",
+    detail: "Même ville que le vendeur",
     color: "#3B82F6",
   },
   {
     title: "Livraison express",
-    delay: "24 à 48h",
-    detail: "Disponible dans certaines zones",
+    price: "2 000 FCFA",
+    delay: "Même journée",
+    detail: "Même ville que le vendeur",
     color: "#E8A838",
+  },
+  {
+    title: "Livraison inter-ville",
+    price: "3 500 FCFA",
+    delay: "24h – 96h (max 4 jours)",
+    detail: "Vendeur dans une autre ville",
+    color: "#A855F7",
   },
 ];
 
 const pricingInfo = [
-  "Calculés automatiquement en fonction du poids, du volume et de la distance",
-  "Possibilité de livraison gratuite sur certaines promotions ou pour certaines commandes",
+  "Les frais de livraison sont fixes et affichés avant validation de la commande",
+  "La livraison inter-ville s'applique automatiquement si le vendeur est dans une ville différente de la vôtre",
 ];
 
 const trackingSteps = [

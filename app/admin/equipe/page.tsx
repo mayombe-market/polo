@@ -62,20 +62,25 @@ export default function AdminEquipePage() {
 
     const handlePromote = async (userId: string) => {
         setPromoting(userId)
-        const res = tab === 'comptable'
-            ? await promoteToComptable(userId)
-            : await promoteToLogistician(userId)
+        try {
+            const res = tab === 'comptable'
+                ? await promoteToComptable(userId)
+                : await promoteToLogistician(userId)
 
-        if (res.error) {
-            toast.error(res.error)
-        } else {
-            toast.success(tab === 'comptable' ? 'Comptable ajoutée ✓' : 'Livreur ajouté ✓')
-            setShowSearch(false)
-            setQuery('')
-            setResults([])
-            loadAll()
+            if (res.error) {
+                toast.error(res.error)
+            } else {
+                toast.success(tab === 'comptable' ? 'Comptable ajoutée ✓' : 'Livreur ajouté ✓')
+                setShowSearch(false)
+                setQuery('')
+                setResults([])
+                loadAll()
+            }
+        } catch (e: any) {
+            toast.error('Erreur : ' + (e?.message || 'inconnue'))
+        } finally {
+            setPromoting(null)
         }
-        setPromoting(null)
     }
 
     const handleDemote = async (userId: string, currentTab: Tab) => {

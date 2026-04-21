@@ -8,45 +8,68 @@ const sections = [
     id: "about",
     title: "Qu'est-ce que Mayombe Market ?",
     content:
-      "Mayombe Market est une plateforme d'e-commerce née au Congo, qui connecte les consommateurs avec des milliers de vendeurs, artisans et marques. Notre mission : rendre accessibles des produits de qualité à des prix justes, tout en valorisant le savoir-faire congolais et africain. Fondé avec l'esprit du « Mbongui » — le rassemblement communautaire — Mayombe Market incarne la conviction que le commerce peut être un pont entre les peuples, du Congo vers le monde entier.",
+      "Mayombe Market est la première marketplace congolaise qui connecte directement les vendeurs du Congo avec les clients du Congo. Notre mission est simple : permettre à tout entrepreneur, artisan, commerçant ou créateur basé en République du Congo de vendre ses produits en ligne, et à tout client congolais de les commander facilement, en toute confiance, avec livraison à domicile. Nous sommes un pont numérique entre ceux qui produisent et ceux qui consomment — entièrement fait au Congo, pour le Congo.",
     gradient: "linear-gradient(135deg, #1a1a2e, #2d2d4a)",
   },
   {
     id: "meaning",
     title: "Que signifie Mayombe Market ?",
     content:
-      "Mayombe Market – Votre Marché en Ligne, Né au Congo. Le Mayombe, c'est cette forêt majestueuse qui s'étend du Congo jusqu'à l'océan, symbole d'abondance et de vie. Comme elle, notre marché rassemble une richesse immense et diverse. Chaque produit raconte une histoire, chaque achat crée un lien — du cœur du Congo vers le monde.",
+      "Le Mayombe, c'est cette forêt majestueuse qui s'étend au cœur du Congo jusqu'à l'océan Atlantique — symbole de richesse, de vie et d'abondance. Comme elle, notre marché en ligne rassemble une diversité immense de produits, de vendeurs et de clients issus de tout le territoire congolais. Chaque produit sur Mayombe Market raconte une histoire congolaise. Chaque achat crée un lien direct entre un entrepreneur local et un foyer congolais.",
     gradient: "linear-gradient(135deg, #2d2d4a, #3a3a5c)",
   },
   {
     id: "origin",
-    title: "D'où proviennent les produits vendus sur Mayombe Market ?",
+    title: "Qui sont les vendeurs sur Mayombe Market ?",
     content:
-      "Les produits proposés par nos vendeurs sur Mayombe Market sont expédiés depuis différentes régions du monde grâce à nos partenaires logistiques fiables et expérimentés. Les origines d'expédition varient selon le produit acheté, garantissant toujours le meilleur rapport qualité-prix.",
+      "Tous nos vendeurs sont basés en République du Congo. Ce sont des commerçants, artisans, créateurs, entrepreneurs et boutiques installés à Brazzaville, Pointe-Noire, Dolisie et dans d'autres villes du pays. Chaque vendeur est vérifié par notre équipe avant de pouvoir publier ses produits. En achetant sur Mayombe Market, vous soutenez directement l'économie locale et les entrepreneurs congolais.",
     gradient: "linear-gradient(135deg, #1e293b, #334155)",
+  },
+  {
+    id: "mission",
+    title: "Notre mission",
+    content:
+      "Nous croyons que chaque Congolais mérite d'avoir accès à un marché numérique fiable, simple et sécurisé. Du côté des vendeurs, nous leur offrons une vitrine en ligne professionnelle sans besoin de compétences techniques. Du côté des acheteurs, nous leur garantissons des produits réels, des paiements sécurisés via Mobile Money, et une livraison suivie jusqu'à leur porte. Ensemble, nous construisons le commerce de demain — ancré dans nos réalités, pensé pour notre quotidien.",
+    gradient: "linear-gradient(135deg, #1a2e1a, #1e3a1e)",
   },
 ];
 
 const strengths = [
   {
-    title: "Réseau mondial de vendeurs",
-    desc: "Capacité à vous connecter avec des vendeurs offrant une sélection immense et diversifiée de produits.",
+    title: "100% Vendeurs Congolais",
+    desc: "Chaque vendeur sur Mayombe Market est vérifié et basé en République du Congo. Vous achetez local, vous soutenez l'économie congolaise directement.",
     color: "#E8A838",
+    icon: "🇨🇬",
   },
   {
-    title: "Logistique fiable",
-    desc: "Expérience solide dans la gestion des chaînes d'approvisionnement pour des livraisons rapides et sûres.",
+    title: "Paiement Mobile Money",
+    desc: "Payez facilement via MTN Mobile Money ou Airtel Money — les moyens de paiement que vous utilisez déjà au quotidien. Aucune carte bancaire requise.",
     color: "#3B82F6",
+    icon: "📱",
   },
   {
-    title: "Prix accessibles",
-    desc: "Un modèle direct du fabricant au consommateur qui élimine les intermédiaires pour des prix imbattables.",
+    title: "Livraison à domicile",
+    desc: "Nous livrons partout en République du Congo. Standard, express ou inter-ville : recevez votre commande directement chez vous, à votre quartier.",
     color: "#A855F7",
+    icon: "🚚",
   },
   {
-    title: "Confiance & sécurité",
-    desc: "Paiements sécurisés, protection acheteur et service client réactif à chaque étape.",
+    title: "Protection acheteur",
+    desc: "Produit non reçu ou non conforme ? Notre système de litiges vous protège. Vous pouvez signaler un problème et notre équipe intervient rapidement.",
     color: "#F43F5E",
+    icon: "🛡️",
+  },
+  {
+    title: "Vitrine pour les vendeurs",
+    desc: "Tout entrepreneur congolais peut créer sa boutique en ligne en quelques minutes, sans compétences techniques. Vendez vos produits dans tout le pays.",
+    color: "#10B981",
+    icon: "🏪",
+  },
+  {
+    title: "Suivi en temps réel",
+    desc: "Clients et vendeurs sont informés à chaque étape : confirmation, préparation, expédition, livraison. Tout est visible dans le tableau de bord.",
+    color: "#F97316",
+    icon: "🔔",
   },
 ];
 
@@ -167,9 +190,12 @@ export default function AProposPage() {
           transform: translateX(-4px);
           box-shadow: 0 4px 16px rgba(232,168,56,0.25);
         }
-        @media (max-width: 768px) {
-          .strengths-grid { grid-template-columns: 1fr !important; }
+        @media (max-width: 900px) {
+          .strengths-grid { grid-template-columns: repeat(2, 1fr) !important; }
           .values-grid { grid-template-columns: 1fr !important; }
+        }
+        @media (max-width: 600px) {
+          .strengths-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
 
@@ -316,7 +342,7 @@ export default function AProposPage() {
               className="strengths-grid"
               style={{
                 display: "grid",
-                gridTemplateColumns: "repeat(2, 1fr)",
+                gridTemplateColumns: "repeat(3, 1fr)",
                 gap: 20,
                 perspective: "1000px",
               }}
@@ -343,18 +369,14 @@ export default function AProposPage() {
                     borderBottomLeftRadius: 40,
                   }} />
                   <div style={{
-                    width: 40, height: 40, borderRadius: 12,
+                    width: 48, height: 48, borderRadius: 14,
                     background: `linear-gradient(135deg, ${s.color}20, ${s.color}08)`,
                     border: `2px solid ${s.color}30`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    marginBottom: 16,
+                    marginBottom: 16, fontSize: 22,
                     position: "relative",
                   }}>
-                    <div style={{
-                      width: 10, height: 10, borderRadius: "50%",
-                      background: s.color,
-                      animation: "valueOrbit 3s linear infinite",
-                    }} />
+                    {(s as any).icon || "✦"}
                   </div>
                   <h3 style={{
                     fontSize: 17, fontWeight: 700, marginBottom: 10, color: s.color,

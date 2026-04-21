@@ -258,7 +258,7 @@ export default function Header() {
 
             {/* MOBILE MENU DRAWER */}
             {mobileMenuOpen && (
-                <div className="md:hidden border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pb-4">
+                <div className="md:hidden border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900 px-4 pb-4 overflow-y-auto max-h-[75vh]">
                     <div className="flex flex-col gap-1 pt-2">
                         <div className="px-0 py-2">
                             <BecomeVendorCta variant="header-mobile" onNavigate={() => setMobileMenuOpen(false)} />

@@ -20,9 +20,6 @@ async function getSupabase() {
     )
 }
 
-// ─── Motifs prédéfinis ─────────────────────────────────────────
-export { DISPUTE_MOTIFS } from '@/lib/disputeMotifs'
-
 // ─── Client : créer un litige ──────────────────────────────────
 export async function createDispute({
     orderId,

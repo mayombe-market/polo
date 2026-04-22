@@ -10,6 +10,7 @@ import {
     type AdPlacement,
     type AdDurationDays,
 } from '@/lib/adCampaignPricing'
+import { createNotification } from '@/app/actions/notifications'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -228,6 +229,20 @@ export async function adminApproveVendorAdCampaign(
         .eq('id', campaignId)
 
     if (error) return { error: error.message }
+
+    // Notifier le vendeur
+    if (row.seller_id) {
+        const startFmt = start.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+        const endFmt = end.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })
+        createNotification(
+            row.seller_id as string,
+            'ad_approved',
+            'Publicité activée ✓',
+            `Votre campagne ${row.placement === 'hero' ? 'Hero' : 'Tile'} est en ligne du ${startFmt} au ${endFmt}.`,
+            '/vendor/ad-campaigns',
+        ).catch(() => {})
+    }
+
     revalidatePath('/')
     revalidatePath('/admin/ads')
     return { success: true }
@@ -255,6 +270,18 @@ export async function adminRejectVendorAdCampaign(campaignId: string, reason: st
         .eq('id', campaignId)
 
     if (error) return { error: error.message }
+
+    // Notifier le vendeur
+    if (pre.seller_id) {
+        createNotification(
+            pre.seller_id as string,
+            'ad_rejected',
+            'Publicité refusée',
+            `Votre campagne publicitaire a été refusée. Motif : ${r}`,
+            '/vendor/ad-campaigns',
+        ).catch(() => {})
+    }
+
     revalidatePath('/')
     revalidatePath('/admin/ads')
     return { success: true }

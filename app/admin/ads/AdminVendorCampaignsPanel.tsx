@@ -86,6 +86,15 @@ export default function AdminVendorCampaignsPanel() {
             const res = await adminListVendorAdCampaigns()
             if ('ok' in res && res.ok) {
                 setRows(res.campaigns || [])
+                // Pré-remplir le champ "date de début" avec la date préférée du vendeur
+                const prefilled: Record<string, string> = {}
+                for (const c of res.campaigns || []) {
+                    if (c.status === 'pending_review' && c.start_date) {
+                        // Convertir ISO → format datetime-local (YYYY-MM-DDTHH:mm)
+                        prefilled[c.id] = new Date(c.start_date).toISOString().slice(0, 16)
+                    }
+                }
+                setStartInputs(prev => ({ ...prefilled, ...prev }))
             } else if ('error' in res) {
                 setRows([])
                 setLoadError(res.error)
@@ -197,7 +206,7 @@ export default function AdminVendorCampaignsPanel() {
                 </div>
             ) : rows.length === 0 && !loadError ? (
                 <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-6 py-10 dark:border-slate-700 dark:bg-slate-900/50">
-                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Aucune campagne pour l’instant</p>
+                    <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Aucune campagne pour l'instant</p>
                     <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
                         Les vendeurs créent leurs campagnes sur{' '}
                         <code className="rounded bg-white px-1.5 py-0.5 text-xs dark:bg-slate-800">/vendor/ad-campaigns</code>
@@ -224,7 +233,7 @@ export default function AdminVendorCampaignsPanel() {
                                     {!canAct && (
                                         <span
                                             className="px-2 py-0.5 text-[9px] font-black uppercase rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                                            title="Actions réservées à l’admin de cette ville"
+                                            title="Actions réservées à l'admin de cette ville"
                                         >
                                             Lecture seule
                                         </span>
@@ -273,7 +282,14 @@ export default function AdminVendorCampaignsPanel() {
                                 {c.status === 'pending_review' && (
                                     <div className="flex flex-col sm:flex-row flex-wrap gap-2 pt-2">
                                         <label className="text-[10px] font-black uppercase text-slate-400 flex flex-col gap-1">
-                                            Début (optionnel, défaut maintenant)
+                                            <span>
+                                                Début
+                                                {c.start_date && (
+                                                    <span className="text-orange-500 normal-case font-bold ml-1">
+                                                        — date souhaitée par le vendeur
+                                                    </span>
+                                                )}
+                                            </span>
                                             <input
                                                 type="datetime-local"
                                                 value={startInputs[c.id] ?? ''}
@@ -281,7 +297,7 @@ export default function AdminVendorCampaignsPanel() {
                                                     setStartInputs((s) => ({ ...s, [c.id]: e.target.value }))
                                                 }
                                                 disabled={!canAct}
-                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                 className="rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs bg-white dark:bg-slate-950 disabled:opacity-40"
                                             />
                                         </label>
@@ -295,14 +311,14 @@ export default function AdminVendorCampaignsPanel() {
                                                     setOrderInputs((s) => ({ ...s, [c.id]: e.target.value }))
                                                 }
                                                 disabled={!canAct}
-                                                title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                 className="w-24 rounded-lg border border-slate-200 dark:border-slate-700 px-2 py-1 text-xs bg-white dark:bg-slate-950 disabled:opacity-40"
                                             />
                                         </label>
                                         <button
                                             type="button"
                                             disabled={processing === c.id || !canAct}
-                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                             onClick={() => approve(c.id)}
                                             className="inline-flex items-center justify-center gap-1 rounded-xl bg-green-600 text-white px-4 py-2 text-[10px] font-black uppercase self-end disabled:opacity-40"
                                         >
@@ -312,7 +328,7 @@ export default function AdminVendorCampaignsPanel() {
                                         <button
                                             type="button"
                                             disabled={!canAct}
-                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                             onClick={() => setRejectId(rejectId === c.id ? null : c.id)}
                                             className="inline-flex items-center justify-center gap-1 rounded-xl border border-red-200 text-red-600 px-4 py-2 text-[10px] font-black uppercase self-end disabled:opacity-40"
                                         >
@@ -329,13 +345,13 @@ export default function AdminVendorCampaignsPanel() {
                                             placeholder="Motif du refus"
                                             rows={2}
                                             disabled={!canAct}
-                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                             className="rounded-xl border border-slate-200 dark:border-slate-700 px-3 py-2 text-sm disabled:opacity-40"
                                         />
                                         <button
                                             type="button"
                                             disabled={processing === c.id || !canAct}
-                                            title={!canAct ? 'Actions réservées à l’admin de cette ville' : undefined}
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                             onClick={() => reject(c.id)}
                                             className="self-start rounded-xl bg-red-600 text-white px-4 py-2 text-[10px] font-black uppercase disabled:opacity-40"
                                         >

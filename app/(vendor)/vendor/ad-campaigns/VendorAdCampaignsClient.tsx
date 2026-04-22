@@ -3,20 +3,14 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     HERO_PRICES_FCFA,
     TILE_PRICES_FCFA,
-    priceForCampaign,
-    type AdDurationDays,
-    type AdPlacement,
 } from '@/lib/adCampaignPricing'
-import { submitVendorAdCampaign, cancelVendorAdCampaign } from '@/app/actions/vendorAdCampaigns'
+import { cancelVendorAdCampaign } from '@/app/actions/vendorAdCampaigns'
 import VendorAdPaymentModal from './VendorAdPaymentModal'
 import { toast } from 'sonner'
-import { Loader2, Megaphone, Upload, ArrowLeft } from 'lucide-react'
-
-const DURATIONS: AdDurationDays[] = [3, 7, 14, 30]
+import { Loader2, Megaphone, ArrowLeft, Info } from 'lucide-react'
 
 type CampaignRow = {
     id: string
@@ -40,97 +34,24 @@ type CampaignRow = {
 
 export default function VendorAdCampaignsClient({ initialCampaigns }: { initialCampaigns: CampaignRow[] }) {
     const router = useRouter()
-    const supabase = getSupabaseBrowserClient()
     const [campaigns, setCampaigns] = useState<CampaignRow[]>(initialCampaigns)
+    const [loading, setLoading] = useState(false)
+    const [paymentModalCampaign, setPaymentModalCampaign] = useState<CampaignRow | null>(null)
 
     useEffect(() => {
         setCampaigns(initialCampaigns)
     }, [initialCampaigns])
-    const [loading, setLoading] = useState(false)
-    const [uploading, setUploading] = useState(false)
 
-    const [linkType, setLinkType] = useState<'product' | 'store'>('product')
-    const [linkUrl, setLinkUrl] = useState('')
-    const [imageUrl, setImageUrl] = useState('')
-    const [title, setTitle] = useState('')
-    const [description, setDescription] = useState('')
-    const [placement, setPlacement] = useState<AdPlacement>('hero')
-    const [durationDays, setDurationDays] = useState<AdDurationDays>(7)
-    const [paymentModalCampaign, setPaymentModalCampaign] = useState<CampaignRow | null>(null)
-
-    const refresh = async () => {
-        router.refresh()
-    }
-
-    const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        try {
-            setUploading(true)
-            if (!e.target.files?.[0]) return
-            const file = e.target.files[0]
-            if (file.size > 5 * 1024 * 1024) {
-                toast.error('Image trop lourde (max 5 Mo)')
-                return
-            }
-            const {
-                data: { user },
-            } = await supabase.auth.getUser()
-            if (!user) {
-                toast.error('Session expirée')
-                return
-            }
-            const ext = file.name.split('.').pop()
-            const fileName = `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-            const filePath = `campaigns/${user.id}/${fileName}`
-            const { error: upErr } = await supabase.storage.from('ads').upload(filePath, file)
-            if (upErr) throw upErr
-            const { data } = supabase.storage.from('ads').getPublicUrl(filePath)
-            setImageUrl(data.publicUrl)
-            toast.success('Image importée')
-        } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : 'Erreur upload')
-        } finally {
-            setUploading(false)
-        }
-    }
-
-    const onSubmit = async (e: React.FormEvent) => {
-        e.preventDefault()
-        setLoading(true)
-        const res = await submitVendorAdCampaign({
-            linkUrl,
-            linkType,
-            imageUrl,
-            title: title.trim() || undefined,
-            description: description.trim() || undefined,
-            placement,
-            durationDays,
-        })
-        setLoading(false)
-        if (res.error) {
-            toast.error(res.error)
-            return
-        }
-        toast.success('Campagne créée — procédez au paiement puis déclarez-le ci-dessous.')
-        setLinkUrl('')
-        setImageUrl('')
-        setTitle('')
-        setDescription('')
-        await refresh()
-    }
+    const refresh = async () => { router.refresh() }
 
     const onCancel = async (id: string) => {
         setLoading(true)
         const res = await cancelVendorAdCampaign(id)
         setLoading(false)
-        if (res.error) {
-            toast.error(res.error)
-            return
-        }
+        if (res.error) { toast.error(res.error); return }
         toast.success('Campagne annulée')
         await refresh()
     }
-
-    const pricePreview = priceForCampaign(placement, durationDays)
 
     const statusLabel = (s: string) => {
         switch (s) {
@@ -173,111 +94,24 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
                 et fixe les dates de diffusion.
             </p>
 
-            <form onSubmit={onSubmit} className="space-y-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-3xl p-6 md:p-8 mb-14">
-                <h2 className="text-sm font-black uppercase italic text-slate-800 dark:text-white">Nouvelle campagne</h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <label className="block text-[10px] font-black uppercase text-slate-400">
-                        Emplacement
-                        <select
-                            value={placement}
-                            onChange={(e) => setPlacement(e.target.value as AdPlacement)}
-                            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                        >
-                            <option value="hero">Hero (carrousel — max 7 avec les bannières site)</option>
-                            <option value="tile">Tuile (grande + rangée)</option>
-                        </select>
-                    </label>
-                    <label className="block text-[10px] font-black uppercase text-slate-400">
-                        Durée (jours)
-                        <select
-                            value={durationDays}
-                            onChange={(e) => setDurationDays(Number(e.target.value) as AdDurationDays)}
-                            className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                        >
-                            {DURATIONS.map((d) => (
-                                <option key={d} value={d}>
-                                    {d} j — {priceForCampaign(placement, d).toLocaleString('fr-FR')} FCFA
-                                </option>
-                            ))}
-                        </select>
-                    </label>
-                </div>
-
-                <p className="text-xs font-bold text-orange-600 dark:text-orange-400">
-                    Prix pour cette sélection : {pricePreview.toLocaleString('fr-FR')} FCFA
-                </p>
-
-                <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" checked={linkType === 'product'} onChange={() => setLinkType('product')} />
-                        Lien produit
-                    </label>
-                    <label className="flex items-center gap-2 text-sm cursor-pointer">
-                        <input type="radio" checked={linkType === 'store'} onChange={() => setLinkType('store')} />
-                        Lien boutique
-                    </label>
-                </div>
-
-                <label className="block text-[10px] font-black uppercase text-slate-400">
-                    URL (page produit ou boutique Mayombe)
-                    <input
-                        value={linkUrl}
-                        onChange={(e) => setLinkUrl(e.target.value)}
-                        placeholder="https://…/product/… ou …/store/…"
-                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                        required
-                    />
-                </label>
-
+            {/* Bannière info — création via formulaire produit */}
+            <div className="flex items-start gap-3 bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-2xl p-4 mb-10">
+                <Info size={16} className="text-orange-500 shrink-0 mt-0.5" />
                 <div>
-                    <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Visuel</p>
-                    <div className="flex flex-wrap items-center gap-3">
-                        <label className="inline-flex items-center gap-2 rounded-xl bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-black uppercase cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700">
-                            <Upload size={14} />
-                            {uploading ? '…' : 'Importer'}
-                            <input type="file" accept="image/*" className="hidden" onChange={handleUpload} disabled={uploading} />
-                        </label>
-                        {imageUrl ? (
-                            <span className="text-xs text-green-600 font-bold truncate max-w-[200px]">Image OK</span>
-                        ) : null}
-                    </div>
-                    <input
-                        value={imageUrl}
-                        onChange={(e) => setImageUrl(e.target.value)}
-                        placeholder="Ou URL d’image directe"
-                        className="mt-2 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                        required
-                    />
+                    <p className="text-sm font-black text-orange-700 dark:text-orange-400 mb-1">
+                        Comment créer une publicité ?
+                    </p>
+                    <p className="text-xs text-orange-600/80 dark:text-orange-400/70 leading-relaxed">
+                        Publiez un produit depuis votre dashboard — à la fin de la publication, un assistant vous proposera automatiquement de créer une pub avec le choix de l&apos;emplacement, des dates et du paiement.
+                    </p>
+                    <Link
+                        href="/vendor/dashboard?tab=products"
+                        className="inline-block mt-2 text-xs font-black uppercase text-orange-500 hover:underline"
+                    >
+                        → Aller à mes produits
+                    </Link>
                 </div>
-
-                <label className="block text-[10px] font-black uppercase text-slate-400">
-                    Titre (optionnel)
-                    <input
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                    />
-                </label>
-                <label className="block text-[10px] font-black uppercase text-slate-400">
-                    Texte court (optionnel, affiché sous le titre en hero)
-                    <textarea
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        rows={2}
-                        className="mt-1 w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm"
-                    />
-                </label>
-
-                <button
-                    type="submit"
-                    disabled={loading}
-                    className="w-full sm:w-auto rounded-2xl bg-orange-500 text-white px-8 py-3 text-xs font-black uppercase tracking-wide shadow-lg shadow-orange-500/25 hover:bg-orange-600 disabled:opacity-50 inline-flex items-center justify-center gap-2"
-                >
-                    {loading ? <Loader2 className="animate-spin" size={16} /> : null}
-                    Créer la campagne (à payer ensuite)
-                </button>
-            </form>
+            </div>
 
             <h2 className="text-sm font-black uppercase italic text-slate-800 dark:text-white mb-4">Mes campagnes</h2>
             {campaigns.length === 0 ? (

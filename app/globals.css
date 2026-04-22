@@ -2,6 +2,22 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+ * Breakpoints en px fixes (pas en rem).
+ * Tailwind v4 utilise rem par défaut (48rem pour md), ce qui décale les
+ * breakpoints sur les appareils Android dont la taille de police système
+ * est personnalisée — causant un affichage desktop sur mobile.
+ * En fixant en px, les breakpoints sont absolus et indépendants du navigateur.
+ */
+@theme {
+    --breakpoint-xs: 480px;
+    --breakpoint-sm: 640px;
+    --breakpoint-md: 768px;
+    --breakpoint-lg: 1024px;
+    --breakpoint-xl: 1280px;
+    --breakpoint-2xl: 1536px;
+}
+
 /* Police Inter (Google Fonts via next/font) + fallback système */
 html {
     font-family: var(--font-inter), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;

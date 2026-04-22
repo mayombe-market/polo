@@ -7,7 +7,7 @@
  * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
  * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
  *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
- * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` = data URL `data:image/...;base64,...`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; envoi **séquentiel** des fichiers.
+ * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` = data URL `data:image/...;base64,...`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; compression **et** envoi en **parallèle** (`Promise.all`) pour minimiser le temps d'attente.
  * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
  *   renvoyée dans `{ error: string }` (évite doublons involontaires).
  * - **Feedback** : libellés d’étape (`publishLabel`) + barre de progression ; entrées fichier désactivées pendant `loading`.
@@ -969,7 +969,7 @@ export default function AddProductForm({
 
         /**
          * POST `/api/upload` (session requise) : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout.
-         * Les fichiers sont envoyés séquentiellement (pas en parallèle) pour limiter la charge et les races côté client.
+         * Les fichiers sont envoyés en parallèle via `Promise.all` — pas de races car l’endpoint est stateless.
          */
         const uploadFileTimedWithRetry = async (file: File, label: string): Promise<string> => {
             const oneWave = () =>
@@ -1013,60 +1013,60 @@ export default function AddProductForm({
 
             setPublishLabel('Préparation…')
 
-            const galleryFiles = gallery.filter(Boolean) as File[]
-            const totalUploads = 1 + galleryFiles.length
-            let completed = 0
-
-            const bumpUploadProgress = () => {
-                completed++
-                const pct = 5 + Math.round((completed / totalUploads) * 70)
-                setPublishProgress(Math.min(75, pct))
-                setPublishLabel(`Envoi des images… ${completed}/${totalUploads}`)
-            }
-
+            // ── Compression parallèle ────────────────────────────────────────
             setPublishProgress(8)
             setPublishLabel('Optimisation des photos…')
             let fileMain: File
             const galleryPrepared: { slotIndex: number; file: File }[] = []
             try {
-                setPublishLabel('Optimisation de l’image principale…')
-                fileMain = await safeCompress(mainImage!)
+                const galleryIndexed = gallery
+                    .map((f, i) => ({ file: f, index: i }))
+                    .filter((g): g is { file: File; index: number } => g.file !== null)
+
+                const allCompressed = await Promise.all([
+                    safeCompress(mainImage!),
+                    ...galleryIndexed.map(({ file }) => safeCompress(file)),
+                ])
                 if (!ownsPublishUi()) return
-                for (let i = 0; i < gallery.length; i++) {
-                    const f = gallery[i]
-                    if (!f) continue
-                    setPublishLabel(`Optimisation photo galerie (${i + 1})…`)
-                    galleryPrepared.push({ slotIndex: i, file: await safeCompress(f) })
-                    if (!ownsPublishUi()) return
+
+                fileMain = allCompressed[0]
+                for (let j = 0; j < galleryIndexed.length; j++) {
+                    galleryPrepared.push({ slotIndex: galleryIndexed[j].index, file: allCompressed[j + 1] })
                 }
             } catch (e: unknown) {
                 await reportTechnicalFailure('compression_images', e)
                 return
             }
 
-            setPublishLabel('Envoi de l’image principale…')
-            let mainUrl: string
-            try {
-                mainUrl = await uploadFileTimedWithRetry(fileMain, 'principale')
-                if (!ownsPublishUi()) return
-                bumpUploadProgress()
-            } catch (e: unknown) {
-                await reportTechnicalFailure('upload_image_principale', e)
-                return
+            // ── Upload parallèle ─────────────────────────────────────────────
+            const totalUploads = 1 + galleryPrepared.length
+            let completed = 0
+            const bumpUploadProgress = () => {
+                completed++
+                const pct = 15 + Math.round((completed / totalUploads) * 65)
+                setPublishProgress(Math.min(80, pct))
+                setPublishLabel(`Envoi des images… ${completed}/${totalUploads}`)
             }
 
+            setPublishProgress(15)
+            setPublishLabel(`Envoi des images (0/${totalUploads})…`)
+
+            let mainUrl: string
             const galleryUrls: string[] = []
             try {
-                let gIdx = 0
-                for (const { slotIndex, file: gFile } of galleryPrepared) {
-                    setPublishLabel(`Envoi galerie ${gIdx + 1}/${galleryFiles.length}…`)
-                    galleryUrls.push(
-                        await uploadFileTimedWithRetry(gFile, `galerie-${slotIndex}`)
-                    )
-                    if (!ownsPublishUi()) return
-                    bumpUploadProgress()
-                    gIdx++
-                }
+                const uploadWithProgress = (file: File, label: string) =>
+                    uploadFileTimedWithRetry(file, label).then(url => { bumpUploadProgress(); return url })
+
+                const results = await Promise.all([
+                    uploadWithProgress(fileMain, 'principale'),
+                    ...galleryPrepared.map(({ slotIndex, file }) =>
+                        uploadWithProgress(file, `galerie-${slotIndex}`)
+                    ),
+                ])
+                if (!ownsPublishUi()) return
+
+                mainUrl = results[0]
+                results.slice(1).forEach(url => galleryUrls.push(url))
             } catch (e: unknown) {
                 await reportTechnicalFailure('upload_galerie', e)
                 return

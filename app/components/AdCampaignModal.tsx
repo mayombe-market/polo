@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import {
     X, Megaphone, Zap, LayoutGrid, ChevronRight,
-    ChevronLeft, Check, Loader2, Calendar, ImageIcon, Upload
+    ChevronLeft, Check, Loader2, Calendar, ImageIcon, Upload, PartyPopper
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
@@ -50,6 +50,7 @@ export default function AdCampaignModal({ productId, productName, productImages,
     const [txCode, setTxCode] = useState('')
     const [txError, setTxError] = useState('')
     const [submitting, setSubmitting] = useState(false)
+    const [submitted, setSubmitted] = useState(false)
 
     // Calendar nav
     const today = new Date()
@@ -160,8 +161,9 @@ export default function AdCampaignModal({ productId, productName, productImages,
         })
         setSubmitting(false)
         if (res.error) { toast.error(res.error); return }
-        toast.success('Campagne soumise ! L\'admin valide sous peu.')
-        onSuccess()
+        // Afficher l'écran de succès 2.5s avant de rediriger
+        setSubmitted(true)
+        setTimeout(() => onSuccess(), 2500)
     }
 
     const canGoNext = () => {
@@ -544,8 +546,30 @@ export default function AdCampaignModal({ productId, productName, productImages,
                         </div>
                     )}
 
+                    {/* ── SUCCÈS ── */}
+                    {submitted && (
+                        <div className="text-center py-6">
+                            <div className="w-20 h-20 rounded-full bg-green-50 dark:bg-green-500/10 border-2 border-green-200 dark:border-green-500/30 flex items-center justify-center mx-auto mb-5">
+                                <PartyPopper size={36} className="text-green-500" />
+                            </div>
+                            <h2 className="text-xl font-black uppercase italic tracking-tighter mb-2 text-slate-900 dark:text-white">
+                                Campagne soumise !
+                            </h2>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-1">
+                                Votre publicité <span className="font-black text-slate-700 dark:text-slate-200">{placement === 'hero' ? 'Hero Carousel' : 'Vignette Tile'}</span> est en attente de validation.
+                            </p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+                                L&apos;équipe Mayombe vérifie votre paiement et active votre pub sous peu. Vous recevrez une notification.
+                            </p>
+                            <div className="inline-flex items-center gap-2 text-[10px] font-black uppercase text-slate-400">
+                                <Loader2 size={12} className="animate-spin" />
+                                Redirection en cours…
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── ÉTAPE 5 : Paiement ── */}
-                    {step === 5 && (
+                    {step === 5 && !submitted && (
                         <div>
                             <h2 className="text-lg font-black uppercase italic tracking-tighter mb-1">Paiement</h2>
                             <p className="text-[11px] text-slate-400 mb-5">Effectuez le transfert puis entrez votre code SMS.</p>
@@ -607,7 +631,7 @@ export default function AdCampaignModal({ productId, productName, productImages,
                     )}
 
                     {/* Navigation Précédent / Suivant */}
-                    {step > 0 && step < 5 && (
+                    {step > 0 && step < 5 && !submitted && (
                         <div className="flex gap-3 mt-6">
                             <button
                                 onClick={() => setStep(s => (s - 1) as typeof step)}

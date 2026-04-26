@@ -16,10 +16,12 @@ export const PRODUCT_VARIANT_COLORS = [
 
 export type VariantColorName = (typeof PRODUCT_VARIANT_COLORS)[number]['name']
 
-export const CLOTHING_SIZES = ['S', 'M', 'L', 'XL', 'XXL'] as const
-export const SHOE_SIZES = ['38', '39', '40', '41', '42', '43', '44'] as const
+export const CLOTHING_SIZES = ['XS', 'S', 'M', 'L', 'XL', 'XXL', '3XL'] as const
+export const SHOE_SIZES = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'] as const
+/** Tailles bagues françaises (tour de doigt en mm) */
+export const RING_SIZES = ['48', '50', '52', '54', '56', '58', '60', '62'] as const
 
-export type SizeKind = 'none' | 'clothing' | 'shoes'
+export type SizeKind = 'none' | 'clothing' | 'shoes' | 'ring'
 
 export function getVariantColorHex(name: string): string | undefined {
     const c = PRODUCT_VARIANT_COLORS.find((x) => x.name === name)

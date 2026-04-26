@@ -30,7 +30,13 @@ INSERT INTO category (name, img) VALUES
 ('Services', 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800&q=80'),
 ('Fournitures & Bureau', 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=800&q=80'),
 ('Agriculture & Élevage', 'https://images.unsplash.com/photo-1500937386664-56d1dfef3854?w=800&q=80'),
-('Matériaux & BTP', 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80');
+('Matériaux & BTP', 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=800&q=80'),
+('Bijoux & Montres', 'https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=800&q=80'),
+('Jouets & Jeux', 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80'),
+('Animalerie', 'https://images.unsplash.com/photo-1587300003388-59208cc962cb?w=800&q=80'),
+('Livres & Culture', 'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&q=80'),
+('Bricolage & Outillage', 'https://images.unsplash.com/photo-1504148455328-c376907d081c?w=800&q=80'),
+('Bagagerie & Voyage', 'https://images.unsplash.com/photo-1553603229-2fac68e30cde?w=800&q=80');
 
 -- 4. Insérer les sous-catégories
 -- Mode & Beauté
@@ -135,3 +141,50 @@ INSERT INTO sub_category (name, category_uuid) SELECT 'Plomberie', id FROM categ
 INSERT INTO sub_category (name, category_uuid) SELECT 'Électricité', id FROM category WHERE name = 'Matériaux & BTP';
 INSERT INTO sub_category (name, category_uuid) SELECT 'Peinture & Finition', id FROM category WHERE name = 'Matériaux & BTP';
 INSERT INTO sub_category (name, category_uuid) SELECT 'Outillage', id FROM category WHERE name = 'Matériaux & BTP';
+
+-- Bijoux & Montres
+INSERT INTO sub_category (name, category_uuid) SELECT 'Bagues & Chevalières', id FROM category WHERE name = 'Bijoux & Montres';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Colliers & Pendentifs', id FROM category WHERE name = 'Bijoux & Montres';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Bracelets', id FROM category WHERE name = 'Bijoux & Montres';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Boucles d''oreilles', id FROM category WHERE name = 'Bijoux & Montres';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Montres Homme', id FROM category WHERE name = 'Bijoux & Montres';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Montres Femme', id FROM category WHERE name = 'Bijoux & Montres';
+
+-- Jouets & Jeux
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jouets 0-3 ans', id FROM category WHERE name = 'Jouets & Jeux';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jouets 3-8 ans', id FROM category WHERE name = 'Jouets & Jeux';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jeux de société', id FROM category WHERE name = 'Jouets & Jeux';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jeux éducatifs', id FROM category WHERE name = 'Jouets & Jeux';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Jeux d''extérieur', id FROM category WHERE name = 'Jouets & Jeux';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Déguisements & Accessoires', id FROM category WHERE name = 'Jouets & Jeux';
+
+-- Animalerie
+INSERT INTO sub_category (name, category_uuid) SELECT 'Chiens', id FROM category WHERE name = 'Animalerie';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Chats', id FROM category WHERE name = 'Animalerie';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Oiseaux', id FROM category WHERE name = 'Animalerie';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Rongeurs & Lapins', id FROM category WHERE name = 'Animalerie';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Alimentation animale', id FROM category WHERE name = 'Animalerie';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Accessoires animaux', id FROM category WHERE name = 'Animalerie';
+
+-- Livres & Culture
+INSERT INTO sub_category (name, category_uuid) SELECT 'Livres scolaires', id FROM category WHERE name = 'Livres & Culture';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Romans & Littérature', id FROM category WHERE name = 'Livres & Culture';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Livres religieux', id FROM category WHERE name = 'Livres & Culture';
+INSERT INTO sub_category (name, category_uuid) SELECT 'BD & Manga', id FROM category WHERE name = 'Livres & Culture';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Instruments de musique', id FROM category WHERE name = 'Livres & Culture';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Loisirs créatifs', id FROM category WHERE name = 'Livres & Culture';
+
+-- Bricolage & Outillage
+INSERT INTO sub_category (name, category_uuid) SELECT 'Outillage électrique', id FROM category WHERE name = 'Bricolage & Outillage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Outillage à main', id FROM category WHERE name = 'Bricolage & Outillage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Visserie & Fixations', id FROM category WHERE name = 'Bricolage & Outillage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Peinture & Lasure', id FROM category WHERE name = 'Bricolage & Outillage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Mesure & Traçage', id FROM category WHERE name = 'Bricolage & Outillage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Échelles & Escabeaux', id FROM category WHERE name = 'Bricolage & Outillage';
+
+-- Bagagerie & Voyage
+INSERT INTO sub_category (name, category_uuid) SELECT 'Valises', id FROM category WHERE name = 'Bagagerie & Voyage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Sacs de voyage', id FROM category WHERE name = 'Bagagerie & Voyage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Sacs à dos', id FROM category WHERE name = 'Bagagerie & Voyage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Porte-documents & Sacoches', id FROM category WHERE name = 'Bagagerie & Voyage';
+INSERT INTO sub_category (name, category_uuid) SELECT 'Accessoires voyage', id FROM category WHERE name = 'Bagagerie & Voyage';

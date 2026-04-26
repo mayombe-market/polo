@@ -24,6 +24,7 @@ import {
     PRODUCT_VARIANT_COLORS,
     CLOTHING_SIZES,
     SHOE_SIZES,
+    RING_SIZES,
     type SizeKind,
 } from '@/lib/productVariantsPresets'
 import {
@@ -144,6 +145,135 @@ const mesChoix: Record<string, string[]> = {
     "Fournitures & Bureau": ["Papeterie", "Imprimantes & Encre", "Mobilier de bureau", "Fournitures scolaires"],
     "Agriculture & Élevage": ["Semences & Plants", "Engrais & Produits phyto", "Outils agricoles", "Animaux & Bétail"],
     "Matériaux & BTP": ["Ciment & Fer", "Plomberie", "Électricité", "Peinture & Finition", "Outillage"],
+    "Bijoux & Montres": ["Bagues & Chevalières", "Colliers & Pendentifs", "Bracelets", "Boucles d'oreilles", "Montres Homme", "Montres Femme"],
+    "Jouets & Jeux": ["Jouets 0-3 ans", "Jouets 3-8 ans", "Jeux de société", "Jeux éducatifs", "Jeux d'extérieur", "Déguisements & Accessoires"],
+    "Animalerie": ["Chiens", "Chats", "Oiseaux", "Rongeurs & Lapins", "Alimentation animale", "Accessoires animaux"],
+    "Livres & Culture": ["Livres scolaires", "Romans & Littérature", "Livres religieux", "BD & Manga", "Instruments de musique", "Loisirs créatifs"],
+    "Bricolage & Outillage": ["Outillage électrique", "Outillage à main", "Visserie & Fixations", "Peinture & Lasure", "Mesure & Traçage", "Échelles & Escabeaux"],
+    "Bagagerie & Voyage": ["Valises", "Sacs de voyage", "Sacs à dos", "Porte-documents & Sacoches", "Accessoires voyage"],
+}
+
+// ─── Configuration par catégorie ─────────────────────────────────────────────
+type CatCfg = {
+    /** Type de taille pré-sélectionné à l'entrée dans la catégorie */
+    sizeKindDefault: SizeKind
+    /** Libellés utilisés comme placeholders dans l'étape Détails */
+    attrs: string[]
+    /** Conseil photo affiché à l'étape Images */
+    photoTip: string
+    /** Petit badge informatif affiché dans l'étape Infos après sélection */
+    badge?: string
+}
+
+const CATEGORY_CONFIG: Record<string, CatCfg> = {
+    "Mode & Beauté": {
+        sizeKindDefault: 'clothing',
+        attrs: ['Genre (Femme / Homme / Mixte)', 'Coupe (Regular / Slim / Large)', 'Matière — ex: 100% coton', 'Entretien — ex: Lavage 30°C'],
+        photoTip: 'Fond blanc conseillé · vue recto + détail tissu',
+        badge: 'Matière & composition obligatoires',
+    },
+    "High-Tech": {
+        sizeKindDefault: 'none',
+        attrs: ['Marque et modèle exact', 'RAM + Stockage — ex: 8 Go / 128 Go', 'Taille écran — ex: 6,5 pouces', 'Batterie — ex: 5000 mAh', 'Connectivité — ex: 5G / WiFi 6 / NFC', 'Certification — ex: IP68, CE'],
+        photoTip: 'Vues multiples : face · côté · ports · boîte d\'origine',
+        badge: 'Référence fabricant requise',
+    },
+    "Pharmacie & Santé": {
+        sizeKindDefault: 'none',
+        attrs: ['Type de peau / usage', 'Volume ml ou poids g', 'Composition (INCI ou principes actifs)', 'Âge minimum / contre-indications', 'Certifications — ex: Bio, Vegan, CE'],
+        photoTip: 'Photo emballage face + photo étiquette dos',
+    },
+    "Électroménager": {
+        sizeKindDefault: 'none',
+        attrs: ['Marque et modèle', 'Puissance — ex: 1800 W', 'Volume ou capacité — ex: 300 L', 'Dimensions H×L×P — ex: 85×60×60 cm', 'Classe énergétique — ex: A+++'],
+        photoTip: 'Photo de face + photo porte ouverte si réfrigérateur / four',
+    },
+    "Maison & Déco": {
+        sizeKindDefault: 'none',
+        attrs: ['Dimensions H×L×P — ex: 80×120×45 cm', 'Poids — ex: 15 kg', 'Matière principale — ex: bois massif', 'Style — ex: moderne / africain', 'Montage requis — Oui / Non'],
+        photoTip: 'Photo en situation + dimensions visibles ou schéma de cotes',
+    },
+    "Pâtisserie & Traiteur": {
+        sizeKindDefault: 'none',
+        attrs: ['Ingrédients principaux', 'Allergènes — ex: gluten, lait, œufs', 'Conservation — ex: 48h au frais', 'Délai de préparation — ex: 2 jours', 'Commande minimum'],
+        photoTip: 'Photo appétissante en lumière naturelle',
+    },
+    "Alimentation & Boissons": {
+        sizeKindDefault: 'none',
+        attrs: ['Poids net g / Volume ml', 'Ingrédients et allergènes', 'DLC ou DDM', 'Origine / pays de production', 'Conservation — ex: 15°C, à l\'abri de l\'humidité'],
+        photoTip: 'Photo face produit + photo étiquette dos complète',
+        badge: 'DLC + ingrédients obligatoires',
+    },
+    "Auto & Moto": {
+        sizeKindDefault: 'none',
+        attrs: ['Marque véhicule compatible', 'Modèle et année — ex: Toyota Corolla 2018', 'Motorisation — ex: 1.6 L essence', 'Référence OEM (si pièce d\'origine)', 'Dimensions pièce — ex: Ø 25 mm'],
+        photoTip: 'Photo pièce seule + photo montée sur véhicule si possible',
+        badge: 'Compatibilité véhicule obligatoire',
+    },
+    "Bébé & Enfants": {
+        sizeKindDefault: 'clothing',
+        attrs: ['Tranche d\'âge — ex: 6-12 mois', 'Taille cm / Poids bébé kg', 'Matière et composition', 'Certification — ex: EN 71, CE, Sans BPA'],
+        photoTip: 'Photo produit + photo étiquette certification',
+        badge: 'Certification sécurité requise',
+    },
+    "Sport & Loisirs": {
+        sizeKindDefault: 'clothing',
+        attrs: ['Sport concerné — ex: Football, Running', 'Niveau — Débutant / Intermédiaire / Expert', 'Poids — ex: 850 g', 'Dimensions transport — ex: 60×30×15 cm'],
+        photoTip: 'Photo produit seul + photo en situation d\'utilisation',
+    },
+    "Bijoux & Montres": {
+        sizeKindDefault: 'ring',
+        attrs: ['Matière — ex: Or 18K / Argent 925 / Acier inox', 'Pierre ou gemme (si applicable)', 'Poids — ex: 4,5 g', 'Longueur chaîne ou tour de poignet cm'],
+        photoTip: 'Photo macro (gros plan détail) + photo portée',
+        badge: 'Matière exacte obligatoire',
+    },
+    "Jouets & Jeux": {
+        sizeKindDefault: 'none',
+        attrs: ['Âge minimum — ex: 3+', 'Nombre de joueurs — ex: 2 à 6', 'Durée de jeu estimée — ex: 45 min', 'Certification — ex: EN 71, CE'],
+        photoTip: 'Photo produit + photo contenu déballé',
+        badge: 'Âge minimum obligatoire (réglementation)',
+    },
+    "Animalerie": {
+        sizeKindDefault: 'none',
+        attrs: ['Espèce cible — ex: Chien / Chat', 'Taille animal — ex: XS < 5 kg / M 10-20 kg', 'Âge animal — Chiot / Adulte / Senior', 'Composition si nourriture'],
+        photoTip: 'Photo produit + photo animal portant l\'accessoire si applicable',
+    },
+    "Livres & Culture": {
+        sizeKindDefault: 'none',
+        attrs: ['Auteur(s)', 'Éditeur et année de parution', 'Nombre de pages', 'Langue — ex: Français / Lingala', 'ISBN — ex: 978-2-...'],
+        photoTip: 'Couverture haute résolution (face)',
+    },
+    "Bricolage & Outillage": {
+        sizeKindDefault: 'none',
+        attrs: ['Puissance — ex: 750 W', 'Tension — ex: 18 V / 220 V', 'Couple — ex: 35 Nm', 'Dimensions — ex: Ø 13 mm perçage max', 'Certification — ex: CE, IP44'],
+        photoTip: 'Photo technique + photo en situation d\'utilisation',
+        badge: 'Certification CE obligatoire',
+    },
+    "Bagagerie & Voyage": {
+        sizeKindDefault: 'none',
+        attrs: ['Dimensions ext. H×L×P — ex: 70×45×28 cm', 'Volume — ex: 95 litres', 'Poids vide — ex: 3,2 kg', 'Conformité cabine IATA — Oui / Non (55×35×25 cm)'],
+        photoTip: 'Photo fermée + photo ouverte intérieur',
+    },
+    "Services": {
+        sizeKindDefault: 'none',
+        attrs: ['Durée — ex: 1h30', 'Lieu d\'intervention — ex: À domicile / En boutique', 'Matériel inclus — Oui / Non', 'Zone géographique desservie'],
+        photoTip: 'Photo illustrant la prestation ou le prestataire au travail',
+    },
+    "Fournitures & Bureau": {
+        sizeKindDefault: 'none',
+        attrs: ['Marque et référence', 'Dimensions — ex: A4 / 21×29,7 cm', 'Matière / composition', 'Quantité par lot / pack'],
+        photoTip: 'Photo produit + photo du packaging',
+    },
+    "Agriculture & Élevage": {
+        sizeKindDefault: 'none',
+        attrs: ['Espèce / variété', 'Quantité — ex: 1 kg / lot de 50', 'Certification — ex: Bio, Non-OGM', 'Saison ou disponibilité'],
+        photoTip: 'Photo produit en situation — champ, sac, animal',
+    },
+    "Matériaux & BTP": {
+        sizeKindDefault: 'none',
+        attrs: ['Dimensions — ex: 50×20×20 cm', 'Résistance / norme — ex: M+', 'Quantité par lot / palette', 'Marque et origine'],
+        photoTip: 'Photo produit + photo mise en œuvre si disponible',
+    },
 }
 
 const RE_PROPERTY_CONDITIONS = [
@@ -720,6 +850,20 @@ export default function AddProductForm({
             setSizeKind('none')
             setSizes([])
             setSelectedColors([])
+        } else if (selectedCategory) {
+            const cfg = CATEGORY_CONFIG[selectedCategory]
+            // Auto-sélectionner le type de taille recommandé pour la catégorie
+            if (cfg?.sizeKindDefault) {
+                setSizeKind(cfg.sizeKindDefault)
+                setSizes([])
+            }
+            // Pré-initialiser les champs caractéristiques (seulement si tous vides)
+            if (cfg?.attrs?.length) {
+                setFeatures(prev => {
+                    const allEmpty = prev.every(f => !f.trim())
+                    return allEmpty ? Array(cfg.attrs.length).fill('') : prev
+                })
+            }
         }
     }, [selectedCategory])
 
@@ -1295,6 +1439,14 @@ export default function AddProductForm({
                             </div>
                         </div>
 
+                        {/* Badge info par catégorie */}
+                        {selectedCategory && CATEGORY_CONFIG[selectedCategory]?.badge && (
+                            <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 text-xs font-bold text-emerald-700 dark:text-emerald-400">
+                                <Check size={12} />
+                                {CATEGORY_CONFIG[selectedCategory].badge}
+                            </div>
+                        )}
+
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Description</label>
                             <textarea
@@ -1457,8 +1609,9 @@ export default function AddProductForm({
                             <div className="flex flex-wrap gap-2">
                                 {([
                                     { kind: 'none' as const, label: 'Sans taille' },
-                                    { kind: 'clothing' as const, label: 'Vêtements' },
-                                    { kind: 'shoes' as const, label: 'Chaussures' },
+                                    { kind: 'clothing' as const, label: 'Vêtements (XS→3XL)' },
+                                    { kind: 'shoes' as const, label: 'Chaussures (EU)' },
+                                    { kind: 'ring' as const, label: 'Bague (tour doigt)' },
                                 ]).map(({ kind, label }) => (
                                     <button
                                         key={kind}
@@ -1511,6 +1664,27 @@ export default function AddProductForm({
                                             </button>
                                         )
                                     })}
+                                </div>
+                            )}
+                            {sizeKind === 'ring' && (
+                                <div className="flex flex-wrap gap-2 pt-1">
+                                    {RING_SIZES.map((s) => {
+                                        const on = sizes.includes(s)
+                                        return (
+                                            <button
+                                                key={s}
+                                                type="button"
+                                                onClick={() => togglePresetSize(s)}
+                                                className={`min-w-[52px] h-11 px-3 rounded-xl text-sm font-black transition-all ${on
+                                                    ? 'bg-orange-500 text-white ring-2 ring-orange-300 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-800'
+                                                    : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 border-2 border-slate-200 dark:border-slate-600 hover:border-orange-400'
+                                                    }`}
+                                            >
+                                                {s}
+                                            </button>
+                                        )
+                                    })}
+                                    <p className="w-full text-[10px] text-slate-400 font-bold italic mt-1">Taille en mm (tour de doigt) — Standard FR</p>
                                 </div>
                             )}
                             {sizeKind === 'none' && (
@@ -1721,7 +1895,10 @@ export default function AddProductForm({
                                     <input
                                         value={feat}
                                         onChange={e => updateFeature(i, e.target.value)}
-                                        placeholder={`Caractéristique ${i + 1} (ex: Matière 100% coton)`}
+                                        placeholder={
+                                            CATEGORY_CONFIG[selectedCategory]?.attrs?.[i]
+                                            ?? `Caractéristique ${i + 1} (ex: Matière 100% coton)`
+                                        }
                                         className="flex-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm"
                                     />
                                     {features.length > 1 && (
@@ -1745,15 +1922,28 @@ export default function AddProductForm({
                             <Plus size={14} /> Ajouter une caractéristique
                         </button>
 
-                        <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
-                            <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Exemples :</p>
-                            <ul className="text-xs text-slate-500 space-y-1">
-                                <li>Matière : 100% coton bio</li>
-                                <li>Poids : 250g</li>
-                                <li>Garantie : 1 an</li>
-                                <li>Origine : Congo-Brazzaville</li>
-                            </ul>
-                        </div>
+                        {CATEGORY_CONFIG[selectedCategory]?.attrs ? (
+                            <div className="bg-blue-50 dark:bg-blue-950/20 rounded-2xl p-5 border border-blue-100 dark:border-blue-800/40">
+                                <p className="text-[10px] font-black uppercase text-blue-500 dark:text-blue-400 mb-2">
+                                    Attributs recommandés — {selectedCategory}
+                                </p>
+                                <ul className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+                                    {CATEGORY_CONFIG[selectedCategory].attrs.map((a, i) => (
+                                        <li key={i}>• {a}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        ) : (
+                            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-5 border border-slate-100 dark:border-slate-700">
+                                <p className="text-[10px] font-black uppercase text-slate-400 mb-2">Exemples :</p>
+                                <ul className="text-xs text-slate-500 space-y-1">
+                                    <li>Matière : 100% coton bio</li>
+                                    <li>Poids : 250g</li>
+                                    <li>Garantie : 1 an</li>
+                                    <li>Origine : Congo-Brazzaville</li>
+                                </ul>
+                            </div>
+                        )}
                     </div>
                 )}
 
@@ -1763,6 +1953,11 @@ export default function AddProductForm({
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Photos du produit</h3>
                             <p className="text-sm text-slate-400">Image principale + 3 miniatures minimum (max 5 Mo / image).</p>
+                            {selectedCategory && CATEGORY_CONFIG[selectedCategory]?.photoTip && (
+                                <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-1.5">
+                                    📷 {CATEGORY_CONFIG[selectedCategory].photoTip}
+                                </p>
+                            )}
                             {imageHint && (
                                 <p className="mt-3 text-xs font-bold text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl px-3 py-2">
                                     {imageHint}

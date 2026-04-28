@@ -8,6 +8,7 @@ import DeferredPwaWidgets from '@/app/components/DeferredPwaWidgets'
 import DiagnosticsListener from '@/app/components/DiagnosticsListener'
 import GtmDeferred from '@/app/components/GtmDeferred'
 import OnlineRefresh from '@/app/components/OnlineRefresh'
+import RecentOrdersWidget from '@/app/components/RecentOrdersWidget'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -144,6 +145,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             </CartProvider>
           </RealtimeProvider>
         </AuthProvider>
+
+        {/* Widget popup activité récente — visible sur toutes les pages */}
+        <RecentOrdersWidget />
       </body>
     </html>
   )

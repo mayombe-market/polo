@@ -8,11 +8,11 @@ import { useRealtime } from '@/hooks/useRealtime'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Package, DollarSign, Clock, ShieldCheck, Users, ShoppingBag, Truck,
-    ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle, Zap, Hotel, Star, UserPlus
+    ArrowRight, Loader2, Wallet, TrendingUp, CheckCircle, Zap, Hotel, Star, UserPlus, Trophy
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
-import { adminGetEnrichedStats } from '@/app/actions/admin'
+import { adminGetEnrichedStats, adminGetTopProducts } from '@/app/actions/admin'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -49,6 +49,7 @@ export default function AdminDashboard() {
         newUsersToday: 0,
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
+    const [topProducts, setTopProducts] = useState<any[]>([])
 
     const fetchStats = useCallback(async () => {
         try {
@@ -81,8 +82,12 @@ export default function AdminDashboard() {
             ]), NETWORK_TIMEOUT_MS)
 
             const revenueToday = (ordersRes.data || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
-            const enriched = await adminGetEnrichedStats()
+            const [enriched, topRes] = await Promise.all([
+                adminGetEnrichedStats(),
+                adminGetTopProducts(10),
+            ])
 
+            setTopProducts(topRes.data || [])
             setStats({
                 ordersToday: ordersTodayRes.count || 0,
                 revenueToday,
@@ -293,6 +298,60 @@ export default function AdminDashboard() {
                                     </div>
                                     <div className="flex-shrink-0">
                                         {getStatusBadge(order.status)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+
+                {/* ═══ TOP PRODUITS LES PLUS VENDUS ═══ */}
+                <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                        <h2 className="text-sm font-black uppercase italic tracking-wider dark:text-white flex items-center gap-2">
+                            <Trophy size={16} className="text-amber-500" />
+                            Top produits
+                        </h2>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tous temps</span>
+                    </div>
+
+                    {topProducts.length === 0 ? (
+                        <div className="p-8 text-center text-slate-400 text-sm">
+                            Aucune vente enregistrée
+                        </div>
+                    ) : (
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                            {topProducts.map((p, idx) => (
+                                <div key={p.id} className="px-5 py-3 flex items-center gap-4 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                                    {/* Rang */}
+                                    <div className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 text-[10px] font-black
+                                        ${idx === 0 ? 'bg-amber-400 text-white' : idx === 1 ? 'bg-slate-300 dark:bg-slate-600 text-slate-700 dark:text-white' : idx === 2 ? 'bg-amber-700/60 text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500'}`}>
+                                        {idx + 1}
+                                    </div>
+
+                                    {/* Image */}
+                                    {p.img ? (
+                                        <img src={p.img} alt={p.name} className="w-9 h-9 rounded-lg object-cover flex-shrink-0 border border-slate-100 dark:border-slate-700" />
+                                    ) : (
+                                        <div className="w-9 h-9 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+                                            <ShoppingBag size={14} className="text-slate-300" />
+                                        </div>
+                                    )}
+
+                                    {/* Nom + catégorie */}
+                                    <div className="flex-1 min-w-0">
+                                        <p className="text-xs font-bold dark:text-white truncate">{p.name}</p>
+                                        <p className="text-[10px] text-slate-400 truncate">{p.category || '—'}</p>
+                                    </div>
+
+                                    {/* Stats */}
+                                    <div className="text-right flex-shrink-0">
+                                        <p className="text-xs font-black dark:text-white">
+                                            {p.quantite.toLocaleString('fr-FR')} <span className="text-[10px] font-normal text-slate-400">ventes</span>
+                                        </p>
+                                        <p className="text-[10px] text-green-600 dark:text-green-400 font-bold">
+                                            {p.ca.toLocaleString('fr-FR')} F
+                                        </p>
                                     </div>
                                 </div>
                             ))}

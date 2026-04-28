@@ -238,6 +238,51 @@ export async function adminGetHotelVendors() {
     return { data }
 }
 
+// ─── Top produits les plus vendus ────────────────────────
+export async function adminGetTopProducts(limit = 10) {
+    const supabase = svc()
+
+    const { data, error } = await supabase
+        .from('order_items')
+        .select('product_id, quantity, unit_price, products:product_id(id, name, category, img)')
+
+    if (error || !data) return { data: [] }
+
+    // Agréger par product_id côté JS
+    const map = new Map<string, {
+        id: string; name: string; category: string; img: string | null
+        quantite: number; ca: number
+    }>()
+
+    for (const item of data) {
+        const product = item.products as any
+        if (!product?.id) continue
+        const pid = item.product_id as string
+        const qty = (item.quantity as number) || 0
+        const price = (item.unit_price as number) || 0
+        const existing = map.get(pid)
+        if (existing) {
+            existing.quantite += qty
+            existing.ca += qty * price
+        } else {
+            map.set(pid, {
+                id: product.id,
+                name: product.name || '—',
+                category: product.category || '',
+                img: product.img || null,
+                quantite: qty,
+                ca: qty * price,
+            })
+        }
+    }
+
+    const sorted = Array.from(map.values())
+        .sort((a, b) => b.quantite - a.quantite)
+        .slice(0, limit)
+
+    return { data: sorted }
+}
+
 // ─── Statistiques dashboard enrichies ────────────────────
 export async function adminGetEnrichedStats() {
     const supabase = svc()

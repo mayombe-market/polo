@@ -239,12 +239,16 @@ export async function adminGetHotelVendors() {
 }
 
 // ─── Top produits les plus vendus ────────────────────────
-export async function adminGetTopProducts(limit = 10) {
+export async function adminGetTopProducts(limit = 10, since?: string) {
     const supabase = svc()
 
-    const { data, error } = await supabase
+    let q = supabase
         .from('order_items')
         .select('product_id, quantity, unit_price, products:product_id(id, name, category, img)')
+
+    if (since) q = q.gte('created_at', since)
+
+    const { data, error } = await q
 
     if (error || !data) return { data: [] }
 

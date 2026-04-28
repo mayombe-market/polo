@@ -50,6 +50,23 @@ export default function AdminDashboard() {
     })
     const [recentOrders, setRecentOrders] = useState<any[]>([])
     const [topProducts, setTopProducts] = useState<any[]>([])
+    const [topFilter, setTopFilter] = useState<'7d' | '30d' | 'month' | 'all'>('all')
+    const [topLoading, setTopLoading] = useState(false)
+
+    function getSince(filter: typeof topFilter): string | undefined {
+        const now = new Date()
+        if (filter === '7d') { now.setDate(now.getDate() - 7); return now.toISOString() }
+        if (filter === '30d') { now.setDate(now.getDate() - 30); return now.toISOString() }
+        if (filter === 'month') { now.setDate(1); now.setHours(0, 0, 0, 0); return now.toISOString() }
+        return undefined
+    }
+
+    const loadTopProducts = useCallback(async (filter: typeof topFilter) => {
+        setTopLoading(true)
+        const res = await adminGetTopProducts(10, getSince(filter))
+        setTopProducts(res.data || [])
+        setTopLoading(false)
+    }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
     const fetchStats = useCallback(async () => {
         try {
@@ -84,7 +101,7 @@ export default function AdminDashboard() {
             const revenueToday = (ordersRes.data || []).reduce((sum: number, o: any) => sum + (o.total_amount || 0), 0)
             const [enriched, topRes] = await Promise.all([
                 adminGetEnrichedStats(),
-                adminGetTopProducts(10),
+                adminGetTopProducts(10, getSince(topFilter)),
             ])
 
             setTopProducts(topRes.data || [])
@@ -112,6 +129,7 @@ export default function AdminDashboard() {
     }, [])
 
     useEffect(() => { fetchStats() }, [fetchStats])
+    useEffect(() => { loadTopProducts(topFilter) }, [topFilter, loadTopProducts])
 
     // Realtime via shared channel
     useRealtime('order:insert', fetchStats)
@@ -307,15 +325,38 @@ export default function AdminDashboard() {
 
                 {/* ═══ TOP PRODUITS LES PLUS VENDUS ═══ */}
                 <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800">
                         <h2 className="text-sm font-black uppercase italic tracking-wider dark:text-white flex items-center gap-2">
                             <Trophy size={16} className="text-amber-500" />
                             Top produits
                         </h2>
-                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tous temps</span>
+                        <div className="flex gap-1.5">
+                            {([
+                                { key: '7d', label: '7 jours' },
+                                { key: '30d', label: '30 jours' },
+                                { key: 'month', label: 'Ce mois' },
+                                { key: 'all', label: 'Tout' },
+                            ] as const).map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    onClick={() => setTopFilter(key)}
+                                    className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                                        topFilter === key
+                                            ? 'bg-amber-500 text-white'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
-                    {topProducts.length === 0 ? (
+                    {topLoading ? (
+                        <div className="p-8 flex justify-center">
+                            <Loader2 size={20} className="animate-spin text-amber-500" />
+                        </div>
+                    ) : topProducts.length === 0 ? (
                         <div className="p-8 text-center text-slate-400 text-sm">
                             Aucune vente enregistrée
                         </div>

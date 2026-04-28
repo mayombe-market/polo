@@ -47,6 +47,7 @@ interface ClientHomePageProps {
     popularProducts: any[]
     promoProducts: any[]
     trendProducts: any[]
+    homeReviews?: any[]
     totalProducts?: number
     totalVendors?: number
 }
@@ -71,6 +72,7 @@ export default function ClientHomePage({
     popularProducts,
     promoProducts,
     trendProducts,
+    homeReviews = [],
     totalProducts = 0,
     totalVendors = 0,
 }: ClientHomePageProps) {
@@ -505,6 +507,64 @@ export default function ClientHomePage({
                                 ))}
                             </div>
                         )}
+                    </section>
+                )}
+
+                {/* Avis clients */}
+                {homeReviews.length > 0 && (
+                    <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800">
+                        <SophieSectionTitle label="Témoignages" title="Ce que disent nos clients" />
+                        {/* Scroll horizontal sur mobile, grille 3 colonnes sur desktop */}
+                        <div className="flex gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0">
+                            {homeReviews.map((review) => {
+                                const product = review.products as any
+                                const stars = Math.round(review.rating ?? 5)
+                                const text = (review.content || '').slice(0, 160)
+                                const hasMore = (review.content || '').length > 160
+                                return (
+                                    <div
+                                        key={review.id}
+                                        className="flex w-[min(80vw,320px)] shrink-0 flex-col justify-between border border-neutral-200 bg-white p-6 dark:border-neutral-800 dark:bg-neutral-950 md:w-auto"
+                                    >
+                                        {/* Étoiles */}
+                                        <div className="mb-4 flex gap-0.5">
+                                            {Array.from({ length: 5 }).map((_, i) => (
+                                                <span key={i} className={i < stars ? 'text-amber-400' : 'text-neutral-200 dark:text-neutral-700'}>
+                                                    ★
+                                                </span>
+                                            ))}
+                                        </div>
+
+                                        {/* Texte */}
+                                        <p className="flex-1 text-sm font-light leading-relaxed text-neutral-700 dark:text-neutral-300">
+                                            &ldquo;{text}{hasMore ? '…' : ''}&rdquo;
+                                        </p>
+
+                                        {/* Produit + auteur */}
+                                        <div className="mt-5 flex items-center gap-3 border-t border-neutral-100 pt-4 dark:border-neutral-800">
+                                            {product?.img ? (
+                                                <img
+                                                    src={product.img}
+                                                    alt={product.name}
+                                                    className="h-10 w-10 flex-shrink-0 object-cover"
+                                                    loading="lazy"
+                                                />
+                                            ) : null}
+                                            <div className="min-w-0">
+                                                <p className="truncate text-[11px] font-semibold text-neutral-900 dark:text-white">
+                                                    {review.user_name || 'Client'}
+                                                </p>
+                                                {product?.name ? (
+                                                    <p className="truncate text-[10px] text-neutral-400">
+                                                        {product.name}
+                                                    </p>
+                                                ) : null}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
                     </section>
                 )}
 

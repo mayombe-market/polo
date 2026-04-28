@@ -34,6 +34,7 @@ export default async function HomePage() {
     { data: popularProducts },
     { data: promoProducts },
     { data: trendProducts },
+    { data: homeReviews },
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     supabase
@@ -74,6 +75,13 @@ export default async function HomePage() {
         .limit(30),
       expiredIds
     ),
+    supabase
+      .from('reviews')
+      .select('id, rating, content, user_name, created_at, products:product_id(name, img, category)')
+      .gte('rating', 4)
+      .not('content', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(8),
   ])
 
   // Compteurs produits & boutiques (pour la barre de stats)
@@ -124,6 +132,7 @@ export default async function HomePage() {
           popularProducts={popularProducts || []}
           promoProducts={promoProducts || []}
           trendProducts={trendProducts || []}
+          homeReviews={homeReviews || []}
           totalProducts={totalProducts}
           totalVendors={totalVendors}
         />

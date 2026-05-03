@@ -48,44 +48,44 @@ const MODULES = [
         description: 'Appartements, villas, terrains à Brazzaville et Pointe-Noire.',
         cta: 'Explorer les biens', href: '/category/Immobilier',
         Icon: Home, accent: 'emerald',
-        iconBg: 'bg-emerald-500', lightBg: 'bg-emerald-50 dark:bg-emerald-900/10',
-        border: 'border-emerald-100 dark:border-emerald-900/30',
-        hover: 'hover:border-emerald-300 dark:hover:border-emerald-700',
+        iconBg: 'bg-emerald-500', lightBg: 'bg-emerald-50',
+        border: 'border-emerald-100',
+        hover: 'hover:border-emerald-300',
         ctaClass: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-200',
-        textAccent: 'text-emerald-600 dark:text-emerald-400',
+        textAccent: 'text-emerald-600',
     },
     {
         key: 'patisserie', label: 'Pâtisserie', badge: 'Commandes sur mesure',
         description: 'Gâteaux artisanaux, layer cakes et pains livrés chez vous.',
         cta: 'Voir les créations', href: '/patisserie',
         Icon: Cake, accent: 'pink',
-        iconBg: 'bg-pink-500', lightBg: 'bg-pink-50 dark:bg-pink-900/10',
-        border: 'border-pink-100 dark:border-pink-900/30',
-        hover: 'hover:border-pink-300 dark:hover:border-pink-700',
+        iconBg: 'bg-pink-500', lightBg: 'bg-pink-50',
+        border: 'border-pink-100',
+        hover: 'hover:border-pink-300',
         ctaClass: 'bg-pink-500 hover:bg-pink-600 shadow-pink-200',
-        textAccent: 'text-pink-600 dark:text-pink-400',
+        textAccent: 'text-pink-600',
     },
     {
         key: 'restaurant', label: 'Restaurants', badge: 'Plats du jour',
         description: 'Cuisine congolaise, burgers, grillades livrés chez vous.',
         cta: 'Commander un plat', href: '/restaurant',
         Icon: UtensilsCrossed, accent: 'orange',
-        iconBg: 'bg-orange-500', lightBg: 'bg-orange-50 dark:bg-orange-900/10',
-        border: 'border-orange-100 dark:border-orange-900/30',
-        hover: 'hover:border-orange-300 dark:hover:border-orange-700',
+        iconBg: 'bg-orange-500', lightBg: 'bg-orange-50',
+        border: 'border-orange-100',
+        hover: 'hover:border-orange-300',
         ctaClass: 'bg-orange-500 hover:bg-orange-600 shadow-orange-200',
-        textAccent: 'text-orange-600 dark:text-orange-400',
+        textAccent: 'text-orange-600',
     },
     {
         key: 'marketplace', label: 'Marketplace', badge: 'Boutique en ligne',
         description: 'Mode, high-tech, maison et beauté. Achetez et vendez.',
         cta: 'Visiter la boutique', href: '/marketplace',
         Icon: ShoppingBag, accent: 'blue',
-        iconBg: 'bg-blue-500', lightBg: 'bg-blue-50 dark:bg-blue-900/10',
-        border: 'border-blue-100 dark:border-blue-900/30',
-        hover: 'hover:border-blue-300 dark:hover:border-blue-700',
+        iconBg: 'bg-blue-500', lightBg: 'bg-blue-50',
+        border: 'border-blue-100',
+        hover: 'hover:border-blue-300',
         ctaClass: 'bg-blue-500 hover:bg-blue-600 shadow-blue-200',
-        textAccent: 'text-blue-600 dark:text-blue-400',
+        textAccent: 'text-blue-600',
     },
 ] as const
 
@@ -97,10 +97,10 @@ const TRUST_BAND = [
 ]
 
 const WHY_ITEMS = [
-    { Icon: ShieldCheck,  title: 'Vendeurs vérifiés',     desc: 'Chaque vendeur est contrôlé et approuvé par notre équipe avant de vendre.',  color: 'text-emerald-600', bg: 'bg-emerald-50 dark:bg-emerald-900/10', border: 'border-emerald-100 dark:border-emerald-800/30' },
-    { Icon: CreditCard,   title: 'Paiement Mobile Money', desc: 'Payez en toute sécurité via MTN Money ou Airtel Money, sans carte bancaire.',  color: 'text-orange-500',  bg: 'bg-orange-50 dark:bg-orange-900/10',  border: 'border-orange-100 dark:border-orange-800/30'  },
-    { Icon: Truck,        title: 'Livraison locale',       desc: 'Nos livreurs assurent la livraison à Brazzaville et Pointe-Noire.',           color: 'text-blue-600',    bg: 'bg-blue-50 dark:bg-blue-900/10',      border: 'border-blue-100 dark:border-blue-800/30'      },
-    { Icon: MessageCircle, title: 'Support client',        desc: 'Une équipe réactive disponible 7j/7 pour répondre à toutes vos questions.',  color: 'text-purple-600',  bg: 'bg-purple-50 dark:bg-purple-900/10',  border: 'border-purple-100 dark:border-purple-800/30'  },
+    { Icon: ShieldCheck,  title: 'Vendeurs vérifiés',     desc: 'Chaque vendeur est contrôlé et approuvé par notre équipe avant de vendre.',  color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+    { Icon: CreditCard,   title: 'Paiement Mobile Money', desc: 'Payez en toute sécurité via MTN Money ou Airtel Money, sans carte bancaire.',  color: 'text-orange-500',  bg: 'bg-orange-50',  border: 'border-orange-100'  },
+    { Icon: Truck,        title: 'Livraison locale',       desc: 'Nos livreurs assurent la livraison à Brazzaville et Pointe-Noire.',           color: 'text-blue-600',    bg: 'bg-blue-50',      border: 'border-blue-100'      },
+    { Icon: MessageCircle, title: 'Support client',        desc: 'Une équipe réactive disponible 7j/7 pour répondre à toutes vos questions.',  color: 'text-purple-600',  bg: 'bg-purple-50',  border: 'border-purple-100'  },
 ]
 
 const PLACEHOLDERS = [
@@ -179,21 +179,21 @@ function SearchBar() {
     return (
         <div ref={wrapperRef} className="relative w-full max-w-2xl mx-auto">
             <form onSubmit={handleSubmit}>
-                <div className="flex items-center bg-white dark:bg-neutral-900 rounded-full shadow-lg shadow-neutral-200/60 dark:shadow-neutral-900 border border-neutral-200 dark:border-neutral-700 px-5 py-4 gap-3">
+                <div className="flex items-center bg-white rounded-full shadow-lg shadow-neutral-200/60 border border-neutral-200 px-5 py-4 gap-3">
                     <Search size={17} className="text-neutral-400 flex-shrink-0" />
                     <input
                         type="text" value={query}
                         onChange={e => setQuery(e.target.value)}
                         onFocus={() => results.length > 0 && setShowDropdown(true)}
                         placeholder={placeholder}
-                        className="flex-1 bg-transparent text-sm text-neutral-800 dark:text-neutral-100 placeholder:text-neutral-400 outline-none min-w-0"
+                        className="flex-1 bg-transparent text-sm text-neutral-800 placeholder:text-neutral-400 outline-none min-w-0"
                     />
                     {query && (
                         <button type="button" onClick={() => { setQuery(''); setResults([]); setShowDropdown(false) }}>
                             <X size={15} className="text-neutral-400 hover:text-neutral-600 transition-colors" />
                         </button>
                     )}
-                    <div className="w-px h-5 bg-neutral-200 dark:bg-neutral-700 flex-shrink-0" />
+                    <div className="w-px h-5 bg-neutral-200 flex-shrink-0" />
                     <div className="flex items-center gap-2 flex-shrink-0">
                         {FILTERS.map(({ key, Icon, color, ring, label }) => (
                             <button key={key} type="button" title={label}
@@ -210,7 +210,7 @@ function SearchBar() {
             </form>
 
             {showDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-neutral-900 rounded-2xl shadow-2xl shadow-neutral-200/80 dark:shadow-neutral-950 border border-neutral-100 dark:border-neutral-800 overflow-hidden z-50">
+                <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl shadow-neutral-200/80 border border-neutral-100 overflow-hidden z-50">
                     {loading ? (
                         <p className="px-5 py-6 text-center text-sm text-neutral-400">Recherche en cours…</p>
                     ) : results.length === 0 ? (
@@ -219,14 +219,14 @@ function SearchBar() {
                         <>
                             {results.map((r, i) => (
                                 <Link key={r.id} href={`/product/${r.id}`} onClick={() => setShowDropdown(false)}
-                                    className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 dark:hover:bg-neutral-800 transition-colors no-underline ${i > 0 ? 'border-t border-neutral-50 dark:border-neutral-800' : ''}`}
+                                    className={`flex items-center gap-3 px-4 py-3 hover:bg-neutral-50 transition-colors no-underline ${i > 0 ? 'border-t border-neutral-50' : ''}`}
                                 >
-                                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-neutral-100 dark:bg-neutral-800 flex-shrink-0">
+                                    <div className="w-10 h-10 rounded-xl overflow-hidden bg-neutral-100 flex-shrink-0">
                                         {r.img ? <img src={r.img} alt={r.name} className="w-full h-full object-cover" />
                                             : <ShoppingBag size={16} className="text-neutral-300 m-auto mt-2.5" />}
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-semibold text-neutral-900 dark:text-white truncate">{r.name}</p>
+                                        <p className="text-sm font-semibold text-neutral-900 truncate">{r.name}</p>
                                         <p className="text-[11px] text-neutral-400 truncate">{r.category}</p>
                                     </div>
                                     <p className="text-sm font-bold text-orange-500 flex-shrink-0">
@@ -234,7 +234,7 @@ function SearchBar() {
                                     </p>
                                 </Link>
                             ))}
-                            <div className="border-t border-neutral-100 dark:border-neutral-800 px-4 py-2.5">
+                            <div className="border-t border-neutral-100 px-4 py-2.5">
                                 <button onClick={() => handleSubmit()} className="text-xs font-bold text-orange-500 hover:underline">
                                     Voir tous les résultats pour «&nbsp;{query}&nbsp;» →
                                 </button>
@@ -254,7 +254,7 @@ function ProductCard({ p, accentColor, isImmobilier }: { p: Product; accentColor
 
     return (
         <Link href={`/product/${p.id}`} className="flex-shrink-0 w-44 snap-start group no-underline">
-            <div className="relative w-44 h-44 rounded-2xl overflow-hidden bg-neutral-100 dark:bg-neutral-800 mb-3 shadow-sm group-hover:shadow-md transition-shadow duration-300">
+            <div className="relative w-44 h-44 rounded-2xl overflow-hidden bg-neutral-100 mb-3 shadow-sm group-hover:shadow-md transition-shadow duration-300">
                 {p.img
                     ? <img src={p.img} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" />
                     : <div className="w-full h-full flex items-center justify-center text-3xl text-neutral-300">📦</div>
@@ -270,7 +270,7 @@ function ProductCard({ p, accentColor, isImmobilier }: { p: Product; accentColor
                     </span>
                 )}
             </div>
-            <p className="text-xs font-semibold text-neutral-900 dark:text-white truncate leading-snug">{p.name}</p>
+            <p className="text-xs font-semibold text-neutral-900 truncate leading-snug">{p.name}</p>
             <p className={`text-xs font-bold mt-1 ${accentColor}`}>{formatPrice(p.price, isImmobilier)}</p>
         </Link>
     )
@@ -286,7 +286,7 @@ function DiscoveryCarousel({ label, title, href, accentColor, emptyIcon, product
             <div className="flex items-end justify-between mb-6">
                 <div>
                     <p className="text-[10px] font-bold uppercase tracking-[0.45em] text-neutral-400 mb-1">{label}</p>
-                    <h2 className="text-2xl font-light text-neutral-900 dark:text-white tracking-tight">{title}</h2>
+                    <h2 className="text-2xl font-light text-neutral-900 tracking-tight">{title}</h2>
                 </div>
                 <Link href={href} className={`text-[11px] font-bold ${accentColor} hover:underline uppercase tracking-widest flex items-center gap-1 mb-1`}>
                     Voir tout <ArrowRight size={12} />
@@ -294,10 +294,10 @@ function DiscoveryCarousel({ label, title, href, accentColor, emptyIcon, product
             </div>
 
             {products.length === 0 ? (
-                <div className="flex items-center gap-3 text-neutral-400 text-sm py-8 px-5 bg-white dark:bg-neutral-900 rounded-2xl border border-dashed border-neutral-200 dark:border-neutral-800">
+                <div className="flex items-center gap-3 text-neutral-400 text-sm py-8 px-5 bg-white rounded-2xl border border-dashed border-neutral-200">
                     <span className="text-3xl">{emptyIcon}</span>
                     <div>
-                        <p className="font-semibold text-neutral-500 dark:text-neutral-400">Bientôt disponible</p>
+                        <p className="font-semibold text-neutral-500">Bientôt disponible</p>
                         <p className="text-xs text-neutral-400 mt-0.5">Les premiers produits arrivent prochainement.</p>
                     </div>
                 </div>
@@ -315,15 +315,15 @@ function DiscoveryCarousel({ label, title, href, accentColor, emptyIcon, product
 /* ─── Footer landing ──────────────────────────────────────── */
 function LandingFooter() {
     return (
-        <footer className="border-t border-neutral-200 dark:border-neutral-800 mt-20 bg-white dark:bg-neutral-900">
+        <footer className="border-t border-neutral-200 mt-20 bg-white">
             <div className="max-w-5xl mx-auto px-5 py-12">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
                     {/* Logo + description */}
                     <div className="sm:col-span-1">
-                        <p className="text-base font-black uppercase italic tracking-tighter text-neutral-900 dark:text-white">
+                        <p className="text-base font-black uppercase italic tracking-tighter text-neutral-900">
                             Mayombe <span className="text-orange-500">Market</span>
                         </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-[220px]">
+                        <p className="text-xs text-neutral-500 leading-relaxed mt-2 max-w-[220px]">
                             Votre plateforme congolaise pour acheter, commander, vendre et trouver des biens.
                         </p>
                         <p className="text-xs text-neutral-400 mt-3">
@@ -341,7 +341,7 @@ function LandingFooter() {
                                 { label: 'Confidentialité', href: '/privacy' },
                                 { label: 'Contact', href: '/contact' },
                             ].map(l => (
-                                <Link key={l.href} href={l.href} className="text-xs text-neutral-500 dark:text-neutral-400 hover:text-orange-500 transition-colors no-underline">
+                                <Link key={l.href} href={l.href} className="text-xs text-neutral-500 hover:text-orange-500 transition-colors no-underline">
                                     {l.label}
                                 </Link>
                             ))}
@@ -353,7 +353,7 @@ function LandingFooter() {
                         <p className="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-3">Nos zones</p>
                         <div className="flex gap-2 mb-4">
                             {['Brazzaville', 'Pointe-Noire'].map(z => (
-                                <span key={z} className="text-[11px] font-semibold bg-neutral-100 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-300 px-3 py-1 rounded-full">
+                                <span key={z} className="text-[11px] font-semibold bg-neutral-100 text-neutral-600 px-3 py-1 rounded-full">
                                     {z}
                                 </span>
                             ))}
@@ -365,7 +365,7 @@ function LandingFooter() {
                     </div>
                 </div>
 
-                <div className="border-t border-neutral-100 dark:border-neutral-800 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <div className="border-t border-neutral-100 mt-10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2">
                     <p className="text-[11px] text-neutral-400">© {new Date().getFullYear()} Mayombe Market. Tous droits réservés.</p>
                     <div className="flex gap-4">
                         {(['Marketplace', 'Immobilier', 'Pâtisserie', 'Restaurants'] as const).map(m => (
@@ -385,11 +385,11 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
     const firstName = profile?.first_name || null
 
     return (
-        <div className="min-h-screen bg-[#F9F8F6] dark:bg-neutral-950">
+        <div className="min-h-screen bg-[#F9F8F6]" data-theme="light" style={{ colorScheme: 'light' }}>
 
             {/* ── Header ── */}
             <header className="flex items-center justify-between px-5 py-4 max-w-5xl mx-auto">
-                <Link href="/" className="text-lg font-black uppercase italic tracking-tighter text-neutral-900 dark:text-white no-underline">
+                <Link href="/" className="text-lg font-black uppercase italic tracking-tighter text-neutral-900 no-underline">
                     Mayombe <span className="text-orange-500">Market</span>
                 </Link>
                 <div className="flex items-center gap-3">
@@ -400,18 +400,18 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                             </Link>
                             <Link
                                 href={profile?.role === 'vendor' ? '/vendor/dashboard' : '/account/dashboard'}
-                                className="flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:text-orange-500 transition-colors no-underline"
+                                className="flex items-center gap-2 text-sm font-semibold text-neutral-700 hover:text-orange-500 transition-colors no-underline"
                             >
                                 {profile?.avatar_url
                                     ? <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
-                                    : <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center"><User size={14} className="text-orange-500" /></div>
+                                    : <div className="w-8 h-8 rounded-full bg-orange-100 flex items-center justify-center"><User size={14} className="text-orange-500" /></div>
                                 }
                                 <span className="hidden sm:block">{firstName ? `Bonjour, ${firstName}` : 'Mon compte'}</span>
                             </Link>
                         </>
                     ) : (
                         <button onClick={() => setShowAuth(true)}
-                            className="text-sm font-bold text-neutral-700 dark:text-neutral-200 hover:text-orange-500 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-4 py-2 rounded-full transition-colors"
+                            className="text-sm font-bold text-neutral-700 hover:text-orange-500 bg-white border border-neutral-200 px-4 py-2 rounded-full transition-colors"
                         >
                             Connexion
                         </button>
@@ -423,17 +423,17 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
 
             {/* ── Hero ── */}
             <section className="pt-10 pb-12 px-4 text-center max-w-3xl mx-auto">
-                <div className="inline-flex items-center gap-2 bg-orange-50 dark:bg-orange-900/20 border border-orange-100 dark:border-orange-800/30 text-orange-600 dark:text-orange-400 text-[11px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5">
+                <div className="inline-flex items-center gap-2 bg-orange-50 border border-orange-100 text-orange-600 text-[11px] font-bold uppercase tracking-widest px-4 py-1.5 rounded-full mb-5">
                     <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
                     Brazzaville &amp; Pointe-Noire
                 </div>
 
-                <h1 className="text-4xl md:text-5xl font-light tracking-tight text-neutral-900 dark:text-white leading-tight mb-4">
+                <h1 className="text-4xl md:text-5xl font-light tracking-tight text-neutral-900 leading-tight mb-4">
                     Trouvez tout au Congo,<br />
                     <span className="text-orange-500">en un seul endroit</span>
                 </h1>
 
-                <p className="text-neutral-500 dark:text-neutral-400 text-base max-w-lg mx-auto leading-relaxed mb-8">
+                <p className="text-neutral-500 text-base max-w-lg mx-auto leading-relaxed mb-8">
                     Immobilier, restauration, pâtisserie et marketplace à Brazzaville et Pointe-Noire.
                 </p>
 
@@ -454,12 +454,12 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
             </section>
 
             {/* ── Bande de confiance ── */}
-            <div className="bg-white dark:bg-neutral-900 border-y border-neutral-100 dark:border-neutral-800">
+            <div className="bg-white border-y border-neutral-100">
                 <div className="max-w-4xl mx-auto px-5 py-4 flex flex-wrap items-center justify-center gap-6 md:gap-10">
                     {TRUST_BAND.map(({ Icon, text, color }) => (
                         <div key={text} className="flex items-center gap-2">
                             <Icon size={15} className={color} />
-                            <span className="text-xs font-semibold text-neutral-600 dark:text-neutral-300">{text}</span>
+                            <span className="text-xs font-semibold text-neutral-600">{text}</span>
                         </div>
                     ))}
                 </div>
@@ -470,13 +470,13 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                 {/* ── 4 cartes modules ── */}
                 <div className="pt-14 pb-2">
                     <p className="text-[10px] font-bold uppercase tracking-[0.45em] text-neutral-400 text-center mb-2">Nos services</p>
-                    <h2 className="text-2xl font-light text-center text-neutral-900 dark:text-white mb-8 tracking-tight">
+                    <h2 className="text-2xl font-light text-center text-neutral-900 mb-8 tracking-tight">
                         Que voulez-vous faire aujourd&apos;hui&nbsp;?
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 md:gap-5">
                         {MODULES.map(({ key, label, badge, description, cta, href, Icon, iconBg, lightBg, border, hover, ctaClass, textAccent }) => (
                             <div key={key}
-                                className={`group bg-white dark:bg-neutral-900 rounded-2xl border ${border} ${hover} p-6 flex flex-col gap-5 shadow-sm hover:shadow-lg transition-all duration-300`}
+                                className={`group bg-white rounded-2xl border ${border} ${hover} p-6 flex flex-col gap-5 shadow-sm hover:shadow-lg transition-all duration-300`}
                             >
                                 <div className="flex items-start justify-between">
                                     <div className={`w-13 h-13 w-12 h-12 rounded-2xl ${iconBg} flex items-center justify-center shadow-sm`}>
@@ -487,8 +487,8 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                                     </span>
                                 </div>
                                 <div className="flex-1">
-                                    <h3 className="text-lg font-bold text-neutral-900 dark:text-white tracking-tight mb-1.5">{label}</h3>
-                                    <p className="text-sm text-neutral-500 dark:text-neutral-400 leading-relaxed">{description}</p>
+                                    <h3 className="text-lg font-bold text-neutral-900 tracking-tight mb-1.5">{label}</h3>
+                                    <p className="text-sm text-neutral-500 leading-relaxed">{description}</p>
                                 </div>
                                 <Link href={href}
                                     className={`inline-flex items-center gap-2 ${ctaClass} text-white text-sm font-bold px-5 py-2.5 rounded-full shadow-md transition-all w-fit group-hover:gap-3 group-hover:shadow-lg`}
@@ -509,7 +509,7 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                 {/* ── Pourquoi Mayombe Market ── */}
                 <div className="mt-20 mb-4">
                     <p className="text-[10px] font-bold uppercase tracking-[0.45em] text-neutral-400 text-center mb-2">Nos engagements</p>
-                    <h2 className="text-2xl font-light text-center text-neutral-900 dark:text-white mb-8 tracking-tight">
+                    <h2 className="text-2xl font-light text-center text-neutral-900 mb-8 tracking-tight">
                         Pourquoi choisir Mayombe Market&nbsp;?
                     </h2>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -519,8 +519,8 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                                     <Icon size={18} className={color} />
                                 </div>
                                 <div>
-                                    <p className="text-sm font-bold text-neutral-900 dark:text-white mb-1">{title}</p>
-                                    <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed">{desc}</p>
+                                    <p className="text-sm font-bold text-neutral-900 mb-1">{title}</p>
+                                    <p className="text-xs text-neutral-500 leading-relaxed">{desc}</p>
                                 </div>
                             </div>
                         ))}

@@ -31,24 +31,24 @@ export default async function MarketplacePage() {
     supabase.from('vendor_ad_campaigns').select('id, title, description, image_url, link_url, display_order').eq('placement', 'hero').order('display_order', { ascending: true }),
     supabase.from('vendor_ad_campaigns').select('id, title, description, image_url, link_url, display_order').eq('placement', 'tile').order('display_order', { ascending: true }),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
+      supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
       expiredIds
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).order('created_at', { ascending: false }).limit(20),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('created_at', { ascending: false }).limit(20),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('views_count', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
       expiredIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).order('views_count', { ascending: false }).limit(30),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('views_count', { ascending: false }).limit(30),
       expiredIds
     ),
     supabase.from('reviews').select('id, rating, content, user_name, created_at, products:product_id(name, img, category)').gte('rating', 4).not('content', 'is', null).order('created_at', { ascending: false }).limit(8),

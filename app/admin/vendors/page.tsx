@@ -40,7 +40,21 @@ function VendorTypeBadge({ vendorType }: { vendorType?: string }) {
             🏨 Hôtel
         </span>
     )
-    return null
+    if (vendorType === 'patisserie') return (
+        <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-rose-50 text-rose-600 border border-rose-200 dark:bg-rose-900/20 dark:text-rose-300 dark:border-rose-800/30">
+            🎂 Pâtisserie
+        </span>
+    )
+    if (vendorType === 'restaurant') return (
+        <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-orange-50 text-orange-600 border border-orange-200 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800/30">
+            🍽️ Restaurant
+        </span>
+    )
+    return (
+        <span className="px-2 py-0.5 text-[9px] font-bold rounded-full bg-slate-50 text-slate-500 border border-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700">
+            🛍️ Marketplace
+        </span>
+    )
 }
 
 function getVerifBadge(status: string) {
@@ -100,9 +114,11 @@ export default function AdminVendorsPage() {
     const totalVendors = vendors.length
     const verifiedCount = vendors.filter(v => v.verification_status === 'verified').length
     const pendingCount = vendors.filter(v => v.verification_status === 'pending').length
-    const immoCount = vendors.filter(v => v.vendor_type === 'immobilier').length
-    const hotelCount = vendors.filter(v => v.vendor_type === 'hotel').length
-    const marketplaceCount = vendors.filter(v => v.vendor_type !== 'immobilier' && v.vendor_type !== 'hotel').length
+    const immoCount        = vendors.filter(v => v.vendor_type === 'immobilier').length
+    const hotelCount       = vendors.filter(v => v.vendor_type === 'hotel').length
+    const patisserieCount  = vendors.filter(v => v.vendor_type === 'patisserie').length
+    const restaurantCount  = vendors.filter(v => v.vendor_type === 'restaurant').length
+    const marketplaceCount = vendors.filter(v => !['immobilier','hotel','patisserie','restaurant'].includes(v.vendor_type)).length
 
     // Filtrage
     const filteredVendors = (() => {
@@ -110,9 +126,11 @@ export default function AdminVendorsPage() {
         if (filter === 'verified') base = base.filter(v => v.verification_status === 'verified')
         else if (filter === 'unverified') base = base.filter(v => v.verification_status === 'unverified' || !v.verification_status)
         else if (filter === 'pending') base = base.filter(v => v.verification_status === 'pending')
-        else if (filter === 'immobilier') base = base.filter(v => v.vendor_type === 'immobilier')
-        else if (filter === 'hotel') base = base.filter(v => v.vendor_type === 'hotel')
-        else if (filter === 'marketplace') base = base.filter(v => v.vendor_type !== 'immobilier' && v.vendor_type !== 'hotel')
+        else if (filter === 'immobilier')  base = base.filter(v => v.vendor_type === 'immobilier')
+        else if (filter === 'hotel')       base = base.filter(v => v.vendor_type === 'hotel')
+        else if (filter === 'patisserie')  base = base.filter(v => v.vendor_type === 'patisserie')
+        else if (filter === 'restaurant')  base = base.filter(v => v.vendor_type === 'restaurant')
+        else if (filter === 'marketplace') base = base.filter(v => !['immobilier','hotel','patisserie','restaurant'].includes(v.vendor_type))
 
         if (searchQuery.trim()) {
             const q = searchQuery.trim().toLowerCase()
@@ -182,7 +200,7 @@ export default function AdminVendorsPage() {
 
             <div className="max-w-7xl mx-auto px-4 py-8 space-y-6">
                 {/* STATS */}
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
                     <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
                         <div className="text-blue-500 mb-2"><Users size={18} /></div>
                         <p className="text-2xl font-black italic tracking-tighter">{totalVendors}</p>
@@ -198,20 +216,25 @@ export default function AdminVendorsPage() {
                         <p className="text-2xl font-black italic tracking-tighter text-amber-600">{pendingCount}</p>
                         <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest mt-1">En attente</p>
                     </div>
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800">
+                        <div className="mb-2 text-lg">🛍️</div>
+                        <p className="text-2xl font-black italic tracking-tighter text-slate-700 dark:text-slate-200">{marketplaceCount}</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Marketplace</p>
+                    </div>
                     <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-blue-200 dark:border-blue-800/30">
                         <div className="text-blue-500 mb-2 text-lg">🏠</div>
                         <p className="text-2xl font-black italic tracking-tighter text-blue-600">{immoCount}</p>
                         <p className="text-[9px] font-black uppercase text-blue-500 tracking-widest mt-1">Immobilier</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-orange-200 dark:border-orange-800/30">
-                        <div className="text-orange-500 mb-2 text-lg">🛍️</div>
-                        <p className="text-2xl font-black italic tracking-tighter text-orange-600">{marketplaceCount}</p>
-                        <p className="text-[9px] font-black uppercase text-orange-500 tracking-widest mt-1">Marketplace</p>
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-rose-200 dark:border-rose-800/30">
+                        <div className="mb-2 text-lg">🎂</div>
+                        <p className="text-2xl font-black italic tracking-tighter text-rose-600">{patisserieCount}</p>
+                        <p className="text-[9px] font-black uppercase text-rose-500 tracking-widest mt-1">Pâtisserie</p>
                     </div>
-                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-amber-200 dark:border-amber-800/30">
-                        <div className="text-amber-500 mb-2 text-lg">🏨</div>
-                        <p className="text-2xl font-black italic tracking-tighter text-amber-600">{hotelCount}</p>
-                        <p className="text-[9px] font-black uppercase text-amber-500 tracking-widest mt-1">Hôtellerie</p>
+                    <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-orange-200 dark:border-orange-800/30">
+                        <div className="mb-2 text-lg">🍽️</div>
+                        <p className="text-2xl font-black italic tracking-tighter text-orange-600">{restaurantCount}</p>
+                        <p className="text-[9px] font-black uppercase text-orange-500 tracking-widest mt-1">Restaurant</p>
                     </div>
                 </div>
 
@@ -235,13 +258,15 @@ export default function AdminVendorsPage() {
                 {/* FILTRES */}
                 <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                     {[
-                        { id: 'all', label: 'Tous' },
-                        { id: 'immobilier', label: `🏠 Immobilier (${immoCount})` },
-                        { id: 'hotel', label: `🏨 Hôtellerie (${hotelCount})` },
+                        { id: 'all',         label: 'Tous' },
+                        { id: 'pending',     label: `⏳ En attente (${pendingCount})` },
+                        { id: 'verified',    label: '✅ Vérifiés' },
+                        { id: 'unverified',  label: '⚠️ Non vérifiés' },
                         { id: 'marketplace', label: `🛍️ Marketplace (${marketplaceCount})` },
-                        { id: 'verified', label: 'Vérifiés' },
-                        { id: 'unverified', label: 'Non vérifiés' },
-                        { id: 'pending', label: 'En attente' },
+                        { id: 'immobilier',  label: `🏠 Immobilier (${immoCount})` },
+                        { id: 'patisserie',  label: `🎂 Pâtisserie (${patisserieCount})` },
+                        { id: 'restaurant',  label: `🍽️ Restaurant (${restaurantCount})` },
+                        { id: 'hotel',       label: `🏨 Hôtellerie (${hotelCount})` },
                     ].map((f) => (
                         <button
                             key={f.id}

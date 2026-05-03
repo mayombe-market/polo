@@ -46,11 +46,13 @@ export default function CompleteProfilePage() {
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
     // ═══ Type de vendeur (pré-sélectionné via ?type=immobilier ou ?type=hotel) ═══
-    const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier' | 'hotel'>(() => {
+    const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier' | 'hotel' | 'patisserie' | 'restaurant'>(() => {
         if (typeof window !== 'undefined') {
             const p = new URLSearchParams(window.location.search)
             if (p.get('type') === 'immobilier') return 'immobilier'
             if (p.get('type') === 'hotel') return 'hotel'
+            if (p.get('type') === 'patisserie') return 'patisserie'
+            if (p.get('type') === 'restaurant') return 'restaurant'
         }
         return 'marketplace'
     })
@@ -248,6 +250,7 @@ export default function CompleteProfilePage() {
                 ...(role === 'vendor' ? {
                     shop_name: shopName.trim(),
                     subscription_plan: vendorType === 'immobilier' ? 'immo_free' : vendorType === 'hotel' ? 'hotel_free' : 'gratuit',
+                    verification_status: 'pending',
                     vendor_type: vendorType,
                 } : {}),
                 terms_accepted_at: now,
@@ -372,16 +375,28 @@ export default function CompleteProfilePage() {
                             ? "linear-gradient(135deg, #3B82F6, #2563EB)"
                             : vendorType === 'hotel'
                                 ? "linear-gradient(135deg, #F59E0B, #D97706)"
-                                : "linear-gradient(135deg, #E8A838, #D4782F)",
+                                : vendorType === 'patisserie'
+                                    ? "linear-gradient(135deg, #F43F5E, #E11D48)"
+                                    : vendorType === 'restaurant'
+                                        ? "linear-gradient(135deg, #F97316, #EA580C)"
+                                        : "linear-gradient(135deg, #E8A838, #D4782F)",
                         display: "flex", alignItems: "center", justifyContent: "center",
                         fontSize: 32, margin: "0 auto 16px",
                         boxShadow: vendorType === 'immobilier'
                             ? "0 8px 24px rgba(59,130,246,0.3)"
                             : vendorType === 'hotel'
                                 ? "0 8px 24px rgba(245,158,11,0.3)"
-                                : "0 8px 24px rgba(232,168,56,0.3)",
+                                : vendorType === 'patisserie'
+                                    ? "0 8px 24px rgba(244,63,94,0.3)"
+                                    : vendorType === 'restaurant'
+                                        ? "0 8px 24px rgba(249,115,22,0.3)"
+                                        : "0 8px 24px rgba(232,168,56,0.3)",
                     }}>
-                        {vendorType === 'immobilier' ? '🏠' : vendorType === 'hotel' ? '🏨' : '🏪'}
+                        {vendorType === 'immobilier' ? '🏠'
+                            : vendorType === 'hotel' ? '🏨'
+                            : vendorType === 'patisserie' ? '🎂'
+                            : vendorType === 'restaurant' ? '🍽️'
+                            : '🏪'}
                     </div>
                     <h1 style={{ color: "#F0ECE2", fontSize: 22, fontWeight: 800, margin: "0 0 4px" }}>
                         Bienvenue, {firstName} !
@@ -391,7 +406,11 @@ export default function CompleteProfilePage() {
                             ? 'Choisissez votre plan pour publier vos annonces immobilières'
                             : vendorType === 'hotel'
                                 ? "Choisissez votre plan pour publier vos chambres d'hôtel"
-                                : 'Choisissez votre plan pour commencer à vendre sur Mayombe Market'}
+                                : vendorType === 'patisserie'
+                                    ? 'Choisissez votre plan pour publier vos créations pâtissières'
+                                    : vendorType === 'restaurant'
+                                        ? 'Choisissez votre plan pour publier vos plats et menus'
+                                        : 'Choisissez votre plan pour commencer à vendre sur Mayombe Market'}
                     </p>
                 </div>
 
@@ -667,7 +686,9 @@ export default function CompleteProfilePage() {
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">
                                     Que souhaitez-vous vendre ? *
                                 </label>
-                                <div className="grid grid-cols-3 gap-3">
+
+                                {/* Rangée 1 : Marketplace + Immobilier */}
+                                <div className="grid grid-cols-2 gap-3 mb-3">
                                     <button
                                         type="button"
                                         onClick={() => setVendorType('marketplace')}
@@ -678,12 +699,8 @@ export default function CompleteProfilePage() {
                                         }`}
                                     >
                                         <div className="text-2xl mb-1">🛍️</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                                            Marketplace
-                                        </p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                            Mode, beauté…
-                                        </p>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Marketplace</p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Mode, beauté, high-tech…</p>
                                     </button>
                                     <button
                                         type="button"
@@ -695,12 +712,38 @@ export default function CompleteProfilePage() {
                                         }`}
                                     >
                                         <div className="text-2xl mb-1">🏠</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                                            Immobilier
-                                        </p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                            Maisons, terrains…
-                                        </p>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Immobilier</p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Maisons, terrains, bureaux…</p>
+                                    </button>
+                                </div>
+
+                                {/* Rangée 2 : Pâtisserie + Restaurant + Hôtellerie */}
+                                <div className="grid grid-cols-3 gap-3">
+                                    <button
+                                        type="button"
+                                        onClick={() => setVendorType('patisserie')}
+                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                            vendorType === 'patisserie'
+                                                ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20'
+                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-rose-400 bg-white dark:bg-slate-800'
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">🎂</div>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Pâtisserie</p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Gâteaux, viennoiseries…</p>
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => setVendorType('restaurant')}
+                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                            vendorType === 'restaurant'
+                                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
+                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-orange-400 bg-white dark:bg-slate-800'
+                                        }`}
+                                    >
+                                        <div className="text-2xl mb-1">🍽️</div>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Restaurant</p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Plats, grillades, fast-food…</p>
                                     </button>
                                     <button
                                         type="button"
@@ -712,34 +755,30 @@ export default function CompleteProfilePage() {
                                         }`}
                                     >
                                         <div className="text-2xl mb-1">🏨</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">
-                                            Hôtellerie
-                                        </p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">
-                                            Chambres, hôtels…
-                                        </p>
+                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Hôtellerie</p>
+                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Chambres, hôtels…</p>
                                     </button>
                                 </div>
                             </div>
 
                             <div>
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
-                                    {vendorType === 'immobilier'
-                                        ? 'Nom de votre agence / société *'
-                                        : vendorType === 'hotel'
-                                            ? 'Nom de votre hôtel *'
-                                            : 'Nom de votre boutique *'}
+                                    {vendorType === 'immobilier' ? 'Nom de votre agence / société *'
+                                        : vendorType === 'hotel' ? 'Nom de votre hôtel *'
+                                        : vendorType === 'patisserie' ? 'Nom de votre pâtisserie *'
+                                        : vendorType === 'restaurant' ? 'Nom de votre restaurant *'
+                                        : 'Nom de votre boutique *'}
                                 </label>
                                 <input
                                     type="text"
                                     value={shopName}
                                     onChange={(e) => setShopName(e.target.value)}
                                     placeholder={
-                                        vendorType === 'immobilier'
-                                            ? 'Ex: Agence Brazza Immo, Particulier...'
-                                            : vendorType === 'hotel'
-                                                ? 'Ex: Hôtel Brazzaville Palace, La Résidence...'
-                                                : 'Ex: Boutique Élégance, Tech Store...'
+                                        vendorType === 'immobilier' ? 'Ex : Agence Brazza Immo, Particulier...'
+                                            : vendorType === 'hotel' ? 'Ex : Hôtel Brazzaville Palace, La Résidence...'
+                                            : vendorType === 'patisserie' ? 'Ex : Pâtisserie Mama Sucre, Douceurs du Congo...'
+                                            : vendorType === 'restaurant' ? 'Ex : Chez Mama Africa, Brazza Grill...'
+                                            : 'Ex : Boutique Élégance, Tech Store...'
                                     }
                                     className="w-full p-3 border-2 border-blue-200 dark:border-blue-800/30 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 bg-white dark:bg-slate-800 dark:text-white"
                                     required={role === 'vendor'}

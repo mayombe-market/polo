@@ -14,7 +14,7 @@ const MODULES = [
         label: 'Immobilier',
         description: 'Appartements, villas, terrains. Vente, location, neuf.',
         cta: 'Explorer les biens',
-        href: '/search?category=Immobilier',
+        href: '/category/Immobilier',
         Icon: Home,
         iconBg: 'bg-emerald-500',
         cardBorder: 'hover:border-emerald-200 dark:hover:border-emerald-800/40',

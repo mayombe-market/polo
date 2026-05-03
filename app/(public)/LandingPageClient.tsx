@@ -244,7 +244,7 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                 <DiscoveryCarousel
                     label="Immobilier"
                     title="Biens disponibles"
-                    href="/search?category=Immobilier"
+                    href="/category/Immobilier"
                     accentColor="text-emerald-600"
                     emptyIcon="🏠"
                     products={immobilierProducts}

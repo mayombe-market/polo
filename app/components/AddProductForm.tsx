@@ -137,7 +137,7 @@ const mesChoix: Record<string, string[]> = {
     "Maison & Déco": ["Salons & Canapés", "Lits & Matelas", "Meubles", "Décoration", "Salle de bain", "Cuisine & Arts de la table"],
     "Pâtisserie & Traiteur": ["Gâteaux", "Viennoiseries", "Pâtisseries traditionnelles", "Sur commande", "Plats traiteur"],
     "Immobilier": [...IMMOBILIER_SUBCATEGORIES],
-    "Alimentation & Boissons": ["Vivres frais", "Vivres secs", "Boissons", "Épicerie fine", "Produits locaux"],
+    "Alimentation & Boissons": ["Plats du jour", "Plats congolais", "Grillades & Brochettes", "Fast-food & Burgers", "Boissons", "Menus & Formules", "Accompagnements", "Épicerie & Produits locaux"],
     "Auto & Moto": ["Voitures", "Motos & Scooters", "Pièces détachées", "Accessoires auto"],
     "Bébé & Enfants": ["Vêtements enfants", "Jouets", "Poussettes & Accessoires", "Alimentation bébé"],
     "Sport & Loisirs": ["Équipements sportifs", "Vêtements de sport", "Fitness & Musculation", "Camping & Plein air"],
@@ -750,18 +750,29 @@ const STEPS = [
     { id: 5, label: 'Images', icon: ImageIcon },
 ]
 
+/** Catégories visibles selon le type de vendeur */
+const VENDOR_TYPE_CATEGORIES: Record<string, string[]> = {
+    patisserie: ["Pâtisserie & Traiteur"],
+    restaurant: ["Alimentation & Boissons"],
+    immobilier: ["Immobilier"],
+    hotel:      ["Alimentation & Boissons", "Services"],
+}
+
 export type AddProductFormProps = {
     sellerId?: string
     /** Si false, le bouton Publier reste désactivé avec message d’aide */
     isVendorAccount?: boolean
     /** Requis côté serveur pour createProduct */
     verificationStatus?: string | null
+    /** Type de vendeur — filtre les catégories disponibles à la publication */
+    vendorType?: string | null
 }
 
 export default function AddProductForm({
     sellerId,
     isVendorAccount,
     verificationStatus,
+    vendorType,
 }: AddProductFormProps) {
     /**
      * Anti-course / double envoi :
@@ -842,6 +853,24 @@ export default function AddProductForm({
     }, [supabase])
 
     const isRealEstate = selectedCategory === IMMOBILIER_CATEGORY
+
+    // Catégories filtrées selon le type du vendeur
+    const filteredChoix = vendorType && VENDOR_TYPE_CATEGORIES[vendorType]
+        ? Object.fromEntries(
+            VENDOR_TYPE_CATEGORIES[vendorType]
+                .filter(cat => mesChoix[cat])
+                .map(cat => [cat, mesChoix[cat]])
+          )
+        : mesChoix
+
+    // Auto-sélectionner si une seule catégorie disponible
+    useEffect(() => {
+        const cats = Object.keys(filteredChoix)
+        if (cats.length === 1 && !selectedCategory) {
+            setSelectedCategory(cats[0])
+        }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [vendorType])
 
     useEffect(() => {
         if (selectedCategory === IMMOBILIER_CATEGORY) {
@@ -1398,7 +1427,7 @@ export default function AddProductForm({
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Catégorie</label>
                                 <div className="flex flex-col gap-2">
-                                    {Object.keys(mesChoix).map(c => (
+                                    {Object.keys(filteredChoix).map(c => (
                                         <button
                                             key={c}
                                             type="button"
@@ -1418,7 +1447,7 @@ export default function AddProductForm({
                             <div>
                                 <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Sous-catégorie</label>
                                 <div className="flex flex-col gap-2">
-                                    {selectedCategory ? mesChoix[selectedCategory]?.map(sc => (
+                                    {selectedCategory ? filteredChoix[selectedCategory]?.map(sc => (
                                         <button
                                             key={sc}
                                             type="button"

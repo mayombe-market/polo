@@ -1,7 +1,12 @@
 'use client'
 
 import Link from 'next/link'
-import { Home, Cake, UtensilsCrossed, ShoppingBag, ArrowRight } from 'lucide-react'
+import { Home, Cake, UtensilsCrossed, ShoppingBag, ArrowRight, ShoppingCart, User } from 'lucide-react'
+import { useAuth } from '@/hooks/useAuth'
+import { useState } from 'react'
+import dynamic from 'next/dynamic'
+
+const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 
 const MODULES = [
     {
@@ -63,8 +68,54 @@ type DiscoveryProduct = {
 }
 
 export default function LandingPageClient({ discoveryProducts }: { discoveryProducts: DiscoveryProduct[] }) {
+    const { user, profile } = useAuth()
+    const [showAuth, setShowAuth] = useState(false)
+
+    const firstName = profile?.first_name || null
+
     return (
         <div className="min-h-screen bg-[#FAFAF8] dark:bg-neutral-950">
+
+            {/* Mini header propre */}
+            <header className="flex items-center justify-between px-5 py-4 max-w-4xl mx-auto">
+                <Link href="/" className="text-lg font-black uppercase italic tracking-tighter text-neutral-900 dark:text-white no-underline">
+                    Mayombe <span className="text-orange-500">Market</span>
+                </Link>
+
+                <div className="flex items-center gap-3">
+                    {user ? (
+                        <>
+                            <Link href="/cart" className="relative text-neutral-500 hover:text-orange-500 transition-colors">
+                                <ShoppingCart size={20} />
+                            </Link>
+                            <Link
+                                href={profile?.role === 'vendor' ? '/vendor/dashboard' : '/account/dashboard'}
+                                className="flex items-center gap-2 text-sm font-semibold text-neutral-700 dark:text-neutral-200 hover:text-orange-500 transition-colors no-underline"
+                            >
+                                {profile?.avatar_url ? (
+                                    <img src={profile.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                                ) : (
+                                    <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center">
+                                        <User size={14} className="text-orange-500" />
+                                    </div>
+                                )}
+                                <span className="hidden sm:block">
+                                    {firstName ? `Bonjour, ${firstName}` : 'Mon compte'}
+                                </span>
+                            </Link>
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => setShowAuth(true)}
+                            className="text-sm font-bold text-neutral-700 dark:text-neutral-200 hover:text-orange-500 transition-colors bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-700 px-4 py-2 rounded-full"
+                        >
+                            Connexion
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            {showAuth && <AuthModal isOpen={showAuth} onClose={() => setShowAuth(false)} />}
 
             {/* Hero */}
             <div className="pt-12 pb-8 px-4 text-center">

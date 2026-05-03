@@ -15,15 +15,16 @@ function isCheckoutTunnelPath(pathname: string | null): boolean {
 export default function PublicLayoutShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname()
     const tunnel = isCheckoutTunnelPath(pathname)
+    const isLanding = pathname === '/'
 
     return (
         <>
-            <Header />
+            {!isLanding && <Header />}
             <Toaster position="top-right" richColors closeButton />
 
             <main className="min-h-screen">{children}</main>
 
-            {!tunnel && <Footer />}
+            {!tunnel && !isLanding && <Footer />}
             <DeferredCookieConsent />
         </>
     )

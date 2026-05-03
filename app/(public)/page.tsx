@@ -19,46 +19,30 @@ export default async function LandingPage() {
     { data: patisserieProducts },
     { data: restaurantProducts },
   ] = await Promise.all([
-    // Marketplace — produits récents hors immobilier et alimentation
     excludeExpiredSellers(
-      supabase
-        .from('products')
-        .select('id, name, price, img, category')
+      supabase.from('products').select('id, name, price, img, category, created_at, views_count')
         .neq('category', IMMOBILIER_CATEGORY)
         .neq('category', 'Pâtisserie & Traiteur')
         .neq('category', 'Alimentation & Boissons')
-        .order('created_at', { ascending: false })
-        .limit(10),
+        .order('created_at', { ascending: false }).limit(12),
       expiredIds
     ),
-    // Immobilier
     excludeExpiredSellers(
-      supabase
-        .from('products')
-        .select('id, name, price, img, category')
+      supabase.from('products').select('id, name, price, img, category, created_at, views_count')
         .eq('category', IMMOBILIER_CATEGORY)
-        .order('created_at', { ascending: false })
-        .limit(10),
+        .order('created_at', { ascending: false }).limit(12),
       expiredIds
     ),
-    // Pâtisserie
     excludeExpiredSellers(
-      supabase
-        .from('products')
-        .select('id, name, price, img, category')
+      supabase.from('products').select('id, name, price, img, category, created_at, views_count')
         .eq('category', 'Pâtisserie & Traiteur')
-        .order('created_at', { ascending: false })
-        .limit(10),
+        .order('created_at', { ascending: false }).limit(12),
       expiredIds
     ),
-    // Restaurant (Alimentation & Boissons pour l'instant)
     excludeExpiredSellers(
-      supabase
-        .from('products')
-        .select('id, name, price, img, category')
+      supabase.from('products').select('id, name, price, img, category, created_at, views_count')
         .eq('category', 'Alimentation & Boissons')
-        .order('created_at', { ascending: false })
-        .limit(10),
+        .order('created_at', { ascending: false }).limit(12),
       expiredIds
     ),
   ])

@@ -38,6 +38,7 @@ interface Seller {
 interface Props {
     products: Product[]
     sellers: Seller[]
+    initialQuery?: string
 }
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -233,9 +234,9 @@ function ProductCard({ product }: { product: Product }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function PatisserieClient({ products, sellers }: Props) {
+export default function PatisserieClient({ products, sellers, initialQuery = '' }: Props) {
     const [activeFilter, setActiveFilter] = useState('')
-    const [search, setSearch] = useState('')
+    const [search, setSearch] = useState(initialQuery)
 
     const filteredProducts = useMemo(() => {
         let result = products

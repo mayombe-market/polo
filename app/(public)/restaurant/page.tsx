@@ -9,7 +9,8 @@ export const metadata = {
   description: 'Commandez vos plats préférés auprès des meilleurs restaurants de Brazzaville et Pointe-Noire. Plats congolais, grillades, burgers et menus du jour.',
 }
 
-export default async function RestaurantPage() {
+export default async function RestaurantPage({ searchParams }: { searchParams: { q?: string } }) {
+  const initialQuery = searchParams.q?.trim() || ''
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -58,6 +59,7 @@ export default async function RestaurantPage() {
     <RestaurantClient
       products={products || []}
       sellers={enrichedSellers}
+      initialQuery={initialQuery}
     />
   )
 }

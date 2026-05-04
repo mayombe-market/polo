@@ -45,6 +45,7 @@ interface Seller {
 interface Props {
   products: Product[]
   sellers: Seller[]
+  initialQuery?: string
 }
 
 // ─── Placeholder data (affiché si base vide) ─────────────────────────────────
@@ -313,9 +314,9 @@ function PlaceholderDishCard({ dish }: { dish: typeof PLACEHOLDER_DISHES[0] }) {
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
-export default function RestaurantClient({ products, sellers }: Props) {
+export default function RestaurantClient({ products, sellers, initialQuery = '' }: Props) {
   const [activeFilter, setActiveFilter] = useState('')
-  const [search, setSearch] = useState('')
+  const [search, setSearch] = useState(initialQuery)
 
   const hasRealData  = products.length > 0
   const hasSellers   = sellers.length > 0

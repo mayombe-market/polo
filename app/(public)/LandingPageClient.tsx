@@ -177,7 +177,13 @@ function SearchBar() {
         e?.preventDefault()
         if (!query.trim()) return
         setShowDropdown(false)
-        router.push(`/marketplace?q=${encodeURIComponent(query)}`)
+        const q = encodeURIComponent(query.trim())
+        const dest =
+            activeFilter === 'patisserie' ? `/patisserie?q=${q}` :
+            activeFilter === 'restaurant' ? `/restaurant?q=${q}` :
+            activeFilter === 'immobilier' ? `/search?q=${q}&category=${encodeURIComponent('Immobilier')}` :
+            `/search?q=${q}`
+        router.push(dest)
     }
 
     return (

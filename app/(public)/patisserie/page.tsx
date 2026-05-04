@@ -9,7 +9,8 @@ export const metadata = {
     description: 'Commandez vos gâteaux, cupcakes, box sucrées et viennoiseries auprès des meilleures pâtisseries de Brazzaville et Pointe-Noire.',
 }
 
-export default async function PatisseriePage() {
+export default async function PatisseriePage({ searchParams }: { searchParams: { q?: string } }) {
+    const initialQuery = searchParams.q?.trim() || ''
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -55,6 +56,7 @@ export default async function PatisseriePage() {
         <PatisserieClient
             products={products || []}
             sellers={enrichedSellers}
+            initialQuery={initialQuery}
         />
     )
 }

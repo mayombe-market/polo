@@ -202,6 +202,9 @@ export default function Header() {
                                     {userRole === 'admin' && (
                                         <Link href="/admin/orders" onClick={() => setShowUserMenu(false)} className="block px-4 py-3 text-sm text-orange-600 dark:text-orange-400 font-bold hover:bg-orange-50 dark:hover:bg-slate-700 border-b dark:border-slate-700">🛡️ Admin Panel</Link>
                                     )}
+                                    {(userRole === 'comptable' || userRole === 'admin') && (
+                                        <Link href="/comptable" onClick={() => setShowUserMenu(false)} className="block px-4 py-3 text-sm text-emerald-600 dark:text-emerald-400 font-bold hover:bg-emerald-50 dark:hover:bg-slate-700 border-b dark:border-slate-700">🧾 Bureau Comptable</Link>
+                                    )}
                                     {(userRole === 'vendor' || userRole === 'admin') && (
                                         <Link href="/vendor/dashboard" onClick={() => setShowUserMenu(false)} className="block px-4 py-3 text-sm text-green-600 dark:text-green-400 font-bold hover:bg-green-50 dark:hover:bg-slate-700 border-b dark:border-slate-700">🏪 Ma Boutique</Link>
                                     )}
@@ -345,6 +348,12 @@ export default function Header() {
                                     <Link href="/admin/orders" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-orange-50 dark:hover:bg-slate-800 transition-colors no-underline">
                                         <span className="text-lg">🛡️</span>
                                         <span className="text-sm font-bold text-orange-600 dark:text-orange-400">Admin Panel</span>
+                                    </Link>
+                                )}
+                                {(userRole === 'comptable' || userRole === 'admin') && (
+                                    <Link href="/comptable" onClick={() => setMobileMenuOpen(false)} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-emerald-50 dark:hover:bg-slate-800 transition-colors no-underline">
+                                        <span className="text-lg">🧾</span>
+                                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">Bureau Comptable</span>
                                     </Link>
                                 )}
                                 {(userRole === 'vendor' || userRole === 'admin') && (

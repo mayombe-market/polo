@@ -819,6 +819,299 @@ export async function sendDisputeRejectedEmail({
     }
 }
 
+// ─── Email : vendeur approuvé par l'admin ─────────────────────────────────
+export async function sendVendorApprovedEmail(
+    vendorEmail: string,
+    vendorName: string,
+    shopName: string,
+    vendorType: string
+) {
+    const typeConfig: Record<string, { emoji: string; label: string; color: string; bg: string; border: string; tip: string }> = {
+        patisserie: {
+            emoji: '🎂',
+            label: 'Pâtisserie',
+            color: '#f43f5e',
+            bg: '#fff1f2',
+            border: '#fecdd3',
+            tip: 'Publiez vos gâteaux, pâtisseries et créations sucrées pour attirer vos premiers clients !',
+        },
+        restaurant: {
+            emoji: '🍽️',
+            label: 'Restaurant',
+            color: '#f59e0b',
+            bg: '#fffbeb',
+            border: '#fde68a',
+            tip: 'Ajoutez vos plats du jour, menus et spécialités congolaises sur votre page restaurant.',
+        },
+        immobilier: {
+            emoji: '🏠',
+            label: 'Immobilier',
+            color: '#3b82f6',
+            bg: '#eff6ff',
+            border: '#bfdbfe',
+            tip: 'Publiez vos biens immobiliers et atteignez des milliers d\'acheteurs au Congo.',
+        },
+        hotel: {
+            emoji: '🏨',
+            label: 'Hôtellerie',
+            color: '#a855f7',
+            bg: '#faf5ff',
+            border: '#e9d5ff',
+            tip: 'Mettez en ligne vos chambres et suites pour accueillir vos premiers voyageurs.',
+        },
+        marketplace: {
+            emoji: '🛍️',
+            label: 'Marketplace',
+            color: '#f97316',
+            bg: '#fff7ed',
+            border: '#fed7aa',
+            tip: 'Publiez vos produits sur la marketplace pour toucher tous les clients de Mayombe.',
+        },
+    }
+
+    const cfg = typeConfig[vendorType] ?? typeConfig['marketplace']
+    const safeName = escapeHtml(vendorName)
+    const safeShop = escapeHtml(shopName)
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: vendorEmail,
+            subject: `Votre boutique "${safeShop}" est vérifiée ! — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <!-- Header -->
+                    <div style="background: #08080E; padding: 30px; text-align: center;">
+                        <h1 style="color: ${cfg.color}; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase; letter-spacing: 1px;">Mayombe Market</h1>
+                        <p style="color: #888; font-size: 12px; margin: 6px 0 0 0;">${cfg.emoji} Espace ${cfg.label}</p>
+                    </div>
+
+                    <!-- Corps -->
+                    <div style="padding: 36px 30px; text-align: center;">
+                        <div style="width: 80px; height: 80px; background: ${cfg.bg}; border: 2px solid ${cfg.border}; border-radius: 24px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 40px;">
+                            ${cfg.emoji}
+                        </div>
+
+                        <h2 style="color: #0f172a; margin: 0 0 8px; font-size: 22px;">
+                            Félicitations, ${safeName} !
+                        </h2>
+                        <p style="color: #64748b; font-size: 15px; line-height: 1.6; margin: 0 0 6px;">
+                            Votre boutique <strong style="color: ${cfg.color};">${safeShop}</strong> a été vérifiée par notre équipe.
+                        </p>
+                        <p style="color: #64748b; font-size: 14px; margin: 0 0 32px;">
+                            Vous pouvez désormais publier vos produits et recevoir des commandes.
+                        </p>
+
+                        <!-- Badge vérifié -->
+                        <div style="display: inline-block; background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 50px; padding: 8px 20px; margin-bottom: 28px;">
+                            <span style="color: #16a34a; font-weight: bold; font-size: 14px;">✓ Compte vérifié</span>
+                        </div>
+
+                        <!-- Conseil type -->
+                        <div style="background: ${cfg.bg}; border: 1px solid ${cfg.border}; padding: 18px 20px; border-radius: 14px; margin: 0 0 28px; text-align: left;">
+                            <p style="font-size: 11px; color: ${cfg.color}; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0;">Prochaine étape</p>
+                            <p style="color: #334155; font-size: 14px; margin: 0; line-height: 1.6;">${cfg.tip}</p>
+                        </div>
+
+                        <!-- CTA -->
+                        <a href="https://mayombe-market.com/vendor/dashboard"
+                           style="display: inline-block; padding: 16px 40px; border-radius: 12px;
+                                  background: linear-gradient(135deg, ${cfg.color}, ${cfg.color}cc);
+                                  color: #ffffff; font-size: 15px; font-weight: 800;
+                                  text-decoration: none; letter-spacing: 0.3px;">
+                            Accéder à mon dashboard →
+                        </a>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="background: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('[sendVendorApprovedEmail] error:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
+// ─── Email : vendeur refusé par l'admin ───────────────────────────────────
+export async function sendVendorRejectedEmail(
+    vendorEmail: string,
+    vendorName: string,
+    reason: string
+) {
+    const safeName   = escapeHtml(vendorName)
+    const safeReason = escapeHtml(reason)
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: vendorEmail,
+            subject: `Suite à votre demande de vérification — Mayombe Market`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <!-- Header -->
+                    <div style="background: #08080E; padding: 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase; letter-spacing: 1px;">Mayombe Market</h1>
+                    </div>
+
+                    <!-- Corps -->
+                    <div style="padding: 36px 30px; text-align: center;">
+                        <div style="width: 70px; height: 70px; background: #fef2f2; border: 2px solid #fecaca; border-radius: 20px; margin: 0 auto 20px; display: flex; align-items: center; justify-content: center; font-size: 36px;">
+                            ⚠️
+                        </div>
+
+                        <h2 style="color: #0f172a; margin: 0 0 8px; font-size: 22px;">
+                            Bonjour ${safeName},
+                        </h2>
+                        <p style="color: #64748b; font-size: 15px; line-height: 1.6; margin: 0 0 28px;">
+                            Après examen de votre dossier, notre équipe n'a pas pu valider votre vérification pour le moment.
+                        </p>
+
+                        <!-- Motif -->
+                        <div style="background: #fef2f2; border: 1px solid #fecaca; padding: 20px; border-radius: 14px; margin: 0 0 28px; text-align: left;">
+                            <p style="font-size: 11px; color: #dc2626; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">Motif du refus</p>
+                            <p style="color: #991b1b; font-size: 14px; margin: 0; line-height: 1.6;">${safeReason}</p>
+                        </div>
+
+                        <!-- Que faire -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 18px 20px; border-radius: 14px; margin: 0 0 28px; text-align: left;">
+                            <p style="font-size: 11px; color: #64748b; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 10px 0;">Que faire ?</p>
+                            <p style="color: #334155; font-size: 14px; margin: 0; line-height: 1.6;">
+                                Corrigez les éléments mentionnés ci-dessus et soumettez une nouvelle demande depuis votre espace vendeur.
+                                Notre équipe l'examinera dans les plus brefs délais.
+                            </p>
+                        </div>
+
+                        <!-- CTA -->
+                        <a href="https://mayombe-market.com/vendor/verification"
+                           style="display: inline-block; padding: 16px 40px; border-radius: 12px;
+                                  background: linear-gradient(135deg, #f97316, #ea580c);
+                                  color: #ffffff; font-size: 15px; font-weight: 800;
+                                  text-decoration: none; letter-spacing: 0.3px;">
+                            Soumettre une nouvelle demande →
+                        </a>
+
+                        <p style="color: #94a3b8; font-size: 12px; margin: 24px 0 0;">
+                            Des questions ? Contactez-nous à <strong>contact@mayombe-market.com</strong>
+                        </p>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="background: #f8fafc; padding: 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('[sendVendorRejectedEmail] error:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
+// ─── Email : alerte admin — nouvelle demande de vérification ──────────────
+export async function sendAdminNewVerificationEmail(
+    adminEmail: string,
+    vendorName: string,
+    shopName: string,
+    vendorType: string,
+    city: string
+) {
+    const typeLabels: Record<string, { label: string; emoji: string; color: string }> = {
+        patisserie:  { label: 'Pâtisserie',  emoji: '🎂', color: '#f43f5e' },
+        restaurant:  { label: 'Restaurant',  emoji: '🍽️', color: '#f59e0b' },
+        immobilier:  { label: 'Immobilier',  emoji: '🏠', color: '#3b82f6' },
+        hotel:       { label: 'Hôtellerie',  emoji: '🏨', color: '#a855f7' },
+        marketplace: { label: 'Marketplace', emoji: '🛍️', color: '#f97316' },
+    }
+
+    const cfg = typeLabels[vendorType] ?? typeLabels['marketplace']
+    const safeName = escapeHtml(vendorName)
+    const safeShop = escapeHtml(shopName)
+    const safeCity = escapeHtml(city)
+
+    try {
+        await resend.emails.send({
+            from: FROM_EMAIL,
+            to: adminEmail,
+            subject: `[Admin] Nouvelle vérification vendeur — ${safeShop}`,
+            html: `
+                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
+                    <!-- Header -->
+                    <div style="background: #08080E; padding: 24px 30px; text-align: center;">
+                        <h1 style="color: #f97316; margin: 0; font-size: 20px; font-style: italic; text-transform: uppercase; letter-spacing: 1px;">Mayombe Market</h1>
+                        <p style="color: #888; font-size: 12px; margin: 4px 0 0 0;">Panneau d'administration</p>
+                    </div>
+
+                    <!-- Corps -->
+                    <div style="padding: 30px;">
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                            <div style="width: 48px; height: 48px; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 24px; flex-shrink: 0;">
+                                🔔
+                            </div>
+                            <div>
+                                <p style="font-size: 11px; color: #94a3b8; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 4px 0;">Nouvelle demande</p>
+                                <h2 style="color: #0f172a; margin: 0; font-size: 18px;">Vérification vendeur à traiter</h2>
+                            </div>
+                        </div>
+
+                        <!-- Fiche vendeur -->
+                        <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 14px; overflow: hidden; margin-bottom: 24px;">
+                            <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 12px 16px; color: #64748b; width: 130px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Vendeur</td>
+                                    <td style="padding: 12px 16px; font-weight: bold; color: #0f172a;">${safeName}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 12px 16px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Boutique</td>
+                                    <td style="padding: 12px 16px; font-weight: bold; color: #0f172a;">${safeShop}</td>
+                                </tr>
+                                <tr style="border-bottom: 1px solid #e2e8f0;">
+                                    <td style="padding: 12px 16px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Type</td>
+                                    <td style="padding: 12px 16px;">
+                                        <span style="display: inline-block; background: ${cfg.color}15; color: ${cfg.color}; border: 1px solid ${cfg.color}40; border-radius: 50px; padding: 3px 12px; font-size: 13px; font-weight: bold;">
+                                            ${cfg.emoji} ${cfg.label}
+                                        </span>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td style="padding: 12px 16px; color: #64748b; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;">Ville</td>
+                                    <td style="padding: 12px 16px; color: #0f172a;">${safeCity}</td>
+                                </tr>
+                            </table>
+                        </div>
+
+                        <!-- CTA -->
+                        <div style="text-align: center;">
+                            <a href="https://mayombe-market.com/admin/verifications"
+                               style="display: inline-block; padding: 14px 36px; border-radius: 10px;
+                                      background: linear-gradient(135deg, #f97316, #ea580c);
+                                      color: #ffffff; font-size: 14px; font-weight: 800;
+                                      text-decoration: none; letter-spacing: 0.3px;">
+                                Examiner le dossier →
+                            </a>
+                        </div>
+                    </div>
+
+                    <!-- Footer -->
+                    <div style="background: #f8fafc; padding: 16px 20px; text-align: center; border-top: 1px solid #f1f5f9;">
+                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Email automatique — Mayombe Market Administration</p>
+                    </div>
+                </div>
+            `,
+        })
+        return { success: true }
+    } catch (error) {
+        console.error('[sendAdminNewVerificationEmail] error:', error)
+        return { error: 'Erreur envoi email' }
+    }
+}
+
 // Email de réponse à une négociation (envoyé à l'acheteur)
 export async function sendNegotiationResponseEmail(
     buyerEmail: string,

@@ -5,6 +5,11 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createNotification } from '@/app/actions/notifications'
 import { VendorVerificationSubmitSchema } from '@/lib/vendorVerificationSchema'
+import {
+    sendVendorApprovedEmail,
+    sendVendorRejectedEmail,
+    sendAdminNewVerificationEmail,
+} from '@/app/actions/emails'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -83,10 +88,22 @@ export async function submitVerification(input: {
         .update({ verification_status: 'pending' })
         .eq('id', user.id)
 
-    // Notifier les admins
+    // Récupérer le profil vendeur pour l'email admin
+    const { data: vendorProfile } = await supabase
+        .from('profiles')
+        .select('first_name, last_name, shop_name, store_name, vendor_type, city')
+        .eq('id', user.id)
+        .single()
+
+    const vendorName  = vendorProfile ? `${vendorProfile.first_name ?? ''} ${vendorProfile.last_name ?? ''}`.trim() : 'Vendeur'
+    const shopName    = vendorProfile?.shop_name ?? vendorProfile?.store_name ?? 'Sans nom'
+    const vendorType  = vendorProfile?.vendor_type ?? 'marketplace'
+    const vendorCity  = vendorProfile?.city ?? 'Non précisée'
+
+    // Notifier les admins (notification in-app + email)
     const { data: admins } = await supabase
         .from('profiles')
-        .select('id')
+        .select('id, email')
         .eq('role', 'admin')
 
     if (admins) {
@@ -98,6 +115,16 @@ export async function submitVerification(input: {
                 `Un vendeur a soumis une demande de vérification.`,
                 '/admin/verifications'
             ).catch(() => {})
+
+            if (admin.email) {
+                sendAdminNewVerificationEmail(
+                    admin.email,
+                    vendorName,
+                    shopName,
+                    vendorType,
+                    vendorCity
+                ).catch(() => {})
+            }
         }
     }
 
@@ -228,6 +255,20 @@ export async function adminApproveVerification(verificationId: string) {
             'Votre compte vendeur a été vérifié avec succès. Vous pouvez maintenant publier vos produits.',
             '/vendor/dashboard'
         ).catch(() => {})
+
+        // Récupérer email + infos vendeur pour l'email de bienvenue
+        const { data: vp } = await supabase
+            .from('profiles')
+            .select('email, first_name, shop_name, store_name, vendor_type')
+            .eq('id', verification.vendor_id)
+            .single()
+
+        if (vp?.email) {
+            const vName    = vp.first_name ?? 'Vendeur'
+            const vShop    = vp.shop_name ?? vp.store_name ?? 'Votre boutique'
+            const vType    = vp.vendor_type ?? 'marketplace'
+            sendVendorApprovedEmail(vp.email, vName, vShop, vType).catch(() => {})
+        }
     }
 
     return { success: true }
@@ -283,6 +324,17 @@ export async function adminRejectVerification(verificationId: string, reason: st
             `Votre demande de vérification a été refusée : ${reason.trim()}. Vous pouvez soumettre une nouvelle demande.`,
             '/vendor/verification'
         ).catch(() => {})
+
+        // Récupérer email + prénom vendeur pour l'email de refus
+        const { data: vp } = await supabase
+            .from('profiles')
+            .select('email, first_name')
+            .eq('id', verification.vendor_id)
+            .single()
+
+        if (vp?.email) {
+            sendVendorRejectedEmail(vp.email, vp.first_name ?? 'Vendeur', reason.trim()).catch(() => {})
+        }
     }
 
     return { success: true }

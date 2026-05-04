@@ -271,6 +271,34 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    if (pathname.startsWith('/comptable')) {
+        if (!user && authStatus === 'no-user') {
+            return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))
+        }
+
+        if (!user && authStatus !== 'no-user') {
+            if (authStatus === 'timeout' || authStatus === 'network-error') {
+                return finish(supabaseResponse)
+            }
+            return finish(
+                nextWithSearchParams(request, supabaseResponse, (u) => u.searchParams.set('auth_error', authStatus))
+            )
+        }
+
+        try {
+            const { data: comptableProfile, error } = await withTimeout(
+                supabase.from('profiles').select('role').eq('id', user.id).single()
+            )
+            if (error || !comptableProfile || !['admin', 'comptable'].includes(comptableProfile.role))
+                return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))
+        } catch (err: any) {
+            if (err instanceof Error && err.message.toLowerCase().includes('timeout')) {
+                return finish(supabaseResponse)
+            }
+            return finish(supabaseResponse)
+        }
+    }
+
     if (pathname.startsWith('/account')) {
         if (!user && authStatus === 'no-user') {
             return finish(redirectWithSession(supabaseResponse, new URL('/', request.url)))

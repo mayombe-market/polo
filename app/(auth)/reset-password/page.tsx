@@ -148,12 +148,19 @@ function ResetPasswordForm() {
 
         const tryEstablish = async (): Promise<boolean> => {
             if (recoveryCode) {
-                const { error: exErr } = await supabase.auth.exchangeCodeForSession(recoveryCode)
+                // Timeout 10 s — exchangeCodeForSession peut bloquer indéfiniment
+                const exchangeResult = await Promise.race([
+                    supabase.auth.exchangeCodeForSession(recoveryCode),
+                    new Promise<{ error: Error }>((resolve) =>
+                        setTimeout(() => resolve({ error: new Error('exchange_timeout') }), 10_000)
+                    ),
+                ])
+                const exErr = (exchangeResult as any)?.error
                 if (!exErr) {
                     stripSensitiveFromUrl()
                     return true
                 }
-                // Code peut être déjà échangé (detectSessionInUrl / double appel)
+                // Code déjà échangé ou timeout — vérifier la session existante
                 const {
                     data: { session },
                 } = await supabase.auth.getSession()

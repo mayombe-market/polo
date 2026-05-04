@@ -1,5 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+    async rewrites() {
+        return [
+            // Proxy Supabase Auth — les emails de reset/magic-link générés par Supabase
+            // pointent vers /auth/v1/** sur le domaine du site (et non *.supabase.co).
+            // Ce rewrite transparente redirige ces requêtes vers l'API Supabase réelle.
+            {
+                source: '/auth/v1/:path*',
+                destination: 'https://cxbxhzcjjfcvuvlioseg.supabase.co/auth/v1/:path*',
+            },
+        ]
+    },
     poweredByHeader: false,
     images: {
         /**

@@ -276,7 +276,11 @@ function ResetPasswordForm() {
             }
 
             // Déconnecter pour forcer une reconnexion propre avec le nouveau mot de passe
-            await client.auth.signOut().catch(() => {})
+            // Timeout 3s — signOut peut bloquer si la session est déjà invalide
+            await Promise.race([
+                client.auth.signOut(),
+                new Promise(resolve => setTimeout(resolve, 3000)),
+            ]).catch(() => {})
 
             setDone(true)
         } catch (err: unknown) {

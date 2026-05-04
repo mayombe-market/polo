@@ -19,31 +19,62 @@ export const generateInvoice = (order: any) => {
 
         // ── Header band ──
         doc.setFillColor(10, 10, 18)
-        doc.rect(0, 0, pageW, 42, 'F')
+        doc.rect(0, 0, pageW, 46, 'F')
 
+        // ── Logo badge circulaire ──
+        const bx = 26   // centre X du cercle
+        const by = 23   // centre Y du cercle
+        const br = 14   // rayon
+
+        // Cercle vert foncé avec bordure dorée
+        doc.setFillColor(22, 61, 43)      // #163D2B
+        doc.setDrawColor(201, 162, 39)    // #C9A227
+        doc.setLineWidth(0.8)
+        ;(doc as any).circle(bx, by, br, 'FD')
+
+        // Ligne dorée verticale centrale
+        doc.setDrawColor(201, 162, 39)
+        doc.setLineWidth(1.2)
+        doc.line(bx, by - br + 4, bx, by + br - 4)
+
+        // Lettres MM en blanc
         doc.setTextColor(255, 255, 255)
-        doc.setFontSize(20)
+        doc.setFontSize(9)
         doc.setFont('helvetica', 'bold')
-        doc.text('MAYOMBE MARKET', 14, 18)
+        doc.text('M', bx - 8, by + 3.5)
+        doc.text('M', bx + 1, by + 3.5)
 
-        doc.setFontSize(8)
+        // ── Texte MAYOMBE / MARKET ──
+        doc.setTextColor(255, 255, 255)
+        doc.setFontSize(16)
+        doc.setFont('helvetica', 'bold')
+        doc.text('MAYOMBE', bx + br + 5, by + 1)
+
+        doc.setFontSize(7)
         doc.setFont('helvetica', 'normal')
-        doc.text('Avenue de la Paix, Brazzaville, Congo', 14, 25)
-        doc.text('contact@mayombemarket.com  |  +242 06 895 43 21', 14, 30)
+        doc.setTextColor(201, 162, 39)   // doré
+        doc.text('M A R K E T', bx + br + 6, by + 7)
+
+        // Coordonnées
+        doc.setTextColor(180, 180, 180)
+        doc.setFontSize(7)
+        doc.text('Avenue de la Paix, Brazzaville, Congo', 14, 38)
+        doc.text('contact@mayombemarket.com  |  +242 06 895 43 21', 14, 43)
 
         // Invoice title right-aligned
+        doc.setTextColor(255, 255, 255)
         doc.setFontSize(10)
         doc.setFont('helvetica', 'bold')
-        doc.text('RECU DE COMMANDE', pageW - 14, 18, { align: 'right' })
+        doc.text('RECU DE COMMANDE', pageW - 14, 17, { align: 'right' })
         doc.setFont('helvetica', 'normal')
         doc.setFontSize(9)
-        doc.text(`N° ${order.id.slice(0, 8).toUpperCase()}`, pageW - 14, 25, { align: 'right' })
+        doc.text(`N° ${order.id.slice(0, 8).toUpperCase()}`, pageW - 14, 24, { align: 'right' })
         doc.text(`Date : ${new Date(order.created_at).toLocaleDateString('fr-FR')}`, pageW - 14, 30, { align: 'right' })
 
         doc.setTextColor(0, 0, 0)
 
         // ── Tracking number (if exists) ──
-        let currentY = 52
+        let currentY = 56
         if (order.tracking_number) {
             doc.setFillColor(232, 168, 56)
             doc.roundedRect(14, currentY - 6, pageW - 28, 18, 3, 3, 'F')

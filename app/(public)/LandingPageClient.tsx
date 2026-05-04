@@ -11,6 +11,7 @@ import {
 import { useAuth } from '@/hooks/useAuth'
 import dynamic from 'next/dynamic'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import MayombeLogo from '@/app/components/MayombeLogo'
 
 const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 const supabase = getSupabaseBrowserClient()
@@ -329,10 +330,8 @@ function LandingFooter() {
             <div className="max-w-5xl mx-auto px-5 py-12">
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-10">
                     <div className="sm:col-span-1">
-                        <p className="text-base font-black uppercase italic tracking-tighter text-neutral-900 dark:text-white">
-                            Mayombe <span className="text-orange-500">Market</span>
-                        </p>
-                        <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mt-2 max-w-[220px]">
+                        <MayombeLogo />
+                        <p className="text-xs text-neutral-500 dark:text-neutral-400 leading-relaxed mt-3 max-w-[220px]">
                             Votre plateforme congolaise pour acheter, commander, vendre et trouver des biens.
                         </p>
                         <p className="text-xs text-neutral-400 mt-3">
@@ -412,8 +411,8 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
 
             {/* ── Header ── */}
             <header className="flex items-center justify-between px-5 py-4 max-w-5xl mx-auto">
-                <Link href="/" className="text-lg font-black uppercase italic tracking-tighter text-neutral-900 dark:text-white no-underline">
-                    Mayombe <span className="text-orange-500">Market</span>
+                <Link href="/" className="no-underline hover:opacity-90 transition-opacity">
+                    <MayombeLogo />
                 </Link>
                 <div className="flex items-center gap-3">
                     {/* Toggle dark mode */}

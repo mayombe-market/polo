@@ -20,6 +20,22 @@ async function getSupabase() {
     )
 }
 
+/** Guard : réservé aux admins. */
+async function requireAdmin(): Promise<{ error: string } | { userId: string }> {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (!profile || profile.role !== 'admin') return { error: 'Non autorisé' }
+    return { userId: user.id }
+}
+
 // ─── Client : créer un litige ──────────────────────────────────
 export async function createDispute({
     orderId,
@@ -112,6 +128,8 @@ export async function adminGetDisputes({
     page?: number
     perPage?: number
 } = {}) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { data: [], total: 0, error: auth.error }
     let q = svc()
         .from('disputes')
         .select(`
@@ -142,6 +160,8 @@ export async function adminAcceptDispute({
     buyerEmail: string
     buyerName: string
 }) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const { error } = await svc()
         .from('disputes')
         .update({
@@ -172,6 +192,8 @@ export async function adminRejectDispute({
     buyerEmail: string
     buyerName: string
 }) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const { error } = await svc()
         .from('disputes')
         .update({

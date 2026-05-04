@@ -1,6 +1,8 @@
 'use server'
 
 import { createClient } from '@supabase/supabase-js'
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
 
 function svc() {
     return createClient(
@@ -9,8 +11,31 @@ function svc() {
     )
 }
 
+/** Guard : vérifie que l'appelant est admin. */
+async function requireAdmin(): Promise<{ error: string } | { userId: string }> {
+    const cookieStore = await cookies()
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+    )
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (!profile || profile.role !== 'admin') return { error: 'Non autorisé' }
+    return { userId: user.id }
+}
+
 // ─── Reviews ────────────────────────────────────────────
 export async function adminDeleteReview(reviewId: string) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const { error } = await svc().from('reviews').delete().eq('id', reviewId)
     if (error) return { error: error.message }
     return { success: true }
@@ -29,6 +54,8 @@ export async function adminGetAllReviews({
     minRating?: number
     search?: string
 }) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const supabase = svc()
     const from = page * perPage
     const to = from + perPage - 1
@@ -73,6 +100,8 @@ export async function adminGetAllReviews({
 
 // ─── Activity feed ───────────────────────────────────────
 export async function adminGetRecentActivity(limit = 80) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { data: [], error: auth.error }
     const supabase = svc()
     const cut = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() // 30 jours
 
@@ -200,6 +229,8 @@ export async function adminGetRecentActivity(limit = 80) {
 
 // ─── Hotels ──────────────────────────────────────────────
 export async function adminGetHotelVendors() {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const supabase = svc()
 
     const [vendors, reviewReqs, reviews] = await Promise.all([
@@ -240,6 +271,8 @@ export async function adminGetHotelVendors() {
 
 // ─── Top produits les plus vendus ────────────────────────
 export async function adminGetTopProducts(limit = 10, since?: string) {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const supabase = svc()
 
     let q = supabase
@@ -289,6 +322,8 @@ export async function adminGetTopProducts(limit = 10, since?: string) {
 
 // ─── Statistiques dashboard enrichies ────────────────────
 export async function adminGetEnrichedStats() {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
     const supabase = svc()
     const today = new Date(); today.setHours(0, 0, 0, 0)
 

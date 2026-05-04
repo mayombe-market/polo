@@ -21,6 +21,27 @@ async function getSupabaseUser() {
     return supabase
 }
 
+/**
+ * Guard : vérifie que l'appelant est comptable ou admin.
+ * À placer au début de chaque Server Action sensible.
+ */
+async function requireComptableOrAdmin(): Promise<{ error: string } | { userId: string }> {
+    const supabase = await getSupabaseUser()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (!profile || !['admin', 'comptable'].includes(profile.role)) {
+        return { error: 'Non autorisé' }
+    }
+    return { userId: user.id }
+}
+
 // ════════════════════════════════════════════════════════
 // GESTION RÔLE COMPTABLE
 // ════════════════════════════════════════════════════════
@@ -104,6 +125,8 @@ function startOfYear(d = new Date()) {
 // Tous les KPIs de la comptable d'un seul appel
 // ════════════════════════════════════════════════════════
 export async function getFinancialDashboard() {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: auth.error }
     const supabase = svc()
     const monthStart = startOfMonth()
     const yearStart  = startOfYear()
@@ -207,6 +230,8 @@ export async function getFinancialDashboard() {
 // PAYOUTS VENDEURS
 // ════════════════════════════════════════════════════════
 export async function getPendingPayouts() {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const { data, error } = await svc()
         .from('orders')
         .select(`
@@ -225,6 +250,8 @@ export async function getPendingPayouts() {
 }
 
 export async function getPaidPayouts({ page = 0, perPage = 30 }: { page?: number; perPage?: number } = {}) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const from = page * perPage
     const { data, error, count } = await svc()
         .from('orders')
@@ -254,6 +281,8 @@ export async function markPayoutPaid({
     phone: string
     note?: string
 }) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const { error } = await svc()
         .from('orders')
         .update({
@@ -271,6 +300,8 @@ export async function markPayoutPaid({
 
 // Sauvegarder le numéro MoMo du vendeur sur son profil
 export async function saveVendorPayoutPhone(vendorId: string, phone: string) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const { error } = await svc()
         .from('profiles')
         .update({ payout_phone: phone })
@@ -289,6 +320,8 @@ export async function getSubscriptionRevenue({
     startDate?: string
     endDate?: string
 } = {}) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     let q = svc()
         .from('orders')
         .select(`
@@ -326,6 +359,8 @@ export async function getSubscriptionRevenue({
 // VIREMENTS BANQUE
 // ════════════════════════════════════════════════════════
 export async function getBankTransfers() {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const { data, error } = await svc()
         .from('bank_transfers')
         .select('*, profiles:transferred_by(full_name)')
@@ -353,6 +388,8 @@ export async function createBankTransfer({
     note?: string
     userId: string
 }) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { error: 'Non autorisé' }
     const { error } = await svc()
         .from('bank_transfers')
         .insert({
@@ -379,6 +416,8 @@ export async function getOrdersJournal({
     startDate: string
     endDate: string
 }) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { data: [], error: 'Non autorisé' }
     const { data, error } = await svc()
         .from('orders')
         .select(`
@@ -410,6 +449,8 @@ export async function getExportData({
     startDate: string
     endDate: string
 }) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { data: [] }
     const supabase = svc()
 
     if (type === 'commandes') {

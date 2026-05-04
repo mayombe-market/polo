@@ -9,6 +9,7 @@ import SearchBar from './SearchBar'
 import HeaderContactPhones from './HeaderContactPhones'
 import TrustBar from './TrustBar'
 import { Menu, X, Bell, LayoutGrid, ChevronDown } from 'lucide-react'
+import MayombeLogo from './MayombeLogo'
 
 // Lazy load AuthModal — ne se charge que quand l'user clique "Connexion"
 const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
@@ -117,28 +118,9 @@ export default function Header() {
         <>
         <header className="relative border-b bg-white dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-50 transition-colors shadow-sm">
             <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
-                {/* 1. LOGO — deux versions : fond clair / fond sombre */}
-                <Link href="/" className="shrink-0 flex items-center">
-                    {/* Logo fond clair (affiché en mode light) */}
-                    <img
-                        src="/logo-light.png"
-                        alt="Logo"
-                        width={200}
-                        height={104}
-                        decoding="async"
-                        fetchPriority="low"
-                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform dark:hidden"
-                    />
-                    {/* Logo fond sombre (affiché en mode dark) */}
-                    <img
-                        src="/logo-dark.png"
-                        alt="Logo"
-                        width={200}
-                        height={104}
-                        decoding="async"
-                        fetchPriority="low"
-                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform hidden dark:block"
-                    />
+                {/* 1. LOGO adaptatif fond clair / fond sombre */}
+                <Link href="/" className="shrink-0 flex items-center hover:opacity-90 transition-opacity">
+                    <MayombeLogo />
                 </Link>
 
                 <div className="hidden md:flex flex-1 min-w-0 items-center gap-3 lg:gap-4 mx-2">

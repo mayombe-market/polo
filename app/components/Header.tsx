@@ -117,16 +117,27 @@ export default function Header() {
         <>
         <header className="relative border-b bg-white dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-50 transition-colors shadow-sm">
             <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
-                {/* 1. LOGO — hauteur ~−30 % vs h-20 / h-32 */}
+                {/* 1. LOGO — deux versions : fond clair / fond sombre */}
                 <Link href="/" className="shrink-0 flex items-center">
+                    {/* Logo fond clair (affiché en mode light) */}
                     <img
-                        src="/logo.png"
+                        src="/logo-light.png"
                         alt="Logo"
                         width={200}
                         height={104}
                         decoding="async"
                         fetchPriority="low"
-                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform"
+                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform dark:hidden"
+                    />
+                    {/* Logo fond sombre (affiché en mode dark) */}
+                    <img
+                        src="/logo-dark.png"
+                        alt="Logo"
+                        width={200}
+                        height={104}
+                        decoding="async"
+                        fetchPriority="low"
+                        className="h-14 w-auto md:h-[90px] hover:scale-[1.02] transition-transform hidden dark:block"
                     />
                 </Link>
 

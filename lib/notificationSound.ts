@@ -189,6 +189,80 @@ export function playMessageSound() {
     }
 }
 
+// ─── ALARME ADMIN — boucle infinie jusqu'à arrêt manuel ─────────────────────
+
+let _alarmInterval: ReturnType<typeof setInterval> | null = null
+let _alarmRunning = false
+
+/**
+ * Génère un burst d'alarme : 4 bips sawtooth alternés (1047 ↔ 1319 Hz), volume max.
+ * Pensé pour être audible à 20 m.
+ */
+function _playAlarmBurst() {
+    try {
+        const ctx = getAudioContext()
+        resumeAudioIfNeeded(ctx)
+        const now = ctx.currentTime
+
+        // Compressor pour maximiser le niveau de sortie
+        const comp = ctx.createDynamicsCompressor()
+        comp.threshold.value = -6
+        comp.knee.value = 0
+        comp.ratio.value = 20
+        comp.attack.value = 0.001
+        comp.release.value = 0.05
+        comp.connect(ctx.destination)
+
+        const pattern = [
+            { freq: 1047, t: 0.00 },   // Do5
+            { freq: 1319, t: 0.22 },   // Mi5
+            { freq: 1047, t: 0.44 },   // Do5
+            { freq: 1319, t: 0.66 },   // Mi5
+            { freq: 1047, t: 0.88 },   // Do5 — 5ème note pour combler la pause
+        ]
+
+        for (const { freq, t } of pattern) {
+            const osc  = ctx.createOscillator()
+            const gain = ctx.createGain()
+            osc.type = 'sawtooth'          // onde riche en harmoniques → perçante
+            osc.frequency.value = freq
+
+            const start = now + t
+            gain.gain.setValueAtTime(0, start)
+            gain.gain.linearRampToValueAtTime(1.0, start + 0.015) // attaque très rapide
+            gain.gain.setValueAtTime(1.0, start + 0.15)
+            gain.gain.linearRampToValueAtTime(0, start + 0.20)
+
+            osc.connect(gain)
+            gain.connect(comp)
+            osc.start(start)
+            osc.stop(start + 0.22)
+        }
+    } catch { /* noop */ }
+}
+
+/** Démarre l'alarme admin en boucle (ne fait rien si déjà active). */
+export function startAdminAlarm() {
+    if (_alarmRunning) return
+    _alarmRunning = true
+    _playAlarmBurst()
+    _alarmInterval = setInterval(_playAlarmBurst, 2200)
+}
+
+/** Arrête l'alarme admin. */
+export function stopAdminAlarm() {
+    _alarmRunning = false
+    if (_alarmInterval !== null) {
+        clearInterval(_alarmInterval)
+        _alarmInterval = null
+    }
+}
+
+/** Retourne true si l'alarme est en cours. */
+export function isAdminAlarmRunning() {
+    return _alarmRunning
+}
+
 /** Son de nouvelle commande (notification vendeur) */
 export function playNewOrderSound() {
     try {

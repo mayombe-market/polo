@@ -2,12 +2,13 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Wallet, CreditCard, Building2, Download, TableProperties } from 'lucide-react'
+import { LayoutDashboard, Wallet, CreditCard, Building2, Download, TableProperties, AlertTriangle } from 'lucide-react'
 
 const links = [
     { href: '/comptable',              label: 'Dashboard',     icon: LayoutDashboard },
     { href: '/comptable/journal',      label: 'Journal',       icon: TableProperties },
     { href: '/comptable/payouts',      label: 'Payouts',       icon: Wallet },
+    { href: '/comptable/litiges',      label: 'Litiges',       icon: AlertTriangle },
     { href: '/comptable/abonnements',  label: 'Abonnements',   icon: CreditCard },
     { href: '/comptable/virements',    label: 'Virements',     icon: Building2 },
     { href: '/comptable/export',       label: 'Export',        icon: Download },

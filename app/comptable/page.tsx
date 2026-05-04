@@ -2,20 +2,42 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { getFinancialDashboard } from '@/app/actions/comptable'
-import { Loader2, TrendingUp, Wallet, CreditCard, Building2, AlertTriangle, ArrowRight, Clock, CheckCircle } from 'lucide-react'
+import { getFinancialDashboard, getDailyRevenue } from '@/app/actions/comptable'
+import { Loader2, TrendingUp, TrendingDown, Wallet, CreditCard, AlertTriangle, Clock, CheckCircle, Zap } from 'lucide-react'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
+function TrendBadge({ pct }: { pct: number | null }) {
+    if (pct === null) return null
+    const up = pct >= 0
+    return (
+        <span className={`inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded-full ${
+            up ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+               : 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400'
+        }`}>
+            {up ? <TrendingUp size={9} /> : <TrendingDown size={9} />}
+            {up ? '+' : ''}{pct}%
+        </span>
+    )
+}
+
 export default function ComptableDashboard() {
     const [data, setData] = useState<any>(null)
+    const [chart, setChart] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
 
     useEffect(() => {
-        getFinancialDashboard()
-            .then(d => { setData(d); setLoading(false) })
+        Promise.all([
+            getFinancialDashboard(),
+            getDailyRevenue(7),
+        ])
+            .then(([d, c]) => {
+                setData(d)
+                setChart(c.data || [])
+                setLoading(false)
+            })
             .catch(() => { setError(true); setLoading(false) })
     }, [])
 
@@ -70,6 +92,66 @@ export default function ComptableDashboard() {
                     </Link>
                 )}
 
+                {/* ─── REVENU DU JOUR (carte vedette) ─── */}
+                <div className="bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl p-5 text-white">
+                    <div className="flex items-start justify-between">
+                        <div>
+                            <div className="flex items-center gap-2 mb-1">
+                                <Zap size={14} className="text-green-200" />
+                                <p className="text-[10px] font-black uppercase tracking-widest text-green-100">Revenu du jour</p>
+                            </div>
+                            <p className="text-4xl font-black italic tracking-tighter">
+                                {fmt(d.revenue.today)} <span className="text-xl font-bold text-green-200">F</span>
+                            </p>
+                        </div>
+                        <div className="text-right">
+                            <p className="text-[10px] text-green-200 mb-1">vs mois dernier</p>
+                            {d.revenue.trendPct !== null ? (
+                                <div className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-sm font-black ${
+                                    d.revenue.trendPct >= 0
+                                        ? 'bg-white/20 text-white'
+                                        : 'bg-red-500/30 text-red-100'
+                                }`}>
+                                    {d.revenue.trendPct >= 0 ? <TrendingUp size={13} /> : <TrendingDown size={13} />}
+                                    {d.revenue.trendPct >= 0 ? '+' : ''}{d.revenue.trendPct}%
+                                </div>
+                            ) : (
+                                <span className="text-[10px] text-green-200">Premier mois</span>
+                            )}
+                            <p className="text-[10px] text-green-200 mt-2">
+                                {fmt(d.revenue.lastMonth)} F mois dernier
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Mini bar chart 7 jours */}
+                    {chart.length > 0 && (
+                        <div className="mt-4 pt-4 border-t border-white/20">
+                            <p className="text-[9px] font-black uppercase text-green-100 mb-2">Revenu plateforme — 7 derniers jours</p>
+                            <div className="flex items-end gap-1.5 h-16">
+                                {chart.map(c => {
+                                    const maxVal = Math.max(...chart.map((x: any) => x.amount), 1)
+                                    const pct = Math.max((c.amount / maxVal) * 100, c.amount > 0 ? 5 : 0)
+                                    const isToday = c.date === new Date().toISOString().slice(0, 10)
+                                    return (
+                                        <div key={c.date} className="flex-1 flex flex-col items-center gap-1">
+                                            <div className="w-full flex flex-col justify-end" style={{ height: '44px' }}>
+                                                <div
+                                                    className={`w-full rounded-t-sm ${isToday ? 'bg-white' : 'bg-white/40'}`}
+                                                    style={{ height: `${pct}%`, minHeight: c.amount > 0 ? '3px' : '0' }}
+                                                />
+                                            </div>
+                                            <span className={`text-[7px] font-bold text-center leading-none ${isToday ? 'text-white' : 'text-green-100'}`}>
+                                                {c.label}
+                                            </span>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* ─── KPIs PRINCIPAUX ─── */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                     {[
@@ -78,18 +160,21 @@ export default function ComptableDashboard() {
                             sub: `${fmt(d.revenue.year)} F cette année`,
                             color: 'text-green-600', border: 'border-green-200 dark:border-green-800/30',
                             bg: 'bg-green-50 dark:bg-green-900/10', icon: <TrendingUp size={18} className="text-green-500" />,
+                            trend: d.revenue.trendPct,
                         },
                         {
                             label: 'Commissions\ncommandes', val: d.commissions.month,
                             sub: `${fmt(d.commissions.year)} F cette année`,
                             color: 'text-blue-600', border: 'border-blue-200 dark:border-blue-800/30',
                             bg: 'bg-blue-50 dark:bg-blue-900/10', icon: <TrendingUp size={18} className="text-blue-500" />,
+                            trend: null,
                         },
                         {
                             label: 'Abonnements\nce mois', val: d.subscriptions.month,
                             sub: `${fmt(d.subscriptions.year)} F cette année`,
                             color: 'text-purple-600', border: 'border-purple-200 dark:border-purple-800/30',
                             bg: 'bg-purple-50 dark:bg-purple-900/10', icon: <CreditCard size={18} className="text-purple-500" />,
+                            trend: null,
                         },
                         {
                             label: 'Payouts vendeurs\nen attente', val: d.payouts.pendingAmount,
@@ -98,10 +183,14 @@ export default function ComptableDashboard() {
                             border: d.payouts.lateCount > 0 ? 'border-red-200 dark:border-red-800/30' : 'border-amber-200 dark:border-amber-800/30',
                             bg: d.payouts.lateCount > 0 ? 'bg-red-50 dark:bg-red-900/10' : 'bg-amber-50 dark:bg-amber-900/10',
                             icon: <Wallet size={18} className={d.payouts.lateCount > 0 ? 'text-red-500' : 'text-amber-500'} />,
+                            trend: null,
                         },
                     ].map((kpi, i) => (
                         <div key={i} className={`p-5 rounded-2xl border ${kpi.border} ${kpi.bg}`}>
-                            <div className="mb-3">{kpi.icon}</div>
+                            <div className="flex items-start justify-between mb-3">
+                                {kpi.icon}
+                                <TrendBadge pct={kpi.trend ?? null} />
+                            </div>
                             <p className={`text-2xl font-black italic tracking-tighter ${kpi.color}`}>
                                 {fmt(kpi.val)} <span className="text-sm font-bold">F</span>
                             </p>
@@ -139,7 +228,10 @@ export default function ComptableDashboard() {
                                         <div key={type}>
                                             <div className="flex justify-between mb-1">
                                                 <span className="text-xs font-bold text-slate-700 dark:text-slate-300">{type}</span>
-                                                <span className="text-xs font-black text-slate-900 dark:text-white">{fmt(amount)} F</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-[10px] text-slate-400">{pct}%</span>
+                                                    <span className="text-xs font-black text-slate-900 dark:text-white">{fmt(amount)} F</span>
+                                                </div>
                                             </div>
                                             <div className="h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
                                                 <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: color }} />

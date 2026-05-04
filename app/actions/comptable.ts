@@ -119,6 +119,15 @@ function startOfMonth(d = new Date()) {
 function startOfYear(d = new Date()) {
     return new Date(d.getFullYear(), 0, 1).toISOString()
 }
+function startOfToday() {
+    const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString()
+}
+function lastMonthRange() {
+    const now = new Date()
+    const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+    const end   = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
+    return { start: start.toISOString(), end: end.toISOString() }
+}
 
 // ════════════════════════════════════════════════════════
 // DASHBOARD FINANCIER
@@ -128,8 +137,10 @@ export async function getFinancialDashboard() {
     const auth = await requireComptableOrAdmin()
     if ('error' in auth) return { error: auth.error }
     const supabase = svc()
-    const monthStart = startOfMonth()
-    const yearStart  = startOfYear()
+    const monthStart   = startOfMonth()
+    const yearStart    = startOfYear()
+    const todayISO     = startOfToday()
+    const lastMonth    = lastMonthRange()
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000).toISOString()
 
     const [
@@ -141,8 +152,12 @@ export async function getFinancialDashboard() {
         subsYear,
         recentPaidPayouts,
         bankTransfers,
+        commissionsToday,
+        subsToday,
+        commissionsLastMonth,
+        subsLastMonth,
     ] = await Promise.all([
-        // Commissions plateforme ce mois (commandes normales)
+        // Commissions plateforme ce mois
         supabase.from('orders').select('commission_amount')
             .gte('created_at', monthStart).neq('status', 'rejected').neq('order_type', 'subscription'),
 
@@ -180,14 +195,36 @@ export async function getFinancialDashboard() {
 
         // Solde virements banque ce mois
         supabase.from('bank_transfers').select('amount').gte('created_at', monthStart),
+
+        // Commissions aujourd'hui
+        supabase.from('orders').select('commission_amount')
+            .gte('created_at', todayISO).neq('status', 'rejected').neq('order_type', 'subscription'),
+
+        // Abonnements aujourd'hui
+        supabase.from('orders').select('total_amount')
+            .gte('created_at', todayISO).eq('order_type', 'subscription').neq('status', 'rejected'),
+
+        // Commissions mois dernier (pour tendance %)
+        supabase.from('orders').select('commission_amount')
+            .gte('created_at', lastMonth.start).lte('created_at', lastMonth.end)
+            .neq('status', 'rejected').neq('order_type', 'subscription'),
+
+        // Abonnements mois dernier
+        supabase.from('orders').select('total_amount')
+            .gte('created_at', lastMonth.start).lte('created_at', lastMonth.end)
+            .eq('order_type', 'subscription').neq('status', 'rejected'),
     ])
 
-    const totalCommissionsMonth = (commissionsMonth.data || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
-    const totalCommissionsYear  = (commissionsYear.data  || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
-    const totalPendingAmount    = (pendingPayouts.data   || []).reduce((s, o) => s + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
-    const totalSubsMonth        = (subsMonth.data        || []).reduce((s, o) => s + (o.total_amount || 0), 0)
-    const totalSubsYear         = (subsYear.data         || []).reduce((s, o) => s + (o.total_amount || 0), 0)
-    const totalBankMonth        = (bankTransfers.data    || []).reduce((s, t) => s + (t.amount || 0), 0)
+    const totalCommissionsMonth     = (commissionsMonth.data     || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
+    const totalCommissionsYear      = (commissionsYear.data      || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
+    const totalPendingAmount        = (pendingPayouts.data       || []).reduce((s, o) => s + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
+    const totalSubsMonth            = (subsMonth.data            || []).reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalSubsYear             = (subsYear.data             || []).reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalBankMonth            = (bankTransfers.data        || []).reduce((s, t) => s + (t.amount || 0), 0)
+    const totalToday                = (commissionsToday.data     || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
+                                    + (subsToday.data            || []).reduce((s, o) => s + (o.total_amount || 0), 0)
+    const totalLastMonth            = (commissionsLastMonth.data || []).reduce((s, o) => s + (o.commission_amount || 0), 0)
+                                    + (subsLastMonth.data        || []).reduce((s, o) => s + (o.total_amount || 0), 0)
 
     // Répartition abonnements ce mois par type
     const subBreakdown = (subsMonth.data || []).reduce((acc: Record<string, number>, o) => {
@@ -198,6 +235,11 @@ export async function getFinancialDashboard() {
         acc[type] = (acc[type] || 0) + (o.total_amount || 0)
         return acc
     }, {})
+
+    const revenueMonth = totalCommissionsMonth + totalSubsMonth
+    const trendPct = totalLastMonth > 0
+        ? Math.round(((revenueMonth - totalLastMonth) / totalLastMonth) * 100)
+        : null
 
     return {
         commissions: {
@@ -216,13 +258,56 @@ export async function getFinancialDashboard() {
             breakdown: subBreakdown,
         },
         revenue: {
-            // Ce que la plateforme a vraiment gagné ce mois = commissions + abonnements
-            month: totalCommissionsMonth + totalSubsMonth,
-            year:  totalCommissionsYear  + totalSubsYear,
+            month: revenueMonth,
+            year:  totalCommissionsYear + totalSubsYear,
+            today: totalToday,
+            lastMonth: totalLastMonth,
+            trendPct,   // null si pas de données le mois précédent
         },
         bankTransfers: {
             month: totalBankMonth,
         },
+    }
+}
+
+// ════════════════════════════════════════════════════════
+// GRAPHIQUE 7 JOURS — revenu quotidien de la plateforme
+// ════════════════════════════════════════════════════════
+export async function getDailyRevenue(days = 7) {
+    const auth = await requireComptableOrAdmin()
+    if ('error' in auth) return { data: [] }
+    const supabase = svc()
+    const since = new Date(Date.now() - (days - 1) * 86400000)
+    since.setHours(0, 0, 0, 0)
+
+    const { data } = await supabase
+        .from('orders')
+        .select('created_at, commission_amount, total_amount, order_type')
+        .gte('created_at', since.toISOString())
+        .neq('status', 'rejected')
+
+    // Initialiser toutes les dates
+    const byDay: Record<string, number> = {}
+    for (let i = 0; i < days; i++) {
+        const d = new Date(Date.now() - (days - 1 - i) * 86400000)
+        byDay[d.toISOString().slice(0, 10)] = 0
+    }
+
+    for (const o of data || []) {
+        const day = (o.created_at as string).slice(0, 10)
+        if (day in byDay) {
+            byDay[day] += o.order_type === 'subscription'
+                ? (o.total_amount || 0)
+                : (o.commission_amount || 0)
+        }
+    }
+
+    return {
+        data: Object.entries(byDay).map(([date, amount]) => ({
+            date,
+            amount,
+            label: new Date(date + 'T12:00:00').toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric' }),
+        }))
     }
 }
 

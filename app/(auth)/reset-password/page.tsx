@@ -244,11 +244,15 @@ function ResetPasswordForm() {
             const { data: { session } } = await client.auth.getSession()
             if (!session?.access_token) {
                 setError('Session expirée. Redemandez un lien de réinitialisation.')
+                setLoading(false)
                 return
             }
 
-            // Appel direct REST API Supabase Auth (évite le SDK qui peut rester en suspens)
+            // Appel direct REST API Supabase Auth avec timeout 15s
             const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+            const controller = new AbortController()
+            const tid = setTimeout(() => controller.abort(), 15_000)
+
             const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
                 method: 'PUT',
                 headers: {
@@ -257,7 +261,9 @@ function ResetPasswordForm() {
                     'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
                 },
                 body: JSON.stringify({ password }),
+                signal: controller.signal,
             })
+            clearTimeout(tid)
 
             const body = await res.json().catch(() => ({}))
 
@@ -285,7 +291,11 @@ function ResetPasswordForm() {
             setDone(true)
         } catch (err: unknown) {
             console.error('[reset-password] exception:', err)
-            setError(authErrorMessage(err))
+            if (err instanceof Error && err.name === 'AbortError') {
+                setError('La requête a expiré. Vérifiez votre connexion et réessayez.')
+            } else {
+                setError(authErrorMessage(err))
+            }
         } finally {
             setLoading(false)
         }

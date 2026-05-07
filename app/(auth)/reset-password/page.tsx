@@ -241,58 +241,26 @@ function ResetPasswordForm() {
         }
 
         setLoading(true)
+
+        // Filet de sécurité absolu : arrête le spinner après 12s quoi qu'il arrive
+        const hardStop = setTimeout(() => {
+            setLoading(false)
+            setError('La requête a expiré. Vérifiez votre connexion et réessayez.')
+        }, 12_000)
+
         try {
             const client = getSupabaseBrowserClient()
 
-            // getSession avec timeout 8s (peut bloquer indéfiniment sinon)
-            const sessionResult = await Promise.race([
-                client.auth.getSession(),
-                new Promise<never>((_, reject) =>
-                    setTimeout(() => reject(new Error('session_timeout')), 8_000)
-                ),
-            ])
-            const session = (sessionResult as Awaited<ReturnType<typeof client.auth.getSession>>).data?.session
-            if (!session?.access_token) {
-                setError('Session expirée. Redemandez un lien de réinitialisation.')
-                setLoading(false)
+            // Mise à jour du mot de passe via le SDK Supabase
+            const { error } = await client.auth.updateUser({ password })
+
+            if (error) {
+                console.error('[reset-password] updateUser error:', error.message)
+                setError(translateAuthErrorMessage(error.message))
                 return
             }
 
-            // Appel direct REST API Supabase Auth avec timeout 15s
-            const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-            const controller = new AbortController()
-            const tid = setTimeout(() => controller.abort(), 15_000)
-
-            const res = await fetch(`${supabaseUrl}/auth/v1/user`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session.access_token}`,
-                    'apikey': process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                },
-                body: JSON.stringify({ password }),
-                signal: controller.signal,
-            })
-            clearTimeout(tid)
-
-            const body = await res.json().catch(() => ({}))
-
-            if (!res.ok) {
-                const msg = body?.msg || body?.message || body?.error_description || `Erreur ${res.status}`
-                console.error('[reset-password] API error:', res.status, msg)
-                setError(translateAuthErrorMessage(msg))
-                return
-            }
-
-            // Vérifier que Supabase a bien confirmé le changement
-            if (body?.error || body?.msg) {
-                console.error('[reset-password] Unexpected response:', body)
-                setError(body.msg || body.error || 'Le changement a échoué.')
-                return
-            }
-
-            // Déconnecter pour forcer une reconnexion propre avec le nouveau mot de passe
-            // Timeout 3s — signOut peut bloquer si la session est déjà invalide
+            // Déconnexion propre (3s max)
             await Promise.race([
                 client.auth.signOut(),
                 new Promise(resolve => setTimeout(resolve, 3000)),
@@ -301,14 +269,9 @@ function ResetPasswordForm() {
             setDone(true)
         } catch (err: unknown) {
             console.error('[reset-password] exception:', err)
-            if (err instanceof Error && err.name === 'AbortError') {
-                setError('La requête a expiré. Vérifiez votre connexion et réessayez.')
-            } else if (err instanceof Error && err.message === 'session_timeout') {
-                setError('Session expirée. Redemandez un lien de réinitialisation.')
-            } else {
-                setError(authErrorMessage(err))
-            }
+            setError(authErrorMessage(err))
         } finally {
+            clearTimeout(hardStop)
             setLoading(false)
         }
     }

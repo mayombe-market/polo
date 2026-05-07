@@ -1,398 +1,237 @@
 'use client'
 
-import { Suspense, useEffect, useState, useRef } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import type { AuthChangeEvent, Session } from '@supabase/supabase-js'
-import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { PasswordPolicyChecklist } from '@/app/components/PasswordPolicyChecklist'
 
-/** getSession après recovery : réseaux lents / mobile. */
-const AUTH_WAIT_MS = NETWORK_TIMEOUT_MS
-
-function authErrorMessage(err: unknown): string {
-    if (err && typeof err === 'object' && 'message' in err && typeof (err as { message: string }).message === 'string') {
-        return (err as { message: string }).message
-    }
-    return 'Impossible de mettre à jour le mot de passe.'
-}
-
-function PasswordFields({
-    password,
-    confirm,
-    onPassword,
-    onConfirm,
-    disabled,
-}: {
-    password: string
-    confirm: string
-    onPassword: (v: string) => void
-    onConfirm: (v: string) => void
-    disabled: boolean
-}) {
-    const [show1, setShow1] = useState(false)
-    const [show2, setShow2] = useState(false)
-
-    const inputClass =
-        'w-full py-3.5 pl-4 pr-12 rounded-xl border-[1.5px] border-white/[0.06] bg-white/[0.03] text-[#F0ECE2] text-sm outline-none transition-colors focus:border-orange-500/30 placeholder:text-slate-600 box-border disabled:opacity-50'
-
+// ─── Écran chargement ──────────────────────────────────────────────────────────
+function LoadingScreen({ message }: { message: string }) {
     return (
-        <div className="space-y-4">
-            <div>
-                <label htmlFor="new-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
-                    🔒 Nouveau mot de passe
-                </label>
-                <div className="relative">
-                    <input
-                        id="new-password"
-                        name="new-password"
-                        type={show1 ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => onPassword(e.target.value)}
-                        placeholder="Minimum 8 caractères"
-                        className={inputClass}
-                        disabled={disabled}
-                        autoComplete="new-password"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setShow1(!show1)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-500 text-lg p-1"
-                    >
-                        {show1 ? '🙈' : '👁'}
-                    </button>
-                </div>
-                <PasswordPolicyChecklist password={password} className="mt-2.5" />
-            </div>
-            <div>
-                <label htmlFor="confirm-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
-                    🔒 Confirmer le mot de passe
-                </label>
-                <div className="relative">
-                    <input
-                        id="confirm-password"
-                        name="confirm-password"
-                        type={show2 ? 'text' : 'password'}
-                        value={confirm}
-                        onChange={(e) => onConfirm(e.target.value)}
-                        placeholder="Répétez le mot de passe"
-                        className={inputClass}
-                        disabled={disabled}
-                        autoComplete="new-password"
-                    />
-                    <button
-                        type="button"
-                        onClick={() => setShow2(!show2)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-500 text-lg p-1"
-                    >
-                        {show2 ? '🙈' : '👁'}
-                    </button>
-                </div>
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+            <div className="text-center">
+                <div className="w-10 h-10 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mx-auto mb-4" />
+                <p className="text-slate-400 text-sm font-medium">{message}</p>
             </div>
         </div>
     )
 }
 
-function ResetPasswordForm() {
-    const router = useRouter()
-    const searchParams = useSearchParams()
-    /** Primitive pour éviter de recréer l’effet à chaque render (référence instable de useSearchParams). */
-    const recoveryCode = searchParams.get('code')
+// ─── Écran lien invalide ───────────────────────────────────────────────────────
+function InvalidScreen() {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+            <div className="max-w-md w-full bg-slate-950 rounded-[28px] p-8 border border-white/[0.06] text-center">
+                <div className="text-4xl mb-4">⚠️</div>
+                <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Lien invalide ou expiré</h1>
+                <p className="text-slate-500 text-sm mb-6">
+                    Ce lien a déjà été utilisé ou a expiré. Demandez-en un nouveau.
+                </p>
+                <Link
+                    href="/forgot-password"
+                    className="inline-block w-full py-4 rounded-[14px] text-center font-bold text-white no-underline mb-3"
+                    style={{ background: 'linear-gradient(135deg, #E8A838, #D4782F)', boxShadow: '0 8px 24px rgba(232,168,56,0.25)' }}
+                >
+                    Demander un nouveau lien
+                </Link>
+                <Link href="/" className="text-orange-400 text-sm font-semibold hover:text-orange-300 no-underline">
+                    ← Accueil
+                </Link>
+            </div>
+        </div>
+    )
+}
 
-    const [status, setStatus] = useState<'checking' | 'ready' | 'invalid'>('checking')
+// ─── Écran succès ─────────────────────────────────────────────────────────────
+function SuccessScreen() {
+    return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
+            <div className="max-w-md w-full bg-slate-950 rounded-[28px] p-8 border border-green-500/20 text-center">
+                <div className="w-16 h-16 rounded-full mx-auto mb-4 bg-green-500/10 border border-green-500/30 flex items-center justify-center text-3xl">
+                    ✅
+                </div>
+                <h1 className="text-[#F0ECE2] text-xl font-extrabold mb-2">Mot de passe changé !</h1>
+                <p className="text-slate-400 text-sm mb-6">
+                    Votre mot de passe a été mis à jour avec succès.<br />
+                    Connectez-vous avec vos nouveaux identifiants.
+                </p>
+                <Link
+                    href="/"
+                    className="inline-block w-full py-4 rounded-[14px] text-center font-bold text-white no-underline transition-transform hover:scale-[1.02]"
+                    style={{ background: 'linear-gradient(135deg, #E8A838, #D4782F)', boxShadow: '0 8px 24px rgba(232,168,56,0.25)' }}
+                >
+                    Se connecter
+                </Link>
+            </div>
+        </div>
+    )
+}
+
+// ─── Formulaire principal ─────────────────────────────────────────────────────
+function ResetPasswordForm() {
+    const searchParams = useSearchParams()
+    const code = searchParams.get('code')
+
+    const [status, setStatus] = useState<'loading' | 'ready' | 'done' | 'invalid'>('loading')
     const [password, setPassword] = useState('')
     const [confirm, setConfirm] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState('')
-    const [done, setDone] = useState(false)
+    const [show1, setShow1] = useState(false)
+    const [show2, setShow2] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [errorMsg, setErrorMsg] = useState('')
 
-    const resolvedRef = useRef(false)
-
+    // Étape 1 : échanger le code contre une session
     useEffect(() => {
+        if (!code) { setStatus('invalid'); return }
+
         const supabase = getSupabaseBrowserClient()
-        let cancelled = false
-        resolvedRef.current = false
-
-        const stripSensitiveFromUrl = () => {
-            if (typeof window === 'undefined') return
-            window.history.replaceState(null, '', window.location.pathname)
-        }
-
-        const markReady = () => {
-            if (cancelled || resolvedRef.current) return
-            resolvedRef.current = true
-            setStatus('ready')
-        }
-
-        const markInvalid = () => {
-            if (cancelled || resolvedRef.current) return
-            resolvedRef.current = true
-            setStatus('invalid')
-        }
-
-        const sessionFromEvent = (event: AuthChangeEvent, session: Session | null) => {
-            if (!session) return
-            // Lien e-mail : PASSWORD_RECOVERY / SIGNED_IN ; rechargement avec session déjà stockée : INITIAL_SESSION
-            if (
-                event === 'PASSWORD_RECOVERY' ||
-                event === 'SIGNED_IN' ||
-                event === 'TOKEN_REFRESHED' ||
-                event === 'INITIAL_SESSION'
-            ) {
-                markReady()
-                if (event !== 'INITIAL_SESSION') {
-                    stripSensitiveFromUrl()
-                }
+        supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
+            if (error) {
+                console.error('[reset-password] exchangeCode error:', error.message)
+                setStatus('invalid')
+            } else {
+                window.history.replaceState(null, '', '/reset-password')
+                setStatus('ready')
             }
-        }
+        })
+    }, [code])
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(sessionFromEvent)
-
-        const tryEstablish = async (): Promise<boolean> => {
-            if (recoveryCode) {
-                // Timeout 10 s — exchangeCodeForSession peut bloquer indéfiniment
-                const exchangeResult = await Promise.race([
-                    supabase.auth.exchangeCodeForSession(recoveryCode),
-                    new Promise<{ error: Error }>((resolve) =>
-                        setTimeout(() => resolve({ error: new Error('exchange_timeout') }), 10_000)
-                    ),
-                ])
-                const exErr = (exchangeResult as any)?.error
-                if (!exErr) {
-                    stripSensitiveFromUrl()
-                    return true
-                }
-                // Code déjà échangé ou timeout — vérifier la session existante
-                const {
-                    data: { session },
-                } = await supabase.auth.getSession()
-                if (session) {
-                    stripSensitiveFromUrl()
-                    return true
-                }
-                return false
-            }
-
-            const hash = typeof window !== 'undefined' ? window.location.hash.substring(1) : ''
-            if (hash) {
-                const params = new URLSearchParams(hash)
-                const access_token = params.get('access_token')
-                const refresh_token = params.get('refresh_token')
-                if (access_token && refresh_token) {
-                    const { error: sErr } = await supabase.auth.setSession({ access_token, refresh_token })
-                    if (sErr) return false
-                    stripSensitiveFromUrl()
-                    return true
-                }
-            }
-
-            const {
-                data: { session },
-            } = await supabase.auth.getSession()
-            return !!session
-        }
-
-        void (async () => {
-            const ok = await tryEstablish()
-            if (cancelled || resolvedRef.current) return
-            if (ok) {
-                markReady()
-                return
-            }
-
-            const {
-                data: { session: s2 },
-            } = await supabase.auth.getSession()
-            if (cancelled || resolvedRef.current) return
-            if (s2) {
-                markReady()
-                return
-            }
-
-            // Laisser le temps à detectSessionInUrl / événements auth de finir (évite faux « invalide »)
-            await new Promise((r) => setTimeout(r, 1600))
-            if (cancelled || resolvedRef.current) return
-
-            const {
-                data: { session: s3 },
-            } = await supabase.auth.getSession()
-            if (s3) markReady()
-            else markInvalid()
-        })()
-
-        return () => {
-            cancelled = true
-            subscription.unsubscribe()
-        }
-    }, [recoveryCode])
-
+    // Étape 2 : soumettre le nouveau mot de passe
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
-        setError('')
+        setErrorMsg('')
+
         if (password.length < 8) {
-            setError('Le mot de passe doit contenir au moins 8 caractères.')
+            setErrorMsg('Le mot de passe doit contenir au moins 8 caractères.')
             return
         }
         if (password !== confirm) {
-            setError('Les deux mots de passe ne correspondent pas.')
+            setErrorMsg('Les deux mots de passe ne correspondent pas.')
             return
         }
 
-        setLoading(true)
+        setSaving(true)
 
-        // Filet de sécurité absolu : arrête le spinner après 12s quoi qu'il arrive
-        const hardStop = setTimeout(() => {
-            setLoading(false)
-            setError('La requête a expiré. Vérifiez votre connexion et réessayez.')
-        }, 12_000)
+        // Filet de sécurité absolu — arrête le spinner après 15s
+        const bail = setTimeout(() => {
+            setSaving(false)
+            setErrorMsg('La requête a pris trop de temps. Réessayez.')
+        }, 15_000)
 
         try {
-            const client = getSupabaseBrowserClient()
+            const supabase = getSupabaseBrowserClient()
+            const { error } = await supabase.auth.updateUser({ password })
 
-            // Mise à jour du mot de passe via le SDK Supabase
-            const { error } = await client.auth.updateUser({ password })
+            clearTimeout(bail)
 
             if (error) {
                 console.error('[reset-password] updateUser error:', error.message)
-                setError(translateAuthErrorMessage(error.message))
+                setErrorMsg(translateAuthErrorMessage(error.message))
+                setSaving(false)
                 return
             }
 
-            // Déconnexion propre (3s max)
-            await Promise.race([
-                client.auth.signOut(),
-                new Promise(resolve => setTimeout(resolve, 3000)),
-            ]).catch(() => {})
-
-            setDone(true)
+            // Déconnexion propre puis affichage du succès
+            await supabase.auth.signOut().catch(() => {})
+            setStatus('done')
         } catch (err: unknown) {
+            clearTimeout(bail)
             console.error('[reset-password] exception:', err)
-            setError(authErrorMessage(err))
-        } finally {
-            clearTimeout(hardStop)
-            setLoading(false)
+            setErrorMsg('Une erreur inattendue est survenue. Réessayez.')
+            setSaving(false)
         }
     }
 
-    if (status === 'checking') {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
-                <div className="text-center">
-                    <div className="w-10 h-10 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin mx-auto mb-4" />
-                    <p className="text-slate-400 text-sm font-medium">Vérification du lien…</p>
-                </div>
-            </div>
-        )
-    }
+    if (status === 'loading') return <LoadingScreen message="Vérification du lien…" />
+    if (status === 'invalid') return <InvalidScreen />
+    if (status === 'done')    return <SuccessScreen />
 
-    if (status === 'invalid') {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
-                <div className="max-w-md w-full bg-slate-950 rounded-[28px] p-8 border border-white/[0.06] text-center">
-                    <div className="text-4xl mb-4">⚠️</div>
-                    <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Lien invalide ou expiré</h1>
-                    <p className="text-slate-500 text-sm mb-6">
-                        Demandez un nouveau lien depuis la page de connexion ou mot de passe oublié.
-                    </p>
-                    <Link
-                        href="/forgot-password"
-                        className="inline-block w-full py-4 rounded-[14px] text-center font-bold text-white no-underline mb-3"
-                        style={{
-                            background: 'linear-gradient(135deg, #E8A838, #D4782F)',
-                            boxShadow: '0 8px 24px rgba(232,168,56,0.25)',
-                        }}
-                    >
-                        Demander un nouveau lien
-                    </Link>
-                    <Link href="/" className="text-orange-400 text-sm font-semibold hover:text-orange-300 no-underline">
-                        ← Accueil
-                    </Link>
-                </div>
-            </div>
-        )
-    }
-
-    if (done) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
-                <div className="max-w-md w-full bg-slate-950 rounded-[28px] p-8 border border-green-500/20 text-center">
-                    <div className="w-16 h-16 rounded-full mx-auto mb-4 bg-green-500/10 border border-green-500/30 flex items-center justify-center text-3xl">
-                        ✅
-                    </div>
-                    <h1 className="text-[#F0ECE2] text-lg font-extrabold mb-2">Mot de passe mis à jour !</h1>
-                    <p className="text-slate-400 text-sm mb-6">
-                        Votre mot de passe a bien été changé. Connectez-vous avec votre nouveau mot de passe.
-                    </p>
-                    <Link
-                        href="/"
-                        className="inline-block w-full py-4 rounded-[14px] text-center font-bold text-white no-underline transition-transform hover:scale-[1.02]"
-                        style={{
-                            background: 'linear-gradient(135deg, #E8A838, #D4782F)',
-                            boxShadow: '0 8px 24px rgba(232,168,56,0.25)',
-                        }}
-                    >
-                        Se connecter
-                    </Link>
-                </div>
-            </div>
-        )
-    }
+    const inputClass = 'w-full py-3.5 pl-4 pr-12 rounded-xl border-[1.5px] border-white/[0.06] bg-white/[0.03] text-[#F0ECE2] text-sm outline-none transition-colors focus:border-orange-500/30 placeholder:text-slate-600 box-border disabled:opacity-50'
 
     return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-4">
             <div className="max-w-md w-full bg-slate-950 rounded-[28px] p-8 border border-white/[0.06] shadow-2xl">
+
                 <div className="text-center mb-8">
                     <div className="w-16 h-16 rounded-2xl mx-auto mb-4 bg-orange-500/10 border border-orange-500/20 flex items-center justify-center text-3xl">
                         🔑
                     </div>
                     <h1 className="text-[#F0ECE2] text-xl font-extrabold mb-1">Nouveau mot de passe</h1>
-                    <p className="text-slate-500 text-[13px]">Choisissez un mot de passe sécurisé pour votre compte.</p>
+                    <p className="text-slate-500 text-[13px]">Choisissez un mot de passe sécurisé.</p>
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-5">
-                    <PasswordFields
-                        password={password}
-                        confirm={confirm}
-                        onPassword={(v) => {
-                            setPassword(v)
-                            if (error) setError('')
-                        }}
-                        onConfirm={(v) => {
-                            setConfirm(v)
-                            if (error) setError('')
-                        }}
-                        disabled={loading}
-                    />
+                    {/* Nouveau mot de passe */}
+                    <div>
+                        <label htmlFor="new-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
+                            🔒 Nouveau mot de passe
+                        </label>
+                        <div className="relative">
+                            <input
+                                id="new-password"
+                                name="new-password"
+                                type={show1 ? 'text' : 'password'}
+                                value={password}
+                                onChange={e => setPassword(e.target.value)}
+                                placeholder="Minimum 8 caractères"
+                                className={inputClass}
+                                disabled={saving}
+                                autoComplete="new-password"
+                            />
+                            <button type="button" onClick={() => setShow1(!show1)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-500 text-lg p-1">
+                                {show1 ? '🙈' : '👁'}
+                            </button>
+                        </div>
+                        <PasswordPolicyChecklist password={password} className="mt-2.5" />
+                    </div>
 
-                    {error && (
+                    {/* Confirmation */}
+                    <div>
+                        <label htmlFor="confirm-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
+                            🔒 Confirmer le mot de passe
+                        </label>
+                        <div className="relative">
+                            <input
+                                id="confirm-password"
+                                name="confirm-password"
+                                type={show2 ? 'text' : 'password'}
+                                value={confirm}
+                                onChange={e => setConfirm(e.target.value)}
+                                placeholder="Répétez le mot de passe"
+                                className={inputClass}
+                                disabled={saving}
+                                autoComplete="new-password"
+                            />
+                            <button type="button" onClick={() => setShow2(!show2)}
+                                className="absolute right-3 top-1/2 -translate-y-1/2 bg-transparent border-none cursor-pointer text-slate-500 text-lg p-1">
+                                {show2 ? '🙈' : '👁'}
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Erreur */}
+                    {errorMsg && (
                         <p className="text-red-200 text-xs font-medium text-center bg-red-950/50 border border-red-500/30 rounded-xl py-2 px-3 leading-snug">
-                            {error}
+                            {errorMsg}
                         </p>
                     )}
 
+                    {/* Bouton */}
                     <button
                         type="submit"
-                        disabled={loading}
+                        disabled={saving}
                         className="w-full py-4 rounded-[14px] border-none text-white text-[15px] font-bold cursor-pointer flex items-center justify-center gap-2 disabled:cursor-wait"
                         style={{
-                            background: loading
-                                ? 'rgba(232,168,56,0.3)'
-                                : 'linear-gradient(135deg, #E8A838, #D4782F)',
-                            boxShadow: loading ? 'none' : '0 8px 24px rgba(232,168,56,0.25)',
+                            background: saving ? 'rgba(232,168,56,0.3)' : 'linear-gradient(135deg, #E8A838, #D4782F)',
+                            boxShadow: saving ? 'none' : '0 8px 24px rgba(232,168,56,0.25)',
                         }}
                     >
-                        {loading && (
-                            <span className="w-5 h-5 rounded-full border-[2.5px] border-white/20 border-t-white animate-spin inline-block" />
-                        )}
-                        {loading ? 'Enregistrement en cours…' : 'Enregistrer le mot de passe'}
+                        {saving && <span className="w-5 h-5 rounded-full border-[2.5px] border-white/20 border-t-white animate-spin inline-block" />}
+                        {saving ? 'Enregistrement en cours…' : 'Enregistrer le mot de passe'}
                     </button>
-                    {loading && (
-                        <p className="text-slate-500 text-xs text-center">
-                            Veuillez patienter, cela peut prendre quelques secondes…
-                        </p>
-                    )}
 
                     <Link href="/" className="block text-center text-orange-400 text-sm font-semibold hover:text-orange-300 no-underline">
                         ← Retour à l&apos;accueil
@@ -405,13 +244,7 @@ function ResetPasswordForm() {
 
 export default function ResetPasswordPage() {
     return (
-        <Suspense
-            fallback={
-                <div className="min-h-screen flex items-center justify-center bg-slate-950">
-                    <div className="w-10 h-10 border-2 border-orange-500/30 border-t-orange-500 rounded-full animate-spin" />
-                </div>
-            }
-        >
+        <Suspense fallback={<LoadingScreen message="Chargement…" />}>
             <ResetPasswordForm />
         </Suspense>
     )

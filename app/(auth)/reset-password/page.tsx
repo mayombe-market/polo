@@ -82,20 +82,45 @@ function ResetPasswordForm() {
     const [saving, setSaving] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
 
-    // Étape 1 : échanger le code contre une session
+    // Étape 1 : attendre que Supabase traite le code (detectSessionInUrl le fait automatiquement)
+    // On écoute PASSWORD_RECOVERY — jamais appeler exchangeCodeForSession manuellement
+    // car detectSessionInUrl le fait déjà et consomme le code one-time
     useEffect(() => {
-        if (!code) { setStatus('invalid'); return }
-
         const supabase = getSupabaseBrowserClient()
-        supabase.auth.exchangeCodeForSession(code).then(({ error }) => {
-            if (error) {
-                console.error('[reset-password] exchangeCode error:', error.message)
-                setStatus('invalid')
-            } else {
+        let settled = false
+
+        const settle = (ready: boolean) => {
+            if (settled) return
+            settled = true
+            if (ready) {
                 window.history.replaceState(null, '', '/reset-password')
                 setStatus('ready')
+            } else {
+                setStatus('invalid')
             }
+        }
+
+        // Principal : événement PASSWORD_RECOVERY déclenché par detectSessionInUrl
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+            if (event === 'PASSWORD_RECOVERY' && session) settle(true)
+            if (event === 'SIGNED_IN' && session && code) settle(true) // fallback PKCE
         })
+
+        // Fallback : l'événement peut avoir été émis AVANT l'écoute (page déjà chargée)
+        supabase.auth.getSession().then(({ data: { session } }) => {
+            if (session) settle(true)
+        })
+
+        // Pas de code dans l'URL → invalide direct
+        if (!code) { settle(false); return }
+
+        // Timeout 8s sans résolution → invalide
+        const timeout = setTimeout(() => settle(false), 8_000)
+
+        return () => {
+            subscription.unsubscribe()
+            clearTimeout(timeout)
+        }
     }, [code])
 
     // Étape 2 : soumettre le nouveau mot de passe

@@ -41,11 +41,13 @@ function PasswordFields({
     return (
         <div className="space-y-4">
             <div>
-                <label className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
+                <label htmlFor="new-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
                     🔒 Nouveau mot de passe
                 </label>
                 <div className="relative">
                     <input
+                        id="new-password"
+                        name="new-password"
                         type={show1 ? 'text' : 'password'}
                         value={password}
                         onChange={(e) => onPassword(e.target.value)}
@@ -65,11 +67,13 @@ function PasswordFields({
                 <PasswordPolicyChecklist password={password} className="mt-2.5" />
             </div>
             <div>
-                <label className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
+                <label htmlFor="confirm-password" className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
                     🔒 Confirmer le mot de passe
                 </label>
                 <div className="relative">
                     <input
+                        id="confirm-password"
+                        name="confirm-password"
                         type={show2 ? 'text' : 'password'}
                         value={confirm}
                         onChange={(e) => onConfirm(e.target.value)}

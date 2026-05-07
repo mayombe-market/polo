@@ -244,8 +244,14 @@ function ResetPasswordForm() {
         try {
             const client = getSupabaseBrowserClient()
 
-            // Vérifier qu'on a une session active
-            const { data: { session } } = await client.auth.getSession()
+            // getSession avec timeout 8s (peut bloquer indéfiniment sinon)
+            const sessionResult = await Promise.race([
+                client.auth.getSession(),
+                new Promise<never>((_, reject) =>
+                    setTimeout(() => reject(new Error('session_timeout')), 8_000)
+                ),
+            ])
+            const session = (sessionResult as Awaited<ReturnType<typeof client.auth.getSession>>).data?.session
             if (!session?.access_token) {
                 setError('Session expirée. Redemandez un lien de réinitialisation.')
                 setLoading(false)
@@ -297,6 +303,8 @@ function ResetPasswordForm() {
             console.error('[reset-password] exception:', err)
             if (err instanceof Error && err.name === 'AbortError') {
                 setError('La requête a expiré. Vérifiez votre connexion et réessayez.')
+            } else if (err instanceof Error && err.message === 'session_timeout') {
+                setError('Session expirée. Redemandez un lien de réinitialisation.')
             } else {
                 setError(authErrorMessage(err))
             }

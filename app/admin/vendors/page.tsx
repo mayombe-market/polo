@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
-    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown
+    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2
 } from 'lucide-react'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
@@ -57,6 +57,94 @@ function VendorTypeBadge({ vendorType }: { vendorType?: string }) {
     )
 }
 
+const PAGE_OPTIONS = [
+    { key: 'marketplace', label: 'Marketplace', emoji: '🛍️', desc: 'Mode, High-Tech, Maison…' },
+    { key: 'patisserie',  label: 'Pâtisserie',  emoji: '🎂', desc: 'Pâtisserie & Traiteur' },
+    { key: 'restaurant',  label: 'Restaurant',  emoji: '🍽️', desc: 'Alimentation & Boissons' },
+    { key: 'immobilier',  label: 'Immobilier',  emoji: '🏠', desc: 'Annonces immobilières' },
+]
+
+function VendorPagesModal({ vendor, onClose, onSaved }: {
+    vendor: any
+    onClose: () => void
+    onSaved: (id: string, pages: string[]) => void
+}) {
+    const [selected, setSelected] = useState<string[]>(vendor.vendor_pages || ['marketplace'])
+    const [saving, setSaving] = useState(false)
+
+    const toggle = (key: string) => {
+        setSelected(prev =>
+            prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+        )
+    }
+
+    const save = async () => {
+        if (selected.length === 0) return
+        setSaving(true)
+        const { error } = await supabase
+            .from('profiles')
+            .update({ vendor_pages: selected })
+            .eq('id', vendor.id)
+        setSaving(false)
+        if (!error) {
+            onSaved(vendor.id, selected)
+            onClose()
+        }
+    }
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={onClose}>
+            <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                <div className="flex items-center justify-between mb-5">
+                    <div>
+                        <h2 className="text-sm font-black dark:text-white">Accès pages</h2>
+                        <p className="text-[11px] text-slate-400 mt-0.5">{vendor.shop_name || vendor.store_name || `${vendor.first_name} ${vendor.last_name}`}</p>
+                    </div>
+                    <button onClick={onClose} className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-slate-200 transition-colors">
+                        <X size={16} />
+                    </button>
+                </div>
+
+                <div className="space-y-2 mb-6">
+                    {PAGE_OPTIONS.map(opt => (
+                        <button
+                            key={opt.key}
+                            onClick={() => toggle(opt.key)}
+                            className={`w-full flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                                selected.includes(opt.key)
+                                    ? 'border-[#163D2B] bg-[#163D2B]/5 dark:border-green-500 dark:bg-green-500/10'
+                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                            }`}
+                        >
+                            <span className="text-xl">{opt.emoji}</span>
+                            <div className="flex-1">
+                                <p className={`text-xs font-bold ${selected.includes(opt.key) ? 'text-[#163D2B] dark:text-green-400' : 'dark:text-white'}`}>{opt.label}</p>
+                                <p className="text-[10px] text-slate-400">{opt.desc}</p>
+                            </div>
+                            <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
+                                selected.includes(opt.key)
+                                    ? 'border-[#163D2B] bg-[#163D2B] dark:border-green-500 dark:bg-green-500'
+                                    : 'border-slate-300 dark:border-slate-600'
+                            }`}>
+                                {selected.includes(opt.key) && <CheckCircle size={12} className="text-white" />}
+                            </div>
+                        </button>
+                    ))}
+                </div>
+
+                <button
+                    onClick={save}
+                    disabled={saving || selected.length === 0}
+                    className="w-full py-3 rounded-xl bg-[#163D2B] text-white text-sm font-bold disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle size={16} />}
+                    {saving ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+            </div>
+        </div>
+    )
+}
+
 function getVerifBadge(status: string) {
     switch (status) {
         case 'verified': return <span className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold rounded-full bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400"><CheckCircle size={10} /> Vérifié</span>
@@ -73,13 +161,14 @@ export default function AdminVendorsPage() {
     const [error, setError] = useState(false)
     const [filter, setFilter] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
+    const [editingVendor, setEditingVendor] = useState<any | null>(null)
 
     useEffect(() => {
         const fetchVendors = async () => {
             try {
                 const { data } = await withTimeout(supabase
                     .from('profiles')
-                    .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, vendor_type, verification_status, avatar_url, created_at')
+                    .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, vendor_type, vendor_pages, verification_status, avatar_url, created_at')
                     .eq('role', 'vendor')
                     .order('created_at', { ascending: false }))
 
@@ -335,19 +424,40 @@ export default function AdminVendorsPage() {
                                     <p className="text-[9px] text-slate-400 font-bold uppercase">Produits</p>
                                 </div>
 
-                                {/* Action */}
-                                <Link
-                                    href={`/seller/${vendor.id}`}
-                                    className="flex-shrink-0 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-orange-100 hover:text-orange-500 dark:hover:bg-orange-900/20 transition-colors no-underline"
-                                    title="Voir le profil"
-                                >
-                                    <ExternalLink size={16} />
-                                </Link>
+                                {/* Actions */}
+                                <div className="flex items-center gap-2 flex-shrink-0">
+                                    <button
+                                        onClick={() => setEditingVendor(vendor)}
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-[#163D2B]/10 hover:text-[#163D2B] dark:hover:bg-green-900/20 dark:hover:text-green-400 transition-colors"
+                                        title="Gérer les accès pages"
+                                    >
+                                        <Settings2 size={16} />
+                                    </button>
+                                    <Link
+                                        href={`/seller/${vendor.id}`}
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-orange-100 hover:text-orange-500 dark:hover:bg-orange-900/20 transition-colors no-underline"
+                                        title="Voir le profil"
+                                    >
+                                        <ExternalLink size={16} />
+                                    </Link>
+                                </div>
                             </div>
                         ))}
                     </div>
                 )}
             </div>
+
+            {/* Modal accès pages */}
+            {editingVendor && (
+                <VendorPagesModal
+                    vendor={editingVendor}
+                    onClose={() => setEditingVendor(null)}
+                    onSaved={(id, pages) => {
+                        setVendors(prev => prev.map(v => v.id === id ? { ...v, vendor_pages: pages } : v))
+                        setEditingVendor(null)
+                    }}
+                />
+            )}
         </div>
     )
 }

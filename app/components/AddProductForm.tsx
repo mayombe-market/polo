@@ -750,7 +750,25 @@ const STEPS = [
     { id: 5, label: 'Images', icon: ImageIcon },
 ]
 
-/** Catégories visibles selon le type de vendeur */
+/** Catégories spécialisées (non visibles par un marketplace par défaut) */
+const SPECIALIZED_CATEGORIES = ["Pâtisserie & Traiteur", "Alimentation & Boissons", "Immobilier"]
+
+/** Catégories visibles selon la page / l'accès accordé */
+const PAGE_CATEGORIES: Record<string, string[]> = {
+    marketplace: Object.keys({
+        "Mode & Beauté": 1, "High-Tech": 1, "Pharmacie & Santé": 1, "Électroménager": 1,
+        "Maison & Déco": 1, "Auto & Moto": 1, "Bébé & Enfants": 1, "Sport & Loisirs": 1,
+        "Services": 1, "Fournitures & Bureau": 1, "Agriculture & Élevage": 1,
+        "Matériaux & BTP": 1, "Bijoux & Montres": 1, "Jouets & Jeux": 1,
+        "Animalerie": 1, "Livres & Culture": 1, "Bricolage & Outillage": 1, "Bagagerie & Voyage": 1,
+    }),
+    patisserie: ["Pâtisserie & Traiteur"],
+    restaurant: ["Alimentation & Boissons"],
+    immobilier: ["Immobilier"],
+    hotel:      ["Alimentation & Boissons", "Services"],
+}
+
+/** @deprecated — conservé pour rétro-compatibilité si vendor_pages absent */
 const VENDOR_TYPE_CATEGORIES: Record<string, string[]> = {
     patisserie: ["Pâtisserie & Traiteur"],
     restaurant: ["Alimentation & Boissons"],
@@ -764,8 +782,10 @@ export type AddProductFormProps = {
     isVendorAccount?: boolean
     /** Requis côté serveur pour createProduct */
     verificationStatus?: string | null
-    /** Type de vendeur — filtre les catégories disponibles à la publication */
+    /** Type de vendeur — rétro-compatibilité (remplacé par vendorPages) */
     vendorType?: string | null
+    /** Pages auxquelles le vendeur a accès — pilote les catégories visibles */
+    vendorPages?: string[] | null
 }
 
 export default function AddProductForm({
@@ -773,6 +793,7 @@ export default function AddProductForm({
     isVendorAccount,
     verificationStatus,
     vendorType,
+    vendorPages,
 }: AddProductFormProps) {
     /**
      * Anti-course / double envoi :
@@ -854,14 +875,31 @@ export default function AddProductForm({
 
     const isRealEstate = selectedCategory === IMMOBILIER_CATEGORY
 
-    // Catégories filtrées selon le type du vendeur
-    const filteredChoix = vendorType && VENDOR_TYPE_CATEGORIES[vendorType]
-        ? Object.fromEntries(
-            VENDOR_TYPE_CATEGORIES[vendorType]
-                .filter(cat => mesChoix[cat])
-                .map(cat => [cat, mesChoix[cat]])
-          )
-        : mesChoix
+    // Catégories filtrées selon les pages accessibles du vendeur
+    const filteredChoix = (() => {
+        // 1. Nouveau système : vendor_pages (tableau)
+        if (vendorPages && vendorPages.length > 0) {
+            const allowed = new Set<string>()
+            vendorPages.forEach(page => {
+                (PAGE_CATEGORIES[page] || []).forEach(c => allowed.add(c))
+            })
+            return Object.fromEntries(
+                [...allowed].filter(cat => mesChoix[cat]).map(cat => [cat, mesChoix[cat]])
+            )
+        }
+        // 2. Ancien système : vendor_type (rétro-compatibilité)
+        if (vendorType && VENDOR_TYPE_CATEGORIES[vendorType]) {
+            return Object.fromEntries(
+                VENDOR_TYPE_CATEGORIES[vendorType]
+                    .filter(cat => mesChoix[cat])
+                    .map(cat => [cat, mesChoix[cat]])
+            )
+        }
+        // 3. Par défaut : marketplace (exclut les catégories spécialisées)
+        return Object.fromEntries(
+            Object.entries(mesChoix).filter(([cat]) => !SPECIALIZED_CATEGORIES.includes(cat))
+        )
+    })()
 
     // Auto-sélectionner si une seule catégorie disponible
     useEffect(() => {

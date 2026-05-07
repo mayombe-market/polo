@@ -853,6 +853,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     isVendorAccount={profile?.role === 'vendor'}
                                     verificationStatus={profile?.verification_status}
                                     vendorType={profile?.vendor_type}
+                                    vendorPages={profile?.vendor_pages}
                                 />
                             </>
                         )}

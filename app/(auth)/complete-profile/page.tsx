@@ -369,6 +369,26 @@ export default function CompleteProfilePage() {
                 maxWidth: 560, margin: "0 auto",
             }}>
 
+                {/* Bouton passer — tout en haut */}
+                <div style={{ textAlign: "right", marginBottom: 12 }}>
+                    <button
+                        type="button"
+                        onClick={() => router.push('/vendor/dashboard')}
+                        style={{
+                            background: "transparent",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 10,
+                            color: "#888",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            padding: "8px 16px",
+                            cursor: "pointer",
+                        }}
+                    >
+                        Passer pour l'instant →
+                    </button>
+                </div>
+
                 {/* Header */}
                 <div style={{ textAlign: "center", marginBottom: 20 }}>
                     <div style={{

@@ -759,8 +759,27 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {activePage === 'add' && (
                     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-                        {/* Gate vérification */}
-                        {profile?.verification_status !== 'verified' ? (
+                        {/* Gate abonnement — pas encore de plan choisi */}
+                        {!profile?.subscription_plan ? (
+                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-orange-200 dark:border-orange-800/30">
+                                <div className="text-6xl mb-4">📦</div>
+                                <h2 className="text-xl font-black uppercase italic text-orange-500 mb-2">Abonnement requis</h2>
+                                <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">
+                                    Vous pouvez explorer votre dashboard librement.
+                                </p>
+                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
+                                    Pour publier des produits et commencer à vendre, choisissez d'abord votre abonnement.
+                                </p>
+                                <button
+                                    onClick={() => openUpgradeFlow()}
+                                    className="inline-block text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg no-underline"
+                                    style={{ background: 'linear-gradient(135deg, #E8A838, #D4782F)', boxShadow: '0 8px 24px rgba(232,168,56,0.3)' }}
+                                >
+                                    🚀 Choisir mon abonnement
+                                </button>
+                            </div>
+                        ) : /* Gate vérification */
+                        profile?.verification_status !== 'verified' ? (
                             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30">
                                 <div className="text-6xl mb-4">🔒</div>
                                 <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">Vérification requise</h2>

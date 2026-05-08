@@ -175,7 +175,6 @@ interface AuthModalProps {
 function AuthModal({ isOpen, onClose }: AuthModalProps) {
     const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
     const [email, setEmail] = useState('')
-    const [name, setName] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
@@ -223,11 +222,6 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
     const handleAuth = async () => {
         // Validation client
-        if (mode === 'signup' && !name.trim()) {
-            setError('Entrez votre nom complet')
-            triggerShake()
-            return
-        }
         if (!email.trim() || !email.includes('@')) {
             setError('Entrez une adresse email valide')
             triggerShake()
@@ -440,23 +434,7 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
                         ) : (
                         /* Form fields */
                         <div className="flex flex-col gap-3 mb-5">
-                            {mode === 'signup' && (
                                 <div>
-                                    <label className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
-                                        👤 Nom complet
-                                    </label>
-                                    <input
-                                        type="text"
-                                        value={name}
-                                        onChange={e => { setName(e.target.value); if (error) setError('') }}
-                                        onKeyDown={handleKeyDown}
-                                        placeholder="Jean Makaya"
-                                        className="w-full py-3.5 px-4 rounded-xl border-[1.5px] border-white/[0.06] bg-white/[0.03] text-[#F0ECE2] text-sm outline-none transition-colors focus:border-orange-500/30 placeholder:text-slate-600 box-border"
-                                    />
-                                </div>
-                            )}
-
-                            <div>
                                 <label className="text-slate-500 text-[11px] font-semibold uppercase tracking-wider mb-1.5 block">
                                     📧 Email
                                 </label>

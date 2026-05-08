@@ -88,7 +88,7 @@ export function getSupabaseBrowserClient(): SupabaseClient {
         auth: {
             flowType: 'pkce',
             persistSession: true,
-            detectSessionInUrl: true,
+            detectSessionInUrl: false,
             /**
              * Désactivation de `navigator.locks` : sur certains navigateurs / WebViews, l’API peut
              * bloquer indéfiniment et empêcher `getSession` / refresh de se terminer.

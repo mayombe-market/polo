@@ -82,62 +82,57 @@ function ResetPasswordForm() {
     const [saving, setSaving] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
 
-    // Étape 1 : établir la session depuis les tokens de l'URL
-    // Supabase envoie soit ?code= (PKCE) soit #access_token=&refresh_token= (implicit)
-    // Avec flowType:'pkce', detectSessionInUrl ne traite PAS le hash → on le fait manuellement
     useEffect(() => {
         const supabase = getSupabaseBrowserClient()
-        let settled = false
-
-        const settle = (ready: boolean) => {
-            if (settled) return
-            settled = true
-            if (ready) {
-                window.history.replaceState(null, '', '/reset-password')
-                setStatus('ready')
-            } else {
-                setStatus('invalid')
-            }
-        }
 
         const run = async () => {
-            // — Cas 1 : tokens dans le hash (#access_token=...&refresh_token=...)
-            const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
-            const accessToken = hashParams.get('access_token')
-            const refreshToken = hashParams.get('refresh_token')
-
-            if (accessToken && refreshToken) {
-                try {
-                    const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
-                    if (error || !data.session) { settle(false); return }
-                    settle(true)
-                } catch {
-                    settle(false)
+            try {
+                // 0. Vérifier si une session existe déjà
+                const { data: existing } = await supabase.auth.getSession()
+                if (existing.session) {
+                    window.history.replaceState(null, '', '/reset-password')
+                    setStatus('ready')
+                    return
                 }
-                return
-            }
 
-            // — Cas 2 : code PKCE dans ?code= (detectSessionInUrl le traite automatiquement)
-            if (code) {
-                // Écouter l'événement PASSWORD_RECOVERY ou SIGNED_IN déclenché par detectSessionInUrl
-                const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-                    if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
-                        subscription.unsubscribe()
-                        settle(true)
+                // 1. Cas PKCE : ?code=...
+                if (code) {
+                    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+                    if (error || !data.session) {
+                        console.error('[reset-password] exchangeCodeForSession error:', error)
+                        setStatus('invalid')
+                        return
                     }
-                })
+                    window.history.replaceState(null, '', '/reset-password')
+                    setStatus('ready')
+                    return
+                }
 
-                // Fallback : session déjà établie avant l'écoute
-                const { data: { session } } = await supabase.auth.getSession()
-                if (session) { subscription.unsubscribe(); settle(true); return }
+                // 2. Cas hash : #access_token=...&refresh_token=...
+                const hashParams = new URLSearchParams(window.location.hash.substring(1))
+                const accessToken = hashParams.get('access_token')
+                const refreshToken = hashParams.get('refresh_token')
 
-                // Timeout 10s
-                const timeout = setTimeout(() => { subscription.unsubscribe(); settle(false) }, 10_000)
-                return () => { subscription.unsubscribe(); clearTimeout(timeout) }
+                if (accessToken && refreshToken) {
+                    const { data, error } = await supabase.auth.setSession({
+                        access_token: accessToken,
+                        refresh_token: refreshToken,
+                    })
+                    if (error || !data.session) {
+                        console.error('[reset-password] setSession error:', error)
+                        setStatus('invalid')
+                        return
+                    }
+                    window.history.replaceState(null, '', '/reset-password')
+                    setStatus('ready')
+                    return
+                }
+
+                setStatus('invalid')
+            } catch (err) {
+                console.error('[reset-password] unexpected error:', err)
+                setStatus('invalid')
             }
-
-            // — Aucun token trouvé
-            settle(false)
         }
 
         run()

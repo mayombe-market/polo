@@ -720,6 +720,37 @@ export default function AdminOrders() {
                                                         <Phone size={12} className="text-orange-500" /> {order.phone}
                                                     </p>
                                                 )}
+                                                {/* Localisation de livraison */}
+                                                {order.delivery_location_type === 'manual' && (order.delivery_sector || order.delivery_bus_stop || order.delivery_landmark) && (
+                                                    <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 space-y-1">
+                                                        <p className="text-[8px] font-black uppercase text-orange-500 tracking-[0.15em] mb-2">📍 Adresse de livraison</p>
+                                                        {order.delivery_sector && (
+                                                            <p className="text-[10px] font-bold text-slate-500">Secteur : <span className="text-slate-700 dark:text-slate-300">{order.delivery_sector}</span></p>
+                                                        )}
+                                                        {order.delivery_bus_stop && (
+                                                            <p className="text-[10px] font-bold text-slate-500">Arrêt bus : <span className="text-slate-700 dark:text-slate-300">{order.delivery_bus_stop}</span></p>
+                                                        )}
+                                                        {order.delivery_landmark && (
+                                                            <p className="text-[10px] font-bold text-slate-500">Repère : <span className="text-slate-700 dark:text-slate-300">{order.delivery_landmark}</span></p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                                {order.delivery_location_type === 'gps' && order.delivery_latitude && order.delivery_longitude && (
+                                                    <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700">
+                                                        <p className="text-[8px] font-black uppercase text-blue-500 tracking-[0.15em] mb-2">📡 Position GPS</p>
+                                                        {order.delivery_accuracy && (
+                                                            <p className="text-[10px] font-bold text-slate-400 mb-1.5">Précision ±{Math.round(order.delivery_accuracy)} m</p>
+                                                        )}
+                                                        <a
+                                                            href={`https://www.google.com/maps?q=${order.delivery_latitude},${order.delivery_longitude}`}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-blue-500 hover:text-blue-600 no-underline"
+                                                        >
+                                                            <MapPin size={11} /> Ouvrir dans Google Maps
+                                                        </a>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Répartition financière */}

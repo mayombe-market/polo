@@ -29,3 +29,52 @@ self.addEventListener('message', (event) => {
     self.skipWaiting()
   }
 })
+
+// ─── PUSH NOTIFICATIONS ───────────────────────────────────────────────────────
+
+self.addEventListener('push', (event) => {
+  if (!event.data) return
+
+  let data = {}
+  try { data = event.data.json() } catch { return }
+
+  const title   = data.title || 'Mayombe Market'
+  const options = {
+    body:              data.body || 'Nouvelle activité sur votre boutique',
+    icon:              data.icon  || '/favicon.ico',
+    badge:             '/favicon.ico',
+    vibrate:           [400, 100, 400, 100, 400, 100, 600],  // sonnerie longue
+    requireInteraction: true,   // reste affiché jusqu'à interaction du vendeur
+    renotify:          true,
+    tag:               'new-order',
+    data:              { url: data.url || '/vendor/dashboard' },
+    actions: [
+      { action: 'open',    title: '📦 Voir la commande' },
+      { action: 'dismiss', title: 'Plus tard' },
+    ],
+  }
+
+  event.waitUntil(self.registration.showNotification(title, options))
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  if (event.action === 'dismiss') return
+
+  const url = event.notification.data?.url || '/vendor/dashboard'
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // Si un onglet du site est déjà ouvert → focus + navigation
+      for (const client of clientList) {
+        if ('focus' in client) {
+          client.focus()
+          client.postMessage({ type: 'PUSH_NAVIGATE', url })
+          return
+        }
+      }
+      // Sinon → ouvrir un nouvel onglet
+      if (clients.openWindow) return clients.openWindow(url)
+    })
+  )
+})

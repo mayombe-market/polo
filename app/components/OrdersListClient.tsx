@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
-import { Phone, Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
+import { Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
@@ -252,11 +252,6 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                         >
                                             <Download size={14} /> Reçu PDF
                                         </button>
-                                        {order.phone && (
-                                            <a href={`tel:${order.phone}`} className="flex-1 sm:flex-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-6 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95">
-                                                <Phone size={14} /> Appeler
-                                            </a>
-                                        )}
                                     </div>
                                 </div>
                             </div>

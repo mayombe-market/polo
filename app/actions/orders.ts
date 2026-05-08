@@ -16,6 +16,7 @@ import {
     type BuyerPaymentNoticeType,
 } from '@/lib/buyerPaymentNotice'
 import { assertAdminCanActOnOrder, assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
+import { sendPushToUsers } from '@/app/actions/push'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -75,6 +76,47 @@ export async function getVendorOrders() {
     }))
 
     return { orders: JSON.parse(JSON.stringify(cleanOrders)), vendorId: user.id }
+}
+
+// Sauvegarder la position de livraison après commande (appelé côté client)
+export async function saveDeliveryLocation(orderId: string, data: {
+    type: 'manual' | 'gps'
+    sector?: string
+    busStop?: string
+    landmark?: string
+    latitude?: number
+    longitude?: number
+    accuracy?: number
+}): Promise<{ success: true } | { error: string }> {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    // Vérifier que la commande appartient bien à cet utilisateur
+    const { data: order } = await supabase
+        .from('orders')
+        .select('id, customer_id')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+    if (order.customer_id !== user.id) return { error: 'Non autorisé' }
+
+    const update: Record<string, any> = { delivery_location_type: data.type }
+
+    if (data.type === 'manual') {
+        if (data.sector)  update.delivery_sector   = data.sector.trim()
+        if (data.busStop) update.delivery_bus_stop = data.busStop.trim()
+        if (data.landmark) update.delivery_landmark = data.landmark.trim()
+    } else {
+        update.delivery_latitude  = data.latitude
+        update.delivery_longitude = data.longitude
+        update.delivery_accuracy  = data.accuracy
+    }
+
+    const { error } = await supabase.from('orders').update(update).eq('id', orderId)
+    if (error) return { error: error.message }
+    return { success: true }
 }
 
 // Mettre à jour le statut d'une commande (vendeur)
@@ -869,6 +911,22 @@ export async function createOrder(input: {
             district: input.district?.trim() || null,
         })
         .eq('id', user.id)
+
+    // Push notification aux vendeurs concernés par cette commande
+    const vendorIds: string[] = [...new Set(
+        (order.items as any[])
+            .map((item: any) => item.seller_id)
+            .filter(Boolean)
+    )]
+    if (vendorIds.length) {
+        const productNames = (order.items as any[]).map((i: any) => i.name).join(', ')
+        sendPushToUsers(
+            vendorIds,
+            '🛒 Nouvelle commande !',
+            `${order.customer_name} · ${productNames} · ${(order.total_amount || 0).toLocaleString('fr-FR')} F`,
+            '/vendor/dashboard'
+        ).catch(() => {})
+    }
 
     return { order: JSON.parse(JSON.stringify(order)) }
 }

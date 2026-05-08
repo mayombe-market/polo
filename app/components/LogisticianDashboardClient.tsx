@@ -274,6 +274,29 @@ export default function LogisticianDashboardClient({ user, profile }: { user: an
                     <p className="text-[#F0ECE2] text-sm font-semibold">{d.customer_name}</p>
                     <p className="text-gray-500 text-xs">{d.city}, {d.district}</p>
                     <p className="text-gray-600 text-xs mb-2.5">{d.landmark || ''}</p>
+                    {/* Localisation de livraison */}
+                    {d.delivery_location_type === 'manual' && (d.delivery_sector || d.delivery_bus_stop || d.delivery_landmark) && (
+                        <div className="mt-2 mb-2.5 p-3 rounded-xl bg-orange-500/[0.06] border border-orange-500/15 space-y-1">
+                            <p className="text-orange-400 text-[10px] font-black uppercase tracking-wide mb-1.5">📍 Adresse de livraison</p>
+                            {d.delivery_sector && <p className="text-gray-400 text-xs">Secteur : <span className="text-[#F0ECE2] font-semibold">{d.delivery_sector}</span></p>}
+                            {d.delivery_bus_stop && <p className="text-gray-400 text-xs">Arrêt bus : <span className="text-[#F0ECE2] font-semibold">{d.delivery_bus_stop}</span></p>}
+                            {d.delivery_landmark && <p className="text-gray-400 text-xs">Repère : <span className="text-[#F0ECE2] font-semibold">{d.delivery_landmark}</span></p>}
+                        </div>
+                    )}
+                    {d.delivery_location_type === 'gps' && d.delivery_latitude && d.delivery_longitude && (
+                        <div className="mt-2 mb-2.5 p-3 rounded-xl bg-blue-500/[0.06] border border-blue-500/15">
+                            <p className="text-blue-400 text-[10px] font-black uppercase tracking-wide mb-1.5">📡 Position GPS partagée</p>
+                            {d.delivery_accuracy && <p className="text-gray-500 text-[10px] mb-2">Précision ±{Math.round(d.delivery_accuracy)} m</p>}
+                            <a
+                                href={`https://www.google.com/maps?q=${d.delivery_latitude},${d.delivery_longitude}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg bg-blue-500/15 border border-blue-500/20 text-blue-400 text-xs font-semibold no-underline"
+                            >
+                                <MapPin size={12} /> Ouvrir dans Google Maps
+                            </a>
+                        </div>
+                    )}
                     {d.phone && (
                         <a href={`tel:${d.phone}`}
                             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-blue-500/10 border border-blue-500/15 text-blue-400 text-xs font-semibold no-underline">

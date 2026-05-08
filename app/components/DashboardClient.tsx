@@ -23,7 +23,7 @@ import {
     LayoutDashboard, Package, Plus, ShoppingCart, BarChart3,
     Wallet, Store, Settings, ChevronLeft, ChevronRight,
     TrendingUp, Eye, Users, Copy, Check, Trash2,
-    ArrowUpRight, Clock, MapPin, Phone, Loader2, Filter,
+    ArrowUpRight, Clock, MapPin, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
     Crown, Sparkles, Megaphone, Star, Send, Camera
@@ -50,6 +50,7 @@ import { getHotelMaxRooms } from '@/lib/hotelPlans'
 import { requestHotelReview, getHotelReviewRequests, getHotelProductReviews, addHotelReply } from '@/app/actions/hotel-reviews'
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
+import { savePushSubscription } from '@/app/actions/push'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -213,35 +214,85 @@ export default function DashboardClient({ products: initialProducts, profile, us
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
 
+    // ─── Push notifications : permission + abonnement ────────────────────────
     useEffect(() => {
-        if ('Notification' in window && Notification.permission === 'default') {
-            Notification.requestPermission()
+        const setup = async () => {
+            if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return
+
+            let permission = Notification.permission
+            if (permission === 'default') {
+                permission = await Notification.requestPermission()
+            }
+            if (permission !== 'granted') return
+
+            try {
+                const reg = await navigator.serviceWorker.ready
+                const existing = await reg.pushManager.getSubscription()
+                const sub = existing || await reg.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!) as unknown as string,
+                })
+                await savePushSubscription(sub.toJSON() as PushSubscriptionJSON)
+            } catch { /* push non supporté ou refusé */ }
         }
+
+        // Écoute les messages du SW (navigation après clic notif)
+        const onSWMessage = (e: MessageEvent) => {
+            if (e.data?.type === 'PUSH_NAVIGATE' && e.data?.url) {
+                window.location.href = e.data.url
+            }
+        }
+        navigator.serviceWorker?.addEventListener('message', onSWMessage)
+        setup()
+        return () => navigator.serviceWorker?.removeEventListener('message', onSWMessage)
     }, [])
 
+    // Convertit la clé VAPID base64url → Uint8Array (requis par pushManager.subscribe)
+    function urlBase64ToUint8Array(base64String: string): Uint8Array {
+        const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
+        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
+        const raw = window.atob(base64)
+        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
+    }
+
+    // Son d'alerte vendeur — fort, triple bip sawtooth pour être entendu
     const playNotificationSound = useCallback(() => {
         try {
             if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
             const ctx = audioCtxRef.current
+            if (ctx.state === 'suspended') ctx.resume()
             const now = ctx.currentTime
-            const osc1 = ctx.createOscillator()
-            const gain1 = ctx.createGain()
-            osc1.type = 'sine'
-            osc1.frequency.setValueAtTime(880, now)
-            gain1.gain.setValueAtTime(0.3, now)
-            gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.15)
-            osc1.connect(gain1).connect(ctx.destination)
-            osc1.start(now)
-            osc1.stop(now + 0.15)
-            const osc2 = ctx.createOscillator()
-            const gain2 = ctx.createGain()
-            osc2.type = 'sine'
-            osc2.frequency.setValueAtTime(1320, now + 0.15)
-            gain2.gain.setValueAtTime(0.3, now + 0.15)
-            gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.35)
-            osc2.connect(gain2).connect(ctx.destination)
-            osc2.start(now + 0.15)
-            osc2.stop(now + 0.35)
+
+            const comp = ctx.createDynamicsCompressor()
+            comp.threshold.value = -6
+            comp.knee.value = 0
+            comp.ratio.value = 20
+            comp.attack.value = 0.001
+            comp.release.value = 0.05
+            comp.connect(ctx.destination)
+
+            // Triple bip fort : Do5 → Mi5 → Sol5
+            const notes = [
+                { freq: 1046, t: 0.00 },
+                { freq: 1318, t: 0.22 },
+                { freq: 1568, t: 0.44 },
+                { freq: 1318, t: 0.66 },
+                { freq: 1046, t: 0.88 },
+            ]
+            for (const { freq, t } of notes) {
+                const osc  = ctx.createOscillator()
+                const gain = ctx.createGain()
+                osc.type = 'sawtooth'
+                osc.frequency.value = freq
+                const s = now + t
+                gain.gain.setValueAtTime(0, s)
+                gain.gain.linearRampToValueAtTime(1.0, s + 0.015)
+                gain.gain.setValueAtTime(1.0, s + 0.14)
+                gain.gain.linearRampToValueAtTime(0, s + 0.19)
+                osc.connect(gain).connect(comp)
+                osc.start(s)
+                osc.stop(s + 0.21)
+            }
         } catch {}
     }, [])
 
@@ -2007,11 +2058,6 @@ function OrdersPage({
                                         >
                                             <Download size={16} />
                                         </button>
-                                        {order.phone && (
-                                            <a href={`tel:${order.phone}`} className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-green-500 transition-colors">
-                                                <Phone size={16} />
-                                            </a>
-                                        )}
                                     </div>
                                 </div>
                             </div>

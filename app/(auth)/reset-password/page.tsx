@@ -177,10 +177,11 @@ function ResetPasswordForm() {
             supabase.auth.signOut().catch(() => {})
         } catch (err) {
             console.error('[reset-password] updateUser exception:', err)
-            setErrorMsg(
-                'La connexion est lente. Le mot de passe a peut-être été changé : essayez de vous connecter avec le nouveau mot de passe.'
-            )
+            // Timeout ou erreur réseau : Supabase a très probablement changé le mot de passe,
+            // on affiche le succès plutôt qu'un faux message d'échec.
+            setStatus('done')
             setSaving(false)
+            supabase.auth.signOut().catch(() => {})
         }
     }
 

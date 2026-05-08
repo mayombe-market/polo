@@ -5,12 +5,12 @@ import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
-    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2, Trash2
+    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2, Trash2, UserMinus
 } from 'lucide-react'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
-import { adminDeleteVendor } from '@/app/actions/admin'
+import { adminDeleteVendor, adminDemoteVendor } from '@/app/actions/admin'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -166,6 +166,9 @@ export default function AdminVendorsPage() {
     const [deletingVendor, setDeletingVendor] = useState<any | null>(null)
     const [deleteLoading, setDeleteLoading] = useState(false)
     const [deleteError, setDeleteError] = useState('')
+    const [demotingVendor, setDemotingVendor] = useState<any | null>(null)
+    const [demoteLoading, setDemoteLoading] = useState(false)
+    const [demoteError, setDemoteError] = useState('')
 
     useEffect(() => {
         const fetchVendors = async () => {
@@ -445,6 +448,13 @@ export default function AdminVendorsPage() {
                                         <ExternalLink size={16} />
                                     </Link>
                                     <button
+                                        onClick={() => { setDemotingVendor(vendor); setDemoteError('') }}
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-amber-100 hover:text-amber-600 dark:hover:bg-amber-900/20 dark:hover:text-amber-400 transition-colors"
+                                        title="Rétrograder en acheteur"
+                                    >
+                                        <UserMinus size={16} />
+                                    </button>
+                                    <button
                                         onClick={() => { setDeletingVendor(vendor); setDeleteError('') }}
                                         className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
                                         title="Supprimer ce vendeur"
@@ -468,6 +478,76 @@ export default function AdminVendorsPage() {
                         setEditingVendor(null)
                     }}
                 />
+            )}
+
+            {/* Modal confirmation rétrogradation vendeur → acheteur */}
+            {demotingVendor && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-amber-200 dark:border-amber-800/40 w-full max-w-md p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-amber-600">
+                                <UserMinus size={20} />
+                            </div>
+                            <div>
+                                <h3 className="font-black text-gray-900 dark:text-white">Rétrograder en acheteur ?</h3>
+                                <p className="text-xs text-slate-500">Le compte est conservé</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl p-4 mb-4">
+                            <p className="font-bold text-gray-800 dark:text-white text-sm">{demotingVendor.shop_name || demotingVendor.full_name}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">✉️ {demotingVendor.email}</p>
+                            {demotingVendor.phone && (
+                                <p className="text-xs text-slate-500 mt-0.5">📱 {demotingVendor.phone}</p>
+                            )}
+                        </div>
+
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                            Ce vendeur va <strong>perdre son accès boutique</strong> :
+                        </p>
+                        <ul className="text-xs text-slate-500 space-y-1 mb-2 ml-3">
+                            <li>• Plus d'accès au dashboard vendeur</li>
+                            <li>• Ses produits seront masqués</li>
+                            <li>• Son abonnement et sa vérification sont effacés</li>
+                        </ul>
+                        <p className="text-xs text-green-600 dark:text-green-400 font-medium mb-5">
+                            ✅ Son compte, son email et son historique de commandes sont conservés.
+                        </p>
+
+                        {demoteError && (
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">{demoteError}</p>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setDemotingVendor(null); setDemoteError('') }}
+                                disabled={demoteLoading}
+                                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setDemoteLoading(true)
+                                    setDemoteError('')
+                                    const res = await adminDemoteVendor(demotingVendor.id)
+                                    setDemoteLoading(false)
+                                    if ('error' in res) {
+                                        setDemoteError(res.error)
+                                    } else {
+                                        setVendors(prev => prev.filter(v => v.id !== demotingVendor.id))
+                                        setDemotingVendor(null)
+                                    }
+                                }}
+                                disabled={demoteLoading}
+                                className="flex-1 py-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-sm font-black transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                                {demoteLoading ? <Loader2 size={16} className="animate-spin" /> : <UserMinus size={16} />}
+                                {demoteLoading ? 'En cours…' : 'Rétrograder en acheteur'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
 
             {/* Modal confirmation suppression vendeur */}

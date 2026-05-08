@@ -67,6 +67,42 @@ export async function adminDeleteVendor(vendorId: string): Promise<{ success: tr
     return { success: true }
 }
 
+/**
+ * Rétrograde un vendeur en acheteur : change le rôle en 'buyer' et efface
+ * les champs vendeur. Le compte, l'email et l'historique sont conservés.
+ */
+export async function adminDemoteVendor(vendorId: string): Promise<{ success: true } | { error: string }> {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
+
+    if (!vendorId) return { error: 'ID vendeur manquant' }
+
+    const { data: profile, error: checkErr } = await svc()
+        .from('profiles')
+        .select('role')
+        .eq('id', vendorId)
+        .single()
+
+    if (checkErr || !profile) return { error: 'Vendeur introuvable' }
+    if (profile.role !== 'vendor') return { error: 'Ce compte n\'est pas un vendeur' }
+
+    const { error: updateErr } = await svc()
+        .from('profiles')
+        .update({
+            role: 'buyer',
+            shop_name: null,
+            vendor_type: null,
+            subscription_plan: null,
+            verification_status: null,
+            vendor_pages: null,
+            updated_at: new Date().toISOString(),
+        })
+        .eq('id', vendorId)
+
+    if (updateErr) return { error: updateErr.message }
+    return { success: true }
+}
+
 // ─── Reviews ────────────────────────────────────────────
 export async function adminDeleteReview(reviewId: string) {
     const auth = await requireAdmin()

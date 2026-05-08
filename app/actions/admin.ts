@@ -55,7 +55,12 @@ export async function adminDeleteVendor(vendorId: string): Promise<{ success: tr
     if (checkErr || !profile) return { error: 'Vendeur introuvable' }
     if (profile.role !== 'vendor') return { error: 'Ce compte n\'est pas un vendeur' }
 
-    // Supprimer le compte auth (cascade supprime le profil)
+    // Supprimer les données liées avant le compte auth (évite les erreurs de FK)
+    await svc().from('products').delete().eq('seller_id', vendorId)
+    await svc().from('vendor_verifications').delete().eq('vendor_id', vendorId)
+    await svc().from('profiles').delete().eq('id', vendorId)
+
+    // Supprimer le compte auth
     const { error: deleteErr } = await svc().auth.admin.deleteUser(vendorId)
     if (deleteErr) return { error: deleteErr.message }
 

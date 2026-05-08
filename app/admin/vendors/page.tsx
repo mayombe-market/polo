@@ -486,7 +486,10 @@ export default function AdminVendorsPage() {
 
                         <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl p-4 mb-4">
                             <p className="font-bold text-gray-800 dark:text-white text-sm">{deletingVendor.shop_name || deletingVendor.full_name}</p>
-                            <p className="text-xs text-slate-500 mt-0.5">{deletingVendor.email}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">✉️ {deletingVendor.email}</p>
+                            {deletingVendor.phone && (
+                                <p className="text-xs text-slate-500 mt-0.5">📱 {deletingVendor.phone}</p>
+                            )}
                         </div>
 
                         <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">

@@ -82,9 +82,9 @@ function ResetPasswordForm() {
     const [saving, setSaving] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
 
-    // Étape 1 : attendre que Supabase traite le code (detectSessionInUrl le fait automatiquement)
-    // On écoute PASSWORD_RECOVERY — jamais appeler exchangeCodeForSession manuellement
-    // car detectSessionInUrl le fait déjà et consomme le code one-time
+    // Étape 1 : laisser Supabase traiter les tokens (detectSessionInUrl)
+    // Supabase peut envoyer soit ?code= (PKCE) soit #access_token= (implicit)
+    // On écoute PASSWORD_RECOVERY — ne jamais appeler exchangeCodeForSession manuellement
     useEffect(() => {
         const supabase = getSupabaseBrowserClient()
         let settled = false
@@ -100,22 +100,31 @@ function ResetPasswordForm() {
             }
         }
 
-        // Principal : événement PASSWORD_RECOVERY déclenché par detectSessionInUrl
+        // Principal : événement PASSWORD_RECOVERY ou SIGNED_IN (les deux sont possibles selon le flow)
         const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'PASSWORD_RECOVERY' && session) settle(true)
-            if (event === 'SIGNED_IN' && session && code) settle(true) // fallback PKCE
+            if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
+                settle(true)
+            }
         })
 
-        // Fallback : l'événement peut avoir été émis AVANT l'écoute (page déjà chargée)
+        // Fallback : l'événement peut avoir été émis AVANT l'écoute
         supabase.auth.getSession().then(({ data: { session } }) => {
             if (session) settle(true)
         })
 
-        // Pas de code dans l'URL → invalide direct
-        if (!code) { settle(false); return }
+        // Vérifier si des tokens auth sont présents (query ?code= OU hash #access_token=)
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
+        const hasHashTokens = !!hashParams.get('access_token') && hashParams.get('type') === 'recovery'
+        const hasCode = !!code
 
-        // Timeout 8s sans résolution → invalide
-        const timeout = setTimeout(() => settle(false), 8_000)
+        if (!hasCode && !hasHashTokens) {
+            // Aucun token dans l'URL → invalide immédiat
+            settle(false)
+            return
+        }
+
+        // Timeout 10s — si aucun événement n'a résolu la session
+        const timeout = setTimeout(() => settle(false), 10_000)
 
         return () => {
             subscription.unsubscribe()

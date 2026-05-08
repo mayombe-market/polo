@@ -82,9 +82,9 @@ function ResetPasswordForm() {
     const [saving, setSaving] = useState(false)
     const [errorMsg, setErrorMsg] = useState('')
 
-    // Étape 1 : laisser Supabase traiter les tokens (detectSessionInUrl)
-    // Supabase peut envoyer soit ?code= (PKCE) soit #access_token= (implicit)
-    // On écoute PASSWORD_RECOVERY — ne jamais appeler exchangeCodeForSession manuellement
+    // Étape 1 : établir la session depuis les tokens de l'URL
+    // Supabase envoie soit ?code= (PKCE) soit #access_token=&refresh_token= (implicit)
+    // Avec flowType:'pkce', detectSessionInUrl ne traite PAS le hash → on le fait manuellement
     useEffect(() => {
         const supabase = getSupabaseBrowserClient()
         let settled = false
@@ -100,36 +100,47 @@ function ResetPasswordForm() {
             }
         }
 
-        // Principal : événement PASSWORD_RECOVERY ou SIGNED_IN (les deux sont possibles selon le flow)
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-            if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
-                settle(true)
+        const run = async () => {
+            // — Cas 1 : tokens dans le hash (#access_token=...&refresh_token=...)
+            const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
+            const accessToken = hashParams.get('access_token')
+            const refreshToken = hashParams.get('refresh_token')
+
+            if (accessToken && refreshToken) {
+                try {
+                    const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken })
+                    if (error || !data.session) { settle(false); return }
+                    settle(true)
+                } catch {
+                    settle(false)
+                }
+                return
             }
-        })
 
-        // Fallback : l'événement peut avoir été émis AVANT l'écoute
-        supabase.auth.getSession().then(({ data: { session } }) => {
-            if (session) settle(true)
-        })
+            // — Cas 2 : code PKCE dans ?code= (detectSessionInUrl le traite automatiquement)
+            if (code) {
+                // Écouter l'événement PASSWORD_RECOVERY ou SIGNED_IN déclenché par detectSessionInUrl
+                const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                    if ((event === 'PASSWORD_RECOVERY' || event === 'SIGNED_IN') && session) {
+                        subscription.unsubscribe()
+                        settle(true)
+                    }
+                })
 
-        // Vérifier si des tokens auth sont présents (query ?code= OU hash #access_token=)
-        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''))
-        const hasHashTokens = !!hashParams.get('access_token') && hashParams.get('type') === 'recovery'
-        const hasCode = !!code
+                // Fallback : session déjà établie avant l'écoute
+                const { data: { session } } = await supabase.auth.getSession()
+                if (session) { subscription.unsubscribe(); settle(true); return }
 
-        if (!hasCode && !hasHashTokens) {
-            // Aucun token dans l'URL → invalide immédiat
+                // Timeout 10s
+                const timeout = setTimeout(() => { subscription.unsubscribe(); settle(false) }, 10_000)
+                return () => { subscription.unsubscribe(); clearTimeout(timeout) }
+            }
+
+            // — Aucun token trouvé
             settle(false)
-            return
         }
 
-        // Timeout 10s — si aucun événement n'a résolu la session
-        const timeout = setTimeout(() => settle(false), 10_000)
-
-        return () => {
-            subscription.unsubscribe()
-            clearTimeout(timeout)
-        }
+        run()
     }, [code])
 
     // Étape 2 : soumettre le nouveau mot de passe

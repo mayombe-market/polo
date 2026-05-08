@@ -154,32 +154,32 @@ function ResetPasswordForm() {
 
         setSaving(true)
 
-        // Filet de sécurité absolu — arrête le spinner après 15s
-        const bail = setTimeout(() => {
-            setSaving(false)
-            setErrorMsg('La requête a pris trop de temps. Réessayez.')
-        }, 15_000)
+        const supabase = getSupabaseBrowserClient()
+
+        const timeoutPromise = new Promise<never>((_, reject) => {
+            setTimeout(() => reject(new Error('timeout')), 30_000)
+        })
 
         try {
-            const supabase = getSupabaseBrowserClient()
-            const { error } = await supabase.auth.updateUser({ password })
+            const result = await Promise.race([
+                supabase.auth.updateUser({ password }),
+                timeoutPromise,
+            ])
 
-            clearTimeout(bail)
-
-            if (error) {
-                console.error('[reset-password] updateUser error:', error.message)
-                setErrorMsg(translateAuthErrorMessage(error.message))
+            if (result.error) {
+                console.error('[reset-password] updateUser error:', result.error.message)
+                setErrorMsg(translateAuthErrorMessage(result.error.message))
                 setSaving(false)
                 return
             }
 
-            // Déconnexion propre puis affichage du succès
-            await supabase.auth.signOut().catch(() => {})
             setStatus('done')
-        } catch (err: unknown) {
-            clearTimeout(bail)
-            console.error('[reset-password] exception:', err)
-            setErrorMsg('Une erreur inattendue est survenue. Réessayez.')
+            supabase.auth.signOut().catch(() => {})
+        } catch (err) {
+            console.error('[reset-password] updateUser exception:', err)
+            setErrorMsg(
+                'La connexion est lente. Le mot de passe a peut-être été changé : essayez de vous connecter avec le nouveau mot de passe.'
+            )
             setSaving(false)
         }
     }

@@ -32,6 +32,36 @@ async function requireAdmin(): Promise<{ error: string } | { userId: string }> {
     return { userId: user.id }
 }
 
+// ─── Vendeurs ───────────────────────────────────────────
+
+/**
+ * Supprime définitivement un vendeur :
+ * 1. Supprime le compte dans auth.users (via service role)
+ * 2. Le profil est supprimé en cascade (FK ON DELETE CASCADE)
+ */
+export async function adminDeleteVendor(vendorId: string): Promise<{ success: true } | { error: string }> {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
+
+    if (!vendorId) return { error: 'ID vendeur manquant' }
+
+    // Vérifier que c'est bien un vendeur avant de supprimer
+    const { data: profile, error: checkErr } = await svc()
+        .from('profiles')
+        .select('role, email, shop_name')
+        .eq('id', vendorId)
+        .single()
+
+    if (checkErr || !profile) return { error: 'Vendeur introuvable' }
+    if (profile.role !== 'vendor') return { error: 'Ce compte n\'est pas un vendeur' }
+
+    // Supprimer le compte auth (cascade supprime le profil)
+    const { error: deleteErr } = await svc().auth.admin.deleteUser(vendorId)
+    if (deleteErr) return { error: deleteErr.message }
+
+    return { success: true }
+}
+
 // ─── Reviews ────────────────────────────────────────────
 export async function adminDeleteReview(reviewId: string) {
     const auth = await requireAdmin()

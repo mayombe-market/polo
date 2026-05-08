@@ -5,11 +5,12 @@ import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
-    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2
+    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2, Trash2
 } from 'lucide-react'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
+import { adminDeleteVendor } from '@/app/actions/admin'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -162,6 +163,9 @@ export default function AdminVendorsPage() {
     const [filter, setFilter] = useState('all')
     const [searchQuery, setSearchQuery] = useState('')
     const [editingVendor, setEditingVendor] = useState<any | null>(null)
+    const [deletingVendor, setDeletingVendor] = useState<any | null>(null)
+    const [deleteLoading, setDeleteLoading] = useState(false)
+    const [deleteError, setDeleteError] = useState('')
 
     useEffect(() => {
         const fetchVendors = async () => {
@@ -440,6 +444,13 @@ export default function AdminVendorsPage() {
                                     >
                                         <ExternalLink size={16} />
                                     </Link>
+                                    <button
+                                        onClick={() => { setDeletingVendor(vendor); setDeleteError('') }}
+                                        className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
+                                        title="Supprimer ce vendeur"
+                                    >
+                                        <Trash2 size={16} />
+                                    </button>
                                 </div>
                             </div>
                         ))}
@@ -457,6 +468,70 @@ export default function AdminVendorsPage() {
                         setEditingVendor(null)
                     }}
                 />
+            )}
+
+            {/* Modal confirmation suppression vendeur */}
+            {deletingVendor && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-red-200 dark:border-red-800/40 w-full max-w-md p-6">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-500">
+                                <Trash2 size={20} />
+                            </div>
+                            <div>
+                                <h3 className="font-black text-gray-900 dark:text-white">Supprimer ce vendeur ?</h3>
+                                <p className="text-xs text-slate-500">Action irréversible</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-xl p-4 mb-4">
+                            <p className="font-bold text-gray-800 dark:text-white text-sm">{deletingVendor.shop_name || deletingVendor.full_name}</p>
+                            <p className="text-xs text-slate-500 mt-0.5">{deletingVendor.email}</p>
+                        </div>
+
+                        <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">
+                            Cela va <strong>supprimer définitivement</strong> :
+                        </p>
+                        <ul className="text-xs text-slate-500 space-y-1 mb-5 ml-3">
+                            <li>• Le compte et le profil du vendeur</li>
+                            <li>• Tous ses produits</li>
+                            <li>• Son historique et ses données</li>
+                        </ul>
+
+                        {deleteError && (
+                            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2 mb-4">{deleteError}</p>
+                        )}
+
+                        <div className="flex gap-3">
+                            <button
+                                onClick={() => { setDeletingVendor(null); setDeleteError('') }}
+                                disabled={deleteLoading}
+                                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    setDeleteLoading(true)
+                                    setDeleteError('')
+                                    const res = await adminDeleteVendor(deletingVendor.id)
+                                    setDeleteLoading(false)
+                                    if ('error' in res) {
+                                        setDeleteError(res.error)
+                                    } else {
+                                        setVendors(prev => prev.filter(v => v.id !== deletingVendor.id))
+                                        setDeletingVendor(null)
+                                    }
+                                }}
+                                disabled={deleteLoading}
+                                className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-black transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                                {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
+                                {deleteLoading ? 'Suppression…' : 'Supprimer définitivement'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     )

@@ -46,6 +46,8 @@ export default function CompleteProfilePage() {
     const [selectedPlan, setSelectedPlan] = useState<any>(null)
 
     // ═══ Type de vendeur (pré-sélectionné via ?type=immobilier ou ?type=hotel) ═══
+    const [infoOpen, setInfoOpen] = useState<'ville' | 'phone' | null>(null)
+
     const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier' | 'hotel' | 'patisserie' | 'restaurant'>(() => {
         if (typeof window !== 'undefined') {
             const p = new URLSearchParams(window.location.search)
@@ -464,28 +466,52 @@ export default function CompleteProfilePage() {
     // ═══════════════════════════════════════
     // ÉTAPE 1 : FORMULAIRE PROFIL
     // ═══════════════════════════════════════
+
+    // Carte info réutilisable
+    const InfoCard = ({ id, children }: { id: 'ville' | 'phone'; children: React.ReactNode }) =>
+        infoOpen === id ? (
+            <div className="mt-2 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700/40 rounded-2xl text-sm text-blue-800 dark:text-blue-200 leading-relaxed shadow-sm animate-in fade-in slide-in-from-top-2 duration-200">
+                {children}
+            </div>
+        ) : null
+
+    const InfoBtn = ({ id }: { id: 'ville' | 'phone' }) => (
+        <button
+            type="button"
+            onClick={() => setInfoOpen(infoOpen === id ? null : id)}
+            className={`w-5 h-5 rounded-full border-2 flex items-center justify-center text-[11px] font-black transition-all shrink-0 ${
+                infoOpen === id
+                    ? 'border-blue-500 bg-blue-500 text-white'
+                    : 'border-gray-300 dark:border-slate-600 text-gray-400 dark:text-slate-500 hover:border-blue-400 hover:text-blue-500'
+            }`}
+            aria-label="Plus d'informations"
+        >
+            ?
+        </button>
+    )
+
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 p-4">
-            <div className="max-w-2xl w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
+        <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 px-4 py-6 flex items-start justify-center">
+            <div className="max-w-lg w-full bg-white dark:bg-slate-900 rounded-3xl shadow-2xl overflow-hidden">
 
                 {/* HEADER */}
-                <div className="bg-gradient-to-r from-green-600 to-blue-600 p-8 text-center">
-                    <div className="w-20 h-20 bg-white rounded-full mx-auto mb-4 flex items-center justify-center shadow-lg">
-                        <span className="text-4xl">🎉</span>
+                <div className="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-8 text-center">
+                    <div className="w-16 h-16 bg-white rounded-full mx-auto mb-3 flex items-center justify-center shadow-lg">
+                        <span className="text-3xl">🎉</span>
                     </div>
-                    <h1 className="text-3xl font-bold text-white mb-2">
+                    <h1 className="text-2xl font-bold text-white mb-1">
                         Email confirmé !
                     </h1>
-                    <p className="text-green-100">
+                    <p className="text-green-100 text-sm">
                         Complétez votre profil pour continuer
                     </p>
                 </div>
 
                 {/* FORMULAIRE */}
-                <form onSubmit={handleSubmit} className="p-8 space-y-6">
+                <form onSubmit={handleSubmit} className="px-5 py-6 space-y-5">
 
-                    {/* NOM & PRÉNOM */}
-                    <div className="grid md:grid-cols-2 gap-4">
+                    {/* NOM & PRÉNOM — colonne unique sur mobile */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
                                 Prénom *
@@ -494,7 +520,7 @@ export default function CompleteProfilePage() {
                                 type="text"
                                 value={firstName}
                                 onChange={(e) => setFirstName(e.target.value)}
-                                className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white"
+                                className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white text-sm"
                                 required
                             />
                         </div>
@@ -506,21 +532,33 @@ export default function CompleteProfilePage() {
                                 type="text"
                                 value={lastName}
                                 onChange={(e) => setLastName(e.target.value)}
-                                className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white"
+                                className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white text-sm"
                                 required
                             />
                         </div>
                     </div>
 
-                    {/* VILLE (livraison / logistique) */}
+                    {/* VILLE */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                            Ville *
-                        </label>
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                Ville *
+                            </label>
+                            <InfoBtn id="ville" />
+                        </div>
+                        <InfoCard id="ville">
+                            <p className="font-bold mb-1">📦 Pourquoi on vous demande votre ville ?</p>
+                            <ul className="space-y-1.5 text-xs">
+                                <li>• <strong>Calcul des frais de livraison</strong> — les tarifs varient selon que vous êtes à Brazzaville, Pointe-Noire ou ailleurs.</li>
+                                <li>• <strong>Détection des envois inter-villes</strong> — si un vendeur est dans une autre ville, on vous prévient avant la commande.</li>
+                                <li>• <strong>Afficher les vendeurs proches de chez vous</strong> — pour des livraisons plus rapides.</li>
+                            </ul>
+                            <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 font-medium">🔒 Votre ville n'est jamais partagée publiquement.</p>
+                        </InfoCard>
                         <select
                             value={city}
                             onChange={(e) => setCity(e.target.value)}
-                            className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white"
+                            className="w-full p-3 border dark:border-slate-700 rounded-xl outline-none focus:ring-2 focus:ring-green-500 bg-white dark:bg-slate-800 dark:text-white text-sm"
                             required
                         >
                             <option value="">Choisissez votre ville</option>
@@ -530,16 +568,25 @@ export default function CompleteProfilePage() {
                                 </option>
                             ))}
                         </select>
-                        <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1.5">
-                            Utilisée pour la livraison et pour détecter les envois inter-villes.
-                        </p>
                     </div>
 
                     {/* TÉLÉPHONE AVEC SÉLECTEUR DE PAYS */}
                     <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-2">
-                            Numéro de téléphone *
-                        </label>
+                        <div className="flex items-center gap-2 mb-2">
+                            <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                                Numéro de téléphone *
+                            </label>
+                            <InfoBtn id="phone" />
+                        </div>
+                        <InfoCard id="phone">
+                            <p className="font-bold mb-1">📱 Pourquoi on vous demande votre numéro ?</p>
+                            <ul className="space-y-1.5 text-xs">
+                                <li>• <strong>Suivi de commande</strong> — le livreur vous contacte directement pour coordonner la livraison.</li>
+                                <li>• <strong>Confirmation de commande</strong> — en cas de problème avec votre paiement ou votre adresse.</li>
+                                <li>• <strong>Support client</strong> — notre équipe peut vous joindre rapidement si besoin.</li>
+                            </ul>
+                            <p className="mt-2 text-xs text-blue-600 dark:text-blue-400 font-medium">🔒 Votre numéro n'est visible que des vendeurs avec qui vous passez commande.</p>
+                        </InfoCard>
                         <div className="flex gap-2">
                             {/* Sélecteur de pays */}
                             <div className="relative">
@@ -589,10 +636,11 @@ export default function CompleteProfilePage() {
                             {/* Champ numéro */}
                             <input
                                 type="tel"
+                                inputMode="numeric"
                                 value={phoneNumber}
                                 onChange={(e) => handlePhoneChange(e.target.value)}
                                 placeholder={selectedCountry.placeholder}
-                                className={`flex-1 p-3 border rounded-xl outline-none focus:ring-2 bg-white dark:bg-slate-800 dark:text-white transition-all ${
+                                className={`flex-1 p-3 border rounded-xl outline-none focus:ring-2 bg-white dark:bg-slate-800 dark:text-white transition-all text-sm ${
                                     phoneNumber && !isPhoneValid
                                         ? 'border-orange-300 focus:ring-orange-500'
                                         : phoneNumber && isPhoneValid
@@ -718,7 +766,7 @@ export default function CompleteProfilePage() {
                                 </div>
 
                                 {/* Rangée 2 : Pâtisserie + Restaurant + Hôtellerie */}
-                                <div className="grid grid-cols-3 gap-3">
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                                     <button
                                         type="button"
                                         onClick={() => setVendorType('patisserie')}

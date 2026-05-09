@@ -478,23 +478,26 @@ export default function DashboardClient({ products: initialProducts, profile, us
         if (!user?.id) return
         const updated = payload.new as any
         const vendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
-        if (vendorItems.length > 0) {
-            setOrders(prev => {
-                const exists = prev.find(o => o.id === updated.id)
-                if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
-                if (updated.status !== 'pending') {
-                    const updatedVendorItems = updated.items?.filter((i: any) => i.seller_id === user.id) || []
-                    const productNames = updatedVendorItems.map((i: any) => i.name).join(', ')
-                    const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
-                    const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
-                    toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
-                    sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
-                    triggerVendorAlarm(updated.id, updated.customer_name, productNames)
-                    return [updated, ...prev]
-                }
-                return prev
-            })
+        if (vendorItems.length === 0) return
+
+        const productNames = vendorItems.map((i: any) => i.name).join(', ')
+        const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
+
+        // Alarme + notification dès que la commande passe à "confirmed"
+        // (hors du setOrders pour qu'elle se déclenche même si la commande est déjà dans la liste)
+        if (updated.status === 'confirmed') {
+            const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
+            toast.success(`Commande confirmée — ${updated.customer_name} !`, { description: desc, duration: 10000 })
+            sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
+            triggerVendorAlarm(updated.id, updated.customer_name, productNames)
         }
+
+        setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id)
+            if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
+            if (updated.status !== 'pending') return [updated, ...prev]
+            return prev
+        })
     }, [user?.id])
 
     // Real-time negotiations

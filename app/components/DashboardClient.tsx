@@ -458,22 +458,22 @@ export default function DashboardClient({ products: initialProducts, profile, us
         return () => document.removeEventListener('visibilitychange', onVisible)
     }, [user?.id])
 
-    // Real-time orders — order:insert (hors pending, car les commandes démarrent toujours pending)
+    // Real-time orders — order:insert
+    // Les nouvelles commandes démarrent toujours en "pending" donc ce handler
+    // met surtout à jour la liste si une commande arrive déjà confirmée (cas rare).
+    // L'alarme vendeur est gérée UNIQUEMENT par le canal direct vendor-direct-{id}.
     useRealtime('order:insert', (payload) => {
         if (!user?.id) return
         const newOrder = payload.new as any
         const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === user.id) || []
         if (vendorItems.length > 0 && newOrder.status !== 'pending') {
             setOrders(prev => [newOrder, ...prev])
-            const productNames = vendorItems.map((i: any) => i.name).join(', ')
-            const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
-            const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
-            toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
-            sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
-            triggerVendorAlarm(newOrder.id, newOrder.customer_name, productNames)
         }
     }, [user?.id])
 
+    // Real-time orders — order:update
+    // Toast + mise à jour de la liste seulement.
+    // L'alarme vendeur est gérée UNIQUEMENT par le canal direct vendor-direct-{id}.
     useRealtime('order:update', (payload) => {
         if (!user?.id) return
         const updated = payload.new as any
@@ -483,13 +483,10 @@ export default function DashboardClient({ products: initialProducts, profile, us
         const productNames = vendorItems.map((i: any) => i.name).join(', ')
         const deliveryLabel = updated.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard'
 
-        // Alarme + notification dès que la commande passe à "confirmed"
-        // (hors du setOrders pour qu'elle se déclenche même si la commande est déjà dans la liste)
         if (updated.status === 'confirmed') {
             const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
             toast.success(`Commande confirmée — ${updated.customer_name} !`, { description: desc, duration: 10000 })
             sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
-            triggerVendorAlarm(updated.id, updated.customer_name, productNames)
         }
 
         setOrders(prev => {

@@ -526,19 +526,16 @@ export default function DashboardClient({ products: initialProducts, profile, us
         }
     }, [user?.id])
 
-    // Real-time notifications (badge + alarme commande)
+    // Real-time notifications (badge + alarme sur toute nouvelle notif)
     useRealtime('notification:insert', (payload) => {
         setUnreadNotifs(prev => prev + 1)
         const notif = payload.new as any
-        const t = (notif?.type || '') as string
-        const isOrderNotif = t.includes('order') || t.includes('commande') || t.includes('subscription')
-        if (isOrderNotif) {
-            triggerVendorAlarm(
-                notif?.id || String(Date.now()),
-                notif?.title || 'Nouvelle commande',
-                notif?.body  || ''
-            )
-        }
+        // Déclenche l'alarme sur toute notification — le vendeur tape "Arrêter" pour couper
+        triggerVendorAlarm(
+            notif?.id || String(Date.now()),
+            notif?.title || 'Nouvelle activité',
+            notif?.body  || ''
+        )
     })
 
     const copyLink = () => {

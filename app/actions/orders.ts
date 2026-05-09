@@ -922,21 +922,9 @@ export async function createOrder(input: {
         })
         .eq('id', user.id)
 
-    // Push notification aux vendeurs concernés par cette commande
-    const vendorIds: string[] = [...new Set(
-        (order.items as any[])
-            .map((item: any) => item.seller_id)
-            .filter(Boolean)
-    )]
-    if (vendorIds.length) {
-        const productNames = (order.items as any[]).map((i: any) => i.name).join(', ')
-        sendPushToUsers(
-            vendorIds,
-            '🛒 Nouvelle commande !',
-            `${order.customer_name} · ${productNames} · ${(order.total_amount || 0).toLocaleString('fr-FR')} F`,
-            '/vendor/dashboard'
-        ).catch(() => {})
-    }
+    // NOTE : pas de push vendeur ici — la commande est en attente de paiement (pending).
+    // Le push est envoyé uniquement à la confirmation admin (adminConfirmPayment)
+    // pour ne pas alerter le vendeur sur une commande qui pourrait être rejetée.
 
     return { order: JSON.parse(JSON.stringify(order)) }
 }

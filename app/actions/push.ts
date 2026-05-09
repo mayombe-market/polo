@@ -4,11 +4,19 @@ import webpush from 'web-push'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 
-webpush.setVapidDetails(
-    process.env.VAPID_SUBJECT!,
-    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-    process.env.VAPID_PRIVATE_KEY!
-)
+// setVapidDetails en lazy — ne plante pas si les clés sont absentes (prod sans config)
+function getWebPush() {
+    const subject = process.env.VAPID_SUBJECT
+    const pubKey  = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
+    const privKey = process.env.VAPID_PRIVATE_KEY
+    if (!subject || !pubKey || !privKey) return null
+    try {
+        webpush.setVapidDetails(subject, pubKey, privKey)
+        return webpush
+    } catch {
+        return null
+    }
+}
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -54,6 +62,9 @@ export async function sendPushToUsers(
 ): Promise<void> {
     if (!userIds.length) return
 
+    const wp = getWebPush()
+    if (!wp) return  // clés VAPID non configurées → on skip silencieusement
+
     const supabase = await getSupabase()
     const { data: subs } = await supabase
         .from('push_subscriptions')
@@ -66,7 +77,7 @@ export async function sendPushToUsers(
 
     await Promise.allSettled(
         subs.map((row: { subscription: webpush.PushSubscription }) =>
-            webpush.sendNotification(row.subscription, payload)
+            wp.sendNotification(row.subscription, payload)
                 .catch(() => { /* subscription expirée ou invalide */ })
         )
     )

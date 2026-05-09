@@ -526,15 +526,17 @@ export default function DashboardClient({ products: initialProducts, profile, us
         }
     }, [user?.id])
 
-    // Real-time notifications (badge + alarme si commande confirmée)
+    // Real-time notifications (badge + alarme commande)
     useRealtime('notification:insert', (payload) => {
         setUnreadNotifs(prev => prev + 1)
         const notif = payload.new as any
-        if (notif?.type === 'order_confirmed') {
+        const t = (notif?.type || '') as string
+        const isOrderNotif = t.includes('order') || t.includes('commande') || t.includes('subscription')
+        if (isOrderNotif) {
             triggerVendorAlarm(
-                notif.related_id || notif.id,
-                'Nouvelle commande',
-                notif.title || 'Commande confirmée'
+                notif?.id || String(Date.now()),
+                notif?.title || 'Nouvelle commande',
+                notif?.body  || ''
             )
         }
     })

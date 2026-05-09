@@ -95,12 +95,12 @@ export async function saveDeliveryLocation(orderId: string, data: {
     // Vérifier que la commande appartient bien à cet utilisateur
     const { data: order } = await supabase
         .from('orders')
-        .select('id, customer_id')
+        .select('id, user_id')
         .eq('id', orderId)
         .single()
 
     if (!order) return { error: 'Commande introuvable' }
-    if (order.customer_id !== user.id) return { error: 'Non autorisé' }
+    if (order.user_id !== user.id) return { error: 'Non autorisé' }
 
     const update: Record<string, any> = { delivery_location_type: data.type }
 

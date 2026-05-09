@@ -51,6 +51,7 @@ import { requestHotelReview, getHotelReviewRequests, getHotelProductReviews, add
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 import { savePushSubscription } from '@/app/actions/push'
+import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -94,6 +95,32 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [negotiationsLoading, setNegotiationsLoading] = useState(true)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifs, setUnreadNotifs] = useState(0)
+
+    // ─── Alarme vendeur : boucle jusqu'à arrêt manuel ────────────────────────
+    const [alarmOrders, setAlarmOrders] = useState<{ id: string; customer_name: string; label: string }[]>([])
+    const alarmRef = useRef(false)
+
+    const triggerVendorAlarm = useCallback((orderId: string, customerName: string, label: string) => {
+        setAlarmOrders(prev => {
+            if (prev.find(o => o.id === orderId)) return prev
+            return [...prev, { id: orderId, customer_name: customerName, label }]
+        })
+        if (!alarmRef.current) {
+            alarmRef.current = true
+            startAdminAlarm()
+        }
+    }, [])
+
+    const dismissVendorAlarm = useCallback(() => {
+        stopAdminAlarm()
+        alarmRef.current = false
+        setAlarmOrders([])
+    }, [])
+
+    // Arrêter l'alarme si le vendeur quitte la page
+    useEffect(() => {
+        return () => { stopAdminAlarm(); alarmRef.current = false }
+    }, [])
 
     /** `loading` → premier fetch ; `ready` → OK ; `error` → échec critique (commandes) ; `not_found` → pas de user ou pas vendeur côté session. */
     type SellerBootstrapPhase = 'loading' | 'ready' | 'error' | 'not_found'
@@ -443,6 +470,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
             toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
             sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
+            triggerVendorAlarm(newOrder.id, newOrder.customer_name, productNames)
         }
     }, [user?.id])
 
@@ -461,6 +489,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     const desc = `${productNames} · ${deliveryLabel} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`
                     toast.success(`Commande confirmée — ${updated.customer_name}`, { description: desc, duration: 10000 })
                     sendNotification(`Commande confirmée — ${deliveryLabel}`, `${productNames} · ${updated.customer_name}`)
+                    triggerVendorAlarm(updated.id, updated.customer_name, productNames)
                     return [updated, ...prev]
                 }
                 return prev
@@ -553,6 +582,37 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
+
+            {/* ===== BANNIÈRE ALARME NOUVELLE COMMANDE ===== */}
+            {alarmOrders.length > 0 && (
+                <button
+                    onClick={() => { dismissVendorAlarm(); setActivePage('orders') }}
+                    className="fixed top-0 left-0 right-0 z-[99999] w-full flex items-center justify-between gap-3 px-5 py-4 bg-red-600 text-white shadow-2xl animate-pulse cursor-pointer border-b-4 border-red-800"
+                    style={{ animation: 'pulse 0.6s ease-in-out infinite' }}
+                >
+                    <div className="flex items-center gap-3">
+                        <span className="text-2xl">🛒</span>
+                        <div className="text-left">
+                            <p className="font-black text-sm uppercase tracking-wide leading-tight">
+                                {alarmOrders.length > 1
+                                    ? `${alarmOrders.length} nouvelles commandes !`
+                                    : `Nouvelle commande — ${alarmOrders[0].customer_name}`}
+                            </p>
+                            <p className="text-[11px] text-red-200 font-bold truncate max-w-[220px] sm:max-w-none">
+                                {alarmOrders[0].label}
+                                {alarmOrders.length > 1 && ` + ${alarmOrders.length - 1} autre${alarmOrders.length > 2 ? 's' : ''}`}
+                            </p>
+                        </div>
+                    </div>
+                    <div className="shrink-0 bg-white text-red-600 font-black text-[10px] uppercase px-3 py-2 rounded-xl">
+                        ✋ Arrêter
+                    </div>
+                </button>
+            )}
+
+            {/* Décalage du contenu quand la bannière est visible */}
+            {alarmOrders.length > 0 && <div className="fixed top-0 left-0 right-0 h-[68px] z-[99998] pointer-events-none" />}
+
             {/* ===== SIDEBAR DESKTOP ===== */}
             <aside className={`hidden md:flex flex-col ${sidebarOpen ? 'w-64' : 'w-20'} bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 transition-all duration-300 sticky top-0 h-screen`}>
                 <div className="p-6 flex items-center justify-between">

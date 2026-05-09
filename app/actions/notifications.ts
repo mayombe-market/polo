@@ -21,7 +21,18 @@ async function getSupabase() {
     )
 }
 
-/** Crée une notification pour un utilisateur (vérifie que l'appelant est authentifié) */
+// Client service_role — bypass RLS pour créer des notifications pour d'autres utilisateurs
+function getServiceSupabase() {
+    return createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { cookies: { getAll: () => [], setAll: () => {} } }
+    )
+}
+
+/** Crée une notification pour un utilisateur.
+ *  Utilise le service_role pour bypasser la RLS —
+ *  l'admin peut ainsi notifier les vendeurs sans restriction. */
 export async function createNotification(
     userId: string,
     type: string,
@@ -30,13 +41,14 @@ export async function createNotification(
     link?: string
 ) {
     try {
+        // Vérifier que l'appelant est bien connecté (sécurité minimale)
         const supabase = await getSupabase()
-
-        // Vérifier que l'appelant est connecté (protection contre appel direct depuis le client)
         const { data: { user } } = await supabase.auth.getUser()
         if (!user) return
 
-        const { error } = await supabase.from('notifications').insert({
+        // Insert via service_role pour ne pas être bloqué par RLS
+        const adminSupabase = getServiceSupabase()
+        const { error } = await adminSupabase.from('notifications').insert({
             user_id: userId,
             type,
             title,
@@ -44,11 +56,7 @@ export async function createNotification(
             link: link || null,
         })
         if (error) {
-            console.error('[createNotification] insert refusé ou erreur Supabase:', error.message, {
-                userId,
-                type,
-                callerId: user.id,
-            })
+            console.error('[createNotification] insert error:', error.message, { userId, type })
         }
     } catch (e) {
         console.error('[createNotification] exception:', e)

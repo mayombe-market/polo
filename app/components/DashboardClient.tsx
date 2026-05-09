@@ -526,17 +526,27 @@ export default function DashboardClient({ products: initialProducts, profile, us
         }
     }, [user?.id])
 
-    // Real-time notifications (badge + alarme sur toute nouvelle notif)
-    useRealtime('notification:insert', (payload) => {
-        setUnreadNotifs(prev => prev + 1)
-        const notif = payload.new as any
-        // Déclenche l'alarme sur toute notification — le vendeur tape "Arrêter" pour couper
-        triggerVendorAlarm(
-            notif?.id || String(Date.now()),
-            notif?.title || 'Nouvelle activité',
-            notif?.body  || ''
-        )
-    })
+    // Real-time notifications — canal direct (bypass RealtimeProvider)
+    useEffect(() => {
+        if (!user?.id) return
+        const client = getSupabaseBrowserClient()
+        const channel = client
+            .channel(`vendor-notif-${user.id}`)
+            .on(
+                'postgres_changes' as any,
+                { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+                (payload: any) => {
+                    setUnreadNotifs(prev => prev + 1)
+                    triggerVendorAlarm(
+                        payload.new?.id || String(Date.now()),
+                        payload.new?.title || 'Nouvelle commande',
+                        payload.new?.body  || ''
+                    )
+                }
+            )
+            .subscribe()
+        return () => { client.removeChannel(channel) }
+    }, [user?.id])
 
     const copyLink = () => {
         const url = `${window.location.origin}/seller/${user?.id}`

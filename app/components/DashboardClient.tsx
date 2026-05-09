@@ -463,14 +463,17 @@ export default function DashboardClient({ products: initialProducts, profile, us
         if (!user?.id) return
         const newOrder = payload.new as any
         const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === user.id) || []
-        if (vendorItems.length > 0 && newOrder.status !== 'pending') {
-            setOrders(prev => [newOrder, ...prev])
+        if (vendorItems.length > 0) {
             const productNames = vendorItems.map((i: any) => i.name).join(', ')
             const deliveryLabel = newOrder.delivery_mode === 'express' ? '⚡ EXPRESS 3-6H' : '📦 Standard 6-48H'
             const desc = `${productNames} · ${deliveryLabel} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`
             toast.success(`Nouvelle commande de ${newOrder.customer_name} !`, { description: desc, duration: 10000 })
             sendNotification(`Nouvelle commande — ${deliveryLabel}`, `${productNames} · ${newOrder.customer_name}`)
             triggerVendorAlarm(newOrder.id, newOrder.customer_name, productNames)
+            // N'ajouter à la liste que si non-pending (les pending sont gérés par l'admin)
+            if (newOrder.status !== 'pending') {
+                setOrders(prev => [newOrder, ...prev])
+            }
         }
     }, [user?.id])
 
@@ -526,27 +529,46 @@ export default function DashboardClient({ products: initialProducts, profile, us
         }
     }, [user?.id])
 
-    // Real-time notifications — canal direct (bypass RealtimeProvider)
+    // ─── Canal direct vendeur — alarme + badge (bypass RealtimeProvider) ──────
+    // Les subscriptions orders n'ont PAS de filtre → pas besoin de REPLICA IDENTITY FULL.
+    // La subscription notifications (filtrée) s'ajoute en bonus si REPLICA IDENTITY FULL est actif.
     useEffect(() => {
         if (!user?.id) return
+        const vendorId = user.id
         const client = getSupabaseBrowserClient()
+
         const channel = client
-            .channel(`vendor-notif-${user.id}`)
-            .on(
-                'postgres_changes' as any,
-                { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${user.id}` },
+            .channel(`vendor-direct-${vendorId}`)
+            // Nouvelle commande → alarme immédiate (même si pending)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'orders' } as any,
                 (payload: any) => {
-                    setUnreadNotifs(prev => prev + 1)
-                    triggerVendorAlarm(
-                        payload.new?.id || String(Date.now()),
-                        payload.new?.title || 'Nouvelle commande',
-                        payload.new?.body  || ''
-                    )
-                }
-            )
+                    const o = payload.new
+                    const items = (o?.items || []).filter((i: any) => i.seller_id === vendorId)
+                    if (items.length > 0) {
+                        const label = items.map((i: any) => i.name).join(', ')
+                        triggerVendorAlarm(o.id || String(Date.now()), o.customer_name || '?', label)
+                    }
+                })
+            // Commande confirmée → alarme + badge
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders' } as any,
+                (payload: any) => {
+                    const o = payload.new
+                    const items = (o?.items || []).filter((i: any) => i.seller_id === vendorId)
+                    if (items.length > 0 && o.status === 'confirmed') {
+                        const label = items.map((i: any) => i.name).join(', ')
+                        triggerVendorAlarm(o.id || String(Date.now()), o.customer_name || '?', label)
+                        setUnreadNotifs(prev => prev + 1)
+                    }
+                })
+            // Notification directe → badge (si REPLICA IDENTITY FULL actif sur la table notifications)
+            .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${vendorId}` } as any,
+                () => {
+                    // badge uniquement — l'alarme est déjà déclenchée via order:update
+                })
             .subscribe()
+
         return () => { client.removeChannel(channel) }
-    }, [user?.id])
+    }, [user?.id, triggerVendorAlarm])
 
     const copyLink = () => {
         const url = `${window.location.origin}/seller/${user?.id}`

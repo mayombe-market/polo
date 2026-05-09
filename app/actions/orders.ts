@@ -368,7 +368,17 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
         // Notifier chaque vendeur impliqué
         for (const sellerId of sellerIds) {
             const sellerItems = (order.items || []).filter((i: any) => i.seller_id === sellerId).map((i: any) => i.name).join(', ')
-            createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/account/dashboard?tab=orders`).catch(() => {})
+            createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/vendor/dashboard`).catch(() => {})
+        }
+
+        // Push téléphone vendeur à la confirmation du paiement
+        if (sellerIds.length > 0) {
+            sendPushToUsers(
+                sellerIds as string[],
+                '✅ Paiement confirmé !',
+                `${productNames} · ${dlvLabel} · Préparez la commande !`,
+                '/vendor/dashboard'
+            ).catch(() => {})
         }
 
         // Notifier l'acheteur

@@ -197,11 +197,16 @@ let _alarmRunning = false
 /**
  * Génère un burst d'alarme : 4 bips sawtooth alternés (1047 ↔ 1319 Hz), volume max.
  * Pensé pour être audible à 20 m.
+ * Async : attend que l'AudioContext soit débloqué avant de planifier l'audio.
  */
-function _playAlarmBurst() {
+async function _playAlarmBurst() {
     try {
         const ctx = getAudioContext()
-        resumeAudioIfNeeded(ctx)
+        // IMPORTANT : await le resume — sinon les oscillateurs jouent en silence
+        // si le contexte est encore "suspended" (politique autoplay navigateur).
+        if (ctx.state === 'suspended') {
+            await ctx.resume()
+        }
         const now = ctx.currentTime
 
         // Compressor pour maximiser le niveau de sortie
@@ -245,8 +250,8 @@ function _playAlarmBurst() {
 export function startAdminAlarm() {
     if (_alarmRunning) return
     _alarmRunning = true
-    _playAlarmBurst()
-    _alarmInterval = setInterval(_playAlarmBurst, 2200)
+    void _playAlarmBurst()
+    _alarmInterval = setInterval(() => void _playAlarmBurst(), 2200)
 }
 
 /** Arrête l'alarme admin. */

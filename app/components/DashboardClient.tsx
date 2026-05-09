@@ -50,7 +50,7 @@ import { getHotelMaxRooms } from '@/lib/hotelPlans'
 import { requestHotelReview, getHotelReviewRequests, getHotelProductReviews, addHotelReply } from '@/app/actions/hotel-reviews'
 import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/subscription'
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
-import { savePushSubscription } from '@/app/actions/push'
+import VendorPushPrompt from '@/app/components/VendorPushPrompt'
 import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
@@ -241,46 +241,17 @@ export default function DashboardClient({ products: initialProducts, profile, us
     // ===== NOTIFICATION SOUND + BROWSER PUSH =====
     const audioCtxRef = useRef<AudioContext | null>(null)
 
-    // ─── Push notifications : permission + abonnement ────────────────────────
+    // ─── Service Worker : navigation après clic sur notif push ──────────────
+    // (L'abonnement push et la demande de permission sont gérés par VendorPushPrompt)
     useEffect(() => {
-        const setup = async () => {
-            if (!('Notification' in window) || !('serviceWorker' in navigator) || !('PushManager' in window)) return
-
-            let permission = Notification.permission
-            if (permission === 'default') {
-                permission = await Notification.requestPermission()
-            }
-            if (permission !== 'granted') return
-
-            try {
-                const reg = await navigator.serviceWorker.ready
-                const existing = await reg.pushManager.getSubscription()
-                const sub = existing || await reg.pushManager.subscribe({
-                    userVisibleOnly: true,
-                    applicationServerKey: urlBase64ToUint8Array(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!) as unknown as string,
-                })
-                await savePushSubscription(sub.toJSON() as PushSubscriptionJSON)
-            } catch { /* push non supporté ou refusé */ }
-        }
-
-        // Écoute les messages du SW (navigation après clic notif)
         const onSWMessage = (e: MessageEvent) => {
             if (e.data?.type === 'PUSH_NAVIGATE' && e.data?.url) {
                 window.location.href = e.data.url
             }
         }
         navigator.serviceWorker?.addEventListener('message', onSWMessage)
-        setup()
         return () => navigator.serviceWorker?.removeEventListener('message', onSWMessage)
     }, [])
-
-    // Convertit la clé VAPID base64url → Uint8Array (requis par pushManager.subscribe)
-    function urlBase64ToUint8Array(base64String: string): Uint8Array {
-        const padding = '='.repeat((4 - (base64String.length % 4)) % 4)
-        const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/')
-        const raw = window.atob(base64)
-        return Uint8Array.from([...raw].map(c => c.charCodeAt(0)))
-    }
 
     // Son d'alerte vendeur — fort, triple bip sawtooth pour être entendu
     const playNotificationSound = useCallback(() => {
@@ -604,6 +575,9 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     return (
         <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex">
+
+            {/* ===== ACTIVATION NOTIFICATIONS PUSH ===== */}
+            <VendorPushPrompt />
 
             {/* ===== BANNIÈRE ALARME NOUVELLE COMMANDE ===== */}
             {alarmOrders.length > 0 && (

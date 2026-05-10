@@ -55,12 +55,13 @@ export async function adminDeleteVendor(vendorId: string): Promise<{ success: tr
     if (checkErr || !profile) return { error: 'Vendeur introuvable' }
     if (profile.role !== 'vendor') return { error: 'Ce compte n\'est pas un vendeur' }
 
-    // Supprimer les données liées avant le compte auth (évite les erreurs de FK)
-    await svc().from('products').delete().eq('seller_id', vendorId)
-    await svc().from('vendor_verifications').delete().eq('vendor_id', vendorId)
-    await svc().from('profiles').delete().eq('id', vendorId)
+    // Suppression en cascade via RPC (toutes les tables liées dans le bon ordre)
+    const { error: cascadeErr } = await svc().rpc('admin_delete_vendor_cascade', {
+        p_vendor_id: vendorId,
+    })
+    if (cascadeErr) return { error: `Erreur nettoyage données : ${cascadeErr.message}` }
 
-    // Supprimer le compte auth
+    // Supprimer le compte auth (toutes les FK sont déjà nettoyées)
     const { error: deleteErr } = await svc().auth.admin.deleteUser(vendorId)
     if (deleteErr) return { error: deleteErr.message }
 

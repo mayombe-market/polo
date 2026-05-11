@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, usePathname } from 'next/navigation'
 import CartBadge from './CartBadge'
 import SearchBar from './SearchBar'
 import HeaderContactPhones from './HeaderContactPhones'
@@ -22,7 +22,26 @@ export default function Header() {
     const { user, profile, supabase } = useAuth()
     const avatarUrl = profile?.avatar_url || null
     const userRole = profile?.role || null
+    const pathname = usePathname()
     const [isDarkMode, setIsDarkMode] = useState(false)
+
+    // Logo contextuel : renvoie au bon endroit selon la section en cours
+    const logoHref = pathname.startsWith('/admin') || pathname.startsWith('/comptable')
+        ? '/admin'
+        : pathname.startsWith('/vendor')
+            ? '/vendor/dashboard'
+            : (
+                pathname.startsWith('/product') ||
+                pathname.startsWith('/category') ||
+                pathname.startsWith('/sub_category') ||
+                pathname.startsWith('/search') ||
+                pathname.startsWith('/seller') ||
+                pathname.startsWith('/store') ||
+                pathname.startsWith('/patisserie') ||
+                pathname.startsWith('/restaurant')
+            )
+                ? '/marketplace'
+                : '/'
     const [showAuthModal, setShowAuthModal] = useState(false)
     const [showUserMenu, setShowUserMenu] = useState(false)
     const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
@@ -138,7 +157,7 @@ export default function Header() {
         <header ref={headerRef} className="relative border-b bg-white dark:bg-slate-900 dark:border-slate-800 sticky top-0 z-50 transition-colors shadow-sm">
             <div className="flex items-center justify-between gap-3 py-2 px-3 md:py-2.5 md:px-4 md:gap-4">
                 {/* 1. LOGO adaptatif fond clair / fond sombre */}
-                <Link href="/" className="shrink-0 flex items-center hover:opacity-90 transition-opacity">
+                <Link href={logoHref} className="shrink-0 flex items-center hover:opacity-90 transition-opacity">
                     <MayombeLogo />
                 </Link>
 

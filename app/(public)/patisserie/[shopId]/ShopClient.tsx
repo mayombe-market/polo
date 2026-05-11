@@ -1,17 +1,27 @@
 'use client'
 
 import {
-    useState, useMemo, useEffect, useRef, useCallback,
+    useState, useMemo, useEffect, useRef, useCallback, useTransition,
 } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
+import { useRouter } from 'next/navigation'
 import {
     ShieldCheck, Star, MapPin, ArrowLeft, Clock, Search,
     X, Plus, Minus, Cake, Phone, Bike, ShoppingCart,
-    ChevronRight, Timer,
+    ChevronRight, Timer, Check, AlertCircle, Loader2,
 } from 'lucide-react'
-import { useCart } from '@/hooks/userCart'
+import { useAuth } from '@/hooks/useAuth'
+import { createOrder } from '@/app/actions/orders'
+import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import type { ShopProduct, ShopSeller } from './page'
+
+// ─── Types ────────────────────────────────────────────────────────────────────
+
+type LocalCartItem = {
+    product: ShopProduct
+    qty: number
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -37,16 +47,16 @@ function isNew(created_at: string): boolean {
 function deriveSubcategory(p: ShopProduct): string {
     if (p.subcategory) return p.subcategory
     const n = (p.name || '').toLowerCase()
-    if (n.includes('cupcake'))                                              return 'Cupcakes'
-    if (n.includes('macaron'))                                              return 'Macarons'
-    if (n.includes('muffin'))                                               return 'Muffins'
-    if (n.includes('brownie'))                                              return 'Brownies'
-    if (n.includes('tarte') || n.includes('tartelette'))                    return 'Tartes'
-    if (n.includes('mariage') || n.includes('wedding'))                     return 'Mariage'
-    if (n.includes('anniversaire'))                                         return 'Anniversaire'
+    if (n.includes('cupcake'))                                                  return 'Cupcakes'
+    if (n.includes('macaron'))                                                  return 'Macarons'
+    if (n.includes('muffin'))                                                   return 'Muffins'
+    if (n.includes('brownie'))                                                  return 'Brownies'
+    if (n.includes('tarte') || n.includes('tartelette'))                        return 'Tartes'
+    if (n.includes('mariage') || n.includes('wedding'))                         return 'Mariage'
+    if (n.includes('anniversaire'))                                             return 'Anniversaire'
     if (n.includes('viennoiserie') || n.includes('croissant') || n.includes('brioche')) return 'Viennoiseries'
-    if (n.includes('box') || n.includes('coffret'))                         return 'Box sucrées'
-    if (n.includes('gâteau') || n.includes('gateau') || n.includes('cake')) return 'Gâteaux'
+    if (n.includes('box') || n.includes('coffret'))                             return 'Box sucrées'
+    if (n.includes('gâteau') || n.includes('gateau') || n.includes('cake'))    return 'Gâteaux'
     return 'Créations'
 }
 
@@ -65,7 +75,6 @@ function ClosedOverlay({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onDismiss} />
             <div className="relative bg-white rounded-3xl max-w-sm w-full shadow-2xl overflow-hidden">
-                {/* Header */}
                 <div className="bg-neutral-900 px-6 pt-6 pb-5 text-white">
                     <button
                         onClick={onDismiss}
@@ -84,8 +93,6 @@ function ClosedOverlay({
                         </p>
                     )}
                 </div>
-
-                {/* Body */}
                 <div className="p-5">
                     <p className="text-sm text-neutral-500 mb-5">
                         <strong>{shopName}</strong> n'est pas disponible pour le moment.
@@ -103,28 +110,430 @@ function ClosedOverlay({
     )
 }
 
-// ─── Cart Sidebar (desktop) ───────────────────────────────────────────────────
+// ─── Patisserie Checkout Modal ────────────────────────────────────────────────
+
+const DELIVERY_MODES = [
+    { key: 'standard', label: 'Standard', sublabel: '24-48h', fee: 1000 },
+    { key: 'express',  label: 'Express',  sublabel: '3-6h',   fee: 2000 },
+]
+
+const PAYMENT_METHODS = [
+    { key: 'mobile_money', label: 'MTN Mobile Money', emoji: '📱' },
+    { key: 'airtel_money', label: 'Airtel Money',     emoji: '📲' },
+    { key: 'cash',         label: 'Cash à la livraison', emoji: '💵' },
+]
+
+type CheckoutStep = 'form' | 'submitting' | 'success' | 'error'
+
+function PatisserieCheckoutModal({
+    items,
+    seller,
+    onClose,
+    onSuccess,
+}: {
+    items: LocalCartItem[]
+    seller: ShopSeller
+    onClose: () => void
+    onSuccess: () => void
+}) {
+    const [step, setStep]               = useState<CheckoutStep>('form')
+    const [city, setCity]               = useState('')
+    const [district, setDistrict]       = useState('')
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
+    const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'airtel_money' | 'cash'>('mobile_money')
+    const [transactionId, setTransactionId] = useState('')
+    const [phone, setPhone]             = useState('')
+    const [customerName, setCustomerName] = useState('')
+    const [landmark, setLandmark]       = useState('')
+    const [errorMsg, setErrorMsg]       = useState('')
+    const [orderId, setOrderId]         = useState('')
+    const [, startTransition]           = useTransition()
+
+    // Close on Escape
+    useEffect(() => {
+        const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+        document.addEventListener('keydown', h)
+        return () => document.removeEventListener('keydown', h)
+    }, [onClose])
+
+    // Lock body scroll
+    useEffect(() => {
+        document.body.style.overflow = 'hidden'
+        return () => { document.body.style.overflow = '' }
+    }, [])
+
+    const districts = city ? (DELIVERY_LOCATIONS[city] || []) : []
+
+    const deliveryFee = deliveryMode === 'express' ? 2000 : 1000
+    const subtotal = items.reduce((s, i) => {
+        const fp = getPromoPrice(i.product) ?? i.product.price
+        return s + fp * i.qty
+    }, 0)
+    const total = subtotal + deliveryFee
+
+    const needsTransactionId = paymentMethod === 'mobile_money' || paymentMethod === 'airtel_money'
+    const needsPhone = paymentMethod === 'cash'
+
+    const handleSubmit = useCallback(async () => {
+        // Validate
+        if (!city) { setErrorMsg('Choisissez votre ville.'); return }
+        if (!district) { setErrorMsg('Choisissez votre quartier.'); return }
+        if (needsTransactionId && transactionId.replace(/\D/g, '').length !== 10) {
+            setErrorMsg("L'ID de transaction doit contenir exactement 10 chiffres.")
+            return
+        }
+        if (needsPhone && phone.replace(/\D/g, '').length !== 10) {
+            setErrorMsg('Le numéro de téléphone doit contenir exactement 10 chiffres.')
+            return
+        }
+
+        setErrorMsg('')
+        setStep('submitting')
+
+        const orderItems = items.map(i => ({
+            id: i.product.id,
+            name: i.product.name,
+            price: getPromoPrice(i.product) ?? i.product.price,
+            quantity: i.qty,
+            img: i.product.img || '',
+            seller_id: i.product.seller_id || seller.id,
+        }))
+
+        startTransition(async () => {
+            const result = await createOrder({
+                items: orderItems,
+                city,
+                district,
+                payment_method: paymentMethod,
+                total_amount: total,
+                delivery_mode: deliveryMode,
+                delivery_fee: deliveryFee,
+                transaction_id: needsTransactionId ? transactionId : undefined,
+                phone: needsPhone ? phone : undefined,
+                customer_name: customerName || undefined,
+                landmark: landmark || undefined,
+            })
+
+            if ('error' in result) {
+                setErrorMsg(result.error ?? 'Une erreur est survenue.')
+                setStep('error')
+            } else if (result.order) {
+                setOrderId(result.order.id ?? '')
+                setStep('success')
+                onSuccess()
+            }
+        })
+    }, [
+        city, district, paymentMethod, deliveryMode, deliveryFee,
+        transactionId, phone, customerName, landmark,
+        needsTransactionId, needsPhone, items, seller.id,
+        total, onSuccess, startTransition,
+    ])
+
+    return (
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
+            onClick={onClose}
+        >
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+            <div
+                className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl max-h-[95vh] flex flex-col"
+                onClick={e => e.stopPropagation()}
+                style={{ animation: 'slideUp 0.25s ease-out' }}
+            >
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-neutral-100 flex-shrink-0">
+                    <h2 className="text-base font-black text-neutral-900">
+                        {step === 'success' ? '✅ Commande envoyée !' : 'Finaliser la commande'}
+                    </h2>
+                    <button
+                        onClick={onClose}
+                        className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                    >
+                        <X className="w-4 h-4 text-neutral-600" />
+                    </button>
+                </div>
+
+                {/* ── Success ── */}
+                {step === 'success' && (
+                    <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
+                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
+                            <Check className="w-8 h-8 text-green-600" />
+                        </div>
+                        <h3 className="text-lg font-black text-neutral-900 mb-2">
+                            Commande envoyée avec succès !
+                        </h3>
+                        <p className="text-sm text-neutral-500 mb-1">
+                            Votre commande est en attente de confirmation de paiement.
+                        </p>
+                        {orderId && (
+                            <p className="text-xs text-neutral-400 mb-6 font-mono bg-neutral-50 px-3 py-1.5 rounded-lg">
+                                Réf : {orderId.slice(0, 8).toUpperCase()}
+                            </p>
+                        )}
+                        <Link
+                            href="/account/dashboard?tab=orders"
+                            className="inline-flex items-center gap-2 bg-rose-500 text-white text-sm font-black px-6 py-3 rounded-2xl hover:bg-rose-600 transition-colors"
+                        >
+                            Voir mes commandes
+                            <ChevronRight className="w-4 h-4" />
+                        </Link>
+                    </div>
+                )}
+
+                {/* ── Submitting ── */}
+                {step === 'submitting' && (
+                    <div className="flex-1 flex flex-col items-center justify-center px-6 py-16">
+                        <Loader2 className="w-10 h-10 text-rose-500 animate-spin mb-4" />
+                        <p className="text-sm font-semibold text-neutral-600">Envoi de votre commande…</p>
+                    </div>
+                )}
+
+                {/* ── Form / Error ── */}
+                {(step === 'form' || step === 'error') && (
+                    <>
+                        {/* Scrollable form */}
+                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+
+                            {/* Order summary */}
+                            <div className="bg-neutral-50 rounded-2xl p-4">
+                                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">
+                                    Récapitulatif
+                                </p>
+                                <div className="space-y-1">
+                                    {items.map(i => {
+                                        const fp = getPromoPrice(i.product) ?? i.product.price
+                                        return (
+                                            <div key={i.product.id} className="flex justify-between text-xs">
+                                                <span className="text-neutral-600 truncate max-w-[70%]">
+                                                    {i.qty}× {i.product.name}
+                                                </span>
+                                                <span className="font-semibold text-neutral-800 shrink-0">
+                                                    {formatPrice(fp * i.qty)}
+                                                </span>
+                                            </div>
+                                        )
+                                    })}
+                                </div>
+                            </div>
+
+                            {/* Delivery city */}
+                            <div>
+                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                    Ville de livraison <span className="text-rose-500">*</span>
+                                </label>
+                                <select
+                                    value={city}
+                                    onChange={e => { setCity(e.target.value); setDistrict('') }}
+                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 appearance-none"
+                                >
+                                    <option value="">Choisir une ville…</option>
+                                    {Object.keys(DELIVERY_LOCATIONS).map(c => (
+                                        <option key={c} value={c}>{c}</option>
+                                    ))}
+                                </select>
+                            </div>
+
+                            {/* District */}
+                            {city && (
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                        Quartier <span className="text-rose-500">*</span>
+                                    </label>
+                                    <select
+                                        value={district}
+                                        onChange={e => setDistrict(e.target.value)}
+                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 appearance-none"
+                                    >
+                                        <option value="">Choisir un quartier…</option>
+                                        {districts.map(d => (
+                                            <option key={d} value={d}>{d}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Landmark (optional) */}
+                            <div>
+                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                    Point de repère <span className="text-neutral-400 font-normal">(optionnel)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={landmark}
+                                    onChange={e => setLandmark(e.target.value)}
+                                    placeholder="Ex: Près de l'église, immeuble bleu…"
+                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                            </div>
+
+                            {/* Delivery mode */}
+                            <div>
+                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                    Mode de livraison
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {DELIVERY_MODES.map(mode => (
+                                        <button
+                                            key={mode.key}
+                                            type="button"
+                                            onClick={() => setDeliveryMode(mode.key as 'standard' | 'express')}
+                                            className={`rounded-xl border p-3 text-left transition-all ${
+                                                deliveryMode === mode.key
+                                                    ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-300'
+                                                    : 'border-neutral-200 hover:border-neutral-300'
+                                            }`}
+                                        >
+                                            <p className="text-xs font-bold text-neutral-800">{mode.label}</p>
+                                            <p className="text-[10px] text-neutral-400 mt-0.5">{mode.sublabel}</p>
+                                            <p className="text-xs font-black text-rose-600 mt-1">
+                                                {formatPrice(mode.fee)}
+                                            </p>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Payment method */}
+                            <div>
+                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                    Méthode de paiement <span className="text-rose-500">*</span>
+                                </label>
+                                <div className="space-y-2">
+                                    {PAYMENT_METHODS.map(pm => (
+                                        <button
+                                            key={pm.key}
+                                            type="button"
+                                            onClick={() => setPaymentMethod(pm.key as typeof paymentMethod)}
+                                            className={`w-full flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all ${
+                                                paymentMethod === pm.key
+                                                    ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-300'
+                                                    : 'border-neutral-200 hover:border-neutral-300'
+                                            }`}
+                                        >
+                                            <span className="text-lg">{pm.emoji}</span>
+                                            <span className="text-sm font-semibold text-neutral-800">{pm.label}</span>
+                                            {paymentMethod === pm.key && (
+                                                <Check className="w-4 h-4 text-rose-500 ml-auto" />
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Transaction ID (mobile money) */}
+                            {needsTransactionId && (
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                        ID de transaction <span className="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        inputMode="numeric"
+                                        maxLength={10}
+                                        value={transactionId}
+                                        onChange={e => setTransactionId(e.target.value.replace(/\D/g, ''))}
+                                        placeholder="10 chiffres"
+                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                    />
+                                    <p className="text-[10px] text-neutral-400 mt-1">
+                                        L'ID reçu par SMS après le paiement mobile money (10 chiffres).
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Phone (cash) */}
+                            {needsPhone && (
+                                <div>
+                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                        Numéro de téléphone <span className="text-rose-500">*</span>
+                                    </label>
+                                    <input
+                                        type="tel"
+                                        inputMode="numeric"
+                                        maxLength={10}
+                                        value={phone}
+                                        onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
+                                        placeholder="10 chiffres"
+                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                    />
+                                </div>
+                            )}
+
+                            {/* Customer name (optional) */}
+                            <div>
+                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                                    Votre nom <span className="text-neutral-400 font-normal">(optionnel)</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={customerName}
+                                    onChange={e => setCustomerName(e.target.value)}
+                                    placeholder="Nom pour la livraison"
+                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
+                                />
+                            </div>
+
+                            {/* Error */}
+                            {(step === 'error' || errorMsg) && errorMsg && (
+                                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+                                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                                    <p className="text-xs text-red-700 leading-relaxed">{errorMsg}</p>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Sticky footer */}
+                        <div className="px-5 pb-5 pt-3 border-t border-neutral-100 flex-shrink-0 bg-white">
+                            {/* Total */}
+                            <div className="flex justify-between items-center mb-3 text-sm">
+                                <span className="text-neutral-500">Sous-total</span>
+                                <span className="font-semibold text-neutral-700">{formatPrice(subtotal)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-3 text-sm">
+                                <span className="text-neutral-500">Livraison ({deliveryMode === 'express' ? 'express' : 'standard'})</span>
+                                <span className="font-semibold text-neutral-700">{formatPrice(deliveryFee)}</span>
+                            </div>
+                            <div className="flex justify-between items-center mb-4 text-base font-black">
+                                <span className="text-neutral-900">Total</span>
+                                <span className="text-rose-600">{formatPrice(total)}</span>
+                            </div>
+
+                            <button
+                                onClick={handleSubmit}
+                                className="w-full bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-black text-sm py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-md shadow-rose-200"
+                            >
+                                <ShoppingCart className="w-4 h-4" />
+                                Commander · {formatPrice(total)}
+                            </button>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ─── Cart Sidebar (props-driven, no global cart) ──────────────────────────────
 
 function CartSidebar({
-    sellerId,
+    items,
     shopName,
+    onUpdateQty,
+    onCommander,
 }: {
-    sellerId: string
+    items: LocalCartItem[]
     shopName: string
+    onUpdateQty: (productId: string, qty: number) => void
+    onCommander: () => void
 }) {
-    const { cart, updateQuantity, total } = useCart()
-
-    // Items de cette boutique uniquement
-    const shopItems = useMemo(
-        () => cart.filter(item => item.seller_id === sellerId),
-        [cart, sellerId]
-    )
-    const shopTotal = useMemo(
-        () => shopItems.reduce((sum, i) => sum + i.price * i.quantity, 0),
-        [shopItems]
+    const subtotal = useMemo(
+        () => items.reduce((s, i) => s + (getPromoPrice(i.product) ?? i.product.price) * i.qty, 0),
+        [items]
     )
 
-    if (shopItems.length === 0) {
+    if (items.length === 0) {
         return (
             <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-6 text-center">
                 <div className="w-14 h-14 bg-neutral-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -148,49 +557,49 @@ function CartSidebar({
 
             {/* Items */}
             <div className="divide-y divide-neutral-50 max-h-80 overflow-y-auto">
-                {shopItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3">
-                        {/* Thumbnail */}
-                        {item.img ? (
-                            <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
-                                <Image src={item.img} alt={item.name} fill className="object-cover" sizes="44px" />
-                            </div>
-                        ) : (
-                            <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
-                                <Cake className="w-5 h-5 text-rose-200" />
-                            </div>
-                        )}
+                {items.map(item => {
+                    const fp = getPromoPrice(item.product) ?? item.product.price
+                    return (
+                        <div key={item.product.id} className="flex items-center gap-3 px-4 py-3">
+                            {item.product.img ? (
+                                <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
+                                    <Image src={item.product.img} alt={item.product.name} fill className="object-cover" sizes="44px" />
+                                </div>
+                            ) : (
+                                <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                                    <Cake className="w-5 h-5 text-rose-200" />
+                                </div>
+                            )}
 
-                        {/* Name + price */}
-                        <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-neutral-800 truncate">
-                                {item.name}
-                            </p>
-                            <p className="text-xs text-rose-600 font-bold mt-0.5">
-                                {formatPrice(item.price)}
-                            </p>
-                        </div>
+                            <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-neutral-800 truncate">
+                                    {item.product.name}
+                                </p>
+                                <p className="text-xs text-rose-600 font-bold mt-0.5">
+                                    {formatPrice(fp)}
+                                </p>
+                            </div>
 
-                        {/* Qty controls */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                            <button
-                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
-                            >
-                                <Minus className="w-3 h-3 text-neutral-700" />
-                            </button>
-                            <span className="w-5 text-center text-xs font-black text-neutral-900">
-                                {item.quantity}
-                            </span>
-                            <button
-                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
-                            >
-                                <Plus className="w-3 h-3 text-neutral-700" />
-                            </button>
+                            <div className="flex items-center gap-1 flex-shrink-0">
+                                <button
+                                    onClick={() => onUpdateQty(item.product.id, item.qty - 1)}
+                                    className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                                >
+                                    <Minus className="w-3 h-3 text-neutral-700" />
+                                </button>
+                                <span className="w-5 text-center text-xs font-black text-neutral-900">
+                                    {item.qty}
+                                </span>
+                                <button
+                                    onClick={() => onUpdateQty(item.product.id, item.qty + 1)}
+                                    className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                                >
+                                    <Plus className="w-3 h-3 text-neutral-700" />
+                                </button>
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    )
+                })}
             </div>
 
             {/* Summary + CTA */}
@@ -198,21 +607,16 @@ function CartSidebar({
                 <div className="flex justify-between items-center mb-3">
                     <span className="text-sm text-neutral-500">Sous-total</span>
                     <span className="text-sm font-black text-neutral-900">
-                        {formatPrice(shopTotal)}
+                        {formatPrice(subtotal)}
                     </span>
                 </div>
-                {cart.length > shopItems.length && (
-                    <p className="text-[10px] text-neutral-400 mb-2">
-                        + articles d'autres boutiques dans votre panier
-                    </p>
-                )}
-                <Link
-                    href="/cart"
+                <button
+                    onClick={onCommander}
                     className="flex items-center justify-between w-full bg-rose-500 hover:bg-rose-600 text-white text-sm font-black px-4 py-3 rounded-xl transition-colors shadow-sm shadow-rose-200"
                 >
                     <span>Commander</span>
                     <ChevronRight className="w-4 h-4" />
-                </Link>
+                </button>
             </div>
         </div>
     )
@@ -225,15 +629,16 @@ function ProductModal({
     allProducts,
     onClose,
     onSelectProduct,
+    onAddToLocal,
 }: {
     product: ShopProduct
     allProducts: ShopProduct[]
     onClose: () => void
     onSelectProduct: (p: ShopProduct) => void
+    onAddToLocal: (product: ShopProduct, qty: number) => void
 }) {
-    const { addToCart, updateQuantity, cart } = useCart()
     const [qty, setQty] = useState(1)
-    const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
+    const [status, setStatus] = useState<'idle' | 'added'>('idle')
 
     const promoPrice = getPromoPrice(product)
     const finalPrice = promoPrice ?? product.price
@@ -242,7 +647,6 @@ function ProductModal({
         product.stock_quantity !== null &&
         product.stock_quantity <= 0
 
-    // Fréquemment achetés ensemble : même sous-catégorie, autres produits
     const relatedProducts = useMemo(() => {
         const cat = deriveSubcategory(product)
         return allProducts
@@ -250,44 +654,23 @@ function ProductModal({
             .slice(0, 3)
     }, [product, allProducts])
 
-    // Fermer sur Escape
     useEffect(() => {
         const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
         document.addEventListener('keydown', h)
         return () => document.removeEventListener('keydown', h)
     }, [onClose])
 
-    // Bloquer le scroll du body
     useEffect(() => {
         document.body.style.overflow = 'hidden'
         return () => { document.body.style.overflow = '' }
     }, [])
 
-    const handleAdd = useCallback(async () => {
+    const handleAdd = useCallback(() => {
         if (isOutOfStock) return
-        setStatus('adding')
-        try {
-            const cartItem = {
-                id: product.id,
-                product_id: product.id,
-                name: product.name,
-                price: finalPrice,
-                img: product.img || '',
-                seller_id: product.seller_id || undefined,
-            }
-            const existing = cart.find(i => i.product_id === product.id)
-            if (existing) {
-                await updateQuantity(existing.id, existing.quantity + qty)
-            } else {
-                await addToCart(cartItem)
-                if (qty > 1) await updateQuantity(product.id, qty)
-            }
-            setStatus('added')
-            setTimeout(() => onClose(), 700)
-        } catch {
-            setStatus('idle')
-        }
-    }, [addToCart, updateQuantity, cart, product, finalPrice, qty, isOutOfStock, onClose])
+        onAddToLocal(product, qty)
+        setStatus('added')
+        setTimeout(() => onClose(), 600)
+    }, [onAddToLocal, product, qty, isOutOfStock, onClose])
 
     return (
         <div
@@ -301,7 +684,6 @@ function ProductModal({
                 onClick={e => e.stopPropagation()}
                 style={{ animation: 'slideUp 0.25s ease-out' }}
             >
-                {/* Close */}
                 <button
                     onClick={onClose}
                     className="absolute top-4 right-4 z-10 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:bg-white transition-colors"
@@ -309,7 +691,6 @@ function ProductModal({
                     <X className="w-4 h-4 text-neutral-600" />
                 </button>
 
-                {/* Image */}
                 <div className="relative w-full flex-shrink-0" style={{ aspectRatio: '4/3' }}>
                     {product.img ? (
                         <Image
@@ -339,10 +720,8 @@ function ProductModal({
                     </div>
                 </div>
 
-                {/* Scrollable content */}
                 <div className="flex-1 overflow-y-auto">
                     <div className="px-6 pt-5 pb-2">
-                        {/* Title + price */}
                         <h2 className="text-xl font-black text-neutral-900 leading-tight mb-1">
                             {product.name}
                         </h2>
@@ -362,7 +741,6 @@ function ProductModal({
                             )}
                         </div>
 
-                        {/* Quantity */}
                         {!isOutOfStock && (
                             <div className="flex items-center gap-4 mb-5">
                                 <span className="text-sm font-semibold text-neutral-700">Quantité</span>
@@ -387,7 +765,6 @@ function ProductModal({
                         )}
                     </div>
 
-                    {/* ── Fréquemment achetés ensemble ── */}
                     {relatedProducts.length > 0 && (
                         <div className="px-6 pb-4 border-t border-neutral-100 pt-4">
                             <h4 className="text-sm font-black text-neutral-900 mb-3">
@@ -437,7 +814,6 @@ function ProductModal({
                     )}
                 </div>
 
-                {/* CTA fixe en bas */}
                 <div className="px-6 pb-6 pt-3 flex-shrink-0 border-t border-neutral-50">
                     {isOutOfStock ? (
                         <div className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-400 text-sm font-black text-center">
@@ -446,17 +822,15 @@ function ProductModal({
                     ) : (
                         <button
                             onClick={handleAdd}
-                            disabled={status !== 'idle'}
+                            disabled={status === 'added'}
                             className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all shadow-md ${
                                 status === 'added'
                                     ? 'bg-green-500 text-white shadow-green-200'
-                                    : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200 disabled:opacity-70'
+                                    : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200'
                             }`}
                         >
                             <span>
-                                {status === 'adding' ? 'Ajout en cours…'
-                                    : status === 'added' ? '✓ Ajouté au panier !'
-                                    : 'Ajouter au panier'}
+                                {status === 'added' ? '✓ Ajouté au panier !' : 'Ajouter au panier'}
                             </span>
                             {status !== 'added' && (
                                 <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">
@@ -522,9 +896,11 @@ function FeaturedCard({
 
 function ProductRow({
     product,
+    localQty,
     onClick,
 }: {
     product: ShopProduct
+    localQty: number
     onClick: () => void
 }) {
     const promoPrice = getPromoPrice(product)
@@ -589,7 +965,12 @@ function ProductRow({
                         <Cake className="w-8 h-8 text-rose-200" />
                     </div>
                 )}
-                {!outOfStock && (
+                {!outOfStock && localQty > 0 && (
+                    <div className="absolute top-1.5 right-1.5 w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center shadow-sm">
+                        <span className="text-[10px] font-black text-white">{localQty}</span>
+                    </div>
+                )}
+                {!outOfStock && localQty === 0 && (
                     <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
                         <Plus className="w-3.5 h-3.5 text-white" />
                     </div>
@@ -614,23 +995,64 @@ interface Props {
 }
 
 export default function ShopClient({ seller, products, averageRating, reviewCount }: Props) {
+    const router = useRouter()
+    const { user, loading: authLoading } = useAuth()
+
+    // ── Local cart state ──────────────────────────────────────────────────────
+    const [localCart, setLocalCart] = useState<LocalCartItem[]>([])
+
+    const addToLocalCart = useCallback((product: ShopProduct, qty: number) => {
+        setLocalCart(prev => {
+            const existing = prev.find(i => i.product.id === product.id)
+            if (existing) {
+                return prev.map(i =>
+                    i.product.id === product.id
+                        ? { ...i, qty: i.qty + qty }
+                        : i
+                )
+            }
+            return [...prev, { product, qty }]
+        })
+    }, [])
+
+    const updateLocalQty = useCallback((productId: string, qty: number) => {
+        if (qty <= 0) {
+            setLocalCart(prev => prev.filter(i => i.product.id !== productId))
+        } else {
+            setLocalCart(prev =>
+                prev.map(i => i.product.id === productId ? { ...i, qty } : i)
+            )
+        }
+    }, [])
+
+    const localCartTotal = useMemo(
+        () => localCart.reduce((s, i) => s + (getPromoPrice(i.product) ?? i.product.price) * i.qty, 0),
+        [localCart]
+    )
+    const localCartCount = useMemo(
+        () => localCart.reduce((s, i) => s + i.qty, 0),
+        [localCart]
+    )
+
+    // ── UI state ──────────────────────────────────────────────────────────────
     const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
-    const [search, setSearch] = useState('')
-    const [activeTab, setActiveTab] = useState('')
+    const [showCheckout, setShowCheckout]       = useState(false)
+    const [search, setSearch]                   = useState('')
+    const [activeTab, setActiveTab]             = useState('')
     const [closedDismissed, setClosedDismissed] = useState(false)
     const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
-    const tabsRef = useRef<HTMLDivElement>(null)
+    const tabsRef     = useRef<HTMLDivElement>(null)
     const observerRef = useRef<IntersectionObserver | null>(null)
 
-    const shopName = getSellerName(seller)
-    const verified = seller.verification_status === 'verified'
-    const coverImg = seller.cover_image || products[0]?.img || null
+    const shopName         = getSellerName(seller)
+    const verified         = seller.verification_status === 'verified'
+    const coverImg         = seller.cover_image || products[0]?.img || null
     const showClosedOverlay = !seller.is_open && !closedDismissed
 
-    // Featured : top 5 by views_count
+    // Featured : top 5
     const featured = useMemo(() => products.slice(0, 5), [products])
 
-    // Grouper par sous-catégorie (avec filtre de recherche)
+    // Grouped by subcategory
     const { grouped, categories } = useMemo(() => {
         const q = search.trim().toLowerCase()
         const filtered = q.length > 1
@@ -645,12 +1067,10 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         return { grouped: map, categories: Object.keys(map) }
     }, [products, search])
 
-    // Init active tab
     useEffect(() => {
         if (categories.length > 0) setActiveTab(prev => prev || categories[0])
     }, [categories])
 
-    // IntersectionObserver → active tab au scroll
     useEffect(() => {
         observerRef.current?.disconnect()
         if (categories.length === 0) return
@@ -684,6 +1104,16 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         tabEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
     }, [])
 
+    // ── Auth guard before checkout ────────────────────────────────────────────
+    const handleCommander = useCallback(() => {
+        if (authLoading) return
+        if (!user) {
+            router.push(`/login?redirect=/patisserie/${seller.id}`)
+            return
+        }
+        setShowCheckout(true)
+    }, [user, authLoading, router, seller.id])
+
     return (
         <div className="min-h-screen bg-white">
 
@@ -693,6 +1123,16 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     shopName={shopName}
                     hours={seller.opening_hours_text}
                     onDismiss={() => setClosedDismissed(true)}
+                />
+            )}
+
+            {/* ── Checkout modal ───────────────────────────────────────────── */}
+            {showCheckout && localCart.length > 0 && (
+                <PatisserieCheckoutModal
+                    items={localCart}
+                    seller={seller}
+                    onClose={() => setShowCheckout(false)}
+                    onSuccess={() => setLocalCart([])}
                 />
             )}
 
@@ -719,7 +1159,6 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 >
                     <ArrowLeft className="w-4 h-4 text-neutral-700" />
                 </Link>
-                {/* Badge fermé sur la bannière */}
                 {!seller.is_open && (
                     <div className="absolute bottom-4 left-4 bg-black/70 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
                         🔒 Fermé pour le moment
@@ -730,7 +1169,6 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             {/* ── Shop header ──────────────────────────────────────────────── */}
             <div className="max-w-6xl mx-auto px-4 pt-4 pb-5">
                 <div className="flex items-start gap-4">
-                    {/* Avatar flottant */}
                     <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-4 border-white shadow-lg flex-shrink-0 -mt-10 bg-rose-100">
                         {seller.avatar_url ? (
                             <Image src={seller.avatar_url} alt={shopName} fill className="object-cover" sizes="80px" />
@@ -752,7 +1190,6 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             )}
                         </div>
 
-                        {/* Infos : rating, ville, livraison, horaires */}
                         <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5 text-xs text-neutral-500">
                             {averageRating > 0 && (
                                 <div className="flex items-center gap-1">
@@ -776,7 +1213,6 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             )}
                         </div>
 
-                        {/* Frais livraison + horaires */}
                         <div className="flex flex-wrap gap-3 mt-2">
                             <span className={`inline-flex items-center gap-1 text-xs font-semibold ${seller.delivery_fee === 0 ? 'text-green-600' : 'text-neutral-500'}`}>
                                 <Bike className="w-3.5 h-3.5" />
@@ -794,7 +1230,6 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     </div>
                 </div>
 
-                {/* WhatsApp */}
                 {seller.whatsapp_number && (
                     <a
                         href={`https://wa.me/${seller.whatsapp_number.replace(/\D/g, '')}`}
@@ -874,7 +1309,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             )}
 
             {/* ── Layout 2 colonnes : produits + panier ────────────────────── */}
-            <div className="max-w-6xl mx-auto px-4 flex gap-8 items-start pb-20">
+            <div className="max-w-6xl mx-auto px-4 flex gap-8 items-start pb-32 lg:pb-20">
 
                 {/* Colonne gauche : sections produits */}
                 <div className="flex-1 min-w-0">
@@ -912,6 +1347,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                                         <ProductRow
                                             key={p.id}
                                             product={p}
+                                            localQty={localCart.find(i => i.product.id === p.id)?.qty ?? 0}
                                             onClick={() => setSelectedProduct(p)}
                                         />
                                     ))}
@@ -924,9 +1360,32 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
 
                 {/* Colonne droite : panier (desktop uniquement) */}
                 <div className="hidden lg:block w-80 flex-shrink-0 sticky top-6 pt-6">
-                    <CartSidebar sellerId={seller.id} shopName={shopName} />
+                    <CartSidebar
+                        items={localCart}
+                        shopName={shopName}
+                        onUpdateQty={updateLocalQty}
+                        onCommander={handleCommander}
+                    />
                 </div>
             </div>
+
+            {/* ── Mobile sticky cart bar ───────────────────────────────────── */}
+            {localCartCount > 0 && (
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-safe-bottom pb-4 pt-2 bg-white/95 backdrop-blur border-t border-neutral-100 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+                    <button
+                        onClick={handleCommander}
+                        className="flex items-center justify-between w-full bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-black text-sm px-5 py-4 rounded-2xl transition-colors shadow-md shadow-rose-200"
+                    >
+                        <div className="flex items-center gap-2.5">
+                            <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
+                                <span className="text-xs font-black">{localCartCount}</span>
+                            </div>
+                            <span>Voir le panier</span>
+                        </div>
+                        <span className="font-black">{formatPrice(localCartTotal)}</span>
+                    </button>
+                </div>
+            )}
 
             {/* ── Modal produit ────────────────────────────────────────────── */}
             {selectedProduct && (
@@ -935,6 +1394,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     allProducts={products}
                     onClose={() => setSelectedProduct(null)}
                     onSelectProduct={setSelectedProduct}
+                    onAddToLocal={addToLocalCart}
                 />
             )}
 

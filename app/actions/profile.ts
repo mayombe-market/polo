@@ -38,6 +38,8 @@ export type UpdateProfileInput = {
     return_policy?: string | null
     shipping_info?: string | null
     cover_url?: string | null
+    latitude?: number | null
+    longitude?: number | null
 }
 
 /**
@@ -57,7 +59,7 @@ export async function updateProfile(
         return { success: false, error: 'Non connecté' }
     }
 
-    const payload: Record<string, string | null> = {}
+    const payload: Record<string, string | number | null> = {}
 
     if (fields.store_name !== undefined) {
         payload.store_name = (fields.store_name ?? '').trim()
@@ -86,6 +88,12 @@ export async function updateProfile(
     if (fields.cover_url !== undefined) {
         const v = (fields.cover_url ?? '').trim()
         payload.cover_url = v || null
+    }
+    if (fields.latitude !== undefined) {
+        payload.latitude = fields.latitude ?? null
+    }
+    if (fields.longitude !== undefined) {
+        payload.longitude = fields.longitude ?? null
     }
 
     if (Object.keys(payload).length === 0) {

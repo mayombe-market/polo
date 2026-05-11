@@ -26,7 +26,7 @@ import {
     ArrowUpRight, Clock, MapPin, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles, Megaphone, Star, Send, Camera
+    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -2454,6 +2454,53 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     const [saving, setSaving] = useState(false)
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
+
+    // GPS state
+    const [gpsStatus, setGpsStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle')
+    const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(
+        profile?.latitude && profile?.longitude
+            ? { lat: profile.latitude, lng: profile.longitude }
+            : null
+    )
+    const [savingGps, setSavingGps] = useState(false)
+
+    const handleRequestGps = () => {
+        if (!navigator.geolocation) {
+            toast.error('GPS non disponible sur ce navigateur.')
+            return
+        }
+        setGpsStatus('requesting')
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                setGpsCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude })
+                setGpsStatus('granted')
+            },
+            () => {
+                setGpsStatus('denied')
+                toast.error('Position refusée. Autorisez la géolocalisation dans votre navigateur.')
+            },
+            { enableHighAccuracy: true, timeout: 10000 }
+        )
+    }
+
+    const handleSaveGps = async () => {
+        if (!gpsCoords) return
+        setSavingGps(true)
+        try {
+            const result = await updateProfile({ latitude: gpsCoords.lat, longitude: gpsCoords.lng })
+            if (!result.success) {
+                toast.error('Erreur : ' + (result as any).error)
+            } else {
+                toast.success('Position GPS enregistrée !')
+                setGpsStatus('idle')
+            }
+        } catch (err: any) {
+            toast.error(err.message || 'Erreur sauvegarde GPS')
+        } finally {
+            setSavingGps(false)
+        }
+    }
+
     const [formData, setFormData] = useState({
         store_name: profile?.store_name || profile?.shop_name || '',
         shop_description: profile?.shop_description || '',
@@ -2631,6 +2678,68 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                         </select>
                     </div>
                 </div>
+            </div>
+
+            {/* Position GPS */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 space-y-4">
+                <div>
+                    <h3 className="font-black uppercase text-sm dark:text-white">Position GPS de votre boutique</h3>
+                    <p className="text-[10px] text-slate-400 font-bold mt-1">
+                        Utilisée pour calculer automatiquement les frais de livraison pâtisserie.
+                    </p>
+                </div>
+
+                {/* Coords actuelles */}
+                {gpsCoords && gpsStatus !== 'granted' && (
+                    <div className="flex items-center gap-3 p-3 bg-green-50 dark:bg-green-900/20 rounded-2xl">
+                        <Navigation size={16} className="text-green-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-green-700 dark:text-green-400">Position enregistrée</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                {gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)}
+                            </p>
+                        </div>
+                    </div>
+                )}
+
+                {/* Nouvelles coords en attente de sauvegarde */}
+                {gpsStatus === 'granted' && gpsCoords && (
+                    <div className="flex items-center gap-3 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-2xl">
+                        <Navigation size={16} className="text-blue-500 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-black text-blue-700 dark:text-blue-400">Nouvelle position détectée</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-0.5">
+                                {gpsCoords.lat.toFixed(5)}, {gpsCoords.lng.toFixed(5)}
+                            </p>
+                        </div>
+                        <button
+                            onClick={handleSaveGps}
+                            disabled={savingGps}
+                            className="flex items-center gap-1.5 bg-blue-500 text-white px-3 py-1.5 rounded-xl text-[10px] font-black uppercase hover:bg-blue-600 transition-all disabled:opacity-50 flex-shrink-0"
+                        >
+                            {savingGps ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                            {savingGps ? 'Enregistrement…' : 'Sauvegarder'}
+                        </button>
+                    </div>
+                )}
+
+                {/* Bouton demander la position */}
+                <button
+                    onClick={handleRequestGps}
+                    disabled={gpsStatus === 'requesting'}
+                    className="flex items-center gap-2 px-4 py-3 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 text-xs font-black uppercase hover:border-orange-400 hover:text-orange-500 transition-all w-full justify-center disabled:opacity-50"
+                >
+                    {gpsStatus === 'requesting'
+                        ? <><Loader2 size={14} className="animate-spin" /> Localisation en cours…</>
+                        : <><Navigation size={14} /> {gpsCoords ? 'Mettre à jour ma position' : 'Définir ma position GPS'}</>
+                    }
+                </button>
+
+                {gpsStatus === 'denied' && (
+                    <p className="text-[10px] text-red-500 font-bold text-center">
+                        Accès refusé — autorisez la géolocalisation dans les paramètres de votre navigateur, puis réessayez.
+                    </p>
+                )}
             </div>
 
             {/* Policies */}

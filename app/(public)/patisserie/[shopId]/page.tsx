@@ -65,6 +65,8 @@ export type ShopSeller = {
     delivery_fee: number
     opening_hours_text: string | null
     is_open: boolean
+    latitude: number | null
+    longitude: number | null
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
@@ -93,7 +95,7 @@ export default async function PatisserieShopPage({
     // ── 2. Nouvelles colonnes boutique (ajoutées par migration) ───────────────
     const { data: extraProfile } = await supabase
         .from('profiles')
-        .select('cover_image, delivery_time, min_order, delivery_fee, opening_hours_text, is_open')
+        .select('cover_image, delivery_time, min_order, delivery_fee, opening_hours_text, is_open, latitude, longitude')
         .eq('id', shopId)
         .single()
 
@@ -147,6 +149,8 @@ export default async function PatisserieShopPage({
         delivery_fee: extraProfile?.delivery_fee ?? 0,
         opening_hours_text: extraProfile?.opening_hours_text || null,
         is_open: extraProfile?.is_open !== false,
+        latitude: extraProfile?.latitude ?? null,
+        longitude: extraProfile?.longitude ?? null,
     }
 
     return (

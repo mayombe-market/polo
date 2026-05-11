@@ -1,27 +1,57 @@
 'use client'
 
 import {
-    useState, useMemo, useEffect, useRef, useCallback, useTransition,
+    useState, useMemo, useEffect, useRef, useCallback,
 } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import Image from 'next/image'
-import { useRouter } from 'next/navigation'
 import {
     ShieldCheck, Star, MapPin, ArrowLeft, Clock, Search,
     X, Plus, Minus, Cake, Phone, Bike, ShoppingCart,
-    ChevronRight, Timer, Check, AlertCircle, Loader2,
+    ChevronRight, Timer, ArrowRight,
 } from 'lucide-react'
+import { useCart } from '@/hooks/userCart'
 import { useAuth } from '@/hooks/useAuth'
-import { createOrder } from '@/app/actions/orders'
-import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
+import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { safeGetUser } from '@/lib/supabase-utils'
+import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import AuthModal from '@/app/components/AuthModal'
+import StepIndicator from '@/app/components/checkout/StepIndicator'
+import LocationStep from '@/app/components/checkout/LocationStep'
+import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
+import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
+import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
+import PaymentMethodStep from '@/app/components/checkout/PaymentMethodStep'
+import TransferInfoStep from '@/app/components/checkout/TransferInfoStep'
+import EnterTransactionIdStep from '@/app/components/checkout/EnterTransactionIdStep'
+import WaitingValidationStep from '@/app/components/checkout/WaitingValidationStep'
+import CashDeliveryStep from '@/app/components/checkout/CashDeliveryStep'
+import OrderConfirmedStep from '@/app/components/checkout/OrderConfirmedStep'
+import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
+import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
+import {
+    orderRequiresInterUrbanDelivery,
+    orderCityToProfileCity,
+    INTER_URBAN_DELIVERY_HINT,
+    getFirstInterUrbanSellerCityDisplay,
+} from '@/lib/deliveryLocation'
+import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
+import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
 import type { ShopProduct, ShopSeller } from './page'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Checkout step type (same as cart/page.tsx) ───────────────────────────────
 
-type LocalCartItem = {
-    product: ShopProduct
-    qty: number
-}
+type Step =
+    | 'location'
+    | 'delivery_mode'
+    | 'payment_method'
+    | 'transfer_info'
+    | 'enter_id'
+    | 'waiting'
+    | 'cash_form'
+    | 'confirmed'
+    | 'rejected'
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -110,430 +140,30 @@ function ClosedOverlay({
     )
 }
 
-// ─── Patisserie Checkout Modal ────────────────────────────────────────────────
-
-const DELIVERY_MODES = [
-    { key: 'standard', label: 'Standard', sublabel: '24-48h', fee: 1000 },
-    { key: 'express',  label: 'Express',  sublabel: '3-6h',   fee: 2000 },
-]
-
-const PAYMENT_METHODS = [
-    { key: 'mobile_money', label: 'MTN Mobile Money', emoji: '📱' },
-    { key: 'airtel_money', label: 'Airtel Money',     emoji: '📲' },
-    { key: 'cash',         label: 'Cash à la livraison', emoji: '💵' },
-]
-
-type CheckoutStep = 'form' | 'submitting' | 'success' | 'error'
-
-function PatisserieCheckoutModal({
-    items,
-    seller,
-    onClose,
-    onSuccess,
-}: {
-    items: LocalCartItem[]
-    seller: ShopSeller
-    onClose: () => void
-    onSuccess: () => void
-}) {
-    const [step, setStep]               = useState<CheckoutStep>('form')
-    const [city, setCity]               = useState('')
-    const [district, setDistrict]       = useState('')
-    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express'>('standard')
-    const [paymentMethod, setPaymentMethod] = useState<'mobile_money' | 'airtel_money' | 'cash'>('mobile_money')
-    const [transactionId, setTransactionId] = useState('')
-    const [phone, setPhone]             = useState('')
-    const [customerName, setCustomerName] = useState('')
-    const [landmark, setLandmark]       = useState('')
-    const [errorMsg, setErrorMsg]       = useState('')
-    const [orderId, setOrderId]         = useState('')
-    const [, startTransition]           = useTransition()
-
-    // Close on Escape
-    useEffect(() => {
-        const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-        document.addEventListener('keydown', h)
-        return () => document.removeEventListener('keydown', h)
-    }, [onClose])
-
-    // Lock body scroll
-    useEffect(() => {
-        document.body.style.overflow = 'hidden'
-        return () => { document.body.style.overflow = '' }
-    }, [])
-
-    const districts = city ? (DELIVERY_LOCATIONS[city] || []) : []
-
-    const deliveryFee = deliveryMode === 'express' ? 2000 : 1000
-    const subtotal = items.reduce((s, i) => {
-        const fp = getPromoPrice(i.product) ?? i.product.price
-        return s + fp * i.qty
-    }, 0)
-    const total = subtotal + deliveryFee
-
-    const needsTransactionId = paymentMethod === 'mobile_money' || paymentMethod === 'airtel_money'
-    const needsPhone = paymentMethod === 'cash'
-
-    const handleSubmit = useCallback(async () => {
-        // Validate
-        if (!city) { setErrorMsg('Choisissez votre ville.'); return }
-        if (!district) { setErrorMsg('Choisissez votre quartier.'); return }
-        if (needsTransactionId && transactionId.replace(/\D/g, '').length !== 10) {
-            setErrorMsg("L'ID de transaction doit contenir exactement 10 chiffres.")
-            return
-        }
-        if (needsPhone && phone.replace(/\D/g, '').length !== 10) {
-            setErrorMsg('Le numéro de téléphone doit contenir exactement 10 chiffres.')
-            return
-        }
-
-        setErrorMsg('')
-        setStep('submitting')
-
-        const orderItems = items.map(i => ({
-            id: i.product.id,
-            name: i.product.name,
-            price: getPromoPrice(i.product) ?? i.product.price,
-            quantity: i.qty,
-            img: i.product.img || '',
-            seller_id: i.product.seller_id || seller.id,
-        }))
-
-        startTransition(async () => {
-            const result = await createOrder({
-                items: orderItems,
-                city,
-                district,
-                payment_method: paymentMethod,
-                total_amount: total,
-                delivery_mode: deliveryMode,
-                delivery_fee: deliveryFee,
-                transaction_id: needsTransactionId ? transactionId : undefined,
-                phone: needsPhone ? phone : undefined,
-                customer_name: customerName || undefined,
-                landmark: landmark || undefined,
-            })
-
-            if ('error' in result) {
-                setErrorMsg(result.error ?? 'Une erreur est survenue.')
-                setStep('error')
-            } else if (result.order) {
-                setOrderId(result.order.id ?? '')
-                setStep('success')
-                onSuccess()
-            }
-        })
-    }, [
-        city, district, paymentMethod, deliveryMode, deliveryFee,
-        transactionId, phone, customerName, landmark,
-        needsTransactionId, needsPhone, items, seller.id,
-        total, onSuccess, startTransition,
-    ])
-
-    return (
-        <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center"
-            onClick={onClose}
-        >
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-            <div
-                className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl max-h-[95vh] flex flex-col"
-                onClick={e => e.stopPropagation()}
-                style={{ animation: 'slideUp 0.25s ease-out' }}
-            >
-                {/* Header */}
-                <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-neutral-100 flex-shrink-0">
-                    <h2 className="text-base font-black text-neutral-900">
-                        {step === 'success' ? '✅ Commande envoyée !' : 'Finaliser la commande'}
-                    </h2>
-                    <button
-                        onClick={onClose}
-                        className="w-8 h-8 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
-                    >
-                        <X className="w-4 h-4 text-neutral-600" />
-                    </button>
-                </div>
-
-                {/* ── Success ── */}
-                {step === 'success' && (
-                    <div className="flex-1 flex flex-col items-center justify-center px-6 py-10 text-center">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mb-4">
-                            <Check className="w-8 h-8 text-green-600" />
-                        </div>
-                        <h3 className="text-lg font-black text-neutral-900 mb-2">
-                            Commande envoyée avec succès !
-                        </h3>
-                        <p className="text-sm text-neutral-500 mb-1">
-                            Votre commande est en attente de confirmation de paiement.
-                        </p>
-                        {orderId && (
-                            <p className="text-xs text-neutral-400 mb-6 font-mono bg-neutral-50 px-3 py-1.5 rounded-lg">
-                                Réf : {orderId.slice(0, 8).toUpperCase()}
-                            </p>
-                        )}
-                        <Link
-                            href="/account/dashboard?tab=orders"
-                            className="inline-flex items-center gap-2 bg-rose-500 text-white text-sm font-black px-6 py-3 rounded-2xl hover:bg-rose-600 transition-colors"
-                        >
-                            Voir mes commandes
-                            <ChevronRight className="w-4 h-4" />
-                        </Link>
-                    </div>
-                )}
-
-                {/* ── Submitting ── */}
-                {step === 'submitting' && (
-                    <div className="flex-1 flex flex-col items-center justify-center px-6 py-16">
-                        <Loader2 className="w-10 h-10 text-rose-500 animate-spin mb-4" />
-                        <p className="text-sm font-semibold text-neutral-600">Envoi de votre commande…</p>
-                    </div>
-                )}
-
-                {/* ── Form / Error ── */}
-                {(step === 'form' || step === 'error') && (
-                    <>
-                        {/* Scrollable form */}
-                        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-
-                            {/* Order summary */}
-                            <div className="bg-neutral-50 rounded-2xl p-4">
-                                <p className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">
-                                    Récapitulatif
-                                </p>
-                                <div className="space-y-1">
-                                    {items.map(i => {
-                                        const fp = getPromoPrice(i.product) ?? i.product.price
-                                        return (
-                                            <div key={i.product.id} className="flex justify-between text-xs">
-                                                <span className="text-neutral-600 truncate max-w-[70%]">
-                                                    {i.qty}× {i.product.name}
-                                                </span>
-                                                <span className="font-semibold text-neutral-800 shrink-0">
-                                                    {formatPrice(fp * i.qty)}
-                                                </span>
-                                            </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-
-                            {/* Delivery city */}
-                            <div>
-                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                    Ville de livraison <span className="text-rose-500">*</span>
-                                </label>
-                                <select
-                                    value={city}
-                                    onChange={e => { setCity(e.target.value); setDistrict('') }}
-                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 appearance-none"
-                                >
-                                    <option value="">Choisir une ville…</option>
-                                    {Object.keys(DELIVERY_LOCATIONS).map(c => (
-                                        <option key={c} value={c}>{c}</option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            {/* District */}
-                            {city && (
-                                <div>
-                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                        Quartier <span className="text-rose-500">*</span>
-                                    </label>
-                                    <select
-                                        value={district}
-                                        onChange={e => setDistrict(e.target.value)}
-                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300 appearance-none"
-                                    >
-                                        <option value="">Choisir un quartier…</option>
-                                        {districts.map(d => (
-                                            <option key={d} value={d}>{d}</option>
-                                        ))}
-                                    </select>
-                                </div>
-                            )}
-
-                            {/* Landmark (optional) */}
-                            <div>
-                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                    Point de repère <span className="text-neutral-400 font-normal">(optionnel)</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={landmark}
-                                    onChange={e => setLandmark(e.target.value)}
-                                    placeholder="Ex: Près de l'église, immeuble bleu…"
-                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                />
-                            </div>
-
-                            {/* Delivery mode */}
-                            <div>
-                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                    Mode de livraison
-                                </label>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {DELIVERY_MODES.map(mode => (
-                                        <button
-                                            key={mode.key}
-                                            type="button"
-                                            onClick={() => setDeliveryMode(mode.key as 'standard' | 'express')}
-                                            className={`rounded-xl border p-3 text-left transition-all ${
-                                                deliveryMode === mode.key
-                                                    ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-300'
-                                                    : 'border-neutral-200 hover:border-neutral-300'
-                                            }`}
-                                        >
-                                            <p className="text-xs font-bold text-neutral-800">{mode.label}</p>
-                                            <p className="text-[10px] text-neutral-400 mt-0.5">{mode.sublabel}</p>
-                                            <p className="text-xs font-black text-rose-600 mt-1">
-                                                {formatPrice(mode.fee)}
-                                            </p>
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Payment method */}
-                            <div>
-                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                    Méthode de paiement <span className="text-rose-500">*</span>
-                                </label>
-                                <div className="space-y-2">
-                                    {PAYMENT_METHODS.map(pm => (
-                                        <button
-                                            key={pm.key}
-                                            type="button"
-                                            onClick={() => setPaymentMethod(pm.key as typeof paymentMethod)}
-                                            className={`w-full flex items-center gap-3 rounded-xl border px-3 py-2.5 text-left transition-all ${
-                                                paymentMethod === pm.key
-                                                    ? 'border-rose-400 bg-rose-50 ring-1 ring-rose-300'
-                                                    : 'border-neutral-200 hover:border-neutral-300'
-                                            }`}
-                                        >
-                                            <span className="text-lg">{pm.emoji}</span>
-                                            <span className="text-sm font-semibold text-neutral-800">{pm.label}</span>
-                                            {paymentMethod === pm.key && (
-                                                <Check className="w-4 h-4 text-rose-500 ml-auto" />
-                                            )}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {/* Transaction ID (mobile money) */}
-                            {needsTransactionId && (
-                                <div>
-                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                        ID de transaction <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="text"
-                                        inputMode="numeric"
-                                        maxLength={10}
-                                        value={transactionId}
-                                        onChange={e => setTransactionId(e.target.value.replace(/\D/g, ''))}
-                                        placeholder="10 chiffres"
-                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                    />
-                                    <p className="text-[10px] text-neutral-400 mt-1">
-                                        L'ID reçu par SMS après le paiement mobile money (10 chiffres).
-                                    </p>
-                                </div>
-                            )}
-
-                            {/* Phone (cash) */}
-                            {needsPhone && (
-                                <div>
-                                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                        Numéro de téléphone <span className="text-rose-500">*</span>
-                                    </label>
-                                    <input
-                                        type="tel"
-                                        inputMode="numeric"
-                                        maxLength={10}
-                                        value={phone}
-                                        onChange={e => setPhone(e.target.value.replace(/\D/g, ''))}
-                                        placeholder="10 chiffres"
-                                        className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                    />
-                                </div>
-                            )}
-
-                            {/* Customer name (optional) */}
-                            <div>
-                                <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                                    Votre nom <span className="text-neutral-400 font-normal">(optionnel)</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    value={customerName}
-                                    onChange={e => setCustomerName(e.target.value)}
-                                    placeholder="Nom pour la livraison"
-                                    className="w-full bg-white border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-rose-300"
-                                />
-                            </div>
-
-                            {/* Error */}
-                            {(step === 'error' || errorMsg) && errorMsg && (
-                                <div className="flex items-start gap-2.5 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-                                    <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                                    <p className="text-xs text-red-700 leading-relaxed">{errorMsg}</p>
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Sticky footer */}
-                        <div className="px-5 pb-5 pt-3 border-t border-neutral-100 flex-shrink-0 bg-white">
-                            {/* Total */}
-                            <div className="flex justify-between items-center mb-3 text-sm">
-                                <span className="text-neutral-500">Sous-total</span>
-                                <span className="font-semibold text-neutral-700">{formatPrice(subtotal)}</span>
-                            </div>
-                            <div className="flex justify-between items-center mb-3 text-sm">
-                                <span className="text-neutral-500">Livraison ({deliveryMode === 'express' ? 'express' : 'standard'})</span>
-                                <span className="font-semibold text-neutral-700">{formatPrice(deliveryFee)}</span>
-                            </div>
-                            <div className="flex justify-between items-center mb-4 text-base font-black">
-                                <span className="text-neutral-900">Total</span>
-                                <span className="text-rose-600">{formatPrice(total)}</span>
-                            </div>
-
-                            <button
-                                onClick={handleSubmit}
-                                className="w-full bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-black text-sm py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-md shadow-rose-200"
-                            >
-                                <ShoppingCart className="w-4 h-4" />
-                                Commander · {formatPrice(total)}
-                            </button>
-                        </div>
-                    </>
-                )}
-            </div>
-        </div>
-    )
-}
-
-// ─── Cart Sidebar (props-driven, no global cart) ──────────────────────────────
+// ─── Cart Sidebar ─────────────────────────────────────────────────────────────
 
 function CartSidebar({
-    items,
+    sellerId,
     shopName,
-    onUpdateQty,
     onCommander,
 }: {
-    items: LocalCartItem[]
+    sellerId: string
     shopName: string
-    onUpdateQty: (productId: string, qty: number) => void
     onCommander: () => void
 }) {
-    const subtotal = useMemo(
-        () => items.reduce((s, i) => s + (getPromoPrice(i.product) ?? i.product.price) * i.qty, 0),
-        [items]
-    )
+    const { cart, updateQuantity, total, itemCount } = useCart()
 
-    if (items.length === 0) {
+    const shopItems = useMemo(
+        () => cart.filter(item => item.seller_id === sellerId),
+        [cart, sellerId]
+    )
+    const shopSubtotal = useMemo(
+        () => shopItems.reduce((s, i) => s + i.price * i.quantity, 0),
+        [shopItems]
+    )
+    const otherCount = itemCount - shopItems.reduce((s, i) => s + i.quantity, 0)
+
+    if (shopItems.length === 0) {
         return (
             <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm p-6 text-center">
                 <div className="w-14 h-14 bg-neutral-50 rounded-2xl flex items-center justify-center mx-auto mb-3">
@@ -549,70 +179,61 @@ function CartSidebar({
 
     return (
         <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-            {/* Header */}
             <div className="px-4 py-3.5 border-b border-neutral-50 bg-neutral-50/50">
                 <h3 className="font-black text-neutral-900 text-sm">Votre commande</h3>
                 <p className="text-xs text-neutral-400 mt-0.5 truncate">{shopName}</p>
             </div>
 
-            {/* Items */}
             <div className="divide-y divide-neutral-50 max-h-80 overflow-y-auto">
-                {items.map(item => {
-                    const fp = getPromoPrice(item.product) ?? item.product.price
-                    return (
-                        <div key={item.product.id} className="flex items-center gap-3 px-4 py-3">
-                            {item.product.img ? (
-                                <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
-                                    <Image src={item.product.img} alt={item.product.name} fill className="object-cover" sizes="44px" />
-                                </div>
-                            ) : (
-                                <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
-                                    <Cake className="w-5 h-5 text-rose-200" />
-                                </div>
-                            )}
-
-                            <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-neutral-800 truncate">
-                                    {item.product.name}
-                                </p>
-                                <p className="text-xs text-rose-600 font-bold mt-0.5">
-                                    {formatPrice(fp)}
-                                </p>
+                {shopItems.map(item => (
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                        {item.img ? (
+                            <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
+                                <Image src={item.img} alt={item.name} fill className="object-cover" sizes="44px" />
                             </div>
-
-                            <div className="flex items-center gap-1 flex-shrink-0">
-                                <button
-                                    onClick={() => onUpdateQty(item.product.id, item.qty - 1)}
-                                    className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
-                                >
-                                    <Minus className="w-3 h-3 text-neutral-700" />
-                                </button>
-                                <span className="w-5 text-center text-xs font-black text-neutral-900">
-                                    {item.qty}
-                                </span>
-                                <button
-                                    onClick={() => onUpdateQty(item.product.id, item.qty + 1)}
-                                    className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
-                                >
-                                    <Plus className="w-3 h-3 text-neutral-700" />
-                                </button>
+                        ) : (
+                            <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                                <Cake className="w-5 h-5 text-rose-200" />
                             </div>
+                        )}
+
+                        <div className="flex-1 min-w-0">
+                            <p className="text-xs font-semibold text-neutral-800 truncate">{item.name}</p>
+                            <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(item.price)}</p>
                         </div>
-                    )
-                })}
+
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                                onClick={() => updateQuantity(item.id, item.quantity - 1)}
+                                className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                            >
+                                <Minus className="w-3 h-3 text-neutral-700" />
+                            </button>
+                            <span className="w-5 text-center text-xs font-black text-neutral-900">{item.quantity}</span>
+                            <button
+                                onClick={() => updateQuantity(item.id, item.quantity + 1)}
+                                className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors"
+                            >
+                                <Plus className="w-3 h-3 text-neutral-700" />
+                            </button>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            {/* Summary + CTA */}
             <div className="px-4 py-4 bg-neutral-50/50 border-t border-neutral-100">
                 <div className="flex justify-between items-center mb-3">
                     <span className="text-sm text-neutral-500">Sous-total</span>
-                    <span className="text-sm font-black text-neutral-900">
-                        {formatPrice(subtotal)}
-                    </span>
+                    <span className="text-sm font-black text-neutral-900">{formatPrice(shopSubtotal)}</span>
                 </div>
+                {otherCount > 0 && (
+                    <p className="text-[10px] text-neutral-400 mb-2">
+                        + {otherCount} article{otherCount > 1 ? 's' : ''} d'autres boutiques dans votre panier
+                    </p>
+                )}
                 <button
                     onClick={onCommander}
-                    className="flex items-center justify-between w-full bg-rose-500 hover:bg-rose-600 text-white text-sm font-black px-4 py-3 rounded-xl transition-colors shadow-sm shadow-rose-200"
+                    className="flex items-center justify-between w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-black px-4 py-3 rounded-xl transition-colors shadow-sm shadow-orange-200"
                 >
                     <span>Commander</span>
                     <ChevronRight className="w-4 h-4" />
@@ -629,16 +250,15 @@ function ProductModal({
     allProducts,
     onClose,
     onSelectProduct,
-    onAddToLocal,
 }: {
     product: ShopProduct
     allProducts: ShopProduct[]
     onClose: () => void
     onSelectProduct: (p: ShopProduct) => void
-    onAddToLocal: (product: ShopProduct, qty: number) => void
 }) {
+    const { addToCart, updateQuantity, cart } = useCart()
     const [qty, setQty] = useState(1)
-    const [status, setStatus] = useState<'idle' | 'added'>('idle')
+    const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
 
     const promoPrice = getPromoPrice(product)
     const finalPrice = promoPrice ?? product.price
@@ -665,12 +285,31 @@ function ProductModal({
         return () => { document.body.style.overflow = '' }
     }, [])
 
-    const handleAdd = useCallback(() => {
+    const handleAdd = useCallback(async () => {
         if (isOutOfStock) return
-        onAddToLocal(product, qty)
-        setStatus('added')
-        setTimeout(() => onClose(), 600)
-    }, [onAddToLocal, product, qty, isOutOfStock, onClose])
+        setStatus('adding')
+        try {
+            const cartItem = {
+                id: product.id,
+                product_id: product.id,
+                name: product.name,
+                price: finalPrice,
+                img: product.img || '',
+                seller_id: product.seller_id || undefined,
+            }
+            const existing = cart.find(i => i.product_id === product.id)
+            if (existing) {
+                await updateQuantity(existing.id, existing.quantity + qty)
+            } else {
+                await addToCart(cartItem)
+                if (qty > 1) await updateQuantity(product.id, qty)
+            }
+            setStatus('added')
+            setTimeout(() => onClose(), 700)
+        } catch {
+            setStatus('idle')
+        }
+    }, [addToCart, updateQuantity, cart, product, finalPrice, qty, isOutOfStock, onClose])
 
     return (
         <div
@@ -751,9 +390,7 @@ function ProductModal({
                                     >
                                         <Minus className="w-3.5 h-3.5 text-neutral-700" />
                                     </button>
-                                    <span className="w-8 text-center text-sm font-black text-neutral-900">
-                                        {qty}
-                                    </span>
+                                    <span className="w-8 text-center text-sm font-black text-neutral-900">{qty}</span>
                                     <button
                                         onClick={() => setQty(q => q + 1)}
                                         className="w-10 h-10 flex items-center justify-center hover:bg-neutral-200 transition-colors"
@@ -784,13 +421,7 @@ function ProductModal({
                                         >
                                             <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
                                                 {related.img ? (
-                                                    <Image
-                                                        src={related.img}
-                                                        alt={related.name}
-                                                        fill
-                                                        className="object-cover"
-                                                        sizes="48px"
-                                                    />
+                                                    <Image src={related.img} alt={related.name} fill className="object-cover" sizes="48px" />
                                                 ) : (
                                                     <div className="w-full h-full flex items-center justify-center">
                                                         <Cake className="w-5 h-5 text-rose-200" />
@@ -798,12 +429,8 @@ function ProductModal({
                                                 )}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-semibold text-neutral-800 truncate">
-                                                    {related.name}
-                                                </p>
-                                                <p className="text-xs text-rose-600 font-bold mt-0.5">
-                                                    {formatPrice(rPromo ?? related.price)}
-                                                </p>
+                                                <p className="text-xs font-semibold text-neutral-800 truncate">{related.name}</p>
+                                                <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(rPromo ?? related.price)}</p>
                                             </div>
                                             <Plus className="w-4 h-4 text-rose-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
                                         </button>
@@ -822,15 +449,17 @@ function ProductModal({
                     ) : (
                         <button
                             onClick={handleAdd}
-                            disabled={status === 'added'}
+                            disabled={status !== 'idle'}
                             className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all shadow-md ${
                                 status === 'added'
                                     ? 'bg-green-500 text-white shadow-green-200'
-                                    : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200'
+                                    : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200 disabled:opacity-70'
                             }`}
                         >
                             <span>
-                                {status === 'added' ? '✓ Ajouté au panier !' : 'Ajouter au panier'}
+                                {status === 'adding' ? 'Ajout en cours…'
+                                    : status === 'added' ? '✓ Ajouté au panier !'
+                                    : 'Ajouter au panier'}
                             </span>
                             {status !== 'added' && (
                                 <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">
@@ -882,12 +511,8 @@ function FeaturedCard({
                     <Plus className="w-4 h-4 text-white" />
                 </div>
             </div>
-            <p className="text-xs font-semibold text-neutral-800 line-clamp-2 leading-snug">
-                {product.name}
-            </p>
-            <p className="text-sm font-bold text-rose-600 mt-0.5">
-                {formatPrice(promoPrice ?? product.price)}
-            </p>
+            <p className="text-xs font-semibold text-neutral-800 line-clamp-2 leading-snug">{product.name}</p>
+            <p className="text-sm font-bold text-rose-600 mt-0.5">{formatPrice(promoPrice ?? product.price)}</p>
         </button>
     )
 }
@@ -896,11 +521,11 @@ function FeaturedCard({
 
 function ProductRow({
     product,
-    localQty,
+    cartQty,
     onClick,
 }: {
     product: ShopProduct
-    localQty: number
+    cartQty: number
     onClick: () => void
 }) {
     const promoPrice = getPromoPrice(product)
@@ -921,29 +546,21 @@ function ProductRow({
                 <div className="flex items-start gap-1.5 flex-wrap mb-0.5">
                     <p className="font-semibold text-neutral-900 text-sm leading-snug">{product.name}</p>
                     {isNewProduct && (
-                        <span className="flex-shrink-0 bg-rose-100 text-rose-600 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                            Nouveau
-                        </span>
+                        <span className="flex-shrink-0 bg-rose-100 text-rose-600 text-[9px] font-bold px-1.5 py-0.5 rounded-full">Nouveau</span>
                     )}
                     {isPopular && !isNewProduct && (
-                        <span className="flex-shrink-0 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                            Populaire
-                        </span>
+                        <span className="flex-shrink-0 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">Populaire</span>
                     )}
                 </div>
                 {product.description && (
-                    <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed mb-1.5">
-                        {product.description}
-                    </p>
+                    <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed mb-1.5">{product.description}</p>
                 )}
                 <div className="flex items-center gap-2">
                     {promoPrice ? (
                         <>
                             <span className="text-sm font-bold text-rose-600">{formatPrice(promoPrice)}</span>
                             <span className="text-xs text-neutral-400 line-through">{formatPrice(product.price)}</span>
-                            <span className="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">
-                                -{product.promo_percentage}%
-                            </span>
+                            <span className="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">-{product.promo_percentage}%</span>
                         </>
                     ) : (
                         <span className="text-sm font-bold text-neutral-800">{formatPrice(product.price)}</span>
@@ -965,12 +582,12 @@ function ProductRow({
                         <Cake className="w-8 h-8 text-rose-200" />
                     </div>
                 )}
-                {!outOfStock && localQty > 0 && (
-                    <div className="absolute top-1.5 right-1.5 w-6 h-6 bg-rose-500 rounded-full flex items-center justify-center shadow-sm">
-                        <span className="text-[10px] font-black text-white">{localQty}</span>
+                {!outOfStock && cartQty > 0 && (
+                    <div className="absolute top-1.5 right-1.5 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-sm">
+                        <span className="text-[10px] font-black text-white">{cartQty}</span>
                     </div>
                 )}
-                {!outOfStock && localQty === 0 && (
+                {!outOfStock && cartQty === 0 && (
                     <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
                         <Plus className="w-3.5 h-3.5 text-white" />
                     </div>
@@ -995,48 +612,251 @@ interface Props {
 }
 
 export default function ShopClient({ seller, products, averageRating, reviewCount }: Props) {
-    const router = useRouter()
-    const { user, loading: authLoading } = useAuth()
+    const { cart, total, itemCount, updateQuantity, clearCart } = useCart()
+    const { profile } = useAuth()
 
-    // ── Local cart state ──────────────────────────────────────────────────────
-    const [localCart, setLocalCart] = useState<LocalCartItem[]>([])
+    // ── Checkout state (same as cart/page.tsx) ────────────────────────────────
+    const [isAuthOpen, setIsAuthOpen]   = useState(false)
+    const [user, setUser]               = useState<any>(null)
+    const [userChecked, setUserChecked] = useState(false)
+    const [isCheckoutOpen, setIsCheckoutOpen]   = useState(false)
+    const [step, setStep]               = useState<Step>('location')
+    const [city, setCity]               = useState('')
+    const [district, setDistrict]       = useState('')
+    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | 'inter_urban' | null>(null)
+    const [paymentMethod, setPaymentMethod] = useState('')
+    const [transactionId, setTransactionId] = useState('')
+    const [orderId, setOrderId]         = useState('')
+    const [orderData, setOrderData]     = useState<any>(null)
+    const [saving, setSaving]           = useState(false)
+    const [orderError, setOrderError]   = useState('')
+    const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
+    const [interUrbanWarningOpen, setInterUrbanWarningOpen]   = useState(false)
 
-    const addToLocalCart = useCallback((product: ShopProduct, qty: number) => {
-        setLocalCart(prev => {
-            const existing = prev.find(i => i.product.id === product.id)
-            if (existing) {
-                return prev.map(i =>
-                    i.product.id === product.id
-                        ? { ...i, qty: i.qty + qty }
-                        : i
-                )
-            }
-            return [...prev, { product, qty }]
-        })
-    }, [])
+    const deliveryFee =
+        deliveryMode === 'inter_urban'
+            ? DELIVERY_FEE_INTER_URBAN
+            : deliveryMode
+              ? DELIVERY_FEES[deliveryMode]
+              : 0
+    const grandTotal = total + deliveryFee
 
-    const updateLocalQty = useCallback((productId: string, qty: number) => {
-        if (qty <= 0) {
-            setLocalCart(prev => prev.filter(i => i.product.id !== productId))
-        } else {
-            setLocalCart(prev =>
-                prev.map(i => i.product.id === productId ? { ...i, qty } : i)
-            )
+    const supabase = getSupabaseBrowserClient()
+
+    const buyerCity = profile?.city?.trim() || ''
+    const sellerIds = useMemo(
+        () => [...new Set(cart.map(i => i.seller_id).filter(Boolean))] as string[],
+        [cart]
+    )
+    const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
+    const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
+
+    useEffect(() => {
+        if (sellerIds.length === 0) {
+            setSellerCities({})
+            setSellerCitiesReady(true)
+            return
         }
-    }, [])
+        setSellerCitiesReady(false)
+        let cancelled = false
+        ;(async () => {
+            const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
+            if (cancelled) return
+            const map: Record<string, string | null> = {}
+            for (const sid of sellerIds) map[sid] = null
+            for (const row of (data || []) as { id: string; city: string | null }[]) {
+                map[row.id] = row.city ?? null
+            }
+            setSellerCities(map)
+            setSellerCitiesReady(true)
+        })()
+        return () => { cancelled = true }
+    }, [supabase, sellerIds])
 
-    const localCartTotal = useMemo(
-        () => localCart.reduce((s, i) => s + (getPromoPrice(i.product) ?? i.product.price) * i.qty, 0),
-        [localCart]
-    )
-    const localCartCount = useMemo(
-        () => localCart.reduce((s, i) => s + i.qty, 0),
-        [localCart]
+    const hasInterUrbanDelivery = Boolean(
+        buyerCity && orderRequiresInterUrbanDelivery(buyerCity, sellerIds.map(sid => sellerCities[sid]))
     )
 
-    // ── UI state ──────────────────────────────────────────────────────────────
+    const isInterUrbanForSelectedCity = useCallback(
+        (displayCity: string) =>
+            orderRequiresInterUrbanDelivery(displayCity, sellerIds.map(sid => sellerCities[sid])),
+        [sellerIds, sellerCities]
+    )
+
+    const { sellerCity: paymentSellerCity, ambiguous: ambiguousPaymentCities } = useMemo(
+        () => getSellerCityForPayment(sellerIds, sellerCities),
+        [sellerIds, sellerCities]
+    )
+
+    const checkUser = async () => {
+        if (userChecked) return user
+        const { user: u } = await safeGetUser(supabase)
+        setUser(u)
+        setUserChecked(true)
+        return u
+    }
+
+    const getStepIndex = () => {
+        if (step === 'location') return 0
+        if (step === 'delivery_mode') return 1
+        if (['confirmed', 'rejected'].includes(step)) return 3
+        return 2
+    }
+
+    const handleCheckout = async () => {
+        const u = await checkUser()
+        if (!u) { setIsAuthOpen(true); return }
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('city, phone, whatsapp_number')
+            .eq('id', u.id)
+            .maybeSingle()
+        if (!isBuyerProfileCompleteForOrder(prof)) { setProfileGateOpen(true); return }
+        setInterUrbanPreAlertOpen(false)
+        setInterUrbanWarningOpen(false)
+        setIsCheckoutOpen(true)
+        setStep('location')
+    }
+
+    const closeCheckout = () => {
+        setIsCheckoutOpen(false)
+        setStep('location')
+        setCity('')
+        setDistrict('')
+        setDeliveryMode(null)
+        setPaymentMethod('')
+        setTransactionId('')
+        setOrderId('')
+        setOrderData(null)
+        setInterUrbanPreAlertOpen(false)
+        setInterUrbanWarningOpen(false)
+    }
+
+    const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
+        if (sellerIds.length > 0 && !sellerCitiesReady) {
+            alert('Chargement des informations vendeurs… Réessayez dans une seconde.')
+            return
+        }
+        setCity(selectedCity)
+        setDistrict(selectedDistrict)
+        const u = await checkUser()
+        if (u) {
+            await supabase
+                .from('profiles')
+                .update({ city: orderCityToProfileCity(selectedCity) ?? selectedCity.trim(), district: selectedDistrict.trim() })
+                .eq('id', u.id)
+        }
+        const sellerCityValues = sellerIds.map(sid => sellerCities[sid])
+        const inter = orderRequiresInterUrbanDelivery(selectedCity, sellerCityValues)
+        if (inter) {
+            setInterUrbanPreAlertOpen(true)
+        } else {
+            setDeliveryMode(null)
+            setStep('delivery_mode')
+        }
+    }
+
+    const handleDeliverySelect = (mode: 'standard' | 'express') => {
+        setDeliveryMode(mode)
+        setStep('payment_method')
+    }
+
+    const handlePaymentSelect = (method: string) => {
+        setPaymentMethod(method)
+        if (method === 'cash') {
+            setStep('cash_form')
+        } else {
+            setStep('transfer_info')
+        }
+    }
+
+    const handleTransactionIdSubmit = async (id: string) => {
+        if (!deliveryMode) { setOrderError('Choisissez un mode de livraison.'); return }
+        setTransactionId(id)
+        setSaving(true)
+        setOrderError('')
+        try {
+            const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode]
+            const amount = total + fee
+            const items = cart.map(item => ({
+                id: item.product_id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                img: item.img || '',
+                seller_id: item.seller_id || '',
+                selectedSize: item.selectedSize,
+                selectedColor: item.selectedColor,
+            }))
+            const result = await createOrderAction({
+                items, city, district, payment_method: paymentMethod,
+                total_amount: amount, transaction_id: id,
+                delivery_mode: deliveryMode, delivery_fee: fee,
+            })
+            if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') setProfileGateOpen(true)
+                setOrderError(result.error)
+                return
+            }
+            setOrderId(result.order.id)
+            setOrderData(result.order)
+            setStep('waiting')
+        } catch (err: any) {
+            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleCashConfirm = async (deliveryInfo: { name: string; phone: string; quarter: string; address: string }) => {
+        if (!deliveryMode) { setOrderError('Choisissez un mode de livraison.'); return }
+        setSaving(true)
+        setOrderError('')
+        try {
+            const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode]
+            const amount = total + fee
+            const items = cart.map(item => ({
+                id: item.product_id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity,
+                img: item.img || '',
+                seller_id: item.seller_id || '',
+                selectedSize: item.selectedSize,
+                selectedColor: item.selectedColor,
+            }))
+            const result = await createOrderAction({
+                items, city, district, payment_method: paymentMethod,
+                total_amount: amount, customer_name: deliveryInfo.name,
+                phone: deliveryInfo.phone, landmark: deliveryInfo.address,
+                delivery_mode: deliveryMode, delivery_fee: fee,
+            })
+            if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') setProfileGateOpen(true)
+                setOrderError(result.error)
+                return
+            }
+            setOrderId(result.order.id)
+            setOrderData(result.order)
+            await clearCart()
+            setStep('confirmed')
+        } catch (err: any) {
+            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleValidated = useCallback(async () => {
+        await clearCart()
+        setStep('confirmed')
+    }, [clearCart])
+
+    const handleRejected = useCallback(() => setStep('rejected'), [])
+
+    // ── Shop UI state ─────────────────────────────────────────────────────────
     const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
-    const [showCheckout, setShowCheckout]       = useState(false)
     const [search, setSearch]                   = useState('')
     const [activeTab, setActiveTab]             = useState('')
     const [closedDismissed, setClosedDismissed] = useState(false)
@@ -1049,15 +869,11 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const coverImg         = seller.cover_image || products[0]?.img || null
     const showClosedOverlay = !seller.is_open && !closedDismissed
 
-    // Featured : top 5
     const featured = useMemo(() => products.slice(0, 5), [products])
 
-    // Grouped by subcategory
     const { grouped, categories } = useMemo(() => {
         const q = search.trim().toLowerCase()
-        const filtered = q.length > 1
-            ? products.filter(p => p.name.toLowerCase().includes(q))
-            : products
+        const filtered = q.length > 1 ? products.filter(p => p.name.toLowerCase().includes(q)) : products
         const map: Record<string, ShopProduct[]> = {}
         for (const p of filtered) {
             const cat = deriveSubcategory(p)
@@ -1077,10 +893,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         observerRef.current = new IntersectionObserver(
             entries => {
                 for (const entry of entries) {
-                    if (entry.isIntersecting) {
-                        setActiveTab(entry.target.getAttribute('data-cat') || '')
-                        break
-                    }
+                    if (entry.isIntersecting) { setActiveTab(entry.target.getAttribute('data-cat') || ''); break }
                 }
             },
             { rootMargin: '-25% 0px -65% 0px', threshold: 0 }
@@ -1096,23 +909,27 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         setActiveTab(cat)
         const el = sectionRefs.current[cat]
         if (el) {
-            const offset = 120
-            const top = el.getBoundingClientRect().top + window.scrollY - offset
+            const top = el.getBoundingClientRect().top + window.scrollY - 120
             window.scrollTo({ top, behavior: 'smooth' })
         }
         const tabEl = tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(cat)}"]`)
         tabEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
     }, [])
 
-    // ── Auth guard before checkout ────────────────────────────────────────────
-    const handleCommander = useCallback(() => {
-        if (authLoading) return
-        if (!user) {
-            router.push(`/login?redirect=/patisserie/${seller.id}`)
-            return
+    // cart items from this shop (for qty badge on product rows)
+    const cartQtyMap = useMemo(() => {
+        const map: Record<string, number> = {}
+        for (const item of cart) {
+            if (item.seller_id === seller.id) map[item.product_id] = item.quantity
         }
-        setShowCheckout(true)
-    }, [user, authLoading, router, seller.id])
+        return map
+    }, [cart, seller.id])
+
+    // items from this shop in the cart (for the mobile bar)
+    const shopItemCount = useMemo(
+        () => cart.filter(i => i.seller_id === seller.id).reduce((s, i) => s + i.quantity, 0),
+        [cart, seller.id]
+    )
 
     return (
         <div className="min-h-screen bg-white">
@@ -1126,27 +943,10 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 />
             )}
 
-            {/* ── Checkout modal ───────────────────────────────────────────── */}
-            {showCheckout && localCart.length > 0 && (
-                <PatisserieCheckoutModal
-                    items={localCart}
-                    seller={seller}
-                    onClose={() => setShowCheckout(false)}
-                    onSuccess={() => setLocalCart([])}
-                />
-            )}
-
             {/* ── Cover banner ────────────────────────────────────────────── */}
             <div className="relative w-full overflow-hidden" style={{ aspectRatio: '16/7' }}>
                 {coverImg ? (
-                    <Image
-                        src={coverImg}
-                        alt={shopName}
-                        fill
-                        className="object-cover"
-                        sizes="100vw"
-                        priority
-                    />
+                    <Image src={coverImg} alt={shopName} fill className="object-cover" sizes="100vw" priority />
                 ) : (
                     <div className="w-full h-full bg-gradient-to-br from-rose-100 to-pink-50 flex items-center justify-center">
                         <Cake className="w-20 h-20 text-rose-200" />
@@ -1200,30 +1000,23 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             )}
                             {seller.city && (
                                 <div className="flex items-center gap-1">
-                                    <MapPin className="w-3 h-3" />
-                                    {seller.city}
+                                    <MapPin className="w-3 h-3" />{seller.city}
                                 </div>
                             )}
                             <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {seller.delivery_time}
+                                <Clock className="w-3 h-3" />{seller.delivery_time}
                             </div>
-                            {seller.min_order > 0 && (
-                                <span>Min. {formatPrice(seller.min_order)}</span>
-                            )}
+                            {seller.min_order > 0 && <span>Min. {formatPrice(seller.min_order)}</span>}
                         </div>
 
                         <div className="flex flex-wrap gap-3 mt-2">
                             <span className={`inline-flex items-center gap-1 text-xs font-semibold ${seller.delivery_fee === 0 ? 'text-green-600' : 'text-neutral-500'}`}>
                                 <Bike className="w-3.5 h-3.5" />
-                                {seller.delivery_fee === 0
-                                    ? 'Livraison gratuite'
-                                    : `Frais de livraison : ${formatPrice(seller.delivery_fee)}`}
+                                {seller.delivery_fee === 0 ? 'Livraison gratuite' : `Frais de livraison : ${formatPrice(seller.delivery_fee)}`}
                             </span>
                             {seller.opening_hours_text && (
                                 <span className="inline-flex items-center gap-1 text-xs text-neutral-500">
-                                    <Timer className="w-3.5 h-3.5" />
-                                    {seller.opening_hours_text}
+                                    <Timer className="w-3.5 h-3.5" />{seller.opening_hours_text}
                                 </span>
                             )}
                         </div>
@@ -1251,12 +1044,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     <h2 className="text-base font-black text-neutral-900 mb-4">Articles en vedette</h2>
                     <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-4 px-4">
                         {featured.map((p, i) => (
-                            <FeaturedCard
-                                key={p.id}
-                                product={p}
-                                rank={i + 1}
-                                onClick={() => setSelectedProduct(p)}
-                            />
+                            <FeaturedCard key={p.id} product={p} rank={i + 1} onClick={() => setSelectedProduct(p)} />
                         ))}
                     </div>
                 </div>
@@ -1286,10 +1074,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             {/* ── Category tabs (sticky) ───────────────────────────────────── */}
             {categories.length > 1 && (
                 <div className="sticky top-0 z-20 bg-white border-b border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-                    <div
-                        ref={tabsRef}
-                        className="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto py-3 scrollbar-hide"
-                    >
+                    <div ref={tabsRef} className="max-w-6xl mx-auto px-4 flex gap-1 overflow-x-auto py-3 scrollbar-hide">
                         {categories.map(cat => (
                             <button
                                 key={cat}
@@ -1308,7 +1093,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 </div>
             )}
 
-            {/* ── Layout 2 colonnes : produits + panier ────────────────────── */}
+            {/* ── Layout 2 colonnes ────────────────────────────────────────── */}
             <div className="max-w-6xl mx-auto px-4 flex gap-8 items-start pb-32 lg:pb-20">
 
                 {/* Colonne gauche : sections produits */}
@@ -1318,10 +1103,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             <div className="text-4xl mb-3">🎂</div>
                             <p className="text-neutral-400 text-sm">Aucun produit trouvé</p>
                             {search && (
-                                <button
-                                    onClick={() => setSearch('')}
-                                    className="mt-2 text-xs text-rose-500 hover:underline"
-                                >
+                                <button onClick={() => setSearch('')} className="mt-2 text-xs text-rose-500 hover:underline">
                                     Effacer la recherche
                                 </button>
                             )}
@@ -1335,19 +1117,15 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                                 className="pt-6 pb-2"
                             >
                                 <div className="mb-2">
-                                    <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest px-1">
-                                        {cat}
-                                    </h3>
-                                    <p className="text-xs text-neutral-400 mt-0.5 px-1">
-                                        {grouped[cat].length} article{grouped[cat].length > 1 ? 's' : ''}
-                                    </p>
+                                    <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest px-1">{cat}</h3>
+                                    <p className="text-xs text-neutral-400 mt-0.5 px-1">{grouped[cat].length} article{grouped[cat].length > 1 ? 's' : ''}</p>
                                 </div>
                                 <div>
                                     {grouped[cat].map(p => (
                                         <ProductRow
                                             key={p.id}
                                             product={p}
-                                            localQty={localCart.find(i => i.product.id === p.id)?.qty ?? 0}
+                                            cartQty={cartQtyMap[p.id] ?? 0}
                                             onClick={() => setSelectedProduct(p)}
                                         />
                                     ))}
@@ -1358,31 +1136,31 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     )}
                 </div>
 
-                {/* Colonne droite : panier (desktop uniquement) */}
+                {/* Colonne droite : panier desktop */}
                 <div className="hidden lg:block w-80 flex-shrink-0 sticky top-6 pt-6">
                     <CartSidebar
-                        items={localCart}
+                        sellerId={seller.id}
                         shopName={shopName}
-                        onUpdateQty={updateLocalQty}
-                        onCommander={handleCommander}
+                        onCommander={handleCheckout}
                     />
                 </div>
             </div>
 
             {/* ── Mobile sticky cart bar ───────────────────────────────────── */}
-            {localCartCount > 0 && (
-                <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-safe-bottom pb-4 pt-2 bg-white/95 backdrop-blur border-t border-neutral-100 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+            {shopItemCount > 0 && (
+                <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 px-4 pb-4 pt-2 bg-white/95 backdrop-blur border-t border-neutral-100 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
                     <button
-                        onClick={handleCommander}
-                        className="flex items-center justify-between w-full bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white font-black text-sm px-5 py-4 rounded-2xl transition-colors shadow-md shadow-rose-200"
+                        onClick={handleCheckout}
+                        disabled={sellerIds.length > 0 && !sellerCitiesReady}
+                        className="flex items-center justify-between w-full bg-orange-500 hover:bg-orange-600 active:bg-orange-700 disabled:opacity-50 text-white font-black text-sm px-5 py-4 rounded-2xl transition-colors shadow-md shadow-orange-200"
                     >
                         <div className="flex items-center gap-2.5">
                             <div className="w-6 h-6 bg-white/20 rounded-full flex items-center justify-center">
-                                <span className="text-xs font-black">{localCartCount}</span>
+                                <span className="text-xs font-black">{shopItemCount}</span>
                             </div>
                             <span>Voir le panier</span>
                         </div>
-                        <span className="font-black">{formatPrice(localCartTotal)}</span>
+                        <span>{formatPrice(cart.filter(i => i.seller_id === seller.id).reduce((s, i) => s + i.price * i.quantity, 0))}</span>
                     </button>
                 </div>
             )}
@@ -1394,9 +1172,146 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     allProducts={products}
                     onClose={() => setSelectedProduct(null)}
                     onSelectProduct={setSelectedProduct}
-                    onAddToLocal={addToLocalCart}
                 />
             )}
+
+            {/* ── Checkout modal (même que cart/page.tsx) ──────────────────── */}
+            {isCheckoutOpen && typeof document !== 'undefined' && createPortal(
+                <>
+                    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={closeCheckout}>
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+                        <div
+                            className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800 shadow-2xl animate-fadeIn"
+                            onClick={e => e.stopPropagation()}
+                        >
+                            {/* Header modal */}
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white text-sm font-black">M</div>
+                                    <div>
+                                        <p className="text-[9px] font-black uppercase text-orange-500 tracking-widest">Mayombe Market</p>
+                                        <p className="text-[8px] font-bold text-slate-400 uppercase">{itemCount} article{itemCount > 1 ? 's' : ''}</p>
+                                    </div>
+                                </div>
+                                <button
+                                    onClick={closeCheckout}
+                                    className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors text-lg"
+                                >
+                                    &times;
+                                </button>
+                            </div>
+
+                            {/* Total */}
+                            <div className="text-center mb-4">
+                                <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
+                                <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
+                                <p className="text-[9px] font-bold text-slate-400 mt-1">
+                                    {deliveryMode
+                                        ? `${total.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F ${deliveryMode === 'inter_urban' ? 'livraison inter-ville' : 'livraison'}`
+                                        : `${total.toLocaleString('fr-FR')} F articles — livraison à calculer`}
+                                </p>
+                            </div>
+
+                            <StepIndicator activeStep={getStepIndex()} />
+
+                            {/* Étapes */}
+                            {step === 'location' && !interUrbanPreAlertOpen && !interUrbanWarningOpen && (
+                                <LocationStep
+                                    onConfirm={handleLocationConfirm}
+                                    onClose={closeCheckout}
+                                    isInterUrbanForCity={isInterUrbanForSelectedCity}
+                                />
+                            )}
+                            {step === 'delivery_mode' && (
+                                <DeliveryModeStep onSelect={handleDeliverySelect} onBack={() => setStep('location')} />
+                            )}
+                            {step === 'payment_method' && (
+                                <PaymentMethodStep
+                                    onSelect={handlePaymentSelect}
+                                    onBack={() => {
+                                        if (deliveryMode === 'inter_urban') { setDeliveryMode(null); setStep('location') }
+                                        else setStep('delivery_mode')
+                                    }}
+                                />
+                            )}
+                            {step === 'transfer_info' && (
+                                <TransferInfoStep
+                                    method={paymentMethod}
+                                    total={grandTotal}
+                                    onConfirm={() => setStep('enter_id')}
+                                    onBack={() => setStep('payment_method')}
+                                    sellerCity={paymentSellerCity}
+                                    ambiguousSellerCities={ambiguousPaymentCities}
+                                />
+                            )}
+                            {step === 'enter_id' && (
+                                <EnterTransactionIdStep
+                                    onSubmit={handleTransactionIdSubmit}
+                                    onBack={() => { setOrderError(''); setStep('transfer_info') }}
+                                    loading={saving}
+                                    serverError={orderError}
+                                />
+                            )}
+                            {step === 'waiting' && orderId && (
+                                <WaitingValidationStep
+                                    orderId={orderId}
+                                    orderData={orderData}
+                                    transactionId={transactionId}
+                                    onValidated={handleValidated}
+                                    onRejected={handleRejected}
+                                />
+                            )}
+                            {step === 'cash_form' && (
+                                <CashDeliveryStep
+                                    total={grandTotal}
+                                    onConfirm={handleCashConfirm}
+                                    onBack={() => { setOrderError(''); setStep('payment_method') }}
+                                    loading={saving}
+                                    serverError={orderError}
+                                />
+                            )}
+                            {step === 'confirmed' && orderData && (
+                                <OrderConfirmedStep
+                                    orderData={orderData}
+                                    type={paymentMethod === 'cash' ? 'cash_confirmed' : 'payment_validated'}
+                                    onClose={closeCheckout}
+                                />
+                            )}
+                            {step === 'rejected' && orderData && (
+                                <OrderConfirmedStep orderData={orderData} type="rejected" onClose={closeCheckout} />
+                            )}
+                        </div>
+                    </div>
+
+                    <InterUrbanPrePaymentModal
+                        open={interUrbanPreAlertOpen}
+                        onContinue={() => { setInterUrbanPreAlertOpen(false); setInterUrbanWarningOpen(true) }}
+                        onCancel={() => { setInterUrbanPreAlertOpen(false); setStep('location') }}
+                    />
+                    <InterUrbanWarningModal
+                        open={interUrbanWarningOpen}
+                        buyerCity={city}
+                        sellerCity={getFirstInterUrbanSellerCityDisplay(city, sellerIds, sellerCities)}
+                        onAccept={() => { setInterUrbanWarningOpen(false); setDeliveryMode('inter_urban'); setStep('payment_method') }}
+                        onCancel={() => { setInterUrbanWarningOpen(false); setStep('location') }}
+                    />
+                </>,
+                document.body
+            )}
+
+            {/* Auth modal */}
+            <AuthModal isOpen={isAuthOpen} onClose={() => {
+                setIsAuthOpen(false)
+                checkUser().then(async u => {
+                    if (!u) return
+                    const { data: prof } = await supabase.from('profiles').select('city, phone, whatsapp_number').eq('id', u.id).maybeSingle()
+                    if (!isBuyerProfileCompleteForOrder(prof)) { setProfileGateOpen(true); return }
+                    setIsCheckoutOpen(true)
+                    setStep('location')
+                })
+            }} />
+
+            <CompleteProfileGateModal open={profileGateOpen} onClose={() => setProfileGateOpen(false)} />
 
             <style jsx global>{`
                 @keyframes slideUp {

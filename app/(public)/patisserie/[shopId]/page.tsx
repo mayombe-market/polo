@@ -78,29 +78,43 @@ export default async function PatisserieShopPage({
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    // Profil vendeur
-    const { data: seller } = await supabase
+    // ── 1. Profil de base (colonnes toujours présentes) ──────────────────────
+    const { data: baseProfile } = await supabase
         .from('profiles')
-        .select(
-            'id, shop_name, store_name, avatar_url, city, verification_status, phone, whatsapp_number, cover_image, delivery_time, min_order, delivery_fee, opening_hours_text, is_open'
-        )
+        .select('id, shop_name, store_name, avatar_url, city, verification_status, phone, whatsapp_number, role')
         .eq('id', params.shopId)
-        .eq('role', 'vendor')
         .single()
 
-    if (!seller) notFound()
+    // Pas de profil du tout → 404
+    if (!baseProfile) notFound()
 
-    // Produits pâtisserie du vendeur (triés par popularité)
-    const { data: products } = await supabase
+    // ── 2. Nouvelles colonnes boutique (ajoutées par migration) ───────────────
+    //    Si le schema cache n'est pas encore propagé, on retombe sur les defaults
+    const { data: extraProfile } = await supabase
+        .from('profiles')
+        .select('cover_image, delivery_time, min_order, delivery_fee, opening_hours_text, is_open')
+        .eq('id', params.shopId)
+        .single()
+
+    // ── 3. Produits pâtisserie du vendeur ────────────────────────────────────
+    //    On retire le filtre category pour ne pas rater les produits si la
+    //    catégorie est légèrement différente — on récupère tout et on garde
+    //    la logique de sous-catégorie côté client
+    const { data: allProducts } = await supabase
         .from('products')
         .select(
             'id, name, price, img, images_gallery, category, seller_id, created_at, views_count, stock_quantity, promo_percentage, promo_start_date, promo_end_date, description, subcategory'
         )
         .eq('seller_id', params.shopId)
-        .eq('category', 'Pâtisserie & Traiteur')
         .order('views_count', { ascending: false })
 
-    // Note moyenne via RPC (même logique que getSellerData)
+    // Garder seulement Pâtisserie & Traiteur (filtre côté JS pour éviter
+    // tout problème d'encodage de la valeur dans l'URL Supabase)
+    const products = (allProducts || []).filter(
+        (p: any) => p.category === 'Pâtisserie & Traiteur'
+    )
+
+    // ── 4. Note moyenne via RPC ───────────────────────────────────────────────
     let averageRating = 0
     let reviewCount = 0
     try {
@@ -121,19 +135,26 @@ export default async function PatisserieShopPage({
     }
 
     const shopSeller: ShopSeller = {
-        ...seller,
-        cover_image: seller.cover_image || null,
-        delivery_time: seller.delivery_time || '30-60 min',
-        min_order: seller.min_order || 0,
-        delivery_fee: seller.delivery_fee ?? 0,
-        opening_hours_text: seller.opening_hours_text || null,
-        is_open: seller.is_open !== false,
+        id: baseProfile.id,
+        shop_name: baseProfile.shop_name,
+        store_name: baseProfile.store_name,
+        avatar_url: baseProfile.avatar_url,
+        city: baseProfile.city,
+        verification_status: baseProfile.verification_status,
+        phone: baseProfile.phone,
+        whatsapp_number: baseProfile.whatsapp_number,
+        cover_image: extraProfile?.cover_image || null,
+        delivery_time: extraProfile?.delivery_time || '30-60 min',
+        min_order: extraProfile?.min_order || 0,
+        delivery_fee: extraProfile?.delivery_fee ?? 0,
+        opening_hours_text: extraProfile?.opening_hours_text || null,
+        is_open: extraProfile?.is_open !== false,
     }
 
     return (
         <ShopClient
             seller={shopSeller}
-            products={(products || []) as ShopProduct[]}
+            products={products as ShopProduct[]}
             averageRating={averageRating}
             reviewCount={reviewCount}
         />

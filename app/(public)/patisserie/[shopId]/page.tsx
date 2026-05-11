@@ -8,8 +8,9 @@ export const revalidate = 60
 // ─── Metadata dynamique ───────────────────────────────────────────────────────
 
 export async function generateMetadata(
-    { params }: { params: { shopId: string } }
+    { params }: { params: Promise<{ shopId: string }> }
 ): Promise<Metadata> {
+    const { shopId } = await params
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -17,7 +18,7 @@ export async function generateMetadata(
     const { data } = await supabase
         .from('profiles')
         .select('shop_name, store_name, city')
-        .eq('id', params.shopId)
+        .eq('id', shopId)
         .single()
 
     const name = data?.shop_name || data?.store_name || 'Pâtisserie'
@@ -71,8 +72,9 @@ export type ShopSeller = {
 export default async function PatisserieShopPage({
     params,
 }: {
-    params: { shopId: string }
+    params: Promise<{ shopId: string }>
 }) {
+    const { shopId } = await params
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -82,30 +84,26 @@ export default async function PatisserieShopPage({
     const { data: baseProfile } = await supabase
         .from('profiles')
         .select('id, shop_name, store_name, avatar_url, city, verification_status, phone, whatsapp_number, role')
-        .eq('id', params.shopId)
+        .eq('id', shopId)
         .single()
 
     // Pas de profil du tout → 404
     if (!baseProfile) notFound()
 
     // ── 2. Nouvelles colonnes boutique (ajoutées par migration) ───────────────
-    //    Si le schema cache n'est pas encore propagé, on retombe sur les defaults
     const { data: extraProfile } = await supabase
         .from('profiles')
         .select('cover_image, delivery_time, min_order, delivery_fee, opening_hours_text, is_open')
-        .eq('id', params.shopId)
+        .eq('id', shopId)
         .single()
 
     // ── 3. Produits pâtisserie du vendeur ────────────────────────────────────
-    //    On retire le filtre category pour ne pas rater les produits si la
-    //    catégorie est légèrement différente — on récupère tout et on garde
-    //    la logique de sous-catégorie côté client
     const { data: allProducts } = await supabase
         .from('products')
         .select(
             'id, name, price, img, images_gallery, category, seller_id, created_at, views_count, stock_quantity, promo_percentage, promo_start_date, promo_end_date, description, subcategory'
         )
-        .eq('seller_id', params.shopId)
+        .eq('seller_id', shopId)
         .order('views_count', { ascending: false })
 
     // Garder seulement Pâtisserie & Traiteur (filtre côté JS pour éviter
@@ -119,7 +117,7 @@ export default async function PatisserieShopPage({
     let reviewCount = 0
     try {
         const { data: reviews } = await supabase.rpc('get_seller_reviews', {
-            p_seller_id: params.shopId,
+            p_seller_id: shopId,
         })
         if (reviews?.length) {
             reviewCount = reviews.length

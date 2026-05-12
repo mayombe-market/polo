@@ -58,6 +58,11 @@ const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.
     ssr: false
 })
 
+const PatisserieProductForm = dynamic(() => import('./PatisserieProductForm').then(mod => mod.default || mod), {
+    loading: () => <div className="p-10 text-center font-bold italic text-rose-500">Chargement du formulaire…</div>,
+    ssr: false
+})
+
 type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews'
 
 const getMenuItems = (verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
@@ -952,8 +957,21 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     🚀 Voir les plans supérieurs
                                 </button>
                             </div>
+                        ) : profile?.vendor_type === 'patisserie' ? (
+                            /* Pâtissier → formulaire spécialisé avec options/combos */
+                            <>
+                                <div className="mb-6">
+                                    <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">🎂 Nouveau produit</h2>
+                                    <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1">Ajoutez un produit à votre menu</p>
+                                </div>
+                                <PatisserieProductForm
+                                    sellerId={user?.id}
+                                    onSuccess={() => { setActivePage('products'); router.refresh() }}
+                                    onCancel={() => setActivePage('products')}
+                                />
+                            </>
                         ) : (
-                            /* Sinon → formulaire normal */
+                            /* Vendeur marketplace → formulaire normal */
                             <>
                                 <div className="mb-6">
                                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Nouveau Produit</h2>

@@ -789,7 +789,7 @@ interface Props {
 }
 
 export default function ShopClient({ seller, products, averageRating, reviewCount, reviews = [] }: Props) {
-    const { cart, total, itemCount, updateQuantity, clearCart } = useCart()
+    const { cart, total, itemCount, updateQuantity, clearCart, removeFromCart } = useCart()
     const { profile } = useAuth()
 
     // ── Checkout state ────────────────────────────────────────────────────────
@@ -811,11 +811,16 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
     const [interUrbanWarningOpen, setInterUrbanWarningOpen]   = useState(false)
 
+    // Articles de CETTE boutique uniquement (séparés des autres boutiques du panier)
+    const shopItems = useMemo(() => cart.filter(i => i.seller_id === seller.id), [cart, seller.id])
+    const shopSubtotalValue = useMemo(() => shopItems.reduce((s, i) => s + i.price * i.quantity, 0), [shopItems])
+
     const deliveryFee =
         deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN
         : deliveryMode ? DELIVERY_FEES[deliveryMode]
         : 0
-    const grandTotal = total + deliveryFee
+    // On utilise shopSubtotalValue (articles de cette boutique uniquement) — pas total qui inclut toutes les boutiques
+    const grandTotal = shopSubtotalValue + deliveryFee
 
     const supabase = getSupabaseBrowserClient()
 
@@ -926,14 +931,15 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         setTransactionId(id); setSaving(true); setOrderError('')
         try {
             const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode]
-            const items = cart.map(item => ({
+            // Seulement les articles de CETTE boutique
+            const items = shopItems.map(item => ({
                 id: item.product_id, name: item.name, price: item.price,
                 quantity: item.quantity, img: item.img || '', seller_id: item.seller_id || '',
                 selectedSize: item.selectedSize, selectedColor: item.selectedColor,
             }))
             const result = await createOrderAction({
                 items, city, district, payment_method: paymentMethod,
-                total_amount: total + fee, transaction_id: id,
+                total_amount: shopSubtotalValue + fee, transaction_id: id,
                 delivery_mode: deliveryMode, delivery_fee: fee,
             })
             if (result.error) {
@@ -951,14 +957,15 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         setSaving(true); setOrderError('')
         try {
             const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode]
-            const items = cart.map(item => ({
+            // Seulement les articles de CETTE boutique
+            const items = shopItems.map(item => ({
                 id: item.product_id, name: item.name, price: item.price,
                 quantity: item.quantity, img: item.img || '', seller_id: item.seller_id || '',
                 selectedSize: item.selectedSize, selectedColor: item.selectedColor,
             }))
             const result = await createOrderAction({
                 items, city, district, payment_method: paymentMethod,
-                total_amount: total + fee, customer_name: deliveryInfo.name,
+                total_amount: shopSubtotalValue + fee, customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone, landmark: deliveryInfo.address,
                 delivery_mode: deliveryMode, delivery_fee: fee,
             })
@@ -967,13 +974,20 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 setOrderError(result.error); return
             }
             setOrderId(result.order.id); setOrderData(result.order)
-            await clearCart(); setStep('confirmed')
+            await clearShopCart(); setStep('confirmed')
         } catch (err: any) {
             setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
         } finally { setSaving(false) }
     }
 
-    const handleValidated = useCallback(async () => { await clearCart(); setStep('confirmed') }, [clearCart])
+    // Vide uniquement les articles de cette boutique (les autres boutiques restent dans le panier)
+    const clearShopCart = useCallback(async () => {
+        for (const item of shopItems) {
+            await removeFromCart(item.id)
+        }
+    }, [shopItems, removeFromCart])
+
+    const handleValidated = useCallback(async () => { await clearShopCart(); setStep('confirmed') }, [clearShopCart])
     const handleRejected  = useCallback(() => setStep('rejected'), [])
 
     // ── Shop UI ───────────────────────────────────────────────────────────────
@@ -1031,14 +1045,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         return map
     }, [cart, seller.id])
 
-    const shopItemCount = useMemo(
-        () => cart.filter(i => i.seller_id === seller.id).reduce((s, i) => s + i.quantity, 0),
-        [cart, seller.id]
-    )
-    const shopSubtotal = useMemo(
-        () => cart.filter(i => i.seller_id === seller.id).reduce((s, i) => s + i.price * i.quantity, 0),
-        [cart, seller.id]
-    )
+    const shopItemCount = useMemo(() => shopItems.reduce((s, i) => s + i.quantity, 0), [shopItems])
 
     return (
         <div className="min-h-screen bg-gray-50">
@@ -1395,7 +1402,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             </div>
                             <span>Voir le panier</span>
                         </div>
-                        <span>{formatPrice(shopSubtotal)}</span>
+                        <span>{formatPrice(shopSubtotalValue)}</span>
                     </button>
                 </div>
             )}
@@ -1430,8 +1437,8 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                                 <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
                                 <p className="text-[9px] font-bold text-slate-400 mt-1">
                                     {deliveryMode
-                                        ? `${total.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F livraison`
-                                        : `${total.toLocaleString('fr-FR')} F articles — livraison à calculer`}
+                                        ? `${shopSubtotalValue.toLocaleString('fr-FR')} F articles + ${deliveryFee.toLocaleString('fr-FR')} F livraison`
+                                        : `${shopSubtotalValue.toLocaleString('fr-FR')} F articles — livraison à calculer`}
                                 </p>
                             </div>
 

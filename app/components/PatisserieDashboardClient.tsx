@@ -102,7 +102,7 @@ function HomePage({ profile, products, orders, onToggleOpen, toggling }: {
     const setupPct = Math.round((setupDone / setupItems.length) * 100)
 
     return (
-        <div className="space-y-4 pb-4">
+        <div className="space-y-4 pb-2">
             {/* ── Cover preview + nom ── */}
             <div className="relative rounded-3xl overflow-hidden" style={{ height: 180 }}>
                 {coverImg
@@ -624,7 +624,7 @@ function PatisserieSettingsPage({ profile, user }: { profile: any; user: any }) 
     }
 
     return (
-        <div className="space-y-4 pb-4">
+        <div className="space-y-4 pb-2">
 
             {/* ── Cover image ── */}
             <div className="bg-white rounded-3xl border border-neutral-100 shadow-sm p-5">
@@ -652,27 +652,28 @@ function PatisserieSettingsPage({ profile, user }: { profile: any; user: any }) 
                     <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Nom de la boutique</label>
                     <input value={form.store_name} onChange={set('store_name')}
                         placeholder="Ex: Délices de Brazza"
-                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                     />
                 </div>
                 <div>
                     <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Slogan (75 car. max)</label>
                     <input value={form.shop_description} onChange={set('shop_description')} maxLength={75}
                         placeholder="Pâtisseries artisanales sur commande…"
-                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                     />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
                         <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Téléphone</label>
                         <input value={form.phone} onChange={set('phone')} placeholder="242064440000"
-                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                            type="tel" inputMode="numeric"
+                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                         />
                     </div>
                     <div>
                         <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Ville</label>
                         <select value={form.city} onChange={set('city')}
-                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition appearance-none"
+                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition appearance-none"
                         >
                             <option value="brazzaville">Brazzaville</option>
                             <option value="pointe-noire">Pointe-Noire</option>
@@ -699,7 +700,7 @@ function PatisserieSettingsPage({ profile, user }: { profile: any; user: any }) 
                     <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Horaires (affiché aux clients)</label>
                     <input value={form.opening_hours_text} onChange={set('opening_hours_text')}
                         placeholder="Ex: Lun-Sam 8h00–19h00"
-                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                     />
                 </div>
             </div>
@@ -711,20 +712,20 @@ function PatisserieSettingsPage({ profile, user }: { profile: any; user: any }) 
                     <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Délai de livraison</label>
                     <input value={form.delivery_time} onChange={set('delivery_time')}
                         placeholder="Ex: 30-60 min"
-                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                     />
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <div>
-                        <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Frais (FCFA)</label>
-                        <input type="number" value={form.delivery_fee} onChange={set('delivery_fee')} min={0}
-                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Frais de livraison (FCFA)</label>
+                        <input type="number" inputMode="numeric" value={form.delivery_fee} onChange={set('delivery_fee')} min={0}
+                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                         />
                     </div>
                     <div>
-                        <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Commande min. (FCFA)</label>
-                        <input type="number" value={form.min_order} onChange={set('min_order')} min={0}
-                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
+                        <label className="text-[10px] font-black uppercase text-neutral-400 mb-1.5 block">Commande minimum (FCFA)</label>
+                        <input type="number" inputMode="numeric" value={form.min_order} onChange={set('min_order')} min={0}
+                            className="w-full p-3.5 rounded-2xl bg-neutral-50 text-base sm:text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition"
                         />
                     </div>
                 </div>
@@ -873,20 +874,17 @@ export default function PatisserieDashboardClient({ profile, user, products, pro
             {/* ── Contenu principal ── */}
             <div className="flex-1 flex flex-col min-h-screen">
 
-                {/* Header mobile + desktop */}
-                <header className="bg-white border-b border-neutral-100 shadow-sm px-5 py-4 flex items-center justify-between sticky top-0 z-20">
+                {/* Header — pas sticky (le Header global l'est déjà avec z-50) */}
+                <header className="bg-white border-b border-neutral-100 px-4 sm:px-6 py-3 flex items-center justify-between">
                     <h1 className="font-black text-base text-neutral-900 truncate">{pageTitle[activePage]}</h1>
-                    <div className="flex items-center gap-2">
-                        {/* Badge open/closed */}
-                        <span className={`hidden sm:flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full ${localProfile?.is_open !== false ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${localProfile?.is_open !== false ? 'bg-green-500' : 'bg-red-500'}`} />
-                            {localProfile?.is_open !== false ? 'Ouvert' : 'Fermé'}
-                        </span>
-                    </div>
+                    <span className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-full ${localProfile?.is_open !== false ? 'bg-green-50 text-green-600' : 'bg-red-50 text-red-500'}`}>
+                        <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${localProfile?.is_open !== false ? 'bg-green-500' : 'bg-red-500'}`} />
+                        {localProfile?.is_open !== false ? 'Ouvert' : 'Fermé'}
+                    </span>
                 </header>
 
-                {/* Page content */}
-                <main className="flex-1 p-4 sm:p-6 max-w-2xl w-full mx-auto">
+                {/* Page content — pb-28 pour ne pas être caché sous la bottom nav */}
+                <main className="flex-1 p-4 sm:p-6 pb-28 max-w-2xl w-full mx-auto">
                     {activePage === 'home' && (
                         <HomePage
                             profile={localProfile}
@@ -913,15 +911,18 @@ export default function PatisserieDashboardClient({ profile, user, products, pro
                 </main>
             </div>
 
-            {/* ── Bottom nav mobile ── */}
-            <div className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)] flex">
+            {/* ── Bottom nav mobile — safe area iOS ── */}
+            <div
+                className="lg:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-neutral-100 shadow-[0_-2px_12px_rgba(0,0,0,0.06)] flex"
+                style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+            >
                 {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
                     <button key={id} onClick={() => setActivePage(id)}
-                        className={`flex-1 flex flex-col items-center justify-center py-3 gap-1 transition-colors relative
+                        className={`flex-1 flex flex-col items-center justify-center py-3 gap-0.5 transition-colors relative min-h-[56px]
                             ${activePage === id ? 'text-rose-500' : 'text-neutral-400'}`}
                     >
-                        <Icon size={20} />
-                        <span className="text-[9px] font-bold">{label}</span>
+                        <Icon size={22} />
+                        <span className="text-[10px] font-bold leading-none">{label}</span>
                         {id === 'orders' && orders.filter(o => o.status === 'paid').length > 0 && (
                             <span className="absolute top-2 right-[calc(50%-14px)] w-4 h-4 bg-rose-500 text-white text-[9px] font-black rounded-full flex items-center justify-center">
                                 {orders.filter(o => o.status === 'paid').length}

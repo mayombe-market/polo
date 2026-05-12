@@ -1055,9 +1055,9 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             {/* ═══════════════════════════════════════════════════════════════
                 HERO COVER
             ═══════════════════════════════════════════════════════════════ */}
-            <div className="relative w-full bg-neutral-900 overflow-hidden" style={{ height: '260px' }}>
+            <div className="relative w-full bg-neutral-900 overflow-hidden" style={{ height: '300px' }}>
                 {coverImg ? (
-                    <Image src={coverImg} alt={shopName} fill className="object-cover" sizes="100vw" priority />
+                    <Image src={coverImg} alt={shopName} fill className="object-contain" sizes="100vw" priority />
                 ) : (
                     <div className="w-full h-full bg-gradient-to-br from-rose-800 via-rose-700 to-pink-800 flex items-center justify-center">
                         <Cake className="w-24 h-24 text-white/20" />

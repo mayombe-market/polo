@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import DashboardClient from '@/app/components/DashboardClient'
-import PatisserieDashboardClient from '@/app/components/PatisserieDashboardClient'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 export default async function VendorDashboard() {
@@ -37,18 +36,6 @@ export default async function VendorDashboard() {
         .from('products')
         .select('*', { count: 'exact' })
         .eq('seller_id', user.id)
-
-    // Routing : dashboard spécialisé selon vendor_type
-    if (profile?.vendor_type === 'patisserie') {
-        return (
-            <PatisserieDashboardClient
-                profile={profile}
-                user={user}
-                products={products}
-                productCount={count}
-            />
-        )
-    }
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900">

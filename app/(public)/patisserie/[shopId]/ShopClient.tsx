@@ -1055,7 +1055,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             {/* ═══════════════════════════════════════════════════════════════
                 HERO COVER
             ═══════════════════════════════════════════════════════════════ */}
-            <div className="relative w-full bg-neutral-900 overflow-hidden" style={{ height: '280px' }}>
+            <div className="relative w-full bg-neutral-900" style={{ height: '280px' }}>
                 {coverImg ? (
                     <Image src={coverImg} alt={shopName} fill className="object-cover object-center" sizes="100vw" priority />
                 ) : (

@@ -83,7 +83,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [activePage, setActivePage] = useState<Page>('dashboard')
     const [sidebarOpen, setSidebarOpen] = useState(true)
     const [followerCount, setFollowerCount] = useState(0)
-    const [totalRevenue, setTotalRevenue] = useState(0)
     const [orders, setOrders] = useState<any[]>([])
     const [products, setProducts] = useState(initialProducts || [])
     const [copied, setCopied] = useState(false)
@@ -337,25 +336,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
             setFollowerCount(0)
         }
 
-        try {
-            await withRetry(async () => {
-                const { data: allOrders, error } = await supabase
-                    .from('orders')
-                    .select('vendor_payout, total_amount, items, payout_status')
-                    .eq('payout_status', 'paid')
-                if (error) throw new Error(error.message)
-                const vendorOrders = (allOrders || []).filter((order: { items?: { seller_id?: string }[] }) =>
-                    order.items?.some((item: { seller_id?: string }) => item.seller_id === user.id)
-                )
-                const revenue = vendorOrders.reduce((acc: number, o: any) =>
-                    acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0
-                )
-                setTotalRevenue(revenue)
-            }, { label: 'DashboardClient revenue', maxAttempts: 4 })
-        } catch (err) {
-            console.error('Erreur revenus:', err)
-            setTotalRevenue(0)
-        }
 
         try {
             const result = await withRetry(() => getVendorOrders(), { label: 'DashboardClient getVendorOrders', maxAttempts: 4 })
@@ -560,6 +540,11 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     const totalViews = products?.reduce((acc: number, p: any) => acc + (p.views_count || 0), 0) || 0
     const totalOrders = orders.length
+    const totalRevenue = useMemo(() =>
+        orders
+            .filter((o: any) => o.payout_status === 'paid')
+            .reduce((acc: number, o: any) => acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
+    , [orders])
     const pendingNegotiationsCount = negotiations.filter(n => n.status === 'en_attente').length
 
     const getStatusDetails = (status: string) => {

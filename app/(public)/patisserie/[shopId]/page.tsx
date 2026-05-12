@@ -114,18 +114,20 @@ export default async function PatisserieShopPage({
         (p: any) => p.category === 'Pâtisserie & Traiteur'
     )
 
-    // ── 4. Note moyenne via RPC ───────────────────────────────────────────────
+    // ── 4. Avis via RPC ──────────────────────────────────────────────────────
     let averageRating = 0
     let reviewCount = 0
+    let reviews: any[] = []
     try {
-        const { data: reviews } = await supabase.rpc('get_seller_reviews', {
+        const { data: reviewsData } = await supabase.rpc('get_seller_reviews', {
             p_seller_id: shopId,
         })
-        if (reviews?.length) {
-            reviewCount = reviews.length
+        if (reviewsData?.length) {
+            reviews = reviewsData
+            reviewCount = reviewsData.length
             averageRating =
                 Math.round(
-                    (reviews.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
+                    (reviewsData.reduce((acc: number, r: any) => acc + (r.rating || 0), 0) /
                         reviewCount) *
                     10
                 ) / 10
@@ -159,6 +161,7 @@ export default async function PatisserieShopPage({
             products={products as ShopProduct[]}
             averageRating={averageRating}
             reviewCount={reviewCount}
+            reviews={reviews}
         />
     )
 }

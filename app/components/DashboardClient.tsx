@@ -2486,6 +2486,8 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
         }
     }
 
+    const isPatisserie = profile?.vendor_type === 'patisserie'
+
     const [formData, setFormData] = useState({
         store_name: profile?.store_name || profile?.shop_name || '',
         shop_description: profile?.shop_description || '',
@@ -2494,6 +2496,12 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
         city: profile?.city || 'brazzaville',
         return_policy: profile?.return_policy || 'Retours acceptés sous 7 jours après réception, article non utilisé.',
         shipping_info: profile?.shipping_info || 'Livraison à Brazzaville et Pointe-Noire. Délai : 1-3 jours.',
+        // Champs pâtisserie
+        opening_hours_text: profile?.opening_hours_text || '',
+        delivery_time: profile?.delivery_time || '30-60 min',
+        min_order: profile?.min_order ?? 0,
+        delivery_fee: profile?.delivery_fee ?? 0,
+        is_open: profile?.is_open !== false,
     })
 
     const handleCoverChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2534,6 +2542,13 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 return_policy: formData.return_policy,
                 shipping_info: formData.shipping_info,
                 cover_url: cover_url || null,
+                ...(isPatisserie ? {
+                    opening_hours_text: formData.opening_hours_text,
+                    is_open: formData.is_open,
+                    delivery_time: formData.delivery_time,
+                    min_order: Number(formData.min_order),
+                    delivery_fee: Number(formData.delivery_fee),
+                } : {}),
             })
 
             if (!result.success) {
@@ -2664,6 +2679,81 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                     </div>
                 </div>
             </div>
+
+            {/* ─── Section spécifique Pâtisserie ─── */}
+            {isPatisserie && (
+                <div className="bg-white dark:bg-slate-900 rounded-3xl border border-rose-100 dark:border-rose-900/30 p-6 space-y-5">
+                    <div>
+                        <h3 className="font-black uppercase text-sm dark:text-white flex items-center gap-2">
+                            <span className="text-rose-500">🎂</span> Paramètres pâtisserie
+                        </h3>
+                        <p className="text-[10px] text-slate-400 font-bold mt-1">Infos affichées sur votre page boutique pâtisserie</p>
+                    </div>
+
+                    {/* Ouvert / Fermé */}
+                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                        <div>
+                            <p className="text-sm font-black dark:text-white">Boutique ouverte</p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">Les clients peuvent passer commande</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setFormData(prev => ({ ...prev, is_open: !prev.is_open }))}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${formData.is_open ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                        >
+                            <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition duration-200 ease-in-out ${formData.is_open ? 'translate-x-5' : 'translate-x-0'}`} />
+                        </button>
+                    </div>
+
+                    {/* Horaires */}
+                    <div>
+                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 flex items-center gap-1">
+                            <Clock size={10} /> Horaires d'ouverture
+                        </label>
+                        <input
+                            value={formData.opening_hours_text}
+                            onChange={e => setFormData(prev => ({ ...prev, opening_hours_text: e.target.value }))}
+                            placeholder="Ex: Lun-Sam 8h-20h · Dim 9h-14h"
+                            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-rose-400 transition-all font-bold text-sm text-base sm:text-sm"
+                        />
+                    </div>
+
+                    {/* Délai livraison + Commande min + Frais livraison */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Délai livraison</label>
+                            <input
+                                value={formData.delivery_time}
+                                onChange={e => setFormData(prev => ({ ...prev, delivery_time: e.target.value }))}
+                                placeholder="30-60 min"
+                                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-rose-400 transition-all font-bold text-sm text-base sm:text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Commande min (FCFA)</label>
+                            <input
+                                type="number"
+                                min={0}
+                                value={formData.min_order}
+                                onChange={e => setFormData(prev => ({ ...prev, min_order: Number(e.target.value) }))}
+                                placeholder="0"
+                                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-rose-400 transition-all font-bold text-sm text-base sm:text-sm"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-[10px] font-black uppercase text-slate-400 mb-2">Frais livraison (FCFA)</label>
+                            <input
+                                type="number"
+                                min={0}
+                                value={formData.delivery_fee}
+                                onChange={e => setFormData(prev => ({ ...prev, delivery_fee: Number(e.target.value) }))}
+                                placeholder="0"
+                                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-rose-400 transition-all font-bold text-sm text-base sm:text-sm"
+                            />
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Position GPS */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6 space-y-4">

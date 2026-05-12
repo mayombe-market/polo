@@ -30,6 +30,7 @@ interface CartItemPayload {
     seller_id: string | null
     selected_size: string | null
     selected_color: string | null
+    selected_options?: any[] | null
 }
 
 /** Synchronise le panier complet — remplace tout le panier de l'utilisateur connecté */
@@ -56,6 +57,7 @@ export async function syncCart(items: CartItemPayload[]) {
             seller_id: item.seller_id || null,
             selected_size: item.selected_size || null,
             selected_color: item.selected_color || null,
+            selected_options: item.selected_options || null,
         }))
 
         const { error } = await supabase.from('cart').insert(cartData)

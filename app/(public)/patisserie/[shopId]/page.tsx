@@ -32,6 +32,19 @@ export async function generateMetadata(
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type OptionChoice = {
+    id: string
+    name: string
+    price: number
+}
+
+export type OptionGroup = {
+    id: string
+    name: string
+    required: boolean
+    choices: OptionChoice[]
+}
+
 export type ShopProduct = {
     id: string
     name: string
@@ -48,6 +61,7 @@ export type ShopProduct = {
     promo_end_date?: string | null
     description?: string | null
     subcategory?: string | null
+    options?: OptionGroup[] | null
 }
 
 export type ShopSeller = {
@@ -103,7 +117,7 @@ export default async function PatisserieShopPage({
     const { data: allProducts } = await supabase
         .from('products')
         .select(
-            'id, name, price, img, images_gallery, category, seller_id, created_at, views_count, stock_quantity, promo_percentage, promo_start_date, promo_end_date, description, subcategory'
+            'id, name, price, img, images_gallery, category, seller_id, created_at, views_count, stock_quantity, promo_percentage, promo_start_date, promo_end_date, description, subcategory, options'
         )
         .eq('seller_id', shopId)
         .order('views_count', { ascending: false })

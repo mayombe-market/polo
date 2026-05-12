@@ -1207,6 +1207,8 @@ export async function createProduct(input: {
      * Requiert la migration `supabase-products-listing-extras.sql`.
      */
     listing_extras?: Record<string, unknown> | null
+    /** Options/combos du produit pâtisserie : [{id,name,required,choices:[{id,name,price}]}] */
+    options?: any[] | null
     /** Doit être l’UUID auth actuel ; sinon refus (alignement client / serveur, anti usurpation seller_id). */
     expected_seller_id?: string
 }): Promise<
@@ -1337,6 +1339,7 @@ export async function createProduct(input: {
                 rawExtras != null && typeof rawExtras === 'object' && !Array.isArray(rawExtras)
                     ? rawExtras
                     : {},
+            options: Array.isArray(input.options) ? input.options : [],
         }
 
         const { data: product, error } = await supabase

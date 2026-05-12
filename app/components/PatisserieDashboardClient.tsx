@@ -18,8 +18,9 @@ import {
     ChevronRight, Cake, MapPin, Phone, Bike, Timer, Eye,
     Package, TrendingUp, Camera, AlertCircle, X, ToggleLeft,
     ToggleRight, Store, ShieldCheck, DollarSign, ChevronDown,
-    ArrowUpRight, Bell, Wallet,
+    ArrowUpRight, Bell, Wallet, ArrowLeft,
 } from 'lucide-react'
+import PatisserieProductForm from './PatisserieProductForm'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -423,6 +424,7 @@ function MenuPage({ products, sellerId }: { products: any[] | null; sellerId: st
     const supabase = getSupabaseBrowserClient()
     const [items, setItems] = useState<any[]>(products || [])
     const [deleting, setDeleting] = useState<string | null>(null)
+    const [showAddForm, setShowAddForm] = useState(false)
 
     const handleDelete = async (id: string) => {
         if (!confirm('Supprimer ce produit ?')) return
@@ -434,6 +436,11 @@ function MenuPage({ products, sellerId }: { products: any[] | null; sellerId: st
         setDeleting(null)
     }
 
+    const handleProductAdded = (product: any) => {
+        setItems(prev => [product, ...prev])
+        setShowAddForm(false)
+    }
+
     const grouped: Record<string, any[]> = {}
     for (const p of items) {
         const cat = p.subcategory || 'Autres'
@@ -441,13 +448,36 @@ function MenuPage({ products, sellerId }: { products: any[] | null; sellerId: st
         grouped[cat].push(p)
     }
 
+    // ── Vue formulaire d'ajout ───────────────────────────────────────────────
+    if (showAddForm) {
+        return (
+            <div className="space-y-4">
+                {/* Barre retour */}
+                <button
+                    onClick={() => setShowAddForm(false)}
+                    className="flex items-center gap-2 text-sm font-bold text-neutral-500 hover:text-neutral-800 transition-colors"
+                >
+                    <ArrowLeft size={16} /> Retour au menu
+                </button>
+                <p className="font-black text-base text-neutral-900">Nouvel article</p>
+                <PatisserieProductForm
+                    sellerId={sellerId}
+                    onSuccess={handleProductAdded}
+                    onCancel={() => setShowAddForm(false)}
+                />
+            </div>
+        )
+    }
+
+    // ── Vue liste du menu ────────────────────────────────────────────────────
     return (
         <div className="space-y-4">
-            <Link href="/vendor/products/add"
+            <button
+                onClick={() => setShowAddForm(true)}
                 className="flex items-center justify-center gap-2 w-full bg-rose-500 hover:bg-rose-600 text-white font-black text-sm py-4 rounded-2xl transition-colors shadow-sm shadow-rose-200"
             >
                 <Plus size={16} /> Ajouter un article au menu
-            </Link>
+            </button>
 
             {items.length === 0 ? (
                 <div className="bg-white rounded-3xl border border-neutral-100 py-16 text-center">
@@ -475,7 +505,14 @@ function MenuPage({ products, sellerId }: { products: any[] | null; sellerId: st
                                         {product.description && (
                                             <p className="text-xs text-neutral-400 truncate mt-0.5">{product.description}</p>
                                         )}
-                                        <p className="text-sm font-black text-rose-600 mt-1">{formatPrice(product.price)}</p>
+                                        <div className="flex items-center gap-2 mt-1">
+                                            <p className="text-sm font-black text-rose-600">{formatPrice(product.price)}</p>
+                                            {product.options?.length > 0 && (
+                                                <span className="text-[10px] font-bold bg-rose-50 text-rose-500 px-2 py-0.5 rounded-full">
+                                                    {product.options.length} option{product.options.length > 1 ? 's' : ''}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                     <button
                                         onClick={() => handleDelete(product.id)}

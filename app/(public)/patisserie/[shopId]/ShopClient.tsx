@@ -38,7 +38,8 @@ import {
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
 import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
-import type { ShopProduct, ShopSeller } from './page'
+import type { ShopProduct, ShopSeller, OptionGroup, OptionChoice } from './page'
+import type { SelectedOption } from '@/hooks/userCart'
 
 // ─── Checkout steps ───────────────────────────────────────────────────────────
 
@@ -461,10 +462,25 @@ function ProductModal({
     const { addToCart, updateQuantity, cart } = useCart()
     const [qty, setQty] = useState(1)
     const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
+    // Options : { [groupId]: choiceId }
+    const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({})
 
     const promoPrice = getPromoPrice(product)
-    const finalPrice = promoPrice ?? product.price
+    const basePrice = promoPrice ?? product.price
+    const productOptions: OptionGroup[] = Array.isArray(product.options) ? product.options : []
+
+    // Prix total = base + options sélectionnées
+    const optionsTotal = productOptions.reduce((sum, group) => {
+        const choiceId = selectedChoices[group.id]
+        const choice = group.choices.find(c => c.id === choiceId)
+        return sum + (choice?.price || 0)
+    }, 0)
+    const finalPrice = basePrice + optionsTotal
+
     const isOutOfStock = product.stock_quantity !== undefined && product.stock_quantity !== null && product.stock_quantity <= 0
+
+    // Vérifier que toutes les options requises sont sélectionnées
+    const missingRequired = productOptions.filter(g => g.required && !selectedChoices[g.id])
 
     const relatedProducts = useMemo(() => {
         const cat = deriveSubcategory(product)
@@ -483,23 +499,42 @@ function ProductModal({
     }, [])
 
     const handleAdd = useCallback(async () => {
-        if (isOutOfStock) return
+        if (isOutOfStock || missingRequired.length > 0) return
         setStatus('adding')
         try {
-            const cartItem = { id: product.id, product_id: product.id, name: product.name, price: finalPrice, img: product.img || '', seller_id: product.seller_id || undefined }
-            const existing = cart.find(i => i.product_id === product.id)
+            // Construire la liste des options sélectionnées
+            const selectedOptions: SelectedOption[] = productOptions
+                .filter(g => selectedChoices[g.id])
+                .map(g => {
+                    const choice = g.choices.find(c => c.id === selectedChoices[g.id])!
+                    return { groupId: g.id, groupName: g.name, choiceId: choice.id, choiceName: choice.name, price: choice.price }
+                })
+
+            const optionsKey = selectedOptions.map(o => o.choiceId).sort().join(',')
+            const cartItemId = `${product.id}-${optionsKey}`
+
+            const cartItem = {
+                id: cartItemId,
+                product_id: product.id,
+                name: product.name,
+                price: finalPrice,
+                img: product.img || '',
+                seller_id: product.seller_id || undefined,
+                selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
+            }
+            const existing = cart.find(i => i.id === cartItemId)
             if (existing) {
                 await updateQuantity(existing.id, existing.quantity + qty)
             } else {
                 await addToCart(cartItem)
-                if (qty > 1) await updateQuantity(product.id, qty)
+                if (qty > 1) await updateQuantity(cartItemId, qty)
             }
             setStatus('added')
             setTimeout(() => onClose(), 700)
         } catch {
             setStatus('idle')
         }
-    }, [addToCart, updateQuantity, cart, product, finalPrice, qty, isOutOfStock, onClose])
+    }, [addToCart, updateQuantity, cart, product, finalPrice, qty, isOutOfStock, onClose, selectedChoices, productOptions, missingRequired])
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
@@ -538,7 +573,64 @@ function ProductModal({
                         <div className="flex items-baseline gap-2 mb-5">
                             <span className="text-2xl font-black text-rose-600">{formatPrice(finalPrice)}</span>
                             {promoPrice && <span className="text-sm text-neutral-400 line-through">{formatPrice(product.price)}</span>}
+                            {optionsTotal > 0 && (
+                                <span className="text-xs text-neutral-400 font-medium">(+{formatPrice(optionsTotal)} options)</span>
+                            )}
                         </div>
+
+                        {/* ── Options / Combos ── */}
+                        {productOptions.length > 0 && (
+                            <div className="space-y-5 mb-5">
+                                {productOptions.map(group => (
+                                    <div key={group.id}>
+                                        <div className="flex items-center gap-2 mb-2.5">
+                                            <h4 className="text-sm font-black text-neutral-900">{group.name}</h4>
+                                            {group.required
+                                                ? <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">Obligatoire</span>
+                                                : <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-full">Optionnel</span>
+                                            }
+                                        </div>
+                                        <div className="grid grid-cols-1 gap-2">
+                                            {group.choices.map(choice => {
+                                                const isSelected = selectedChoices[group.id] === choice.id
+                                                return (
+                                                    <button
+                                                        key={choice.id}
+                                                        onClick={() => setSelectedChoices(prev => ({
+                                                            ...prev,
+                                                            [group.id]: prev[group.id] === choice.id ? '' : choice.id,
+                                                        }))}
+                                                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border-2 text-left transition-all ${
+                                                            isSelected
+                                                                ? 'border-rose-500 bg-rose-50'
+                                                                : 'border-neutral-100 bg-neutral-50 hover:border-neutral-300'
+                                                        }`}
+                                                    >
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-neutral-300'}`}>
+                                                                {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                                            </div>
+                                                            <span className="text-sm font-semibold text-neutral-800">{choice.name}</span>
+                                                        </div>
+                                                        {choice.price > 0 && (
+                                                            <span className="text-xs font-bold text-rose-600">+{formatPrice(choice.price)}</span>
+                                                        )}
+                                                        {choice.price === 0 && (
+                                                            <span className="text-xs font-semibold text-green-600">Gratuit</span>
+                                                        )}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                        {/* Erreur si obligatoire et non sélectionné */}
+                                        {group.required && !selectedChoices[group.id] && status === 'idle' && qty > 0 && (
+                                            <p className="text-[10px] text-rose-500 mt-1.5 font-semibold">⚠ Sélectionnez une option</p>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         {!isOutOfStock && (
                             <div className="flex items-center gap-4 mb-5">
                                 <span className="text-sm font-semibold text-neutral-700">Quantité</span>
@@ -585,11 +677,22 @@ function ProductModal({
                     {isOutOfStock ? (
                         <div className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-400 text-sm font-black text-center">Rupture de stock</div>
                     ) : (
-                        <button onClick={handleAdd} disabled={status !== 'idle'}
-                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all shadow-md ${status === 'added' ? 'bg-green-500 text-white shadow-green-200' : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200 disabled:opacity-70'}`}
+                        <button onClick={handleAdd} disabled={status !== 'idle' || missingRequired.length > 0}
+                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all shadow-md ${
+                                status === 'added' ? 'bg-green-500 text-white shadow-green-200'
+                                : missingRequired.length > 0 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
+                                : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200 disabled:opacity-70'
+                            }`}
                         >
-                            <span>{status === 'adding' ? 'Ajout en cours…' : status === 'added' ? '✓ Ajouté au panier !' : 'Ajouter au panier'}</span>
-                            {status !== 'added' && <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">{formatPrice(finalPrice * qty)}</span>}
+                            <span>
+                                {status === 'adding' ? 'Ajout en cours…'
+                                : status === 'added' ? '✓ Ajouté au panier !'
+                                : missingRequired.length > 0 ? `Choisissez ${missingRequired[0].name}`
+                                : 'Ajouter au panier'}
+                            </span>
+                            {status !== 'added' && missingRequired.length === 0 && (
+                                <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">{formatPrice(finalPrice * qty)}</span>
+                            )}
                         </button>
                     )}
                 </div>

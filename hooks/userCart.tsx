@@ -5,6 +5,14 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useAuth } from '@/hooks/useAuth'
 import { syncCart as syncCartServer, loadCart as loadCartServer } from '@/app/actions/cart'
 
+export interface SelectedOption {
+    groupId: string
+    groupName: string
+    choiceId: string
+    choiceName: string
+    price: number
+}
+
 export interface CartItem {
     id: string
     product_id: string
@@ -15,6 +23,7 @@ export interface CartItem {
     seller_id?: string
     selectedSize?: string
     selectedColor?: string
+    selectedOptions?: SelectedOption[]
 }
 
 interface CartContextType {
@@ -62,7 +71,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
         try {
             const { items } = await loadCartServer()
             setCart((items || []).map((item: any) => ({
-                id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}`,
+                id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}-${item.selected_options ? JSON.stringify(item.selected_options) : ''}`,
                 product_id: item.product_id,
                 name: item.name,
                 price: item.price,
@@ -71,6 +80,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
                 seller_id: item.seller_id,
                 selectedSize: item.selected_size ?? item.selectedSize,
                 selectedColor: item.selected_color ?? item.selectedColor,
+                selectedOptions: item.selected_options ?? undefined,
             })))
             setError(null)
         } catch (err) {
@@ -85,7 +95,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
             const { items: existingItems } = await loadCartServer()
 
             const mergedItems: CartItem[] = [...(existingItems || []).map((item: any) => ({
-                id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}`,
+                id: `${item.product_id}-${item.selected_size || ''}-${item.selected_color || ''}-${item.selected_options ? JSON.stringify(item.selected_options) : ''}`,
                 product_id: item.product_id,
                 name: item.name,
                 price: item.price,
@@ -94,6 +104,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
                 seller_id: item.seller_id,
                 selectedSize: item.selected_size,
                 selectedColor: item.selected_color,
+                selectedOptions: item.selected_options ?? undefined,
             }))]
 
             localCart.forEach(localItem => {
@@ -118,6 +129,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
                 seller_id: item.seller_id || null,
                 selected_size: item.selectedSize || null,
                 selected_color: item.selectedColor || null,
+                selected_options: item.selectedOptions || null,
             })))
             setCart(mergedItems)
         } catch (err) {
@@ -182,6 +194,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
                     seller_id: item.seller_id || null,
                     selected_size: item.selectedSize || null,
                     selected_color: item.selectedColor || null,
+                    selected_options: item.selectedOptions || null,
                 })))
                 setError(null)
             } else {

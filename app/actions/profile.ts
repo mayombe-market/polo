@@ -38,6 +38,13 @@ export type UpdateProfileInput = {
     return_policy?: string | null
     shipping_info?: string | null
     cover_url?: string | null
+    // Champs pâtisserie
+    cover_image?: string | null
+    opening_hours_text?: string | null
+    is_open?: boolean | null
+    delivery_time?: string | null
+    min_order?: number | null
+    delivery_fee?: number | null
     latitude?: number | null
     longitude?: number | null
 }
@@ -59,7 +66,7 @@ export async function updateProfile(
         return { success: false, error: 'Non connecté' }
     }
 
-    const payload: Record<string, string | number | null> = {}
+    const payload: Record<string, string | number | boolean | null> = {}
 
     if (fields.store_name !== undefined) {
         payload.store_name = (fields.store_name ?? '').trim()
@@ -94,6 +101,27 @@ export async function updateProfile(
     }
     if (fields.longitude !== undefined) {
         payload.longitude = fields.longitude ?? null
+    }
+    if (fields.cover_image !== undefined) {
+        const v = (fields.cover_image ?? '').trim()
+        payload.cover_image = v || null
+    }
+    if (fields.opening_hours_text !== undefined) {
+        const v = (fields.opening_hours_text ?? '').trim()
+        payload.opening_hours_text = v || null
+    }
+    if (fields.is_open !== undefined) {
+        payload.is_open = fields.is_open ?? true
+    }
+    if (fields.delivery_time !== undefined) {
+        const v = (fields.delivery_time ?? '').trim()
+        payload.delivery_time = v || '30-60 min'
+    }
+    if (fields.min_order !== undefined) {
+        payload.min_order = fields.min_order ?? 0
+    }
+    if (fields.delivery_fee !== undefined) {
+        payload.delivery_fee = fields.delivery_fee ?? 0
     }
 
     if (Object.keys(payload).length === 0) {

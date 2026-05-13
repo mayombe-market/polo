@@ -9,7 +9,7 @@ import Image from 'next/image'
 import {
     ShieldCheck, Star, MapPin, ArrowLeft, Clock, Search,
     X, Plus, Minus, Cake, Phone, Bike, ShoppingCart,
-    ChevronRight, Timer, Navigation, AlertTriangle, CheckCircle2,
+    ChevronRight, Timer, Navigation, AlertTriangle, CheckCircle2, Check,
 } from 'lucide-react'
 import { useCart } from '@/hooks/userCart'
 import { useAuth } from '@/hooks/useAuth'
@@ -462,6 +462,7 @@ function ProductModal({
     const { addToCart, updateQuantity, cart } = useCart()
     const [qty, setQty] = useState(1)
     const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
+    const [addedAccId, setAddedAccId] = useState<string | null>(null)
     // Options : { [groupId]: choiceId }
     const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({})
 
@@ -684,17 +685,24 @@ function ProductModal({
                                                 <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(accPrice)}</p>
                                             </div>
                                             <button
-                                                onClick={() => addToCart({
-                                                    id: `acc-${acc.id}`,
-                                                    product_id: acc.id,
-                                                    name: acc.name,
-                                                    price: accPrice,
-                                                    img: acc.img || '',
-                                                    seller_id: acc.seller_id || undefined,
-                                                })}
-                                                className="w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center flex-shrink-0 transition-colors shadow-sm shadow-rose-200"
+                                                onClick={async () => {
+                                                    await addToCart({
+                                                        id: `acc-${acc.id}`,
+                                                        product_id: acc.id,
+                                                        name: acc.name,
+                                                        price: accPrice,
+                                                        img: acc.img || '',
+                                                        seller_id: acc.seller_id || undefined,
+                                                    })
+                                                    setAddedAccId(acc.id)
+                                                    setTimeout(() => setAddedAccId(null), 1500)
+                                                }}
+                                                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all shadow-sm ${addedAccId === acc.id ? 'bg-green-500 shadow-green-200 scale-110' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-200'}`}
                                             >
-                                                <Plus className="w-4 h-4 text-white" />
+                                                {addedAccId === acc.id
+                                                    ? <Check className="w-4 h-4 text-white" />
+                                                    : <Plus className="w-4 h-4 text-white" />
+                                                }
                                             </button>
                                         </div>
                                     )

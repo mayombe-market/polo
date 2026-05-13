@@ -482,9 +482,19 @@ function ProductModal({
     // Vérifier que toutes les options requises sont sélectionnées
     const missingRequired = productOptions.filter(g => g.required && !selectedChoices[g.id])
 
+    const ACCOMPAGNEMENT_SUBCATS = ['Boissons', 'Desserts', 'Glaces']
+
+    const accompaniments = useMemo(() =>
+        allProducts.filter(p => p.id !== product.id && ACCOMPAGNEMENT_SUBCATS.includes(p.subcategory || ''))
+    , [product, allProducts])
+
     const relatedProducts = useMemo(() => {
         const cat = deriveSubcategory(product)
-        return allProducts.filter(p => p.id !== product.id && deriveSubcategory(p) === cat).slice(0, 3)
+        return allProducts.filter(p =>
+            p.id !== product.id &&
+            deriveSubcategory(p) === cat &&
+            !ACCOMPAGNEMENT_SUBCATS.includes(p.subcategory || '')
+        ).slice(0, 3)
     }, [product, allProducts])
 
     useEffect(() => {
@@ -652,9 +662,51 @@ function ProductModal({
                         )}
                     </div>
 
+                    {/* ── Accompagnements (Boissons / Desserts / Glaces) ── */}
+                    {accompaniments.length > 0 && (
+                        <div className="px-6 pb-4 border-t border-neutral-100 pt-4">
+                            <h4 className="text-sm font-black text-neutral-900 mb-3">Accompagnements</h4>
+                            <div className="grid grid-cols-1 gap-2">
+                                {accompaniments.map(acc => {
+                                    const accPromo = getPromoPrice(acc)
+                                    const accPrice = accPromo ?? acc.price
+                                    return (
+                                        <div key={acc.id} className="flex items-center gap-3 p-2.5 rounded-2xl border border-neutral-100 bg-neutral-50">
+                                            <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-rose-50">
+                                                {acc.img
+                                                    ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="56px" />
+                                                    : <div className="w-full h-full flex items-center justify-center"><Cake className="w-6 h-6 text-rose-200" /></div>
+                                                }
+                                            </div>
+                                            <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-black text-neutral-800 truncate">{acc.name}</p>
+                                                {acc.subcategory && <p className="text-[10px] text-neutral-400 font-medium">{acc.subcategory}</p>}
+                                                <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(accPrice)}</p>
+                                            </div>
+                                            <button
+                                                onClick={() => addToCart({
+                                                    id: `acc-${acc.id}`,
+                                                    product_id: acc.id,
+                                                    name: acc.name,
+                                                    price: accPrice,
+                                                    img: acc.img || '',
+                                                    seller_id: acc.seller_id || undefined,
+                                                })}
+                                                className="w-9 h-9 rounded-full bg-rose-500 hover:bg-rose-600 flex items-center justify-center flex-shrink-0 transition-colors shadow-sm shadow-rose-200"
+                                            >
+                                                <Plus className="w-4 h-4 text-white" />
+                                            </button>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ── Fréquemment achetés ensemble ── */}
                     {relatedProducts.length > 0 && (
                         <div className="px-6 pb-4 border-t border-neutral-100 pt-4">
-                            <h4 className="text-sm font-black text-neutral-900 mb-3">Fréquemment achetés ensemble</h4>
+                            <h4 className="text-sm font-black text-neutral-900 mb-3">Dans la même catégorie</h4>
                             <div className="space-y-2">
                                 {relatedProducts.map(related => {
                                     const rPromo = getPromoPrice(related)

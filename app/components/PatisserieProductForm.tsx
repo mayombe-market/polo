@@ -64,6 +64,8 @@ function genId() {
 const PATISSERIE_SUBCATS = [
     'Gâteaux', 'Cupcakes', 'Macarons', 'Muffins', 'Brownies', 'Tartes',
     'Viennoiseries', 'Box sucrées', 'Mariage', 'Anniversaire', 'Créations',
+    '── Accompagnements ──',
+    'Boissons', 'Desserts', 'Glaces',
 ]
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -238,7 +240,11 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
                         <select value={form.subcategory} onChange={e => setForm(f => ({ ...f, subcategory: e.target.value }))}
                             className="w-full p-3.5 rounded-2xl bg-neutral-50 text-sm font-semibold outline-none focus:ring-2 focus:ring-rose-300 transition appearance-none"
                         >
-                            {PATISSERIE_SUBCATS.map(s => <option key={s} value={s}>{s}</option>)}
+                            {PATISSERIE_SUBCATS.map(s =>
+                                s.startsWith('──')
+                                    ? <option key={s} value="" disabled style={{ color: '#aaa', fontStyle: 'italic' }}>{s}</option>
+                                    : <option key={s} value={s}>{s}</option>
+                            )}
                         </select>
                     </div>
                 </div>

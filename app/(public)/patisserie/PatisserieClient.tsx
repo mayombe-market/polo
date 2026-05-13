@@ -4,7 +4,7 @@ import { useState, useMemo } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
 import {
-    ShieldCheck, MapPin, Cake, Search, Clock, ChevronRight, Sparkles, Bike,
+    ShieldCheck, MapPin, Cake, Search, Clock, ChevronRight, Sparkles, Bike, ArrowLeft,
 } from 'lucide-react'
 import type { PatisserieSeller } from './page'
 
@@ -198,8 +198,16 @@ export default function PatisserieClient({ shops }: { shops: PatisserieSeller[] 
     return (
         <div className="min-h-screen" style={{ backgroundColor: '#FDF8F6' }}>
 
+            {/* ── Nav retour marketplace ───────────────────────────────────── */}
+            <div className="max-w-5xl mx-auto px-4 pt-4">
+                <Link href="/" className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-400 hover:text-neutral-700 transition-colors">
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    Marketplace
+                </Link>
+            </div>
+
             {/* ── Hero ─────────────────────────────────────────────────────── */}
-            <section className="relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-pink-50 pt-10 pb-14 px-4">
+            <section className="relative overflow-hidden bg-gradient-to-br from-rose-50 via-white to-pink-50 pt-6 pb-14 px-4">
                 <div className="absolute top-0 right-0 w-64 h-64 rounded-full bg-rose-100/40 blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none" />
                 <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full bg-pink-100/40 blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none" />
 

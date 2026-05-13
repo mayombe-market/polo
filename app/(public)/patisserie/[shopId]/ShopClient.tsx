@@ -5,6 +5,7 @@ import {
 } from 'react'
 import { createPortal } from 'react-dom'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import {
     ShieldCheck, Star, MapPin, ArrowLeft, Clock, Search,
@@ -1221,6 +1222,8 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const handleValidated = useCallback(async () => { await clearShopCart(); setStep('confirmed') }, [clearShopCart])
     const handleRejected  = useCallback(() => setStep('rejected'), [])
 
+    const router = useRouter()
+
     // ── Shop UI ───────────────────────────────────────────────────────────────
     const [selectedProduct, setSelectedProduct] = useState<ShopProduct | null>(null)
     const [search, setSearch]                   = useState('')
@@ -1301,11 +1304,12 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
 
                 {/* top bar */}
                 <div className="absolute top-0 left-0 right-0 flex items-center justify-between p-4">
-                    <Link href="/patisserie"
-                        className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors"
+                    <button
+                        onClick={() => router.back()}
+                        className="w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-colors cursor-pointer"
                     >
                         <ArrowLeft className="w-4 h-4 text-neutral-700" />
-                    </Link>
+                    </button>
                 </div>
 
                 {/* closed badge */}

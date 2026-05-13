@@ -38,6 +38,7 @@ export type UpdateProfileInput = {
     return_policy?: string | null
     shipping_info?: string | null
     cover_url?: string | null
+    avatar_url?: string | null
     // Champs pâtisserie
     cover_image?: string | null
     opening_hours_text?: string | null
@@ -95,6 +96,10 @@ export async function updateProfile(
     if (fields.cover_url !== undefined) {
         const v = (fields.cover_url ?? '').trim()
         payload.cover_url = v || null
+    }
+    if (fields.avatar_url !== undefined) {
+        const v = (fields.avatar_url ?? '').trim()
+        payload.avatar_url = v || null
     }
     if (fields.latitude !== undefined) {
         payload.latitude = fields.latitude ?? null

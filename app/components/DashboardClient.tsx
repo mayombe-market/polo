@@ -2495,6 +2495,12 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
 
+    // Avatar state
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url || null)
+    const [avatarFile, setAvatarFile] = useState<File | null>(null)
+    const [uploadingAvatar, setUploadingAvatar] = useState(false)
+    const avatarInputRef = useRef<HTMLInputElement>(null)
+
     // GPS state
     const [gpsStatus, setGpsStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle')
     const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(
@@ -2566,6 +2572,35 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
         setCoverPreview(URL.createObjectURL(file))
     }
 
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setAvatarFile(file)
+        setAvatarPreview(URL.createObjectURL(file))
+    }
+
+    const uploadAvatarViaApi = async (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = async () => {
+                try {
+                    const base64 = reader.result as string
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ image: base64 }),
+                    })
+                    const body = await res.json()
+                    if (!res.ok) throw new Error(body.error || 'Erreur upload')
+                    resolve(body.url ?? body.secure_url ?? '')
+                } catch (e: any) { reject(e) }
+            }
+            reader.onerror = () => reject(new Error('Lecture fichier échouée'))
+            reader.readAsDataURL(file)
+        })
+    }
+
     const handleSave = async () => {
         if (!formData.city?.trim()) {
             toast.error('La ville est obligatoire.')
@@ -2574,6 +2609,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
         setSaving(true)
         try {
             let cover_url = coverPreview
+            let avatar_url = avatarPreview
 
             if (coverFile) {
                 const fileExt = coverFile.name.split('.').pop()
@@ -2588,6 +2624,17 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 }
             }
 
+            if (avatarFile) {
+                setUploadingAvatar(true)
+                try {
+                    avatar_url = await uploadAvatarViaApi(avatarFile)
+                } catch {
+                    toast.error('Erreur upload photo de profil')
+                } finally {
+                    setUploadingAvatar(false)
+                }
+            }
+
             const result = await updateProfile({
                 store_name: formData.store_name,
                 shop_description: formData.shop_description,
@@ -2597,6 +2644,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 return_policy: formData.return_policy,
                 shipping_info: formData.shipping_info,
                 cover_url: cover_url || null,
+                avatar_url: avatar_url || null,
                 ...(isPatisserie ? {
                     opening_hours_text: formData.opening_hours_text,
                     is_open: formData.is_open,
@@ -2609,7 +2657,9 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
             if (!result.success) {
                 toast.error('Erreur : ' + result.error)
             } else {
-                toast.success('Description mise à jour !')
+                toast.success('Paramètres mis à jour !')
+                setAvatarFile(null)
+                setCoverFile(null)
             }
         } catch (err: any) {
             toast.error(err.message || 'Erreur sauvegarde')
@@ -2623,6 +2673,64 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
             <div>
                 <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Paramètres</h2>
                 <p className="text-sm text-slate-400 font-bold mt-1">Configurez votre boutique</p>
+            </div>
+
+            {/* Avatar / Photo de profil */}
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6">
+                <h3 className="font-black uppercase text-sm dark:text-white mb-4">Photo de profil</h3>
+                <div className="flex items-center gap-5">
+                    {/* Aperçu avatar */}
+                    <div className="relative flex-shrink-0">
+                        <div className="w-20 h-20 rounded-full overflow-hidden bg-gradient-to-br from-orange-400 to-rose-500 flex items-center justify-center border-4 border-white dark:border-slate-800 shadow-lg">
+                            {avatarPreview
+                                ? <img src={avatarPreview} alt="Avatar" className="w-full h-full object-cover" />
+                                : <span className="text-2xl font-black text-white">
+                                    {(profile?.store_name || profile?.shop_name || 'V').charAt(0).toUpperCase()}
+                                  </span>
+                            }
+                        </div>
+                        {/* Badge caméra */}
+                        <button
+                            type="button"
+                            onClick={() => avatarInputRef.current?.click()}
+                            className="absolute -bottom-1 -right-1 w-7 h-7 bg-orange-500 hover:bg-orange-600 rounded-full flex items-center justify-center shadow-md transition-colors"
+                        >
+                            <Camera size={13} className="text-white" />
+                        </button>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold dark:text-white">
+                            {avatarFile ? avatarFile.name : avatarPreview ? 'Photo actuelle' : 'Aucune photo'}
+                        </p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Apparaît sur ta page boutique et tes produits</p>
+                        <div className="flex gap-2 mt-3">
+                            <button
+                                type="button"
+                                onClick={() => avatarInputRef.current?.click()}
+                                className="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-colors"
+                            >
+                                {avatarPreview ? 'Changer' : 'Ajouter une photo'}
+                            </button>
+                            {avatarPreview && (
+                                <button
+                                    type="button"
+                                    onClick={() => { setAvatarFile(null); setAvatarPreview(null) }}
+                                    className="px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-red-50 hover:text-red-500 text-slate-500 rounded-xl text-xs font-black transition-colors"
+                                >
+                                    Supprimer
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <input
+                    ref={avatarInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarChange}
+                    className="hidden"
+                />
             </div>
 
             {/* Cover image */}

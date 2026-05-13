@@ -4,6 +4,8 @@ import { redirect } from 'next/navigation'
 import DashboardClient from '@/app/components/DashboardClient'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
+export const dynamic = 'force-dynamic'
+
 export default async function VendorDashboard() {
     const cookieStore = await cookies()
     const supabase = createServerClient(

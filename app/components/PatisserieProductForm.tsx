@@ -20,6 +20,7 @@ export interface OptionChoice {
     id: string
     name: string
     price: number
+    img?: string
 }
 
 export interface OptionGroup {
@@ -119,10 +120,10 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
         setOptions(prev => prev.map(g => g.id === id ? { ...g, required: !g.required } : g))
     }
 
-    const addChoice = (groupId: string, name: string, price: number) => {
+    const addChoice = (groupId: string, name: string, price: number, img?: string) => {
         setOptions(prev => prev.map(g =>
             g.id === groupId
-                ? { ...g, choices: [...g.choices, { id: genId(), name, price }] }
+                ? { ...g, choices: [...g.choices, { id: genId(), name, price, img }] }
                 : g
         ))
     }
@@ -295,6 +296,11 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
                                 {/* Choix existants */}
                                 {group.choices.map(choice => (
                                     <div key={choice.id} className="flex items-center gap-2 p-2.5 bg-neutral-50 rounded-xl">
+                                        {choice.img && (
+                                            <div className="relative w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                                                <Image src={choice.img} alt={choice.name} fill className="object-cover" sizes="40px" />
+                                            </div>
+                                        )}
                                         <div className="flex-1 min-w-0">
                                             <p className="text-xs font-semibold text-neutral-800">{choice.name}</p>
                                             <p className="text-[10px] text-rose-600 font-bold">
@@ -309,7 +315,7 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
                                     </div>
                                 ))}
                                 {/* Ajouter un choix */}
-                                <AddChoiceInline onAdd={(name, price) => addChoice(group.id, name, price)} />
+                                <AddChoiceInline sellerId={sellerId} onAdd={(name, price, img) => addChoice(group.id, name, price, img)} />
                             </div>
                         )}
                     </div>
@@ -366,15 +372,39 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
 
 // ─── Sous-composant : ajouter un choix inline ─────────────────────────────────
 
-function AddChoiceInline({ onAdd }: { onAdd: (name: string, price: number) => void }) {
+function AddChoiceInline({ sellerId, onAdd }: { sellerId: string; onAdd: (name: string, price: number, img?: string) => void }) {
+    const supabase = getSupabaseBrowserClient()
+    const fileRef = useRef<HTMLInputElement>(null)
     const [name, setName] = useState('')
     const [price, setPrice] = useState('')
     const [open, setOpen] = useState(false)
+    const [imgPreview, setImgPreview] = useState<string | null>(null)
+    const [imgFile, setImgFile] = useState<File | null>(null)
+    const [uploading, setUploading] = useState(false)
 
-    const submit = () => {
+    const handleImgChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0]
+        if (!file) return
+        setImgFile(file)
+        setImgPreview(URL.createObjectURL(file))
+    }
+
+    const submit = async () => {
         if (!name.trim()) return
-        onAdd(name.trim(), Number(price) || 0)
-        setName(''); setPrice(''); setOpen(false)
+        let imgUrl: string | undefined
+        if (imgFile) {
+            setUploading(true)
+            try {
+                const ext = imgFile.name.split('.').pop()
+                const path = `patisserie-options/${sellerId}-${Date.now()}.${ext}`
+                const { error } = await supabase.storage.from('avatars').upload(path, imgFile, { upsert: true })
+                if (!error) imgUrl = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+            } finally {
+                setUploading(false)
+            }
+        }
+        onAdd(name.trim(), Number(price) || 0, imgUrl)
+        setName(''); setPrice(''); setImgPreview(null); setImgFile(null); setOpen(false)
     }
 
     if (!open) return (
@@ -386,21 +416,42 @@ function AddChoiceInline({ onAdd }: { onAdd: (name: string, price: number) => vo
     )
 
     return (
-        <div className="flex gap-2 items-center">
-            <input value={name} onChange={e => setName(e.target.value)}
-                placeholder="Nom (ex: Coca-Cola)"
-                className="flex-1 p-2.5 rounded-xl bg-white border border-neutral-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-200"
-            />
-            <input type="number" value={price} onChange={e => setPrice(e.target.value)} min={0}
-                placeholder="Prix (0=gratuit)"
-                className="w-28 p-2.5 rounded-xl bg-white border border-neutral-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-200"
-            />
-            <button onClick={submit} className="w-8 h-8 bg-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-600 transition-colors">
-                <Check size={13} className="text-white" />
-            </button>
-            <button onClick={() => setOpen(false)} className="w-8 h-8 bg-neutral-100 rounded-xl flex items-center justify-center hover:bg-neutral-200 transition-colors">
-                <X size={13} />
-            </button>
+        <div className="space-y-2 p-3 bg-white rounded-xl border border-rose-100">
+            {/* Image optionnelle */}
+            <div className="flex items-center gap-2">
+                <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="relative w-12 h-12 rounded-xl overflow-hidden bg-neutral-100 border-2 border-dashed border-neutral-200 flex items-center justify-center flex-shrink-0 hover:border-rose-300 transition-colors"
+                >
+                    {imgPreview
+                        ? <Image src={imgPreview} alt="preview" fill className="object-cover" sizes="48px" />
+                        : <Camera size={16} className="text-neutral-300" />
+                    }
+                </button>
+                <input value={name} onChange={e => setName(e.target.value)}
+                    placeholder="Nom (ex: Glace Vanille)"
+                    className="flex-1 p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-200"
+                />
+                <input type="number" value={price} onChange={e => setPrice(e.target.value)} min={0}
+                    placeholder="Prix"
+                    className="w-20 p-2.5 rounded-xl bg-neutral-50 border border-neutral-200 text-xs font-semibold outline-none focus:ring-2 focus:ring-rose-200"
+                />
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" onChange={handleImgChange} className="hidden" />
+            <div className="flex gap-2">
+                <button onClick={submit} disabled={uploading}
+                    className="flex-1 py-2 bg-rose-500 rounded-xl text-white text-xs font-black flex items-center justify-center gap-1 hover:bg-rose-600 transition-colors disabled:opacity-50"
+                >
+                    {uploading ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                    {uploading ? 'Upload…' : 'Ajouter'}
+                </button>
+                <button onClick={() => { setOpen(false); setImgPreview(null); setImgFile(null) }}
+                    className="px-3 py-2 bg-neutral-100 rounded-xl text-xs font-black hover:bg-neutral-200 transition-colors"
+                >
+                    Annuler
+                </button>
+            </div>
         </div>
     )
 }

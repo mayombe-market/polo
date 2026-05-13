@@ -610,6 +610,11 @@ function ProductModal({
                                                             <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-neutral-300'}`}>
                                                                 {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                                                             </div>
+                                                            {choice.img && (
+                                                                <div className="relative w-10 h-10 rounded-lg overflow-hidden flex-shrink-0">
+                                                                    <Image src={choice.img} alt={choice.name} fill className="object-cover" sizes="40px" />
+                                                                </div>
+                                                            )}
                                                             <span className="text-sm font-semibold text-neutral-800">{choice.name}</span>
                                                         </div>
                                                         {choice.price > 0 && (

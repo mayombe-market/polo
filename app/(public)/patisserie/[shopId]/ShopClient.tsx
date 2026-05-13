@@ -462,9 +462,12 @@ function ProductModal({
     const { addToCart, updateQuantity, cart } = useCart()
     const [qty, setQty] = useState(1)
     const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
-    const [addedAccId, setAddedAccId] = useState<string | null>(null)
+    const [selectedAccIds, setSelectedAccIds] = useState<string[]>([])
     // Options : { [groupId]: choiceId }
     const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({})
+
+    const toggleAcc = (accId: string) =>
+        setSelectedAccIds(prev => prev.includes(accId) ? prev.filter(id => id !== accId) : [...prev, accId])
 
     const promoPrice = getPromoPrice(product)
     const basePrice = promoPrice ?? product.price
@@ -488,6 +491,11 @@ function ProductModal({
     const accompaniments = useMemo(() =>
         allProducts.filter(p => p.id !== product.id && ACCOMPAGNEMENT_SUBCATS.includes(p.subcategory || ''))
     , [product, allProducts])
+
+    // Accompagnements sélectionnés + total
+    const selectedAccompaniments = accompaniments.filter(a => selectedAccIds.includes(a.id))
+    const accTotal = selectedAccompaniments.reduce((sum, a) => sum + (getPromoPrice(a) ?? a.price), 0)
+    const grandTotal = finalPrice * qty + accTotal
 
     const relatedProducts = useMemo(() => {
         const cat = deriveSubcategory(product)
@@ -540,8 +548,19 @@ function ProductModal({
                 await addToCart(cartItem)
                 if (qty > 1) await updateQuantity(cartItemId, qty)
             }
+            // Ajouter les accompagnements sélectionnés
+            for (const acc of selectedAccompaniments) {
+                const accPrice = getPromoPrice(acc) ?? acc.price
+                const accId = `acc-${acc.id}`
+                const existingAcc = cart.find(i => i.id === accId)
+                if (existingAcc) {
+                    await updateQuantity(accId, existingAcc.quantity + 1)
+                } else {
+                    await addToCart({ id: accId, product_id: acc.id, name: acc.name, price: accPrice, img: acc.img || '', seller_id: acc.seller_id || undefined })
+                }
+            }
             setStatus('added')
-            setTimeout(() => onClose(), 700)
+            setTimeout(() => onClose(), 900)
         } catch {
             setStatus('idle')
         }
@@ -663,48 +682,57 @@ function ProductModal({
                         )}
                     </div>
 
-                    {/* ── Accompagnements (Boissons / Desserts / Glaces) ── */}
+                    {/* ── Accompagnements ── */}
                     {accompaniments.length > 0 && (
-                        <div className="px-6 pb-4 border-t border-neutral-100 pt-4">
-                            <h4 className="text-sm font-black text-neutral-900 mb-3">Accompagnements</h4>
-                            <div className="grid grid-cols-1 gap-2">
+                        <div className="px-6 pb-2 border-t border-neutral-100 pt-5">
+                            <div className="flex items-center justify-between mb-3">
+                                <div>
+                                    <h4 className="text-sm font-black text-neutral-900">Accompagnements</h4>
+                                    <p className="text-[10px] text-neutral-400 mt-0.5">Ajoutez-en un ou plusieurs à votre commande</p>
+                                </div>
+                                {selectedAccIds.length > 0 && (
+                                    <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full">
+                                        {selectedAccIds.length} sélectionné{selectedAccIds.length > 1 ? 's' : ''}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2.5">
                                 {accompaniments.map(acc => {
-                                    const accPromo = getPromoPrice(acc)
-                                    const accPrice = accPromo ?? acc.price
+                                    const accPrice = getPromoPrice(acc) ?? acc.price
+                                    const isSelected = selectedAccIds.includes(acc.id)
                                     return (
-                                        <div key={acc.id} className="flex items-center gap-3 p-2.5 rounded-2xl border border-neutral-100 bg-neutral-50">
-                                            <div className="relative w-14 h-14 rounded-xl overflow-hidden flex-shrink-0 bg-rose-50">
+                                        <button
+                                            key={acc.id}
+                                            onClick={() => toggleAcc(acc.id)}
+                                            className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 ${
+                                                isSelected
+                                                    ? 'ring-2 ring-rose-500 shadow-lg shadow-rose-100 scale-[1.02]'
+                                                    : 'border border-neutral-100 hover:border-rose-200 hover:shadow-md'
+                                            } bg-white`}
+                                        >
+                                            {/* Image */}
+                                            <div className="relative w-full aspect-square bg-neutral-50">
                                                 {acc.img
-                                                    ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="56px" />
-                                                    : <div className="w-full h-full flex items-center justify-center"><Cake className="w-6 h-6 text-rose-200" /></div>
+                                                    ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="150px" />
+                                                    : <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-rose-100" /></div>
                                                 }
+                                                {/* Overlay sélectionné */}
+                                                <div className={`absolute inset-0 bg-rose-500/10 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+                                                {/* Checkmark */}
+                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
+                                                    isSelected ? 'bg-rose-500 scale-100' : 'bg-white/80 scale-75 opacity-0'
+                                                }`}>
+                                                    <Check className="w-3.5 h-3.5 text-white" />
+                                                </div>
                                             </div>
-                                            <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-black text-neutral-800 truncate">{acc.name}</p>
-                                                {acc.subcategory && <p className="text-[10px] text-neutral-400 font-medium">{acc.subcategory}</p>}
-                                                <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(accPrice)}</p>
+                                            {/* Infos */}
+                                            <div className="p-2.5">
+                                                <p className="text-xs font-black text-neutral-800 leading-tight line-clamp-1">{acc.name}</p>
+                                                <p className={`text-xs font-bold mt-0.5 transition-colors ${isSelected ? 'text-rose-500' : 'text-neutral-500'}`}>
+                                                    +{formatPrice(accPrice)}
+                                                </p>
                                             </div>
-                                            <button
-                                                onClick={async () => {
-                                                    await addToCart({
-                                                        id: `acc-${acc.id}`,
-                                                        product_id: acc.id,
-                                                        name: acc.name,
-                                                        price: accPrice,
-                                                        img: acc.img || '',
-                                                        seller_id: acc.seller_id || undefined,
-                                                    })
-                                                    setAddedAccId(acc.id)
-                                                    setTimeout(() => setAddedAccId(null), 1500)
-                                                }}
-                                                className={`w-9 h-9 rounded-full flex items-center justify-center flex-shrink-0 transition-all shadow-sm ${addedAccId === acc.id ? 'bg-green-500 shadow-green-200 scale-110' : 'bg-rose-500 hover:bg-rose-600 shadow-rose-200'}`}
-                                            >
-                                                {addedAccId === acc.id
-                                                    ? <Check className="w-4 h-4 text-white" />
-                                                    : <Plus className="w-4 h-4 text-white" />
-                                                }
-                                            </button>
-                                        </div>
+                                        </button>
                                     )
                                 })}
                             </div>
@@ -738,25 +766,47 @@ function ProductModal({
                     )}
                 </div>
 
-                <div className="px-6 pb-6 pt-3 flex-shrink-0 border-t border-neutral-50">
+                <div className="px-6 pb-6 pt-3 flex-shrink-0 border-t border-neutral-100 space-y-3">
+                    {/* Récapitulatif prix si accompagnements sélectionnés */}
+                    {selectedAccIds.length > 0 && status === 'idle' && (
+                        <div className="bg-neutral-50 rounded-2xl px-4 py-3 space-y-1.5">
+                            <div className="flex items-center justify-between">
+                                <span className="text-xs text-neutral-500 font-medium truncate max-w-[60%]">{product.name}{qty > 1 ? ` ×${qty}` : ''}</span>
+                                <span className="text-xs font-bold text-neutral-700">{formatPrice(finalPrice * qty)}</span>
+                            </div>
+                            {selectedAccompaniments.map(acc => (
+                                <div key={acc.id} className="flex items-center justify-between">
+                                    <span className="text-xs text-neutral-500 font-medium truncate max-w-[60%]">+ {acc.name}</span>
+                                    <span className="text-xs font-bold text-rose-500">+{formatPrice(getPromoPrice(acc) ?? acc.price)}</span>
+                                </div>
+                            ))}
+                            <div className="border-t border-neutral-200 pt-1.5 flex items-center justify-between">
+                                <span className="text-xs font-black text-neutral-800">Total</span>
+                                <span className="text-sm font-black text-rose-600">{formatPrice(grandTotal)}</span>
+                            </div>
+                        </div>
+                    )}
                     {isOutOfStock ? (
                         <div className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-400 text-sm font-black text-center">Rupture de stock</div>
                     ) : (
                         <button onClick={handleAdd} disabled={status !== 'idle' || missingRequired.length > 0}
-                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all shadow-md ${
+                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all duration-300 shadow-md ${
                                 status === 'added' ? 'bg-green-500 text-white shadow-green-200'
                                 : missingRequired.length > 0 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                                : 'bg-rose-500 hover:bg-rose-600 active:bg-rose-700 text-white shadow-rose-200 disabled:opacity-70'
+                                : 'bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white shadow-rose-200 disabled:opacity-70'
                             }`}
                         >
                             <span>
                                 {status === 'adding' ? 'Ajout en cours…'
-                                : status === 'added' ? '✓ Ajouté au panier !'
+                                : status === 'added' ? `✓ ${1 + selectedAccIds.length} article${selectedAccIds.length > 0 ? 's' : ''} ajouté${selectedAccIds.length > 0 ? 's' : ''} !`
                                 : missingRequired.length > 0 ? `Choisissez ${missingRequired[0].name}`
+                                : selectedAccIds.length > 0 ? `Ajouter la sélection`
                                 : 'Ajouter au panier'}
                             </span>
                             {status !== 'added' && missingRequired.length === 0 && (
-                                <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">{formatPrice(finalPrice * qty)}</span>
+                                <span className="bg-white/20 rounded-xl px-3 py-1 text-xs font-black">
+                                    {formatPrice(grandTotal)}
+                                </span>
                             )}
                         </button>
                     )}

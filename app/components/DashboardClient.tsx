@@ -875,8 +875,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     🚀 Choisir mon abonnement
                                 </button>
                             </div>
-                        ) : /* Gate vérification */
-                        profile?.verification_status !== 'verified' ? (
+                        ) : /* Gate vérification (pas applicable aux pâtissiers) */
+                        profile?.verification_status !== 'verified' && profile?.vendor_type !== 'patisserie' ? (
                             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30">
                                 <div className="text-6xl mb-4">🔒</div>
                                 <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">Vérification requise</h2>

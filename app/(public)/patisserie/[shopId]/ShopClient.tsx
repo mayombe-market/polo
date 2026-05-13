@@ -1189,9 +1189,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const [search, setSearch]                   = useState('')
     const [activeTab, setActiveTab]             = useState('')
     const [closedDismissed, setClosedDismissed] = useState(false)
-    const sectionRefs = useRef<Record<string, HTMLElement | null>>({})
-    const tabsRef     = useRef<HTMLDivElement>(null)
-    const observerRef = useRef<IntersectionObserver | null>(null)
+    const tabsRef = useRef<HTMLDivElement>(null)
 
     // ── Ouverture automatique (recalcul chaque minute côté client) ─────────────
     const [effectiveIsOpen, setEffectiveIsOpen] = useState(() =>
@@ -1223,25 +1221,18 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
         return { grouped: map, categories: Object.keys(map) }
     }, [products, search])
 
-    useEffect(() => { if (categories.length > 0) setActiveTab(prev => prev || categories[0]) }, [categories])
-
+    // Quand les catégories changent (ou recherche), reset activeTab vers la 1re catégorie disponible
     useEffect(() => {
-        observerRef.current?.disconnect()
-        if (categories.length === 0) return
-        observerRef.current = new IntersectionObserver(
-            entries => { for (const entry of entries) { if (entry.isIntersecting) { setActiveTab(entry.target.getAttribute('data-cat') || ''); break } } },
-            { rootMargin: '-25% 0px -65% 0px', threshold: 0 }
-        )
-        categories.forEach(cat => { const el = sectionRefs.current[cat]; if (el) observerRef.current?.observe(el) })
-        return () => observerRef.current?.disconnect()
+        setActiveTab(prev => (categories.includes(prev) ? prev : categories[0] ?? ''))
     }, [categories])
 
-    const scrollToCategory = useCallback((cat: string) => {
+    const selectTab = useCallback((cat: string) => {
         setActiveTab(cat)
-        const el = sectionRefs.current[cat]
-        if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 120, behavior: 'smooth' })
+        // Scroll le tab dans la barre pour qu'il soit visible
         const tabEl = tabsRef.current?.querySelector<HTMLElement>(`[data-tab="${CSS.escape(cat)}"]`)
         tabEl?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+        // Remonter la page en haut du contenu
+        window.scrollTo({ top: 0, behavior: 'smooth' })
     }, [])
 
     const cartQtyMap = useMemo(() => {
@@ -1449,8 +1440,8 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 <div className="sticky top-0 z-20 bg-white border-b border-neutral-100 shadow-[0_2px_8px_rgba(0,0,0,0.04)] mt-0.5">
                     <div ref={tabsRef} className="max-w-6xl mx-auto px-5 flex gap-1 overflow-x-auto py-3 scrollbar-hide">
                         {categories.map(cat => (
-                            <button key={cat} data-tab={cat} onClick={() => scrollToCategory(cat)}
-                                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all duration-200 whitespace-nowrap
+                            <button key={cat} data-tab={cat} onClick={() => selectTab(cat)}
+                                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all duration-200 whitespace-nowrap cursor-pointer
                                     ${activeTab === cat
                                         ? 'bg-amber-900 text-white shadow-sm shadow-amber-900/20'
                                         : 'text-neutral-500 hover:text-amber-900 hover:bg-amber-50'
@@ -1471,32 +1462,47 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     <div className="bg-white rounded-3xl shadow-sm overflow-hidden">
                         {categories.length === 0 ? (
                             <div className="text-center py-20">
-                                <div className="text-5xl mb-4">🎂</div>
+                                <Cake className="w-12 h-12 text-amber-200 mx-auto mb-4" />
                                 <p className="text-neutral-400 font-medium">Aucun produit trouvé</p>
                                 {search && (
-                                    <button onClick={() => setSearch('')} className="mt-3 text-sm text-rose-500 hover:underline font-semibold">
+                                    <button onClick={() => setSearch('')} className="mt-3 text-sm text-amber-800 hover:underline font-semibold cursor-pointer">
                                         Effacer la recherche
                                     </button>
                                 )}
                             </div>
-                        ) : (
+                        ) : search.trim().length > 1 ? (
+                            /* Mode recherche : toutes les catégories correspondantes */
                             categories.map(cat => (
-                                <div key={cat} ref={el => { sectionRefs.current[cat] = el }} data-cat={cat}>
-                                    <div className="px-5 pt-7 pb-3 flex items-end justify-between">
+                                <div key={cat}>
+                                    <div className="px-5 pt-6 pb-2 flex items-end justify-between">
                                         <div>
-                                            <h3 className="text-base font-black text-neutral-900 tracking-tight">{cat}</h3>
+                                            <h3 className="text-sm font-black text-neutral-900 tracking-tight">{cat}</h3>
                                             <p className="text-xs text-amber-600/70 font-semibold mt-0.5">{grouped[cat].length} article{grouped[cat].length > 1 ? 's' : ''}</p>
                                         </div>
                                         <div className="w-8 h-0.5 bg-amber-200 rounded-full mb-1" />
                                     </div>
-                                    <div>
-                                        {grouped[cat].map(p => (
-                                            <ProductRow key={p.id} product={p} cartQty={cartQtyMap[p.id] ?? 0} onClick={() => setSelectedProduct(p)} />
-                                        ))}
-                                    </div>
+                                    {grouped[cat].map(p => (
+                                        <ProductRow key={p.id} product={p} cartQty={cartQtyMap[p.id] ?? 0} onClick={() => setSelectedProduct(p)} />
+                                    ))}
                                     <div className="mx-5 h-px bg-neutral-50" />
                                 </div>
                             ))
+                        ) : (
+                            /* Mode normal : seulement la catégorie active */
+                            activeTab && grouped[activeTab] ? (
+                                <div>
+                                    <div className="px-5 pt-7 pb-3 flex items-end justify-between">
+                                        <div>
+                                            <h3 className="text-base font-black text-neutral-900 tracking-tight">{activeTab}</h3>
+                                            <p className="text-xs text-amber-600/70 font-semibold mt-0.5">{grouped[activeTab].length} article{grouped[activeTab].length > 1 ? 's' : ''}</p>
+                                        </div>
+                                        <div className="w-8 h-0.5 bg-amber-200 rounded-full mb-1" />
+                                    </div>
+                                    {grouped[activeTab].map(p => (
+                                        <ProductRow key={p.id} product={p} cartQty={cartQtyMap[p.id] ?? 0} onClick={() => setSelectedProduct(p)} />
+                                    ))}
+                                </div>
+                            ) : null
                         )}
                     </div>
                 </div>

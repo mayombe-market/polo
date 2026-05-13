@@ -177,8 +177,7 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
                 <h3 className="font-black text-sm mb-3">Photo du produit</h3>
                 <div
                     onClick={() => fileRef.current?.click()}
-                    className="relative rounded-2xl overflow-hidden bg-neutral-50 border-2 border-dashed border-neutral-200 flex items-center justify-center cursor-pointer hover:border-rose-300 transition-colors group"
-                    style={{ height: 160 }}
+                    className="relative aspect-square rounded-2xl overflow-hidden bg-neutral-50 border-2 border-dashed border-neutral-200 flex items-center justify-center cursor-pointer hover:border-rose-300 transition-colors group max-w-xs mx-auto"
                 >
                     {imgPreview
                         ? <Image src={imgPreview} alt="Preview" fill className="object-cover" sizes="400px" />

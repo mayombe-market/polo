@@ -616,56 +616,71 @@ function ProductModal({
 
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
             <div
-                className="relative bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden max-h-[92vh] flex flex-col"
+                className="relative bg-[#FFFBF5] rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg shadow-2xl overflow-hidden max-h-[94vh] flex flex-col"
                 onClick={e => e.stopPropagation()}
                 style={{ animation: 'slideUp 0.25s ease-out' }}
             >
-                <button onClick={onClose} className="absolute top-4 right-4 z-10 w-9 h-9 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-sm hover:bg-white transition-colors">
-                    <X className="w-4 h-4 text-neutral-600" />
-                </button>
-
-                <div className="relative w-full flex-shrink-0" style={{ aspectRatio: '4/3' }}>
+                {/* ── Hero image ── */}
+                <div className="relative w-full flex-shrink-0" style={{ aspectRatio: '16/9' }}>
                     {product.img ? (
                         <Image src={product.img} alt={product.name} fill className="object-cover" sizes="512px" priority />
                     ) : (
-                        <div className="w-full h-full bg-rose-50 flex items-center justify-center">
-                            <Cake className="w-16 h-16 text-rose-200" />
+                        <div className="w-full h-full bg-amber-50 flex items-center justify-center">
+                            <Cake className="w-20 h-20 text-amber-200" />
                         </div>
                     )}
+                    {/* Gradient bottom for readability */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
+
+                    {/* Top badges */}
                     <div className="absolute top-3 left-3 flex gap-1.5">
                         {promoPrice && (
                             <span className="bg-green-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">-{product.promo_percentage}%</span>
                         )}
                         {isNew(product.created_at) && (
-                            <span className="bg-rose-500 text-white text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">Nouveau</span>
+                            <span className="bg-amber-900 text-amber-50 text-xs font-bold px-2.5 py-1 rounded-full shadow-sm">Nouveau</span>
                         )}
+                    </div>
+
+                    {/* Close button */}
+                    <button onClick={onClose} className="absolute top-3 right-3 z-10 w-9 h-9 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center hover:bg-black/60 transition-colors">
+                        <X className="w-4 h-4 text-white" />
+                    </button>
+
+                    {/* Product name overlaid at bottom of image */}
+                    <div className="absolute bottom-0 left-0 right-0 px-5 pb-4 pt-10">
+                        <h2 className="text-xl font-black text-white leading-tight drop-shadow-sm">{product.name}</h2>
+                        <div className="flex items-baseline gap-2 mt-1">
+                            <span className="text-2xl font-black text-amber-300">{formatPrice(finalPrice)}</span>
+                            {promoPrice && <span className="text-sm text-white/60 line-through">{formatPrice(product.price)}</span>}
+                            {optionsTotal > 0 && (
+                                <span className="text-xs text-white/70 font-medium">(+{formatPrice(optionsTotal)} options)</span>
+                            )}
+                        </div>
                     </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    <div className="px-6 pt-5 pb-2">
-                        <h2 className="text-xl font-black text-neutral-900 leading-tight mb-1">{product.name}</h2>
-                        {product.description && <p className="text-sm text-neutral-500 leading-relaxed mb-3">{product.description}</p>}
-                        <div className="flex items-baseline gap-2 mb-5">
-                            <span className="text-2xl font-black text-rose-600">{formatPrice(finalPrice)}</span>
-                            {promoPrice && <span className="text-sm text-neutral-400 line-through">{formatPrice(product.price)}</span>}
-                            {optionsTotal > 0 && (
-                                <span className="text-xs text-neutral-400 font-medium">(+{formatPrice(optionsTotal)} options)</span>
-                            )}
+                    {/* Description */}
+                    {product.description && (
+                        <div className="px-5 pt-4 pb-0">
+                            <p className="text-sm text-amber-900/70 leading-relaxed">{product.description}</p>
                         </div>
+                    )}
 
+                    <div className="px-5 pt-4 pb-2">
                         {/* ── Options / Combos ── */}
                         {productOptions.length > 0 && (
-                            <div className="space-y-5 mb-5">
+                            <div className="space-y-5 mb-4">
                                 {productOptions.map(group => (
                                     <div key={group.id}>
                                         <div className="flex items-center gap-2 mb-2.5">
-                                            <h4 className="text-sm font-black text-neutral-900">{group.name}</h4>
+                                            <h4 className="text-sm font-black text-amber-950">{group.name}</h4>
                                             {group.required
-                                                ? <span className="text-[10px] font-bold text-rose-500 bg-rose-50 px-2 py-0.5 rounded-full">Obligatoire</span>
-                                                : <span className="text-[10px] font-bold text-neutral-400 bg-neutral-100 px-2 py-0.5 rounded-full">Optionnel</span>
+                                                ? <span className="text-[10px] font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-full">Obligatoire</span>
+                                                : <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">Optionnel</span>
                                             }
                                         </div>
                                         <div className="grid grid-cols-1 gap-2">
@@ -678,14 +693,14 @@ function ProductModal({
                                                             ...prev,
                                                             [group.id]: prev[group.id] === choice.id ? '' : choice.id,
                                                         }))}
-                                                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border-2 text-left transition-all ${
+                                                        className={`flex items-center justify-between px-4 py-3 rounded-2xl border-2 text-left transition-all duration-200 ${
                                                             isSelected
-                                                                ? 'border-rose-500 bg-rose-50'
-                                                                : 'border-neutral-100 bg-neutral-50 hover:border-neutral-300'
+                                                                ? 'border-amber-800 bg-amber-50 shadow-sm'
+                                                                : 'border-amber-100 bg-white hover:border-amber-300 hover:bg-amber-50/50'
                                                         }`}
                                                     >
                                                         <div className="flex items-center gap-3">
-                                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${isSelected ? 'border-rose-500 bg-rose-500' : 'border-neutral-300'}`}>
+                                                            <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${isSelected ? 'border-amber-800 bg-amber-800' : 'border-amber-300'}`}>
                                                                 {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
                                                             </div>
                                                             {choice.img && (
@@ -693,10 +708,10 @@ function ProductModal({
                                                                     <Image src={choice.img} alt={choice.name} fill className="object-cover" sizes="40px" />
                                                                 </div>
                                                             )}
-                                                            <span className="text-sm font-semibold text-neutral-800">{choice.name}</span>
+                                                            <span className="text-sm font-semibold text-amber-950">{choice.name}</span>
                                                         </div>
                                                         {choice.price > 0 && (
-                                                            <span className="text-xs font-bold text-rose-600">+{formatPrice(choice.price)}</span>
+                                                            <span className="text-xs font-bold text-amber-800">+{formatPrice(choice.price)}</span>
                                                         )}
                                                         {choice.price === 0 && (
                                                             <span className="text-xs font-semibold text-green-600">Gratuit</span>
@@ -705,25 +720,28 @@ function ProductModal({
                                                 )
                                             })}
                                         </div>
-                                        {/* Erreur si obligatoire et non sélectionné */}
                                         {group.required && !selectedChoices[group.id] && status === 'idle' && qty > 0 && (
-                                            <p className="text-[10px] text-rose-500 mt-1.5 font-semibold">⚠ Sélectionnez une option</p>
+                                            <p className="text-[10px] text-amber-700 mt-1.5 font-semibold flex items-center gap-1">
+                                                <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                                                Sélectionnez une option
+                                            </p>
                                         )}
                                     </div>
                                 ))}
                             </div>
                         )}
 
+                        {/* ── Quantité ── */}
                         {!isOutOfStock && (
-                            <div className="flex items-center gap-4 mb-5">
-                                <span className="text-sm font-semibold text-neutral-700">Quantité</span>
-                                <div className="flex items-center bg-neutral-100 rounded-full overflow-hidden">
-                                    <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-10 h-10 flex items-center justify-center hover:bg-neutral-200 transition-colors">
-                                        <Minus className="w-3.5 h-3.5 text-neutral-700" />
+                            <div className="flex items-center justify-between mb-4 bg-white rounded-2xl px-4 py-3 border border-amber-100">
+                                <span className="text-sm font-semibold text-amber-950">Quantité</span>
+                                <div className="flex items-center gap-3">
+                                    <button onClick={() => setQty(q => Math.max(1, q - 1))} className="w-9 h-9 rounded-full border-2 border-amber-200 flex items-center justify-center hover:bg-amber-100 hover:border-amber-300 transition-colors active:scale-95">
+                                        <Minus className="w-3.5 h-3.5 text-amber-800" />
                                     </button>
-                                    <span className="w-8 text-center text-sm font-black text-neutral-900">{qty}</span>
-                                    <button onClick={() => setQty(q => q + 1)} className="w-10 h-10 flex items-center justify-center hover:bg-neutral-200 transition-colors">
-                                        <Plus className="w-3.5 h-3.5 text-neutral-700" />
+                                    <span className="w-8 text-center text-base font-black text-amber-950">{qty}</span>
+                                    <button onClick={() => setQty(q => q + 1)} className="w-9 h-9 rounded-full bg-amber-900 flex items-center justify-center hover:bg-amber-800 transition-colors active:scale-95 shadow-sm">
+                                        <Plus className="w-3.5 h-3.5 text-white" />
                                     </button>
                                 </div>
                             </div>
@@ -732,14 +750,14 @@ function ProductModal({
 
                     {/* ── Accompagnements ── */}
                     {accompaniments.length > 0 && (
-                        <div className="px-6 pb-2 border-t border-neutral-100 pt-5">
+                        <div className="px-5 pb-4 border-t border-amber-100/80 pt-5">
                             <div className="flex items-center justify-between mb-3">
                                 <div>
-                                    <h4 className="text-sm font-black text-neutral-900">Accompagnements</h4>
-                                    <p className="text-[10px] text-neutral-400 mt-0.5">Ajoutez-en un ou plusieurs à votre commande</p>
+                                    <h4 className="text-sm font-black text-amber-950">Accompagnements</h4>
+                                    <p className="text-[10px] text-amber-700/60 mt-0.5">Complétez votre commande avec un extra</p>
                                 </div>
                                 {selectedAccIds.length > 0 && (
-                                    <span className="text-[10px] font-black text-rose-500 bg-rose-50 px-2.5 py-1 rounded-full">
+                                    <span className="text-[10px] font-black text-amber-800 bg-amber-100 px-2.5 py-1 rounded-full">
                                         {selectedAccIds.length} sélectionné{selectedAccIds.length > 1 ? 's' : ''}
                                     </span>
                                 )}
@@ -752,31 +770,37 @@ function ProductModal({
                                         <button
                                             key={acc.id}
                                             onClick={() => toggleAcc(acc.id)}
-                                            className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 ${
+                                            className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 cursor-pointer ${
                                                 isSelected
-                                                    ? 'ring-2 ring-rose-500 shadow-lg shadow-rose-100 scale-[1.02]'
-                                                    : 'border border-neutral-100 hover:border-rose-200 hover:shadow-md'
-                                            } bg-white`}
+                                                    ? 'ring-2 ring-amber-800 shadow-lg shadow-amber-100 scale-[1.02]'
+                                                    : 'border border-amber-100 bg-white hover:border-amber-300 hover:shadow-md'
+                                            }`}
                                         >
                                             {/* Image */}
-                                            <div className="relative w-full aspect-square bg-neutral-50">
+                                            <div className="relative w-full aspect-square bg-amber-50">
                                                 {acc.img
                                                     ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="150px" />
-                                                    : <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-rose-100" /></div>
+                                                    : <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-amber-200" /></div>
                                                 }
-                                                {/* Overlay sélectionné */}
-                                                <div className={`absolute inset-0 bg-rose-500/10 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                                {/* Checkmark */}
-                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 ${
-                                                    isSelected ? 'bg-rose-500 scale-100' : 'bg-white/80 scale-75 opacity-0'
+                                                {/* Warm overlay when selected */}
+                                                <div className={`absolute inset-0 bg-amber-900/15 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+                                                {/* Checkmark badge */}
+                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${
+                                                    isSelected ? 'bg-amber-900 scale-100 opacity-100' : 'bg-white/80 scale-75 opacity-0'
                                                 }`}>
                                                     <Check className="w-3.5 h-3.5 text-white" />
                                                 </div>
+                                                {/* + add hint when not selected */}
+                                                {!isSelected && (
+                                                    <div className="absolute bottom-2 right-2 w-6 h-6 rounded-full bg-amber-900/80 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                                        <Plus className="w-3 h-3 text-white" />
+                                                    </div>
+                                                )}
                                             </div>
-                                            {/* Infos */}
-                                            <div className="p-2.5">
-                                                <p className="text-xs font-black text-neutral-800 leading-tight line-clamp-1">{acc.name}</p>
-                                                <p className={`text-xs font-bold mt-0.5 transition-colors ${isSelected ? 'text-rose-500' : 'text-neutral-500'}`}>
+                                            {/* Info */}
+                                            <div className={`p-2.5 transition-colors ${isSelected ? 'bg-amber-50' : 'bg-white'}`}>
+                                                <p className="text-xs font-black text-amber-950 leading-tight line-clamp-1">{acc.name}</p>
+                                                <p className={`text-xs font-bold mt-0.5 transition-colors ${isSelected ? 'text-amber-800' : 'text-amber-600/70'}`}>
                                                     +{formatPrice(accPrice)}
                                                 </p>
                                             </div>
@@ -787,25 +811,27 @@ function ProductModal({
                         </div>
                     )}
 
-                    {/* ── Fréquemment achetés ensemble ── */}
+                    {/* ── Dans la même catégorie ── */}
                     {relatedProducts.length > 0 && (
-                        <div className="px-6 pb-4 border-t border-neutral-100 pt-4">
-                            <h4 className="text-sm font-black text-neutral-900 mb-3">Dans la même catégorie</h4>
-                            <div className="space-y-2">
+                        <div className="px-5 pb-5 border-t border-amber-100/80 pt-4">
+                            <h4 className="text-sm font-black text-amber-950 mb-3">Dans la même catégorie</h4>
+                            <div className="space-y-1.5">
                                 {relatedProducts.map(related => {
                                     const rPromo = getPromoPrice(related)
                                     return (
                                         <button key={related.id} onClick={() => { onClose(); setTimeout(() => onSelectProduct(related), 50) }}
-                                            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-rose-50 transition-colors text-left group"
+                                            className="w-full flex items-center gap-3 p-2.5 rounded-xl hover:bg-amber-50 transition-colors text-left group cursor-pointer"
                                         >
-                                            <div className="relative w-12 h-12 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
-                                                {related.img ? <Image src={related.img} alt={related.name} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center"><Cake className="w-5 h-5 text-rose-200" /></div>}
+                                            <div className="relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-amber-50">
+                                                {related.img ? <Image src={related.img} alt={related.name} fill className="object-cover" sizes="48px" /> : <div className="w-full h-full flex items-center justify-center"><Cake className="w-5 h-5 text-amber-200" /></div>}
                                             </div>
                                             <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-semibold text-neutral-800 truncate">{related.name}</p>
-                                                <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(rPromo ?? related.price)}</p>
+                                                <p className="text-xs font-semibold text-amber-950 truncate">{related.name}</p>
+                                                <p className="text-xs text-amber-800 font-bold mt-0.5">{formatPrice(rPromo ?? related.price)}</p>
                                             </div>
-                                            <Plus className="w-4 h-4 text-rose-400 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                            <div className="w-7 h-7 rounded-full bg-amber-100 group-hover:bg-amber-900 flex items-center justify-center transition-colors flex-shrink-0">
+                                                <Plus className="w-3.5 h-3.5 text-amber-700 group-hover:text-white transition-colors" />
+                                            </div>
                                         </button>
                                     )
                                 })}
@@ -814,23 +840,24 @@ function ProductModal({
                     )}
                 </div>
 
-                <div className="px-6 pb-6 pt-3 flex-shrink-0 border-t border-neutral-100 space-y-3">
-                    {/* Récapitulatif prix si accompagnements sélectionnés */}
+                {/* ── Footer sticky ── */}
+                <div className="px-5 pb-6 pt-3 flex-shrink-0 border-t border-amber-100 space-y-3 bg-[#FFFBF5]">
+                    {/* Price recap */}
                     {selectedAccIds.length > 0 && status === 'idle' && (
-                        <div className="bg-neutral-50 rounded-2xl px-4 py-3 space-y-1.5">
+                        <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3 space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <span className="text-xs text-neutral-500 font-medium truncate max-w-[60%]">{product.name}{qty > 1 ? ` ×${qty}` : ''}</span>
-                                <span className="text-xs font-bold text-neutral-700">{formatPrice(finalPrice * qty)}</span>
+                                <span className="text-xs text-amber-700 font-medium truncate max-w-[60%]">{product.name}{qty > 1 ? ` ×${qty}` : ''}</span>
+                                <span className="text-xs font-bold text-amber-900">{formatPrice(finalPrice * qty)}</span>
                             </div>
                             {selectedAccompaniments.map(acc => (
                                 <div key={acc.id} className="flex items-center justify-between">
-                                    <span className="text-xs text-neutral-500 font-medium truncate max-w-[60%]">+ {acc.name}</span>
-                                    <span className="text-xs font-bold text-rose-500">+{formatPrice(getPromoPrice(acc) ?? acc.price)}</span>
+                                    <span className="text-xs text-amber-700/70 font-medium truncate max-w-[60%]">+ {acc.name}</span>
+                                    <span className="text-xs font-bold text-amber-800">+{formatPrice(getPromoPrice(acc) ?? acc.price)}</span>
                                 </div>
                             ))}
-                            <div className="border-t border-neutral-200 pt-1.5 flex items-center justify-between">
-                                <span className="text-xs font-black text-neutral-800">Total</span>
-                                <span className="text-sm font-black text-rose-600">{formatPrice(grandTotal)}</span>
+                            <div className="border-t border-amber-200 pt-1.5 flex items-center justify-between">
+                                <span className="text-xs font-black text-amber-950">Total</span>
+                                <span className="text-base font-black text-amber-900">{formatPrice(grandTotal)}</span>
                             </div>
                         </div>
                     )}
@@ -838,10 +865,10 @@ function ProductModal({
                         <div className="w-full py-4 rounded-2xl bg-neutral-100 text-neutral-400 text-sm font-black text-center">Rupture de stock</div>
                     ) : (
                         <button onClick={handleAdd} disabled={status !== 'idle' || missingRequired.length > 0}
-                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all duration-300 shadow-md ${
-                                status === 'added' ? 'bg-green-500 text-white shadow-green-200'
-                                : missingRequired.length > 0 ? 'bg-neutral-200 text-neutral-400 cursor-not-allowed'
-                                : 'bg-rose-500 hover:bg-rose-600 active:scale-[0.98] text-white shadow-rose-200 disabled:opacity-70'
+                            className={`w-full py-4 rounded-2xl font-black text-sm flex items-center justify-between px-5 transition-all duration-300 ${
+                                status === 'added' ? 'bg-green-500 text-white shadow-lg shadow-green-200/50'
+                                : missingRequired.length > 0 ? 'bg-amber-100 text-amber-400 cursor-not-allowed'
+                                : 'bg-amber-900 hover:bg-amber-800 active:scale-[0.98] text-white shadow-lg shadow-amber-900/30 disabled:opacity-70'
                             }`}
                         >
                             <span>

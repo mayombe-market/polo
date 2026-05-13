@@ -976,6 +976,71 @@ export async function deleteProduct(productId: string) {
     return { success: true }
 }
 
+// ═══ Mise à jour produit pâtisserie ═══
+
+export async function updateProduct(productId: string, input: {
+    name: string
+    price: number
+    description?: string
+    subcategory?: string
+    img?: string
+    stock_quantity?: number
+    has_stock?: boolean
+    options?: any[] | null
+}): Promise<{ success: true; product: Record<string, unknown> } | { error: string }> {
+    try {
+        const supabase = await getSupabase()
+        const { data: { user } } = await supabase.auth.getUser()
+        if (!user) return { error: 'Non connecté' }
+
+        // Vérifier ownership
+        const { data: existing } = await supabase
+            .from('products')
+            .select('seller_id')
+            .eq('id', productId)
+            .single()
+        if (!existing) return { error: 'Produit introuvable' }
+        if (existing.seller_id !== user.id) return { error: 'Non autorisé' }
+
+        const priceNum = Number(input.price)
+        if (!Number.isFinite(priceNum) || priceNum <= 0) return { error: 'Prix invalide.' }
+
+        const updates: Record<string, unknown> = {
+            name: input.name.trim(),
+            price: Math.round(priceNum),
+            description: input.description?.trim() ?? '',
+            subcategory: input.subcategory ?? '',
+            has_stock: Boolean(input.has_stock),
+            stock_quantity: Number.isFinite(input.stock_quantity) ? input.stock_quantity : 0,
+            options: Array.isArray(input.options) ? input.options : [],
+        }
+
+        // Mettre à jour l'image seulement si une nouvelle URL est fournie
+        const imgTrim = String(input.img ?? '').trim()
+        if (imgTrim && /^https?:\/\//i.test(imgTrim)) {
+            updates.img = imgTrim
+            updates.images_gallery = [imgTrim]
+        }
+
+        const { data: product, error } = await supabase
+            .from('products')
+            .update(updates)
+            .eq('id', productId)
+            .select()
+            .single()
+
+        if (error) return { error: error.message }
+
+        try {
+            await revalidateProductCatalog(productId, user.id)
+        } catch {}
+
+        return { success: true, product: JSON.parse(JSON.stringify(product)) }
+    } catch (e: unknown) {
+        return { error: e instanceof Error ? e.message : String(e) }
+    }
+}
+
 // ═══ Promotions vendeur ═══
 
 export async function activatePromo(productId: string, percentage: number, days: number) {

@@ -26,7 +26,7 @@ import {
     ArrowUpRight, Clock, MapPin, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation
+    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -63,7 +63,7 @@ const PatisserieProductForm = dynamic(() => import('./PatisserieProductForm').th
     ssr: false
 })
 
-type Page = 'dashboard' | 'products' | 'add' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews'
+type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews'
 
 const getMenuItems = (verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
     const items: { id: Page; label: string; icon: any }[] = [
@@ -94,6 +94,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [ordersLoading, setOrdersLoading] = useState(true)
     const [updating, setUpdating] = useState<string | null>(null)
     const [deleting, setDeleting] = useState<string | null>(null)
+    const [editingProduct, setEditingProduct] = useState<any>(null)
     const [orderFilter, setOrderFilter] = useState('all')
     const [negotiations, setNegotiations] = useState<any[]>([])
     const [negotiationsLoading, setNegotiationsLoading] = useState(true)
@@ -843,6 +844,10 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                 setActivePage('add')
                             }
                         }}
+                        onEdit={(product: any) => {
+                            setEditingProduct(product)
+                            setActivePage('edit')
+                        }}
                         onDelete={handleDeleteProduct}
                         deleting={deleting}
                         isAtLimit={isAtLimit}
@@ -851,6 +856,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         currentProductCount={currentProductCount}
                         onUpgrade={() => openUpgradeFlow()}
                         onProductsChange={setProducts}
+                        isPatisserie={profile?.vendor_type === 'patisserie'}
                     />
                 )}
 
@@ -987,6 +993,27 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             </>
                         )}
                         </>)}
+                    </div>
+                )}
+
+                {activePage === 'edit' && editingProduct && profile?.vendor_type === 'patisserie' && (
+                    <div className="p-4 md:p-8 max-w-2xl mx-auto">
+                        <div className="mb-6">
+                            <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">✏️ Modifier le produit</h2>
+                            <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1 truncate">{editingProduct.name}</p>
+                        </div>
+                        <PatisserieProductForm
+                            sellerId={user?.id}
+                            initialProduct={editingProduct}
+                            onSuccess={(updated) => {
+                                // Mettre à jour le produit dans la liste locale
+                                setProducts((prev: any[]) => prev.map((p: any) => p.id === updated.id ? { ...p, ...updated } : p))
+                                setEditingProduct(null)
+                                setActivePage('products')
+                                router.refresh()
+                            }}
+                            onCancel={() => { setEditingProduct(null); setActivePage('products') }}
+                        />
                     </div>
                 )}
 
@@ -1691,7 +1718,7 @@ function VendorNotificationsPage({ userId, onUnreadChange }: { userId?: string; 
 // =====================================================================
 // PRODUCTS LIST
 // =====================================================================
-function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentPlan, maxProducts, currentProductCount, onUpgrade, onProductsChange }: any) {
+function ProductsList({ products, onAdd, onEdit, onDelete, deleting, isAtLimit, currentPlan, maxProducts, currentProductCount, onUpgrade, onProductsChange, isPatisserie }: any) {
     const [promoProduct, setPromoProduct] = useState<any>(null)
     const [promoPercentage, setPromoPercentage] = useState(10)
     const [promoDays, setPromoDays] = useState(3)
@@ -1848,6 +1875,16 @@ function ProductsList({ products, onAdd, onDelete, deleting, isAtLimit, currentP
                                                 title="Activer une promo"
                                             >
                                                 <Tag size={14} />
+                                            </button>
+                                        )}
+                                        {/* Bouton Modifier (pâtisserie uniquement) */}
+                                        {isPatisserie && (
+                                            <button
+                                                onClick={() => onEdit?.(p)}
+                                                className="w-9 h-9 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-rose-500 transition-colors"
+                                                title="Modifier le produit"
+                                            >
+                                                <Pencil size={14} />
                                             </button>
                                         )}
                                         <Link

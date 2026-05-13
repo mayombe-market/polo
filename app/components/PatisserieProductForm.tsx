@@ -7,7 +7,7 @@
 import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { createProduct } from '@/app/actions/orders'
+import { createProduct, updateProduct } from '@/app/actions/orders'
 
 async function uploadViaApi(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -76,26 +76,41 @@ interface Props {
     sellerId: string
     onSuccess: (product: any) => void
     onCancel: () => void
+    /** Si fourni → mode édition (pré-remplissage + updateProduct) */
+    initialProduct?: {
+        id: string
+        name: string
+        price: number
+        img?: string | null
+        subcategory?: string | null
+        description?: string | null
+        stock_quantity?: number | null
+        has_stock?: boolean
+        options?: OptionGroup[] | null
+    }
 }
 
-export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }: Props) {
+export default function PatisserieProductForm({ sellerId, onSuccess, onCancel, initialProduct }: Props) {
+    const isEdit = Boolean(initialProduct?.id)
     const fileRef = useRef<HTMLInputElement>(null)
 
     const [saving, setSaving] = useState(false)
-    const [imgPreview, setImgPreview] = useState<string | null>(null)
+    const [imgPreview, setImgPreview] = useState<string | null>(initialProduct?.img ?? null)
     const [imgFile, setImgFile] = useState<File | null>(null)
     const [uploadingImg, setUploadingImg] = useState(false)
 
     const [form, setForm] = useState({
-        name: '',
-        price: '',
-        subcategory: 'Gâteaux',
-        description: '',
-        stock: '',
-        hasStock: false,
+        name: initialProduct?.name ?? '',
+        price: initialProduct?.price ? String(initialProduct.price) : '',
+        subcategory: initialProduct?.subcategory ?? 'Gâteaux',
+        description: initialProduct?.description ?? '',
+        stock: initialProduct?.stock_quantity ? String(initialProduct.stock_quantity) : '',
+        hasStock: Boolean(initialProduct?.has_stock),
     })
 
-    const [options, setOptions] = useState<OptionGroup[]>([])
+    const [options, setOptions] = useState<OptionGroup[]>(
+        Array.isArray(initialProduct?.options) ? initialProduct.options : []
+    )
     const [newGroupName, setNewGroupName] = useState('')
     const [addingGroup, setAddingGroup] = useState(false)
     const [expandedGroup, setExpandedGroup] = useState<string | null>(null)
@@ -163,28 +178,49 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
 
         setSaving(true)
         try {
-            const imgUrl = await uploadImage()
-            const result = await createProduct({
-                name: form.name.trim(),
-                price: priceNum,
-                description: form.description.trim(),
-                category: 'Pâtisserie & Traiteur',
-                subcategory: form.subcategory,
-                img: imgUrl,
-                images_gallery: imgUrl ? [imgUrl] : [],
-                has_stock: form.hasStock,
-                stock_quantity: form.hasStock ? Number(form.stock) || 0 : 0,
-                has_variants: false,
-                sizes: [],
-                colors: [],
-                options: options.length > 0 ? options : [],
-                expected_seller_id: sellerId,
-            })
-            if ('error' in result) { toast.error(result.error); return }
-            toast.success('Produit ajouté au menu !')
-            onSuccess(result.product)
+            // Upload nouvelle image seulement si l'utilisateur en a choisi une
+            const newImgUrl = await uploadImage()
+
+            if (isEdit && initialProduct?.id) {
+                // ── Mode édition ──────────────────────────────────────────
+                const result = await updateProduct(initialProduct.id, {
+                    name: form.name.trim(),
+                    price: priceNum,
+                    description: form.description.trim(),
+                    subcategory: form.subcategory,
+                    // Garder l'ancienne image si pas de nouvelle
+                    img: newImgUrl || initialProduct.img || '',
+                    has_stock: form.hasStock,
+                    stock_quantity: form.hasStock ? Number(form.stock) || 0 : 0,
+                    options: options,
+                })
+                if ('error' in result) { toast.error(result.error); return }
+                toast.success('Produit mis à jour !')
+                onSuccess(result.product)
+            } else {
+                // ── Mode création ─────────────────────────────────────────
+                const result = await createProduct({
+                    name: form.name.trim(),
+                    price: priceNum,
+                    description: form.description.trim(),
+                    category: 'Pâtisserie & Traiteur',
+                    subcategory: form.subcategory,
+                    img: newImgUrl,
+                    images_gallery: newImgUrl ? [newImgUrl] : [],
+                    has_stock: form.hasStock,
+                    stock_quantity: form.hasStock ? Number(form.stock) || 0 : 0,
+                    has_variants: false,
+                    sizes: [],
+                    colors: [],
+                    options: options.length > 0 ? options : [],
+                    expected_seller_id: sellerId,
+                })
+                if ('error' in result) { toast.error(result.error); return }
+                toast.success('Produit ajouté au menu !')
+                onSuccess(result.product)
+            }
         } catch (err: any) {
-            toast.error(err.message || 'Erreur lors de l\'ajout')
+            toast.error(err.message || 'Erreur lors de l\'enregistrement')
         } finally {
             setSaving(false)
         }
@@ -385,8 +421,8 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
                     className="flex-1 py-4 rounded-2xl bg-rose-500 hover:bg-rose-600 text-white font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md shadow-rose-200 disabled:opacity-50"
                 >
                     {saving || uploadingImg
-                        ? <><Loader2 size={16} className="animate-spin" />{uploadingImg ? 'Upload…' : 'Ajout…'}</>
-                        : <><Check size={16} />Publier au menu</>
+                        ? <><Loader2 size={16} className="animate-spin" />{uploadingImg ? 'Upload…' : isEdit ? 'Enregistrement…' : 'Ajout…'}</>
+                        : <><Check size={16} />{isEdit ? 'Enregistrer les modifications' : 'Publier au menu'}</>
                     }
                 </button>
             </div>

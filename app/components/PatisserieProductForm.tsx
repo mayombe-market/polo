@@ -7,8 +7,31 @@
 import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
-import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { createProduct } from '@/app/actions/orders'
+
+async function uploadViaApi(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = async () => {
+            try {
+                const base64 = reader.result as string
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ image: base64 }),
+                })
+                const body = await res.json()
+                if (!res.ok) throw new Error(body.error || 'Erreur upload')
+                resolve(body.url ?? body.secure_url ?? '')
+            } catch (e: any) {
+                reject(e)
+            }
+        }
+        reader.onerror = () => reject(new Error('Lecture fichier échouée'))
+        reader.readAsDataURL(file)
+    })
+}
 import {
     Camera, Plus, X, Loader2, Check, ChevronDown, ChevronUp,
     GripVertical, Cake, Trash2,
@@ -54,7 +77,6 @@ interface Props {
 }
 
 export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }: Props) {
-    const supabase = getSupabaseBrowserClient()
     const fileRef = useRef<HTMLInputElement>(null)
 
     const [saving, setSaving] = useState(false)
@@ -89,11 +111,7 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
         if (!imgFile) return ''
         setUploadingImg(true)
         try {
-            const ext = imgFile.name.split('.').pop()
-            const path = `patisserie-products/${sellerId}-${Date.now()}.${ext}`
-            const { error } = await supabase.storage.from('avatars').upload(path, imgFile, { upsert: true })
-            if (error) throw new Error(error.message)
-            return supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+            return await uploadViaApi(imgFile)
         } finally {
             setUploadingImg(false)
         }
@@ -372,8 +390,7 @@ export default function PatisserieProductForm({ sellerId, onSuccess, onCancel }:
 
 // ─── Sous-composant : ajouter un choix inline ─────────────────────────────────
 
-function AddChoiceInline({ sellerId, onAdd }: { sellerId: string; onAdd: (name: string, price: number, img?: string) => void }) {
-    const supabase = getSupabaseBrowserClient()
+function AddChoiceInline({ sellerId: _sellerId, onAdd }: { sellerId: string; onAdd: (name: string, price: number, img?: string) => void }) {
     const fileRef = useRef<HTMLInputElement>(null)
     const [name, setName] = useState('')
     const [price, setPrice] = useState('')
@@ -395,10 +412,9 @@ function AddChoiceInline({ sellerId, onAdd }: { sellerId: string; onAdd: (name: 
         if (imgFile) {
             setUploading(true)
             try {
-                const ext = imgFile.name.split('.').pop()
-                const path = `patisserie-options/${sellerId}-${Date.now()}.${ext}`
-                const { error } = await supabase.storage.from('avatars').upload(path, imgFile, { upsert: true })
-                if (!error) imgUrl = supabase.storage.from('avatars').getPublicUrl(path).data.publicUrl
+                imgUrl = await uploadViaApi(imgFile)
+            } catch {
+                toast.error('Erreur upload image')
             } finally {
                 setUploading(false)
             }

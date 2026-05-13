@@ -511,6 +511,7 @@ function ProductModal({
     const [qty, setQty] = useState(1)
     const [status, setStatus] = useState<'idle' | 'adding' | 'added'>('idle')
     const [selectedAccIds, setSelectedAccIds] = useState<string[]>([])
+    const [activeAccTab, setActiveAccTab] = useState('')
     // Options : { [groupId]: choiceId }
     const [selectedChoices, setSelectedChoices] = useState<Record<string, string>>({})
 
@@ -548,12 +549,16 @@ function ProductModal({
             if (!map[key]) map[key] = []
             map[key].push(a)
         }
-        // Ordre fixe : Glaces → Desserts → Boissons → reste
         return ACCOMPAGNEMENT_SUBCATS
             .filter(k => map[k]?.length)
             .map(k => ({ label: k, items: map[k] }))
             .concat(Object.keys(map).filter(k => !ACCOMPAGNEMENT_SUBCATS.includes(k)).map(k => ({ label: k, items: map[k] })))
     }, [accompaniments])
+
+    // Initialise/reset l'onglet actif quand les groupes changent
+    useEffect(() => {
+        setActiveAccTab(prev => accGrouped.find(g => g.label === prev) ? prev : accGrouped[0]?.label ?? '')
+    }, [accGrouped])
 
     // Accompagnements sélectionnés + total
     const selectedAccompaniments = accompaniments.filter(a => selectedAccIds.includes(a.id))
@@ -763,11 +768,11 @@ function ProductModal({
                         )}
                     </div>
 
-                    {/* ── Accompagnements groupés par catégorie ── */}
+                    {/* ── Accompagnements avec onglets filtrants ── */}
                     {accGrouped.length > 0 && (
                         <div className="border-t border-amber-100/80 pt-5 pb-4">
-                            {/* En-tête global */}
-                            <div className="flex items-center justify-between px-5 mb-4">
+                            {/* En-tête + compteur sélectionnés */}
+                            <div className="flex items-center justify-between px-5 mb-3">
                                 <div>
                                     <h4 className="text-sm font-black text-amber-950">Accompagnements</h4>
                                     <p className="text-[10px] text-amber-700/60 mt-0.5">Complétez votre commande avec un extra</p>
@@ -779,82 +784,67 @@ function ProductModal({
                                 )}
                             </div>
 
-                            {/* Un groupe par sous-catégorie */}
-                            <div className="space-y-5">
-                                {accGrouped.map(group => (
-                                    <div key={group.label}>
-                                        {/* Label de groupe — visible seulement si plusieurs groupes */}
-                                        {accGrouped.length > 1 && (
-                                            <div className="flex items-center gap-2 px-5 mb-2.5">
-                                                <span className="text-[11px] font-black text-amber-800 uppercase tracking-wider">{group.label}</span>
-                                                <div className="flex-1 h-px bg-amber-100" />
-                                            </div>
-                                        )}
-                                        {/* Scroll horizontal si beaucoup d'items, sinon grille 2 col */}
-                                        {group.items.length > 3 ? (
-                                            <div className="flex gap-2.5 overflow-x-auto px-5 pb-1 scrollbar-hide">
-                                                {group.items.map(acc => {
-                                                    const accPrice = getPromoPrice(acc) ?? acc.price
-                                                    const isSelected = selectedAccIds.includes(acc.id)
-                                                    return (
-                                                        <button
-                                                            key={acc.id}
-                                                            onClick={() => toggleAcc(acc.id)}
-                                                            className={`relative flex-shrink-0 w-32 flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 cursor-pointer ${
-                                                                isSelected
-                                                                    ? 'ring-2 ring-amber-800 shadow-lg shadow-amber-100 scale-[1.02]'
-                                                                    : 'border border-amber-100 bg-white hover:border-amber-300 hover:shadow-md'
-                                                            }`}
-                                                        >
-                                                            <div className="relative w-full aspect-square bg-amber-50">
-                                                                {acc.img ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="128px" /> : <div className="w-full h-full flex items-center justify-center"><Cake className="w-7 h-7 text-amber-200" /></div>}
-                                                                <div className={`absolute inset-0 bg-amber-900/15 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${isSelected ? 'bg-amber-900 scale-100 opacity-100' : 'bg-white/80 scale-75 opacity-0'}`}>
-                                                                    <Check className="w-3.5 h-3.5 text-white" />
-                                                                </div>
-                                                            </div>
-                                                            <div className={`p-2.5 transition-colors ${isSelected ? 'bg-amber-50' : 'bg-white'}`}>
-                                                                <p className="text-xs font-black text-amber-950 leading-tight line-clamp-1">{acc.name}</p>
-                                                                <p className={`text-xs font-bold mt-0.5 ${isSelected ? 'text-amber-800' : 'text-amber-600/70'}`}>+{formatPrice(accPrice)}</p>
-                                                            </div>
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-                                        ) : (
-                                            <div className={`grid px-5 gap-2.5 ${group.items.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
-                                                {group.items.map(acc => {
-                                                    const accPrice = getPromoPrice(acc) ?? acc.price
-                                                    const isSelected = selectedAccIds.includes(acc.id)
-                                                    return (
-                                                        <button
-                                                            key={acc.id}
-                                                            onClick={() => toggleAcc(acc.id)}
-                                                            className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 cursor-pointer ${
-                                                                isSelected
-                                                                    ? 'ring-2 ring-amber-800 shadow-lg shadow-amber-100 scale-[1.02]'
-                                                                    : 'border border-amber-100 bg-white hover:border-amber-300 hover:shadow-md'
-                                                            }`}
-                                                        >
-                                                            <div className="relative w-full aspect-square bg-amber-50">
-                                                                {acc.img ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="150px" /> : <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-amber-200" /></div>}
-                                                                <div className={`absolute inset-0 bg-amber-900/15 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                                                <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${isSelected ? 'bg-amber-900 scale-100 opacity-100' : 'bg-white/80 scale-75 opacity-0'}`}>
-                                                                    <Check className="w-3.5 h-3.5 text-white" />
-                                                                </div>
-                                                            </div>
-                                                            <div className={`p-2.5 transition-colors ${isSelected ? 'bg-amber-50' : 'bg-white'}`}>
-                                                                <p className="text-xs font-black text-amber-950 leading-tight line-clamp-1">{acc.name}</p>
-                                                                <p className={`text-xs font-bold mt-0.5 ${isSelected ? 'text-amber-800' : 'text-amber-600/70'}`}>+{formatPrice(accPrice)}</p>
-                                                            </div>
-                                                        </button>
-                                                    )
-                                                })}
-                                            </div>
-                                        )}
+                            {/* Onglets filtrants — visibles seulement si plusieurs catégories */}
+                            {accGrouped.length > 1 && (
+                                <div className="flex gap-1.5 px-5 mb-3 overflow-x-auto scrollbar-hide">
+                                    {accGrouped.map(group => (
+                                        <button
+                                            key={group.label}
+                                            onClick={() => setActiveAccTab(group.label)}
+                                            className={`flex-shrink-0 px-3.5 py-1.5 rounded-full text-xs font-bold transition-all duration-200 cursor-pointer ${
+                                                activeAccTab === group.label
+                                                    ? 'bg-amber-900 text-white shadow-sm'
+                                                    : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+                                            }`}
+                                        >
+                                            {group.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* Grille des items de l'onglet actif */}
+                            {(() => {
+                                const activeItems = accGrouped.find(g => g.label === activeAccTab)?.items ?? []
+                                return (
+                                    <div className={`grid px-5 gap-2.5 ${activeItems.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+                                        {activeItems.map(acc => {
+                                            const accPrice = getPromoPrice(acc) ?? acc.price
+                                            const isSelected = selectedAccIds.includes(acc.id)
+                                            return (
+                                                <button
+                                                    key={acc.id}
+                                                    onClick={() => toggleAcc(acc.id)}
+                                                    className={`relative flex flex-col rounded-2xl overflow-hidden text-left transition-all duration-200 cursor-pointer ${
+                                                        isSelected
+                                                            ? 'ring-2 ring-amber-800 shadow-lg shadow-amber-100 scale-[1.02]'
+                                                            : 'border border-amber-100 bg-white hover:border-amber-300 hover:shadow-md'
+                                                    }`}
+                                                >
+                                                    <div className="relative w-full aspect-square bg-amber-50">
+                                                        {acc.img
+                                                            ? <Image src={acc.img} alt={acc.name} fill className="object-cover" sizes="150px" />
+                                                            : <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-amber-200" /></div>
+                                                        }
+                                                        <div className={`absolute inset-0 bg-amber-900/15 transition-opacity duration-200 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
+                                                        <div className={`absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center transition-all duration-200 shadow-sm ${
+                                                            isSelected ? 'bg-amber-900 scale-100 opacity-100' : 'bg-white/80 scale-75 opacity-0'
+                                                        }`}>
+                                                            <Check className="w-3.5 h-3.5 text-white" />
+                                                        </div>
+                                                    </div>
+                                                    <div className={`p-2.5 transition-colors ${isSelected ? 'bg-amber-50' : 'bg-white'}`}>
+                                                        <p className="text-xs font-black text-amber-950 leading-tight line-clamp-1">{acc.name}</p>
+                                                        <p className={`text-xs font-bold mt-0.5 ${isSelected ? 'text-amber-800' : 'text-amber-600/70'}`}>
+                                                            +{formatPrice(accPrice)}
+                                                        </p>
+                                                    </div>
+                                                </button>
+                                            )
+                                        })}
                                     </div>
-                                ))}
-                            </div>
+                                )
+                            })()}
                         </div>
                     )}
 

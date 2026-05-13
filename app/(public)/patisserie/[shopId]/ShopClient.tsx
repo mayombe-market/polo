@@ -869,20 +869,24 @@ function ProductModal({
 function FeaturedCard({ product, rank, onClick }: { product: ShopProduct; rank: number; onClick: () => void }) {
     const promoPrice = getPromoPrice(product)
     return (
-        <button onClick={onClick} className="flex-shrink-0 w-40 sm:w-44 text-left group">
-            <div className="relative aspect-square rounded-2xl overflow-hidden bg-rose-50 mb-2.5">
+        <button onClick={onClick} className="flex-shrink-0 w-44 sm:w-48 text-left group cursor-pointer">
+            <div className="relative aspect-square rounded-2xl overflow-hidden bg-amber-50 mb-3 shadow-sm">
                 {product.img ? (
-                    <Image src={product.img} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="176px" />
+                    <Image src={product.img} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="192px" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Cake className="w-10 h-10 text-rose-200" /></div>
+                    <div className="w-full h-full flex items-center justify-center"><Cake className="w-10 h-10 text-amber-200" /></div>
                 )}
-                {rank <= 3 && <div className="absolute top-2 left-2 bg-amber-400 text-white text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide shadow-sm">N°{rank} le + aimé</div>}
-                <div className="absolute bottom-2 right-2 w-8 h-8 bg-rose-500 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                {rank <= 3 && (
+                    <div className="absolute top-2 left-2 bg-amber-900 text-white text-[9px] font-black px-2 py-1 rounded-full uppercase tracking-wide shadow-sm">
+                        N°{rank} populaire
+                    </div>
+                )}
+                <div className="absolute bottom-2 right-2 w-8 h-8 bg-amber-900 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200">
                     <Plus className="w-4 h-4 text-white" />
                 </div>
             </div>
-            <p className="text-xs font-semibold text-neutral-800 line-clamp-2 leading-snug">{product.name}</p>
-            <p className="text-sm font-bold text-rose-600 mt-0.5">{formatPrice(promoPrice ?? product.price)}</p>
+            <p className="text-xs font-bold text-neutral-800 line-clamp-2 leading-snug">{product.name}</p>
+            <p className="text-sm font-black text-amber-900 mt-0.5">{formatPrice(promoPrice ?? product.price)}</p>
         </button>
     )
 }
@@ -897,45 +901,45 @@ function ProductRow({ product, cartQty, onClick }: { product: ShopProduct; cartQ
 
     return (
         <button onClick={onClick} disabled={outOfStock}
-            className="w-full text-left flex gap-4 px-4 py-4 hover:bg-rose-50/40 transition-colors group rounded-2xl disabled:opacity-50"
+            className="w-full text-left flex gap-4 px-5 py-4 hover:bg-amber-50/50 active:bg-amber-50 transition-colors duration-200 group cursor-pointer disabled:opacity-50"
         >
-            <div className="flex-1 min-w-0">
-                <div className="flex items-start gap-1.5 flex-wrap mb-0.5">
-                    <p className="font-semibold text-neutral-900 text-sm leading-snug">{product.name}</p>
-                    {isNewProduct && <span className="flex-shrink-0 bg-rose-100 text-rose-600 text-[9px] font-bold px-1.5 py-0.5 rounded-full">Nouveau</span>}
-                    {isPopular && !isNewProduct && <span className="flex-shrink-0 bg-amber-100 text-amber-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">Populaire</span>}
+            <div className="flex-1 min-w-0 py-0.5">
+                <div className="flex items-start gap-1.5 flex-wrap mb-1">
+                    <p className="font-bold text-neutral-900 text-[15px] leading-snug">{product.name}</p>
+                    {isNewProduct && <span className="flex-shrink-0 bg-rose-100 text-rose-600 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">Nouveau</span>}
+                    {isPopular && !isNewProduct && <span className="flex-shrink-0 bg-amber-100 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded-full uppercase tracking-wide">Populaire</span>}
                 </div>
-                {product.description && <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed mb-1.5">{product.description}</p>}
-                <div className="flex items-center gap-2">
+                {product.description && <p className="text-xs text-neutral-400 line-clamp-2 leading-relaxed mb-2">{product.description}</p>}
+                <div className="flex items-center gap-2 mt-auto">
                     {promoPrice ? (
                         <>
-                            <span className="text-sm font-bold text-rose-600">{formatPrice(promoPrice)}</span>
-                            <span className="text-xs text-neutral-400 line-through">{formatPrice(product.price)}</span>
-                            <span className="bg-green-100 text-green-700 text-[9px] font-bold px-1.5 py-0.5 rounded-full">-{product.promo_percentage}%</span>
+                            <span className="text-sm font-black text-amber-900">{formatPrice(promoPrice)}</span>
+                            <span className="text-xs text-neutral-300 line-through">{formatPrice(product.price)}</span>
+                            <span className="bg-green-100 text-green-700 text-[9px] font-black px-1.5 py-0.5 rounded-full">-{product.promo_percentage}%</span>
                         </>
                     ) : (
-                        <span className="text-sm font-bold text-neutral-800">{formatPrice(product.price)}</span>
+                        <span className="text-sm font-black text-amber-900">{formatPrice(product.price)}</span>
                     )}
                 </div>
             </div>
 
-            <div className="relative w-24 h-24 flex-shrink-0 rounded-xl overflow-hidden bg-rose-50">
+            <div className="relative w-28 h-28 flex-shrink-0 rounded-2xl overflow-hidden bg-amber-50 shadow-sm">
                 {product.img ? (
-                    <Image src={product.img} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="96px" />
+                    <Image src={product.img} alt={product.name} fill className="object-cover group-hover:scale-105 transition-transform duration-300" sizes="112px" />
                 ) : (
-                    <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-rose-200" /></div>
+                    <div className="w-full h-full flex items-center justify-center"><Cake className="w-8 h-8 text-amber-200" /></div>
                 )}
                 {!outOfStock && cartQty > 0 && (
-                    <div className="absolute top-1.5 right-1.5 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center shadow-sm">
+                    <div className="absolute top-1.5 right-1.5 w-6 h-6 bg-amber-900 rounded-full flex items-center justify-center shadow-sm">
                         <span className="text-[10px] font-black text-white">{cartQty}</span>
                     </div>
                 )}
                 {!outOfStock && cartQty === 0 && (
-                    <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-rose-500 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute bottom-1.5 right-1.5 w-7 h-7 bg-amber-900 rounded-full flex items-center justify-center shadow-md opacity-0 group-hover:opacity-100 transition-all duration-200">
                         <Plus className="w-3.5 h-3.5 text-white" />
                     </div>
                 )}
-                {outOfStock && <div className="absolute inset-0 bg-white/70 flex items-center justify-center"><span className="text-[9px] font-bold text-neutral-400">Rupture</span></div>}
+                {outOfStock && <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center"><span className="text-[9px] font-bold text-neutral-500 uppercase tracking-wide">Rupture</span></div>}
             </div>
         </button>
     )
@@ -1222,7 +1226,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const shopItemCount = useMemo(() => shopItems.reduce((s, i) => s + i.quantity, 0), [shopItems])
 
     return (
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-[#FEF7F0]">
 
             {showClosedOverlay && <ClosedOverlay shopName={shopName} hours={formatScheduleText(seller.shop_schedule as any) || seller.opening_hours_text} onDismiss={() => setClosedDismissed(true)} />}
 
@@ -1233,7 +1237,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 {coverImg ? (
                     <Image src={coverImg} alt={shopName} fill className="object-cover object-center" sizes="100vw" priority />
                 ) : (
-                    <div className="w-full h-full bg-gradient-to-br from-rose-800 via-rose-700 to-pink-800 flex items-center justify-center">
+                    <div className="w-full h-full bg-gradient-to-br from-amber-900 via-rose-800 to-pink-900 flex items-center justify-center">
                         <Cake className="w-24 h-24 text-white/20" />
                     </div>
                 )}
@@ -1252,7 +1256,8 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 {/* closed badge */}
                 {!effectiveIsOpen && (
                     <div className="absolute bottom-16 left-4 bg-black/75 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
-                        🔒 Fermé pour le moment
+                        <span className="w-2 h-2 rounded-full bg-red-400 inline-block" />
+                        Fermé pour le moment
                     </div>
                 )}
 
@@ -1278,11 +1283,11 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                         <div className="flex-1 min-w-0">
                             {/* Name + verified */}
                             <div className="flex items-center gap-2.5 flex-wrap">
-                                <h1 className="text-2xl sm:text-3xl font-black text-neutral-900 leading-tight">{shopName}</h1>
+                                <h1 className="text-2xl sm:text-4xl font-black text-neutral-900 leading-tight tracking-tight">{shopName}</h1>
                                 {verified && (
-                                    <div className="flex items-center gap-1 bg-rose-50 border border-rose-100 rounded-full px-2.5 py-1 flex-shrink-0">
-                                        <ShieldCheck className="w-3.5 h-3.5 text-rose-500" />
-                                        <span className="text-[10px] font-bold text-rose-600">Vérifié</span>
+                                    <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 rounded-full px-2.5 py-1 flex-shrink-0">
+                                        <ShieldCheck className="w-3.5 h-3.5 text-amber-600" />
+                                        <span className="text-[10px] font-bold text-amber-700">Vérifié</span>
                                     </div>
                                 )}
                             </div>
@@ -1333,15 +1338,15 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 </div>
 
                 {/* ── Delivery info bar ── */}
-                <div className="border-t border-neutral-100">
-                    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center gap-6 flex-wrap">
-                        <div className="flex items-center gap-1.5">
-                            <Bike className="w-4 h-4 text-neutral-400" />
+                <div className="border-t border-amber-100/60">
+                    <div className="max-w-6xl mx-auto px-5 sm:px-8 py-4 flex items-center gap-3 flex-wrap">
+                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-3.5 py-2.5">
+                            <Bike className="w-4 h-4 text-amber-600 flex-shrink-0" />
                             <div>
-                                <p className="text-[10px] text-neutral-400 font-medium leading-none mb-0.5">Livraison</p>
-                                <p className="text-sm font-black text-neutral-900 leading-none">
+                                <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-wide leading-none mb-0.5">Livraison</p>
+                                <p className="text-sm font-black text-amber-900 leading-none">
                                     {seller.latitude && seller.longitude
-                                        ? 'Calculée par GPS'
+                                        ? 'Par GPS'
                                         : seller.delivery_fee === 0
                                             ? 'Gratuite'
                                             : formatPrice(seller.delivery_fee)
@@ -1350,28 +1355,26 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                             </div>
                         </div>
 
-                        <div className="w-px h-8 bg-neutral-100" />
-
-                        <div className="flex items-center gap-1.5">
-                            <Clock className="w-4 h-4 text-neutral-400" />
+                        <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-3.5 py-2.5">
+                            <Clock className="w-4 h-4 text-amber-600 flex-shrink-0" />
                             <div>
-                                <p className="text-[10px] text-neutral-400 font-medium leading-none mb-0.5">Délai estimé</p>
-                                <p className="text-sm font-black text-neutral-900 leading-none">{seller.delivery_time}</p>
+                                <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-wide leading-none mb-0.5">Délai</p>
+                                <p className="text-sm font-black text-amber-900 leading-none">{seller.delivery_time}</p>
                             </div>
                         </div>
 
                         {seller.min_order > 0 && (
-                            <>
-                                <div className="w-px h-8 bg-neutral-100" />
+                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-2xl px-3.5 py-2.5">
+                                <ShoppingCart className="w-4 h-4 text-amber-600 flex-shrink-0" />
                                 <div>
-                                    <p className="text-[10px] text-neutral-400 font-medium leading-none mb-0.5">Commande min.</p>
-                                    <p className="text-sm font-black text-neutral-900 leading-none">{formatPrice(seller.min_order)}</p>
+                                    <p className="text-[10px] text-amber-600/70 font-bold uppercase tracking-wide leading-none mb-0.5">Min.</p>
+                                    <p className="text-sm font-black text-amber-900 leading-none">{formatPrice(seller.min_order)}</p>
                                 </div>
-                            </>
+                            </div>
                         )}
 
                         {seller.latitude && seller.longitude && (
-                            <div className="ml-auto flex items-center gap-1.5 bg-blue-50 rounded-full px-3 py-1.5">
+                            <div className="flex items-center gap-1.5 bg-blue-50 border border-blue-100 rounded-2xl px-3 py-2.5 ml-auto">
                                 <Navigation className="w-3.5 h-3.5 text-blue-500" />
                                 <span className="text-xs font-bold text-blue-600">GPS actif</span>
                             </div>
@@ -1384,7 +1387,10 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             {featured.length > 0 && (
                 <div className="bg-white mt-3 shadow-sm">
                     <div className="max-w-6xl mx-auto px-5 sm:px-8 py-6">
-                        <h2 className="text-base font-black text-neutral-900 mb-4">⭐ Articles en vedette</h2>
+                        <div className="flex items-center gap-2 mb-4">
+                            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                            <h2 className="text-base font-black text-neutral-900">Articles en vedette</h2>
+                        </div>
                         <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide -mx-5 px-5">
                             {featured.map((p, i) => <FeaturedCard key={p.id} product={p} rank={i + 1} onClick={() => setSelectedProduct(p)} />)}
                         </div>
@@ -1417,10 +1423,10 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     <div ref={tabsRef} className="max-w-6xl mx-auto px-5 flex gap-1 overflow-x-auto py-3 scrollbar-hide">
                         {categories.map(cat => (
                             <button key={cat} data-tab={cat} onClick={() => scrollToCategory(cat)}
-                                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all whitespace-nowrap
+                                className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-bold transition-all duration-200 whitespace-nowrap
                                     ${activeTab === cat
-                                        ? 'bg-neutral-900 text-white shadow-sm'
-                                        : 'text-neutral-500 hover:text-neutral-900 hover:bg-neutral-100'
+                                        ? 'bg-amber-900 text-white shadow-sm shadow-amber-900/20'
+                                        : 'text-neutral-500 hover:text-amber-900 hover:bg-amber-50'
                                     }`}
                             >{cat}</button>
                         ))}
@@ -1449,9 +1455,12 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                         ) : (
                             categories.map(cat => (
                                 <div key={cat} ref={el => { sectionRefs.current[cat] = el }} data-cat={cat}>
-                                    <div className="px-5 pt-6 pb-2">
-                                        <h3 className="text-sm font-black text-neutral-900 uppercase tracking-widest">{cat}</h3>
-                                        <p className="text-xs text-neutral-400 mt-0.5">{grouped[cat].length} article{grouped[cat].length > 1 ? 's' : ''}</p>
+                                    <div className="px-5 pt-7 pb-3 flex items-end justify-between">
+                                        <div>
+                                            <h3 className="text-base font-black text-neutral-900 tracking-tight">{cat}</h3>
+                                            <p className="text-xs text-amber-600/70 font-semibold mt-0.5">{grouped[cat].length} article{grouped[cat].length > 1 ? 's' : ''}</p>
+                                        </div>
+                                        <div className="w-8 h-0.5 bg-amber-200 rounded-full mb-1" />
                                     </div>
                                     <div>
                                         {grouped[cat].map(p => (

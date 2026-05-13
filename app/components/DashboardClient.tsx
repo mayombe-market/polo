@@ -2495,6 +2495,11 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     const [saving, setSaving] = useState(false)
     const [coverPreview, setCoverPreview] = useState<string | null>(profile?.cover_url || null)
     const [coverFile, setCoverFile] = useState<File | null>(null)
+    const [coverPosition, setCoverPosition] = useState<number>(() => {
+        const saved = profile?.cover_image_position
+        if (saved && typeof saved === 'string') return parseInt(saved, 10) || 50
+        return 50
+    })
 
     // Avatar state
     const [avatarPreview, setAvatarPreview] = useState<string | null>(profile?.avatar_url || null)
@@ -2659,6 +2664,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 return_policy: formData.return_policy,
                 shipping_info: formData.shipping_info,
                 cover_url: cover_url || null,
+                cover_image_position: `${coverPosition}%`,
                 avatar_url: avatar_url || null,
                 ...(isPatisserie ? {
                     is_open: formData.is_open,
@@ -2751,10 +2757,17 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
             {/* Cover image */}
             <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 p-6">
                 <h3 className="font-black uppercase text-sm dark:text-white mb-4">Image de couverture</h3>
-                <div className="relative h-40 rounded-2xl overflow-hidden bg-gradient-to-br from-green-600 via-green-500 to-orange-500">
+                <div className="relative h-44 rounded-2xl overflow-hidden bg-gradient-to-br from-green-600 via-green-500 to-orange-500">
                     {coverPreview && (
                         <>
-                            <img src={coverPreview} alt="Couverture" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                            <img
+                                src={coverPreview}
+                                alt="Couverture"
+                                className="absolute inset-0 h-full w-full object-cover"
+                                style={{ objectPosition: `center ${coverPosition}%` }}
+                                loading="lazy"
+                                decoding="async"
+                            />
                             <button
                                 type="button"
                                 onClick={() => { setCoverFile(null); setCoverPreview(null) }}
@@ -2764,14 +2777,49 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                             </button>
                         </>
                     )}
-                    <label className="absolute inset-0 flex items-center justify-center cursor-pointer hover:bg-black/20 transition-all">
-                        <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 text-white text-[10px] font-black uppercase">
-                            <Upload size={14} />
-                            {coverPreview ? 'Changer' : 'Ajouter une couverture'}
-                        </div>
-                        <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
-                    </label>
+                    {!coverPreview && (
+                        <label className="absolute inset-0 flex items-center justify-center cursor-pointer hover:bg-black/20 transition-all">
+                            <div className="bg-white/20 backdrop-blur-md px-4 py-2 rounded-xl flex items-center gap-2 text-white text-[10px] font-black uppercase">
+                                <Upload size={14} />
+                                Ajouter une couverture
+                            </div>
+                            <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+                        </label>
+                    )}
                 </div>
+
+                {/* Contrôles visibles uniquement quand une image est chargée */}
+                {coverPreview && (
+                    <div className="mt-4 space-y-3">
+                        {/* Slider position verticale */}
+                        <div>
+                            <div className="flex items-center justify-between mb-1.5">
+                                <span className="text-[10px] font-black uppercase text-slate-400">Position verticale</span>
+                                <span className="text-[10px] font-bold text-slate-400">{coverPosition === 0 ? 'Haut' : coverPosition === 100 ? 'Bas' : coverPosition === 50 ? 'Centre' : `${coverPosition}%`}</span>
+                            </div>
+                            <input
+                                type="range"
+                                min={0}
+                                max={100}
+                                step={1}
+                                value={coverPosition}
+                                onChange={e => setCoverPosition(Number(e.target.value))}
+                                className="w-full h-2 rounded-full appearance-none cursor-pointer accent-orange-500 bg-slate-100 dark:bg-slate-700"
+                            />
+                            <div className="flex justify-between text-[9px] text-slate-300 mt-0.5 font-bold">
+                                <span>Haut</span>
+                                <span>Centre</span>
+                                <span>Bas</span>
+                            </div>
+                        </div>
+                        {/* Changer l'image */}
+                        <label className="flex items-center gap-2 cursor-pointer text-[10px] font-black uppercase text-slate-400 hover:text-orange-500 transition-colors w-fit">
+                            <Upload size={12} />
+                            Changer l&apos;image
+                            <input type="file" accept="image/*" onChange={handleCoverChange} className="hidden" />
+                        </label>
+                    </div>
+                )}
             </div>
 
             {/* Textes boutique (ce que les clients voient en premier sur ta page) */}

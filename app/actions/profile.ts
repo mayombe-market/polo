@@ -49,6 +49,7 @@ export type UpdateProfileInput = {
     delivery_fee?: number | null
     latitude?: number | null
     longitude?: number | null
+    cover_image_position?: string | null
 }
 
 /**
@@ -132,6 +133,10 @@ export async function updateProfile(
     }
     if (fields.delivery_fee !== undefined) {
         payload.delivery_fee = fields.delivery_fee ?? 0
+    }
+    if (fields.cover_image_position !== undefined) {
+        const v = (fields.cover_image_position ?? '').trim()
+        payload.cover_image_position = v || '50%'
     }
 
     if (Object.keys(payload).length === 0) {

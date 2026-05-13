@@ -1290,7 +1290,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
             ═══════════════════════════════════════════════════════════════ */}
             <div className="relative w-full bg-neutral-900" style={{ height: '280px' }}>
                 {coverImg ? (
-                    <Image src={coverImg} alt={shopName} fill className="object-cover object-center" sizes="100vw" priority />
+                    <Image src={coverImg} alt={shopName} fill className="object-cover" sizes="100vw" priority style={{ objectPosition: `center ${seller.cover_image_position ?? '50%'}` }} />
                 ) : (
                     <div className="w-full h-full bg-gradient-to-br from-amber-900 via-rose-800 to-pink-900 flex items-center justify-center">
                         <Cake className="w-24 h-24 text-white/20" />

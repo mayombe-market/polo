@@ -201,11 +201,13 @@ function GpsDeliveryStep({
                     seller.latitude!, seller.longitude!
                 )
                 setDistanceKm(km)
+                // Au-delà de 7 km : on calcule quand même les frais (express)
+                // et on montre un avertissement — le client choisit de continuer ou non
+                setDeliveryInfo(feeFromDistance(km))
                 if (km > MAX_KM) {
                     setGpsStatus('out_of_range')
                     return
                 }
-                setDeliveryInfo(feeFromDistance(km))
                 setGpsStatus('granted')
             },
             () => {
@@ -323,24 +325,69 @@ function GpsDeliveryStep({
                 </div>
             )}
 
-            {/* ── Hors zone ── */}
-            {gpsStatus === 'out_of_range' && (
-                <div className="text-center py-4">
-                    <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <AlertTriangle className="w-8 h-8 text-red-400" />
+            {/* ── Hors zone : avertissement (non bloquant) ── */}
+            {gpsStatus === 'out_of_range' && deliveryInfo && (
+                <div className="space-y-4">
+                    {/* Bandeau alerte */}
+                    <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                        <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 mt-0.5">
+                                <AlertTriangle className="w-5 h-5 text-amber-500" />
+                            </div>
+                            <div>
+                                <p className="text-sm font-black text-amber-800 mb-1">
+                                    Vous êtes à {distanceKm!.toFixed(1)} km de la boutique
+                                </p>
+                                <p className="text-xs text-amber-700 leading-relaxed">
+                                    C'est au-delà de notre zone habituelle ({MAX_KM} km).
+                                    La livraison sera possible mais <strong>prendra plus de temps que prévu</strong>
+                                    {' '}— les plats chauds peuvent arriver moins chauds qu'attendu.
+                                </p>
+                            </div>
+                        </div>
                     </div>
-                    <h3 className="font-black text-neutral-900 text-base mb-2">Hors zone de livraison</h3>
-                    <p className="text-sm text-neutral-500 mb-1">
-                        Vous êtes à <strong>{distanceKm!.toFixed(1)} km</strong> de la boutique.
-                    </p>
-                    <p className="text-sm text-neutral-500 mb-6">
-                        La livraison est disponible jusqu'à <strong>{MAX_KM} km</strong> uniquement.
-                    </p>
+
+                    {/* Résumé frais */}
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="bg-white border border-neutral-100 rounded-xl p-3 text-center">
+                            <p className="text-[10px] text-neutral-400 uppercase tracking-wider mb-1">Distance</p>
+                            <p className="text-lg font-black text-neutral-900">{distanceKm!.toFixed(1)} km</p>
+                        </div>
+                        <div className="bg-white border border-neutral-100 rounded-xl p-3 text-center">
+                            <p className="text-[10px] text-neutral-400 uppercase tracking-wider mb-1">Frais de livraison</p>
+                            <p className="text-lg font-black text-orange-500">{formatPrice(deliveryInfo.fee)}</p>
+                            <p className="text-[9px] text-neutral-400">Livraison Express</p>
+                        </div>
+                    </div>
+
+                    {/* Saisie quartier */}
+                    <div>
+                        <label className="text-xs font-bold text-neutral-700 block mb-1.5">
+                            Votre quartier / adresse <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            value={district}
+                            onChange={e => setDistrict(e.target.value)}
+                            placeholder="Ex: Bacongo, près de l'église…"
+                            className="w-full bg-neutral-50 border border-neutral-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300 focus:bg-white transition"
+                        />
+                        {formError && <p className="text-xs text-red-500 mt-1">{formError}</p>}
+                    </div>
+
+                    {/* CTA */}
+                    <button
+                        onClick={handleConfirm}
+                        className="w-full bg-orange-500 hover:bg-orange-600 text-white font-black text-sm py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-md shadow-orange-200"
+                    >
+                        Je comprends, commander quand même — {formatPrice(deliveryInfo.fee)}
+                        <ChevronRight className="w-4 h-4" />
+                    </button>
                     <button
                         onClick={onClose}
-                        className="w-full bg-neutral-200 hover:bg-neutral-300 text-neutral-700 font-black text-sm py-3.5 rounded-2xl transition-colors"
+                        className="w-full text-neutral-400 text-xs hover:text-neutral-600 transition-colors py-1"
                     >
-                        Fermer
+                        Annuler
                     </button>
                 </div>
             )}

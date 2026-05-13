@@ -40,6 +40,7 @@ export type UpdateProfileInput = {
     cover_url?: string | null
     avatar_url?: string | null
     // Champs pâtisserie
+    shop_schedule?: Record<string, unknown> | null
     cover_image?: string | null
     opening_hours_text?: string | null
     is_open?: boolean | null
@@ -67,7 +68,7 @@ export async function updateProfile(
         return { success: false, error: 'Non connecté' }
     }
 
-    const payload: Record<string, string | number | boolean | null> = {}
+    const payload: Record<string, string | number | boolean | null | Record<string, unknown>> = {}
 
     if (fields.store_name !== undefined) {
         payload.store_name = (fields.store_name ?? '').trim()
@@ -100,6 +101,10 @@ export async function updateProfile(
     if (fields.avatar_url !== undefined) {
         const v = (fields.avatar_url ?? '').trim()
         payload.avatar_url = v || null
+    }
+    if (fields.shop_schedule !== undefined) {
+        // Stocker l'objet JSON directement (Supabase jsonb)
+        payload.shop_schedule = fields.shop_schedule ?? null
     }
     if (fields.latitude !== undefined) {
         payload.latitude = fields.latitude ?? null

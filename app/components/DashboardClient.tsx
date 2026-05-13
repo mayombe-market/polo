@@ -32,6 +32,7 @@ import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan } from '@/app/actions/orders'
+import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
 import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
@@ -2501,6 +2502,20 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
     const [uploadingAvatar, setUploadingAvatar] = useState(false)
     const avatarInputRef = useRef<HTMLInputElement>(null)
 
+    // Horaires structurés (planning automatique)
+    const [schedule, setSchedule] = useState<Record<DayKey, DaySchedule>>(() => {
+        const saved = profile?.shop_schedule
+        if (saved && typeof saved === 'object' && Object.keys(saved).length > 0) {
+            return { ...DEFAULT_SCHEDULE, ...(saved as ShopSchedule) }
+        }
+        return { ...DEFAULT_SCHEDULE }
+    })
+
+    const toggleDay = (key: DayKey) =>
+        setSchedule(prev => ({ ...prev, [key]: { ...prev[key], closed: !prev[key].closed } }))
+    const updateDayTime = (key: DayKey, field: 'open' | 'close', val: string) =>
+        setSchedule(prev => ({ ...prev, [key]: { ...prev[key], [field]: val } }))
+
     // GPS state
     const [gpsStatus, setGpsStatus] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle')
     const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | null>(
@@ -2646,11 +2661,11 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                 cover_url: cover_url || null,
                 avatar_url: avatar_url || null,
                 ...(isPatisserie ? {
-                    opening_hours_text: formData.opening_hours_text,
                     is_open: formData.is_open,
                     delivery_time: formData.delivery_time,
                     min_order: Number(formData.min_order),
                     delivery_fee: Number(formData.delivery_fee),
+                    shop_schedule: schedule,
                 } : {}),
             })
 
@@ -2853,32 +2868,81 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                         <p className="text-[10px] text-slate-400 font-bold mt-1">Infos affichées sur votre page boutique pâtisserie</p>
                     </div>
 
-                    {/* Ouvert / Fermé */}
-                    <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800 rounded-2xl">
+                    {/* Fermeture d'urgence (override manuel) */}
+                    <div className={`flex items-center justify-between p-4 rounded-2xl transition-colors ${formData.is_open ? 'bg-green-50 dark:bg-green-900/20' : 'bg-red-50 dark:bg-red-900/20'}`}>
                         <div>
-                            <p className="text-sm font-black dark:text-white">Boutique ouverte</p>
-                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">Les clients peuvent passer commande</p>
+                            <p className="text-sm font-black dark:text-white flex items-center gap-2">
+                                <span>{formData.is_open ? '🟢' : '🔴'}</span>
+                                {formData.is_open ? 'Ouverture automatique activée' : 'Fermeture d\'urgence active'}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                {formData.is_open
+                                    ? 'La boutique suit les horaires ci-dessous'
+                                    : 'Boutique fermée manuellement — clients bloqués même si dans les horaires'}
+                            </p>
                         </div>
                         <button
                             type="button"
                             onClick={() => setFormData(prev => ({ ...prev, is_open: !prev.is_open }))}
-                            className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${formData.is_open ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                            className={`relative inline-flex h-7 w-12 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${formData.is_open ? 'bg-green-500' : 'bg-red-400'}`}
                         >
                             <span className={`inline-block h-6 w-6 transform rounded-full bg-white shadow-lg transition duration-200 ease-in-out ${formData.is_open ? 'translate-x-5' : 'translate-x-0'}`} />
                         </button>
                     </div>
 
-                    {/* Horaires */}
+                    {/* Planning d'ouverture jour par jour */}
                     <div>
-                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-2 flex items-center gap-1">
-                            <Clock size={10} /> Horaires d'ouverture
+                        <label className="block text-[10px] font-black uppercase text-slate-400 mb-3 flex items-center gap-1.5">
+                            <Clock size={10} /> Horaires automatiques
                         </label>
-                        <input
-                            value={formData.opening_hours_text}
-                            onChange={e => setFormData(prev => ({ ...prev, opening_hours_text: e.target.value }))}
-                            placeholder="Ex: Lun-Sam 8h-20h · Dim 9h-14h"
-                            className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 border-none outline-none focus:ring-2 focus:ring-rose-400 transition-all font-bold text-sm text-base sm:text-sm"
-                        />
+
+                        {/* Preview : ouvert maintenant ou pas */}
+                        <div className={`mb-3 px-3 py-2 rounded-xl text-[10px] font-bold flex items-center gap-2 ${computeIsOpen(schedule, formData.is_open) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                            <span>{computeIsOpen(schedule, formData.is_open) ? '● Ouvert maintenant' : '● Fermé maintenant'}</span>
+                            <span className="opacity-60">(selon planning + override)</span>
+                        </div>
+
+                        <div className="space-y-1.5">
+                            {DAY_KEYS.map(key => {
+                                const day = schedule[key]
+                                return (
+                                    <div key={key} className={`flex items-center gap-2 px-3 py-2.5 rounded-2xl transition-colors ${day.closed ? 'bg-slate-50 dark:bg-slate-800/50' : 'bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700'}`}>
+                                        {/* Nom du jour */}
+                                        <span className={`w-20 text-[11px] font-black ${day.closed ? 'text-slate-400' : 'text-slate-700 dark:text-white'}`}>
+                                            {DAY_LABELS[key]}
+                                        </span>
+                                        {/* Toggle ouvert/fermé */}
+                                        <button
+                                            type="button"
+                                            onClick={() => toggleDay(key)}
+                                            className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors ${!day.closed ? 'bg-rose-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                                        >
+                                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition duration-200 ${!day.closed ? 'translate-x-4' : 'translate-x-0'}`} />
+                                        </button>
+                                        {/* Plages horaires ou label Fermé */}
+                                        {day.closed ? (
+                                            <span className="text-[10px] text-slate-400 font-bold ml-1">Fermé</span>
+                                        ) : (
+                                            <div className="flex items-center gap-1.5 ml-1">
+                                                <input
+                                                    type="time"
+                                                    value={day.open}
+                                                    onChange={e => updateDayTime(key, 'open', e.target.value)}
+                                                    className="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-700 text-[11px] font-bold outline-none focus:ring-2 focus:ring-rose-300 w-[5.5rem]"
+                                                />
+                                                <span className="text-slate-400 text-[10px]">→</span>
+                                                <input
+                                                    type="time"
+                                                    value={day.close}
+                                                    onChange={e => updateDayTime(key, 'close', e.target.value)}
+                                                    className="p-1.5 rounded-xl bg-slate-50 dark:bg-slate-700 text-[11px] font-bold outline-none focus:ring-2 focus:ring-rose-300 w-[5.5rem]"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                        </div>
                     </div>
 
                     {/* Délai livraison + Commande min + Frais livraison */}

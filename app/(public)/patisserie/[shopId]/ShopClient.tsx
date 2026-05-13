@@ -40,6 +40,7 @@ import { getSellerCityForPayment } from '@/lib/adminPaymentConfig'
 import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import type { ShopProduct, ShopSeller, OptionGroup, OptionChoice } from './page'
 import type { SelectedOption } from '@/hooks/userCart'
+import { computeIsOpen, formatScheduleText } from '@/lib/shopSchedule'
 
 // ─── Checkout steps ───────────────────────────────────────────────────────────
 
@@ -1114,10 +1115,21 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     const tabsRef     = useRef<HTMLDivElement>(null)
     const observerRef = useRef<IntersectionObserver | null>(null)
 
+    // ── Ouverture automatique (recalcul chaque minute côté client) ─────────────
+    const [effectiveIsOpen, setEffectiveIsOpen] = useState(() =>
+        computeIsOpen(seller.shop_schedule as any, seller.is_open)
+    )
+    useEffect(() => {
+        const recompute = () => setEffectiveIsOpen(computeIsOpen(seller.shop_schedule as any, seller.is_open))
+        recompute()
+        const interval = setInterval(recompute, 60_000)
+        return () => clearInterval(interval)
+    }, [seller.shop_schedule, seller.is_open])
+
     const shopName          = getSellerName(seller)
     const verified          = seller.verification_status === 'verified'
     const coverImg          = seller.cover_image || products[0]?.img || null
-    const showClosedOverlay = !seller.is_open && !closedDismissed
+    const showClosedOverlay = !effectiveIsOpen && !closedDismissed
 
     const featured = useMemo(() => products.slice(0, 5), [products])
 
@@ -1165,7 +1177,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
     return (
         <div className="min-h-screen bg-gray-50">
 
-            {showClosedOverlay && <ClosedOverlay shopName={shopName} hours={seller.opening_hours_text} onDismiss={() => setClosedDismissed(true)} />}
+            {showClosedOverlay && <ClosedOverlay shopName={shopName} hours={formatScheduleText(seller.shop_schedule as any) || seller.opening_hours_text} onDismiss={() => setClosedDismissed(true)} />}
 
             {/* ═══════════════════════════════════════════════════════════════
                 HERO COVER
@@ -1191,7 +1203,7 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 </div>
 
                 {/* closed badge */}
-                {!seller.is_open && (
+                {!effectiveIsOpen && (
                     <div className="absolute bottom-16 left-4 bg-black/75 backdrop-blur-sm text-white text-xs font-bold px-3 py-1.5 rounded-full flex items-center gap-1.5">
                         🔒 Fermé pour le moment
                     </div>

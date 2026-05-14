@@ -609,6 +609,7 @@ function ProductModal({
                 img: product.img || '',
                 seller_id: product.seller_id || undefined,
                 selectedOptions: selectedOptions.length > 0 ? selectedOptions : undefined,
+                shop_type: 'patisserie',
             }
             const existing = cart.find(i => i.id === cartItemId)
             if (existing) {
@@ -625,7 +626,7 @@ function ProductModal({
                 if (existingAcc) {
                     await updateQuantity(accId, existingAcc.quantity + 1)
                 } else {
-                    await addToCart({ id: accId, product_id: acc.id, name: acc.name, price: accPrice, img: acc.img || '', seller_id: acc.seller_id || undefined })
+                    await addToCart({ id: accId, product_id: acc.id, name: acc.name, price: accPrice, img: acc.img || '', seller_id: acc.seller_id || undefined, shop_type: 'patisserie' })
                 }
             }
             setStatus('added')

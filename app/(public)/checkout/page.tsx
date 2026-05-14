@@ -23,7 +23,7 @@ import {
 } from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
@@ -40,6 +40,14 @@ import {
     AirtelMoneyLogo,
     MobileMoneyTrustLine,
 } from '@/app/components/MobileMoneyBranding'
+
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+    const R = 6371
+    const dLat = (lat2 - lat1) * Math.PI / 180
+    const dLon = (lon2 - lon1) * Math.PI / 180
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
     full_name: '',
@@ -62,6 +70,10 @@ export default function CheckoutPage() {
     const [interUrbanAccepted, setInterUrbanAccepted] = useState(false)
     const [interUrbanModalDismissed, setInterUrbanModalDismissed] = useState(false)
     const [userEmail, setUserEmail] = useState('')
+    const [buyerGps, setBuyerGps] = useState<{ lat: number; lng: number } | null>(null)
+    const [gpsLoading, setGpsLoading] = useState(false)
+    const [gpsError, setGpsError] = useState('')
+    const [sellerCoords, setSellerCoords] = useState<Record<string, { lat: number; lng: number } | null>>({})
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
 
@@ -80,6 +92,10 @@ export default function CheckoutPage() {
         () => [...new Set(cart.map((i) => i.seller_id).filter(Boolean))] as string[],
         [cart]
     )
+    const isPatisserieOrder = useMemo(
+        () => cart.length > 0 && cart.every(i => i.shop_type === 'patisserie'),
+        [cart]
+    )
     const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
     const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
 
@@ -92,16 +108,22 @@ export default function CheckoutPage() {
         setSellerCitiesReady(false)
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase.from('profiles').select('id, city').in('id', sellerIds)
+            const { data } = await supabase.from('profiles').select('id, city, latitude, longitude').in('id', sellerIds)
             if (cancelled) return
-            const map: Record<string, string | null> = {}
+            const cityMap: Record<string, string | null> = {}
+            const coordMap: Record<string, { lat: number; lng: number } | null> = {}
             for (const sid of sellerIds) {
-                map[sid] = null
+                cityMap[sid] = null
+                coordMap[sid] = null
             }
-            for (const row of (data || []) as { id: string; city: string | null }[]) {
-                map[row.id] = row.city ?? null
+            for (const row of (data || []) as { id: string; city: string | null; latitude: number | null; longitude: number | null }[]) {
+                cityMap[row.id] = row.city ?? null
+                coordMap[row.id] = row.latitude != null && row.longitude != null
+                    ? { lat: row.latitude, lng: row.longitude }
+                    : null
             }
-            setSellerCities(map)
+            setSellerCities(cityMap)
+            setSellerCoords(coordMap)
             setSellerCitiesReady(true)
         })()
         return () => {
@@ -182,8 +204,34 @@ export default function CheckoutPage() {
         }
     }, [needsInterUrbanDelivery, getValues, resetField])
 
-    const deliveryFee =
-        selectedDelivery === 'inter_urban'
+    useEffect(() => {
+        if (isPatisserieOrder) setValue('delivery_mode', 'standard')
+    }, [isPatisserieOrder, setValue])
+
+    const patisserieDeliveryFee = useMemo(() => {
+        if (!isPatisserieOrder || !buyerGps) return null
+        const distances = sellerIds
+            .map(sid => sellerCoords[sid])
+            .filter((c): c is { lat: number; lng: number } => c != null)
+            .map(c => haversineKm(c.lat, c.lng, buyerGps.lat, buyerGps.lng))
+        const maxDist = distances.length > 0 ? Math.max(...distances) : 0
+        return 700 + Math.ceil(maxDist) * 200
+    }, [isPatisserieOrder, buyerGps, sellerIds, sellerCoords])
+
+    const handleGetBuyerGps = () => {
+        if (!navigator.geolocation) { setGpsError('GPS non disponible sur ce navigateur.'); return }
+        setGpsLoading(true)
+        setGpsError('')
+        navigator.geolocation.getCurrentPosition(
+            pos => { setBuyerGps({ lat: pos.coords.latitude, lng: pos.coords.longitude }); setGpsLoading(false) },
+            () => { setGpsError('Localisation refusée. Activez le GPS et réessayez.'); setGpsLoading(false) },
+            { enableHighAccuracy: true, timeout: 10000 }
+        )
+    }
+
+    const deliveryFee = isPatisserieOrder
+        ? (patisserieDeliveryFee ?? 0)
+        : selectedDelivery === 'inter_urban'
             ? DELIVERY_FEE_INTER_URBAN
             : selectedDelivery === 'standard' || selectedDelivery === 'express'
               ? DELIVERY_FEES[selectedDelivery]
@@ -274,8 +322,9 @@ export default function CheckoutPage() {
                 return
             }
 
-            const currentDeliveryFee =
-                formData.delivery_mode === 'inter_urban'
+            const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
+                ? patisserieDeliveryFee
+                : formData.delivery_mode === 'inter_urban'
                     ? DELIVERY_FEE_INTER_URBAN
                     : DELIVERY_FEES[formData.delivery_mode]
             const totalWithDelivery = total + currentDeliveryFee
@@ -455,10 +504,50 @@ export default function CheckoutPage() {
                         {/* ═══ MODE DE LIVRAISON ═══ */}
                         <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
-                                <Truck size={18} /> Mode de livraison
+                                <Truck size={18} /> Livraison
                             </div>
 
-                            {needsInterUrbanDelivery && !interUrbanAccepted ? (
+                            {isPatisserieOrder ? (
+                                <>
+                                    <input type="hidden" {...register('delivery_mode')} />
+                                    <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-800/40">
+                                        <p className="text-[10px] font-black uppercase text-rose-700 dark:text-rose-400 mb-1">Livraison Pâtisserie</p>
+                                        <p className="text-xs font-bold text-rose-800 dark:text-rose-300">700 FCFA de base + 200 FCFA/km selon votre position</p>
+                                    </div>
+
+                                    {!buyerGps ? (
+                                        <button
+                                            type="button"
+                                            onClick={handleGetBuyerGps}
+                                            disabled={gpsLoading}
+                                            className="w-full flex items-center justify-center gap-3 py-5 rounded-3xl border-2 border-dashed border-rose-300 dark:border-rose-700 text-rose-600 dark:text-rose-400 font-black uppercase text-xs italic hover:bg-rose-50 dark:hover:bg-rose-950/30 transition-all disabled:opacity-50"
+                                        >
+                                            {gpsLoading
+                                                ? <><Loader2 size={16} className="animate-spin" /> Localisation en cours…</>
+                                                : <><Navigation size={16} /> Me localiser pour calculer les frais</>
+                                            }
+                                        </button>
+                                    ) : (
+                                        <div className="p-6 rounded-3xl border-2 border-green-400 dark:border-green-600 bg-green-50 dark:bg-green-950/30 text-center space-y-2">
+                                            <p className="text-[10px] font-black uppercase text-green-600 dark:text-green-400 tracking-widest">Frais de livraison calculés</p>
+                                            <p className="text-3xl font-black italic text-green-700 dark:text-green-300">
+                                                {patisserieDeliveryFee?.toLocaleString('fr-FR')} FCFA
+                                            </p>
+                                            <button
+                                                type="button"
+                                                onClick={() => setBuyerGps(null)}
+                                                className="text-[9px] font-black uppercase text-green-500 hover:underline"
+                                            >
+                                                Recalculer ma position
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {gpsError && (
+                                        <p className="text-red-500 text-[10px] font-bold text-center">{gpsError}</p>
+                                    )}
+                                </>
+                            ) : needsInterUrbanDelivery && !interUrbanAccepted ? (
                                 <div
                                     className="p-6 rounded-3xl border-2 border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/30 space-y-3"
                                     role="status"
@@ -692,7 +781,8 @@ export default function CheckoutPage() {
                                 needsCity ||
                                 cart.length === 0 ||
                                 (sellerIds.length > 0 && !sellerCitiesReady) ||
-                                (needsInterUrbanDelivery &&
+                                (isPatisserieOrder && !buyerGps) ||
+                                (!isPatisserieOrder && needsInterUrbanDelivery &&
                                     (!interUrbanPreAlertAccepted || !interUrbanAccepted))
                             }
                             className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
@@ -744,7 +834,9 @@ export default function CheckoutPage() {
                             </div>
                             <div className="flex justify-between text-[10px] font-bold uppercase">
                                 <span className="flex items-center gap-1.5 text-slate-400">
-                                    {selectedDelivery === 'inter_urban' ? (
+                                    {isPatisserieOrder ? (
+                                        <><Navigation size={12} className="text-rose-500" /> <span className="text-rose-500">Livraison Pâtisserie</span></>
+                                    ) : selectedDelivery === 'inter_urban' ? (
                                         <span className="text-amber-600 dark:text-amber-400">Livraison inter-ville</span>
                                     ) : selectedDelivery === 'express' ? (
                                         <><Zap size={12} className="text-orange-500" /> <span className="text-orange-500">Livraison Express</span></>
@@ -756,16 +848,21 @@ export default function CheckoutPage() {
                                 </span>
                                 <span
                                     className={
-                                        !selectedDelivery
-                                            ? 'text-slate-400 italic normal-case text-[9px] font-black'
-                                            : selectedDelivery === 'inter_urban'
-                                              ? 'text-amber-600 dark:text-amber-400 italic'
-                                              : selectedDelivery === 'express'
-                                                ? 'text-orange-500 italic'
-                                                : 'text-green-500 italic'
+                                        isPatisserieOrder
+                                            ? buyerGps ? 'text-rose-500 italic' : 'text-slate-400 italic normal-case text-[9px] font-black'
+                                            : !selectedDelivery
+                                              ? 'text-slate-400 italic normal-case text-[9px] font-black'
+                                              : selectedDelivery === 'inter_urban'
+                                                ? 'text-amber-600 dark:text-amber-400 italic'
+                                                : selectedDelivery === 'express'
+                                                  ? 'text-orange-500 italic'
+                                                  : 'text-green-500 italic'
                                     }
                                 >
-                                    {selectedDelivery ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'À calculer'}
+                                    {isPatisserieOrder
+                                        ? buyerGps ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'Localisation requise'
+                                        : selectedDelivery ? `+${deliveryFee.toLocaleString('fr-FR')} FCFA` : 'À calculer'
+                                    }
                                 </span>
                             </div>
                             {loyaltyPointsToUse > 0 && (

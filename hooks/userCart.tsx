@@ -24,6 +24,7 @@ export interface CartItem {
     selectedSize?: string
     selectedColor?: string
     selectedOptions?: SelectedOption[]
+    shop_type?: string
 }
 
 interface CartContextType {

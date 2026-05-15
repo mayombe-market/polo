@@ -445,7 +445,7 @@ export default function CookieConsent() {
                 />
             )}
 
-            {view === 'done' && <CookieFloatingButton onClick={handleReopen} />}
+            {/* Bouton flottant supprimé — préférences accessibles via le footer */}
         </>
     )
 }

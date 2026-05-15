@@ -14,7 +14,7 @@ export default function AccountRedirect() {
             const { user } = await safeGetUser(supabase)
 
             if (!user) {
-                router.replace('/')
+                router.replace('/login')
                 return
             }
 

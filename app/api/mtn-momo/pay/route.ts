@@ -12,17 +12,23 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'orderId, phone et amount requis' }, { status: 400 })
         }
 
-        // Normaliser au format MSISDN Congo : 24206XXXXXXX
-        let cleanPhone = String(phone).replace(/\D/g, '')
-        if (cleanPhone.startsWith('242')) {
-            // déjà avec l'indicatif pays
-        } else if (cleanPhone.startsWith('0')) {
-            cleanPhone = '242' + cleanPhone   // 06XXXXXXX → 24206XXXXXXX
+        // En sandbox : numéro de test MTN fixe (le vrai numéro n'est pas vérifié)
+        // En production : normaliser au format MSISDN Congo 24206XXXXXXX
+        let cleanPhone: string
+        if (process.env.MTN_MOMO_ENVIRONMENT === 'sandbox') {
+            cleanPhone = '46733123450'
         } else {
-            cleanPhone = '2420' + cleanPhone  // 6XXXXXXX → 24206XXXXXXX
-        }
-        if (cleanPhone.length !== 12) {
-            return NextResponse.json({ error: 'Numéro MTN invalide (format attendu : 06 XXX XX XX)' }, { status: 400 })
+            cleanPhone = String(phone).replace(/\D/g, '')
+            if (cleanPhone.startsWith('242')) {
+                // déjà avec l'indicatif pays
+            } else if (cleanPhone.startsWith('0')) {
+                cleanPhone = '242' + cleanPhone
+            } else {
+                cleanPhone = '2420' + cleanPhone
+            }
+            if (cleanPhone.length !== 12) {
+                return NextResponse.json({ error: 'Numéro MTN invalide (format attendu : 06 XXX XX XX)' }, { status: 400 })
+            }
         }
 
         const referenceId = randomUUID()

@@ -840,50 +840,66 @@ export default function CheckoutPage() {
                             </label>
 
                             {/* OPTION 2 : Mobile Money */}
-                            <label className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
-                                <div className="flex flex-wrap items-center gap-3 min-w-0">
-                                    <div className="flex items-center gap-2 shrink-0">
-                                        <MtnMomoLogo className="h-8 w-[100px] sm:h-9" />
-                                        <AirtelMoneyLogo className="h-8 w-[110px] sm:h-9" />
+                            <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                <div className="flex items-center gap-3">
+                                    <div className="flex items-center gap-2">
+                                        <MtnMomoLogo className="h-7 w-[88px]" />
                                     </div>
+                                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
                                     <div>
                                         <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Mobile Money</p>
-                                        <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 uppercase">MTN MoMo &amp; Airtel Money</p>
+                                        <p className="text-[9px] font-bold text-green-600 uppercase tracking-wide">Paiement instantané</p>
                                     </div>
                                 </div>
-                                <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0 self-end sm:self-center" />
+                                <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0" />
                             </label>
 
-                            <MobileMoneyTrustLine className="mt-1 text-slate-600 dark:text-slate-400" />
-
-                            {/* INSTRUCTIONS MOMO */}
+                            {/* FLOW AUTOMATIQUE MTN */}
                             {selectedPayment === 'mobile_money' && (
-                                <div className="bg-green-50 dark:bg-green-900/20 p-5 rounded-2xl border border-green-200 dark:border-green-800 mt-2">
-                                    <p className="text-[10px] font-black uppercase text-green-700 dark:text-green-400 mb-2">Instructions de paiement</p>
-                                    {selectedDelivery ? (
-                                        <>
-                                            <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
-                                                Envoyez <strong>{grandTotal.toLocaleString('fr-FR')} FCFA</strong> au
-                                                <strong> 06 938 71 69</strong> (Mayombe Market) via MTN MoMo ou Airtel Money.
-                                                Votre commande sera confirmée dès réception du paiement.
+                                <div className="mt-1 rounded-3xl border-2 border-green-200 dark:border-green-800/50 overflow-hidden">
+
+                                    {/* Montant à payer */}
+                                    <div className="bg-green-500 px-5 py-4 flex items-center justify-between">
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-green-100">Montant total à payer</p>
+                                            <p className="text-2xl font-black text-white italic mt-0.5">
+                                                {(deliveryFee > 0 ? grandTotal : total).toLocaleString('fr-FR')}
+                                                <span className="text-sm ml-1 font-bold">FCFA</span>
                                             </p>
-                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
-                                                ({total.toLocaleString('fr-FR')} F produits + {deliveryFee.toLocaleString('fr-FR')} F livraison)
+                                        </div>
+                                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
+                                            <Phone className="w-6 h-6 text-white" />
+                                        </div>
+                                    </div>
+
+                                    {/* Les 3 étapes */}
+                                    <div className="bg-green-50 dark:bg-green-950/30 px-5 py-4 space-y-3">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-green-700 dark:text-green-400 mb-1">Comment ça marche</p>
+
+                                        {[
+                                            { n: '1', text: 'Cliquez "Confirmer la commande" ci-dessous' },
+                                            { n: '2', text: 'Vous recevez une notification MTN MoMo sur votre téléphone' },
+                                            { n: '3', text: 'Tapez votre PIN MoMo → commande confirmée automatiquement' },
+                                        ].map(step => (
+                                            <div key={step.n} className="flex items-start gap-3">
+                                                <div className="w-5 h-5 rounded-full bg-green-500 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">
+                                                    {step.n}
+                                                </div>
+                                                <p className="text-[11px] font-bold text-green-800 dark:text-green-300 leading-snug">{step.text}</p>
+                                            </div>
+                                        ))}
+
+                                        <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800/40 flex items-start gap-2">
+                                            <ShieldCheck className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
+                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500">
+                                                La notification sera envoyée au numéro saisi dans le formulaire ci-dessus.
                                             </p>
-                                        </>
-                                    ) : (
-                                        <>
-                                            <p className="text-xs text-green-800 dark:text-green-300 leading-relaxed">
-                                                Sélectionnez d&apos;abord un <strong>mode de livraison</strong> ci-dessus pour afficher le <strong>montant exact</strong> à envoyer au{' '}
-                                                <strong>06 938 71 69</strong>.
-                                            </p>
-                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500 mt-2 italic">
-                                                Sous-total articles : {total.toLocaleString('fr-FR')} FCFA — livraison à calculer
-                                            </p>
-                                        </>
-                                    )}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
+
+                            <MobileMoneyTrustLine className="mt-1 text-slate-600 dark:text-slate-400" />
                         </div>
 
                         <button

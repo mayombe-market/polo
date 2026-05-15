@@ -743,17 +743,8 @@ export async function createOrder(input: {
     const txDigits = input.transaction_id ? digitsOnly(input.transaction_id) : ''
     const phoneDigits = input.phone ? digitsOnly(input.phone) : ''
 
-    if (['mobile_money', 'airtel_money'].includes(input.payment_method)) {
-        if (!isExactly10Digits(txDigits)) {
-            return { error: 'L\'ID de transaction doit contenir exactement 10 chiffres.' }
-        }
-    }
-    if (input.payment_method === 'cash') {
-        if (!isExactly10Digits(phoneDigits)) {
-            return { error: 'Le numéro de téléphone doit contenir exactement 10 chiffres.' }
-        }
-    } else if (phoneDigits.length > 0 && !isExactly10Digits(phoneDigits)) {
-        return { error: 'Le numéro de téléphone doit contenir exactement 10 chiffres.' }
+    if (phoneDigits.length > 0 && phoneDigits.length < 9) {
+        return { error: 'Numéro de téléphone invalide.' }
     }
     if (!input.items || input.items.length === 0 || input.items.length > 50) {
         return { error: 'Panier invalide.' }

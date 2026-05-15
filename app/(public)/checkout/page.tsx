@@ -55,7 +55,7 @@ const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
     city: '',
     district: '',
     landmark: '',
-    payment_method: 'cod',
+    payment_method: 'mobile_money',
 }
 
 export default function CheckoutPage() {
@@ -284,7 +284,7 @@ export default function CheckoutPage() {
                         city: displayCity,
                         district: p.district || '',
                         landmark: p.landmark || '',
-                        payment_method: 'cod',
+                        payment_method: 'mobile_money',
                     })
                 } else {
                     setNeedsCity(true)

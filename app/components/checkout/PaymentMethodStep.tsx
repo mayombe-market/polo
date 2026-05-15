@@ -17,14 +17,6 @@ const METHODS = [
         borderHover: 'hover:border-red-500 dark:hover:border-red-500/60',
         bgHover: 'hover:bg-red-50 dark:hover:bg-red-500/5',
     },
-    {
-        id: 'cash',
-        name: 'Payer en Cash',
-        sub: 'Paiement à la livraison',
-        icon: '💵',
-        borderHover: 'hover:border-green-500 dark:hover:border-green-500/60',
-        bgHover: 'hover:bg-green-50 dark:hover:bg-green-500/5',
-    },
 ]
 
 interface PaymentMethodStepProps {

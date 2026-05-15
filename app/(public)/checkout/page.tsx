@@ -70,6 +70,10 @@ export default function CheckoutPage() {
     const [interUrbanAccepted, setInterUrbanAccepted] = useState(false)
     const [interUrbanModalDismissed, setInterUrbanModalDismissed] = useState(false)
     const [userEmail, setUserEmail] = useState('')
+    const [momoStep, setMomoStep] = useState<'idle' | 'requesting' | 'waiting' | 'failed' | 'timeout'>('idle')
+    const [momoReferenceId, setMomoReferenceId] = useState<string | null>(null)
+    const [momoOrderId, setMomoOrderId] = useState<string | null>(null)
+    const [momoError, setMomoError] = useState('')
     const [buyerGps, setBuyerGps] = useState<{ lat: number; lng: number } | null>(null)
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState('')
@@ -368,7 +372,7 @@ export default function CheckoutPage() {
                 return
             }
 
-            // Envoi de l'email de confirmation avec le vrai orderId
+            // Envoi de l'email de confirmation
             if (userEmail) {
                 sendOrderConfirmationEmail({
                     customerName: formData.full_name,
@@ -382,6 +386,32 @@ export default function CheckoutPage() {
                 }).catch(err => console.error('Erreur email:', err))
             }
 
+            // ── MTN MoMo : déclencher la demande de paiement ──
+            if (formData.payment_method === 'mobile_money') {
+                setMomoStep('requesting')
+                setMomoOrderId(result.order.id)
+                try {
+                    const payRes = await fetch('/api/mtn-momo/pay', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            orderId: result.order.id,
+                            phone: formData.phone,
+                            amount: totalWithDelivery,
+                        }),
+                    })
+                    const payData = await payRes.json()
+                    if (!payRes.ok || payData.error) throw new Error(payData.error || 'Erreur MTN')
+                    setMomoReferenceId(payData.referenceId)
+                    setMomoStep('waiting')
+                    clearCart()
+                } catch (err: any) {
+                    setMomoError(err.message || 'Impossible de contacter MTN MoMo.')
+                    setMomoStep('failed')
+                }
+                return
+            }
+
             clearCart()
             router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}&delivery=${formData.delivery_mode}`)
 
@@ -391,6 +421,88 @@ export default function CheckoutPage() {
         } finally {
             setLoading(false)
         }
+    }
+
+    // ── Polling statut MTN MoMo ──
+    useEffect(() => {
+        if (momoStep !== 'waiting' || !momoReferenceId || !momoOrderId) return
+        let attempts = 0
+        const MAX = 20 // 20 × 3s = 60s max
+        const interval = setInterval(async () => {
+            attempts++
+            try {
+                const res = await fetch(`/api/mtn-momo/status?referenceId=${momoReferenceId}&orderId=${momoOrderId}`)
+                const data = await res.json()
+                if (data.status === 'SUCCESSFUL') {
+                    clearInterval(interval)
+                    router.push(`/checkout/success?method=mobile_money&orderId=${momoOrderId}&delivery=${getValues('delivery_mode')}`)
+                } else if (data.status === 'FAILED') {
+                    clearInterval(interval)
+                    setMomoError(data.reason || 'Paiement refusé.')
+                    setMomoStep('failed')
+                } else if (attempts >= MAX) {
+                    clearInterval(interval)
+                    setMomoStep('timeout')
+                }
+            } catch {
+                if (attempts >= MAX) { clearInterval(interval); setMomoStep('timeout') }
+            }
+        }, 3000)
+        return () => clearInterval(interval)
+    }, [momoStep, momoReferenceId, momoOrderId, router, getValues])
+
+    // ── Écran d'attente MTN MoMo ──
+    if (momoStep === 'requesting' || momoStep === 'waiting' || momoStep === 'failed' || momoStep === 'timeout') {
+        return (
+            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-4">
+                <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-10 max-w-sm w-full text-center shadow-xl border border-slate-100 dark:border-slate-800 space-y-6">
+                    {momoStep === 'requesting' && (
+                        <>
+                            <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto" />
+                            <p className="font-black uppercase italic text-lg">Connexion MTN…</p>
+                            <p className="text-sm text-slate-400">Envoi de la demande de paiement</p>
+                        </>
+                    )}
+                    {momoStep === 'waiting' && (
+                        <>
+                            <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-500/10 flex items-center justify-center mx-auto">
+                                <Phone className="w-8 h-8 text-orange-500" />
+                            </div>
+                            <p className="font-black uppercase italic text-xl">Confirmez sur votre téléphone</p>
+                            <p className="text-sm text-slate-500 leading-relaxed">
+                                Une notification MTN MoMo a été envoyée sur votre téléphone.<br />
+                                <strong>Tapez votre PIN MoMo</strong> pour valider le paiement.
+                            </p>
+                            <div className="flex items-center justify-center gap-2 text-[10px] text-slate-400 uppercase font-bold">
+                                <Loader2 className="w-3 h-3 animate-spin" /> En attente de confirmation…
+                            </div>
+                        </>
+                    )}
+                    {momoStep === 'failed' && (
+                        <>
+                            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto text-3xl">✗</div>
+                            <p className="font-black uppercase italic text-xl text-red-600">Paiement refusé</p>
+                            <p className="text-sm text-slate-500">{momoError || 'Le paiement a été refusé par MTN.'}</p>
+                            <button onClick={() => setMomoStep('idle')} className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-black uppercase text-sm hover:bg-orange-500 transition-all">
+                                Réessayer
+                            </button>
+                        </>
+                    )}
+                    {momoStep === 'timeout' && (
+                        <>
+                            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                                <Clock className="w-8 h-8 text-amber-500" />
+                            </div>
+                            <p className="font-black uppercase italic text-xl">Délai dépassé</p>
+                            <p className="text-sm text-slate-500">Le paiement n&apos;a pas été confirmé dans le temps imparti. Votre commande est enregistrée — l&apos;admin va vérifier manuellement.</p>
+                            <button onClick={() => router.push('/')} className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-black uppercase text-sm hover:bg-orange-500 transition-all">
+                                Retour à l&apos;accueil
+                            </button>
+                        </>
+                    )}
+                </div>
+            </div>
+        )
     }
 
     if (loadingProfile) return <div className="min-h-screen flex items-center justify-center font-black italic uppercase animate-pulse">Chargement de vos infos...</div>

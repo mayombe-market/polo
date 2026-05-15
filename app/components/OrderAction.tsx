@@ -1,52 +1,21 @@
 'use client'
 
-import { useState, useCallback } from 'react'
-import { createPortal } from 'react-dom'
-import { createOrder as createOrderAction } from '@/app/actions/orders'
-import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
-import {
-    orderRequiresInterUrbanDelivery,
-    orderCityToProfileCity,
-    profileCityToCheckoutDisplay,
-} from '@/lib/deliveryLocation'
+import { useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useCart } from '@/hooks/userCart'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, Loader2 } from 'lucide-react'
 import AuthModal from './AuthModal'
 import CompleteProfileGateModal from './CompleteProfileGateModal'
-import StepIndicator from './checkout/StepIndicator'
-import LocationStep from './checkout/LocationStep'
-import DeliveryModeStep from './checkout/DeliveryModeStep'
-import InterUrbanPrePaymentModal from './checkout/InterUrbanPrePaymentModal'
-import InterUrbanWarningModal from './checkout/InterUrbanWarningModal'
-import PaymentMethodStep from './checkout/PaymentMethodStep'
-import TransferInfoStep from './checkout/TransferInfoStep'
-import EnterTransactionIdStep from './checkout/EnterTransactionIdStep'
-import WaitingValidationStep from './checkout/WaitingValidationStep'
-import CashDeliveryStep from './checkout/CashDeliveryStep'
-import OrderConfirmedStep from './checkout/OrderConfirmedStep'
-
-type Step =
-    | 'location'
-    | 'delivery_mode'
-    | 'payment_method'
-    | 'transfer_info'
-    | 'enter_id'
-    | 'waiting'
-    | 'cash_form'
-    | 'confirmed'
-    | 'rejected'
 
 interface OrderActionProps {
     product: any
     shop: any
     user: any
-    /** false si couleur/taille requises mais non choisies — bloque l’ouverture du flux commande. */
     variantsComplete?: boolean
     onVariantsInvalid?: () => void
-    /** Quantité choisie sur la fiche produit (défaut 1) */
     quantity?: number
-    /** Variantes enregistrées dans les items de commande (couleur / taille) */
     selectedVariant?: { size: string; color: string }
 }
 
@@ -59,42 +28,13 @@ export default function OrderAction({
     quantity: quantityProp = 1,
     selectedVariant,
 }: OrderActionProps) {
+    const router = useRouter()
+    const { addToCart, updateQuantity } = useCart()
     const [isAuthOpen, setIsAuthOpen] = useState(false)
-    const [isModalOpen, setIsModalOpen] = useState(false)
-    const [step, setStep] = useState<Step>('location')
-    const [city, setCity] = useState('')
-    const [district, setDistrict] = useState('')
-    const [paymentMethod, setPaymentMethod] = useState('')
-    const [transactionId, setTransactionId] = useState('')
-    const [orderId, setOrderId] = useState('')
-    const [orderData, setOrderData] = useState<any>(null)
-    const [deliveryMode, setDeliveryMode] = useState<'standard' | 'express' | 'inter_urban' | null>(null)
-    const [saving, setSaving] = useState(false)
-    const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [profileGateDetail, setProfileGateDetail] = useState<string | undefined>(undefined)
-    const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
-    const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
+    const [loading, setLoading] = useState(false)
 
-    const deliveryFee =
-        deliveryMode === 'inter_urban'
-            ? DELIVERY_FEE_INTER_URBAN
-            : deliveryMode
-              ? DELIVERY_FEES[deliveryMode]
-              : 0
-    const qty = Math.max(1, Math.min(99, Math.floor(Number(quantityProp)) || 1))
-    const lineTotal = product.price * qty
-    const grandTotal = lineTotal + deliveryFee
-
-    // Step indicator index (4 steps: Retrait, Livraison, Paiement, Confirmation)
-    const getStepIndex = () => {
-        if (step === 'location') return 0
-        if (step === 'delivery_mode') return 1
-        if (['confirmed', 'rejected'].includes(step)) return 3
-        return 2
-    }
-
-    // Ouvrir le modal
     const handleMainClick = async () => {
         if (variantsComplete === false) {
             onVariantsInvalid?.()
@@ -104,404 +44,59 @@ export default function OrderAction({
             setIsAuthOpen(true)
             return
         }
-        const supabase = getSupabaseBrowserClient()
-        const { data: prof } = await supabase
-            .from('profiles')
-            .select('city, phone, whatsapp_number')
-            .eq('id', user.id)
-            .maybeSingle()
-        if (!isBuyerProfileCompleteForOrder(prof)) {
-            const missing: string[] = []
-            if (!prof?.city?.trim()) missing.push('ville')
-            if (!(prof?.phone?.trim() || prof?.whatsapp_number?.trim())) {
-                missing.push('téléphone ou WhatsApp')
-            }
-            setProfileGateDetail(
-                missing.length > 0
-                    ? `Renseignez : ${missing.join(', ')}. (Exigé pour toute commande, y compris pour un compte vendeur.)`
-                    : undefined,
-            )
-            setProfileGateOpen(true)
-            return
-        }
-        setDeliveryMode(null)
-        setInterUrbanPreAlertOpen(false)
-        setInterUrbanWarningOpen(false)
-        setIsModalOpen(true)
-        setStep('location')
-    }
 
-    // Fermer et reset
-    const closeModal = () => {
-        setIsModalOpen(false)
-        setStep('location')
-        setCity('')
-        setDistrict('')
-        setDeliveryMode(null)
-        setPaymentMethod('')
-        setTransactionId('')
-        setOrderId('')
-        setOrderData(null)
-        setInterUrbanPreAlertOpen(false)
-        setInterUrbanWarningOpen(false)
-    }
-
-    // Localisation confirmée
-    const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
-        setCity(selectedCity)
-        setDistrict(selectedDistrict)
-
-        const supabase = getSupabaseBrowserClient()
-        if (user?.id) {
-            await supabase
+        setLoading(true)
+        try {
+            const supabase = getSupabaseBrowserClient()
+            const { data: prof } = await supabase
                 .from('profiles')
-                .update({
-                    city: orderCityToProfileCity(selectedCity) ?? selectedCity.trim(),
-                    district: selectedDistrict.trim(),
-                })
+                .select('city, phone, whatsapp_number')
                 .eq('id', user.id)
-        }
+                .maybeSingle()
 
-        const inter = orderRequiresInterUrbanDelivery(selectedCity, [shop?.city])
-        if (inter) {
-            setInterUrbanPreAlertOpen(true)
-        } else {
-            setDeliveryMode(null)
-            setStep('delivery_mode')
-        }
-    }
+            if (!isBuyerProfileCompleteForOrder(prof)) {
+                const missing: string[] = []
+                if (!prof?.city?.trim()) missing.push('ville')
+                if (!(prof?.phone?.trim() || prof?.whatsapp_number?.trim())) missing.push('téléphone ou WhatsApp')
+                setProfileGateDetail(missing.length > 0 ? `Renseignez : ${missing.join(', ')}.` : undefined)
+                setProfileGateOpen(true)
+                return
+            }
 
-    // Mode de livraison choisi
-    const handleDeliverySelect = (mode: 'standard' | 'express') => {
-        setDeliveryMode(mode)
-        setStep('payment_method')
-    }
-
-    // Méthode de paiement choisie
-    const handlePaymentSelect = (method: string) => {
-        setPaymentMethod(method)
-        if (method === 'cash') {
-            setStep('cash_form')
-        } else {
-            setStep('transfer_info')
-        }
-    }
-
-    // Soumission du transaction ID (Mobile Money / Airtel)
-    const handleTransactionIdSubmit = async (id: string) => {
-        if (!deliveryMode) {
-            setOrderError('Choisissez un mode de livraison.')
-            return
-        }
-        setTransactionId(id)
-        setSaving(true)
-        setOrderError('')
-
-        try {
-            const fee =
-                deliveryMode === 'inter_urban'
-                    ? DELIVERY_FEE_INTER_URBAN
-                    : DELIVERY_FEES[deliveryMode]
-            const result = await createOrderAction({
-                items: [{
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    quantity: qty,
-                    img: product.img || product.image_url || '',
-                    seller_id: product.seller_id || '',
-                    ...(selectedVariant?.size?.trim()
-                        ? { selectedSize: selectedVariant.size.trim() }
-                        : {}),
-                    ...(selectedVariant?.color?.trim()
-                        ? { selectedColor: selectedVariant.color.trim() }
-                        : {}),
-                }],
-                city,
-                district,
-                payment_method: paymentMethod,
-                total_amount: lineTotal + fee,
-                transaction_id: id,
-                delivery_mode: deliveryMode,
-                delivery_fee: fee,
+            const qty = Math.max(1, Math.min(99, Math.floor(Number(quantityProp)) || 1))
+            const cartId = `${product.id}-${selectedVariant?.size || ''}-${selectedVariant?.color || ''}`
+            await addToCart({
+                id: cartId,
+                product_id: product.id,
+                name: product.name,
+                price: product.price,
+                img: product.img || product.image_url || '',
+                seller_id: product.seller_id,
+                selectedSize: selectedVariant?.size,
+                selectedColor: selectedVariant?.color,
             })
+            if (qty > 1) await updateQuantity(cartId, qty)
 
-            if (result.error) {
-                if ((result as { code?: string }).code === 'profile_incomplete') {
-                    setProfileGateDetail(result.error)
-                    setProfileGateOpen(true)
-                }
-                setOrderError(result.error)
-                return
-            }
-
-            if (!result.order) {
-                setOrderError('Erreur inattendue. Réessayez.')
-                return
-            }
-
-            setOrderId(result.order.id)
-            setOrderData(result.order)
-            setStep('waiting')
-        } catch (err: any) {
-            console.error('Erreur commande:', err)
-            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
+            router.push('/checkout')
         } finally {
-            setSaving(false)
+            setLoading(false)
         }
     }
-
-    // Soumission du formulaire Cash
-    const handleCashConfirm = async (deliveryInfo: { name: string; phone: string; quarter: string; address: string }) => {
-        if (!deliveryMode) {
-            setOrderError('Choisissez un mode de livraison.')
-            return
-        }
-        setSaving(true)
-        setOrderError('')
-
-        try {
-            const fee =
-                deliveryMode === 'inter_urban'
-                    ? DELIVERY_FEE_INTER_URBAN
-                    : DELIVERY_FEES[deliveryMode]
-            const result = await createOrderAction({
-                items: [{
-                    id: product.id,
-                    name: product.name,
-                    price: product.price,
-                    quantity: qty,
-                    img: product.img || product.image_url || '',
-                    seller_id: product.seller_id || '',
-                    ...(selectedVariant?.size?.trim()
-                        ? { selectedSize: selectedVariant.size.trim() }
-                        : {}),
-                    ...(selectedVariant?.color?.trim()
-                        ? { selectedColor: selectedVariant.color.trim() }
-                        : {}),
-                }],
-                city,
-                district,
-                payment_method: paymentMethod,
-                total_amount: lineTotal + fee,
-                customer_name: deliveryInfo.name,
-                phone: deliveryInfo.phone,
-                landmark: deliveryInfo.address,
-                delivery_mode: deliveryMode,
-                delivery_fee: fee,
-            })
-
-            if (result.error) {
-                if ((result as { code?: string }).code === 'profile_incomplete') {
-                    setProfileGateDetail(result.error)
-                    setProfileGateOpen(true)
-                }
-                setOrderError(result.error)
-                return
-            }
-
-            if (!result.order) {
-                setOrderError('Erreur inattendue. Réessayez.')
-                return
-            }
-
-            setOrderId(result.order.id)
-            setOrderData(result.order)
-            setStep('confirmed')
-        } catch (err: any) {
-            console.error('Erreur commande:', err)
-            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    // Callbacks Realtime
-    const handleValidated = useCallback(() => setStep('confirmed'), [])
-    const handleRejected = useCallback(() => setStep('rejected'), [])
 
     return (
         <div>
-            {/* BOUTON PRINCIPAL */}
             <button
                 onClick={handleMainClick}
-                className="w-full bg-orange-500 text-white py-4 rounded-[1.2rem] text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98]"
+                disabled={loading}
+                className="w-full bg-orange-500 text-white py-4 rounded-[1.2rem] text-[11px] font-black uppercase tracking-wider flex items-center justify-center gap-2 hover:bg-orange-600 transition-all shadow-lg shadow-orange-500/20 active:scale-[0.98] disabled:opacity-60"
             >
-                Commander maintenant <ArrowRight size={16} />
+                {loading ? <Loader2 size={16} className="animate-spin" /> : <>Commander maintenant <ArrowRight size={16} /></>}
             </button>
 
-            {/* MODAL CHECKOUT — portal pour sortir du transform parent */}
-            {isModalOpen && createPortal(
-                <>
-                <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={closeModal}>
-                    {/* Backdrop */}
-                    <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-
-                    {/* Contenu */}
-                    <div
-                        className="relative bg-white dark:bg-slate-900 rounded-[2.5rem] p-6 md:p-8 w-full max-w-md max-h-[90vh] overflow-y-auto border border-slate-200 dark:border-slate-800 shadow-2xl animate-fadeIn"
-                        onClick={e => e.stopPropagation()}
-                    >
-                        {/* Header modal */}
-                        <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-8 h-8 rounded-xl bg-orange-500 flex items-center justify-center text-white text-sm font-black">
-                                    M
-                                </div>
-                                <div>
-                                    <p className="text-[9px] font-black uppercase text-orange-500 tracking-widest">Mayombe Market</p>
-                                    <p className="text-[8px] font-bold text-slate-400 uppercase">{product.name}</p>
-                                </div>
-                            </div>
-                            <button
-                                onClick={closeModal}
-                                className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors text-lg"
-                            >
-                                ×
-                            </button>
-                        </div>
-
-                        {/* Prix */}
-                        <div className="text-center mb-4">
-                            <span className="text-3xl font-black italic text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
-                            <span className="text-[10px] font-black uppercase ml-1 text-slate-400">FCFA</span>
-                            {step !== 'location' && step !== 'delivery_mode' && (
-                                <p className="text-[9px] font-bold text-slate-400 mt-0.5">
-                                    {lineTotal.toLocaleString('fr-FR')} F{qty > 1 ? ` (${qty}×)` : ''} +{' '}
-                                    {deliveryFee.toLocaleString('fr-FR')} F{' '}
-                                    {deliveryMode === 'inter_urban' ? 'livraison inter-ville' : 'livraison'}
-                                </p>
-                            )}
-                        </div>
-
-                        <StepIndicator activeStep={getStepIndex()} />
-
-                        {/* ÉTAPES */}
-                        {step === 'location' && !interUrbanPreAlertOpen && !interUrbanWarningOpen && (
-                            <LocationStep
-                                onConfirm={handleLocationConfirm}
-                                onClose={closeModal}
-                                isInterUrbanForCity={(displayCity) =>
-                                    orderRequiresInterUrbanDelivery(displayCity, [shop?.city])
-                                }
-                            />
-                        )}
-
-                        {step === 'delivery_mode' && (
-                            <DeliveryModeStep
-                                onSelect={handleDeliverySelect}
-                                onBack={() => setStep('location')}
-                            />
-                        )}
-
-                        {step === 'payment_method' && (
-                            <PaymentMethodStep
-                                onSelect={handlePaymentSelect}
-                                onBack={() => {
-                                    if (deliveryMode === 'inter_urban') {
-                                        setDeliveryMode(null)
-                                        setStep('location')
-                                    } else {
-                                        setStep('delivery_mode')
-                                    }
-                                }}
-                            />
-                        )}
-
-                        {step === 'transfer_info' && (
-                            <TransferInfoStep
-                                method={paymentMethod}
-                                total={grandTotal}
-                                onConfirm={() => setStep('enter_id')}
-                                onBack={() => setStep('payment_method')}
-                                sellerCity={shop?.city}
-                            />
-                        )}
-
-                        {step === 'enter_id' && (
-                            <EnterTransactionIdStep
-                                onSubmit={handleTransactionIdSubmit}
-                                onBack={() => { setOrderError(''); setStep('transfer_info') }}
-                                loading={saving}
-                                serverError={orderError}
-                            />
-                        )}
-
-                        {step === 'waiting' && orderId && (
-                            <WaitingValidationStep
-                                orderId={orderId}
-                                orderData={orderData}
-                                transactionId={transactionId}
-                                onValidated={handleValidated}
-                                onRejected={handleRejected}
-                            />
-                        )}
-
-                        {step === 'cash_form' && (
-                            <CashDeliveryStep
-                                total={grandTotal}
-                                onConfirm={handleCashConfirm}
-                                onBack={() => { setOrderError(''); setStep('payment_method') }}
-                                loading={saving}
-                                serverError={orderError}
-                            />
-                        )}
-
-                        {step === 'confirmed' && orderData && (
-                            <OrderConfirmedStep
-                                orderData={orderData}
-                                type={paymentMethod === 'cash' ? 'cash_confirmed' : 'payment_validated'}
-                                onClose={closeModal}
-                            />
-                        )}
-
-                        {step === 'rejected' && orderData && (
-                            <OrderConfirmedStep
-                                orderData={orderData}
-                                type="rejected"
-                                onClose={closeModal}
-                            />
-                        )}
-                    </div>
-                </div>
-                <InterUrbanPrePaymentModal
-                    open={interUrbanPreAlertOpen}
-                    onContinue={() => {
-                        setInterUrbanPreAlertOpen(false)
-                        setInterUrbanWarningOpen(true)
-                    }}
-                    onCancel={() => {
-                        setInterUrbanPreAlertOpen(false)
-                        setStep('location')
-                    }}
-                />
-                <InterUrbanWarningModal
-                    open={interUrbanWarningOpen}
-                    buyerCity={city}
-                    sellerCity={profileCityToCheckoutDisplay(shop?.city) || shop?.city?.trim() || ''}
-                    onAccept={() => {
-                        setInterUrbanWarningOpen(false)
-                        setDeliveryMode('inter_urban')
-                        setStep('payment_method')
-                    }}
-                    onCancel={() => {
-                        setInterUrbanWarningOpen(false)
-                        setStep('location')
-                    }}
-                />
-                </>,
-                document.body
-            )}
-
-            {/* MODAL DE CONNEXION */}
             <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
-
             <CompleteProfileGateModal
                 open={profileGateOpen}
-                onClose={() => {
-                    setProfileGateOpen(false)
-                    setProfileGateDetail(undefined)
-                }}
+                onClose={() => { setProfileGateOpen(false); setProfileGateDetail(undefined) }}
                 detail={profileGateDetail}
             />
         </div>

@@ -33,15 +33,18 @@ export interface RequestToPayInput {
 
 export async function requestToPay(referenceId: string, input: RequestToPayInput): Promise<void> {
     const token = await getMomoToken()
+    const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL
+    const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+        'X-Reference-Id': referenceId,
+        'X-Target-Environment': ENV,
+        'Ocp-Apim-Subscription-Key': SUB_KEY,
+        'Content-Type': 'application/json',
+    }
+    if (callbackUrl) headers['X-Callback-Url'] = callbackUrl
     const res = await fetch(`${BASE_URL}/collection/v1_0/requesttopay`, {
         method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'X-Reference-Id': referenceId,
-            'X-Target-Environment': ENV,
-            'Ocp-Apim-Subscription-Key': SUB_KEY,
-            'Content-Type': 'application/json',
-        },
+        headers,
         body: JSON.stringify({
             amount: String(input.amount),
             currency: input.currency,

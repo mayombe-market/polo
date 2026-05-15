@@ -23,7 +23,7 @@ import {
 } from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, Smartphone, X as XIcon } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
@@ -383,6 +383,8 @@ export default function CheckoutPage() {
                     paymentMethod: formData.payment_method === 'cod' ? 'cash' : formData.payment_method,
                     city: formData.city,
                     district: formData.district,
+                    deliveryMode: formData.delivery_mode,
+                    deliveryFee: currentDeliveryFee,
                 }).catch(err => console.error('Erreur email:', err))
             }
 
@@ -454,48 +456,50 @@ export default function CheckoutPage() {
     // ── Écran d'attente MTN MoMo ──
     if (momoStep === 'requesting' || momoStep === 'waiting' || momoStep === 'failed' || momoStep === 'timeout') {
         return (
-            <div className="min-h-screen bg-slate-50 dark:bg-slate-950 flex items-center justify-center px-4">
-                <div className="bg-white dark:bg-slate-900 rounded-[3rem] p-10 max-w-sm w-full text-center shadow-xl border border-slate-100 dark:border-slate-800 space-y-6">
+            <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-center justify-center px-4">
+                <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl shadow-black/10 border border-stone-200/80 dark:border-stone-800/60 space-y-6">
                     {momoStep === 'requesting' && (
                         <>
                             <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto" />
-                            <p className="font-black uppercase italic text-lg">Connexion MTN…</p>
-                            <p className="text-sm text-slate-400">Envoi de la demande de paiement</p>
+                            <p className="font-black uppercase italic text-lg tracking-tight">Connexion MTN…</p>
+                            <p className="text-sm text-stone-400">Envoi de la demande de paiement</p>
                         </>
                     )}
                     {momoStep === 'waiting' && (
                         <>
-                            <div className="w-16 h-16 rounded-full bg-orange-100 dark:bg-orange-500/10 flex items-center justify-center mx-auto">
-                                <Phone className="w-8 h-8 text-orange-500" />
+                            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto">
+                                <Smartphone className="w-8 h-8 text-orange-500" />
                             </div>
-                            <p className="font-black uppercase italic text-xl">Confirmez sur votre téléphone</p>
-                            <p className="text-sm text-slate-500 leading-relaxed">
-                                Une notification MTN MoMo a été envoyée sur votre téléphone.<br />
-                                <strong>Tapez votre PIN MoMo</strong> pour valider le paiement.
+                            <p className="font-black uppercase italic text-xl tracking-tight">Confirmez sur votre téléphone</p>
+                            <p className="text-sm text-stone-500 leading-relaxed">
+                                Une notification MTN MoMo a été envoyée.<br />
+                                <strong>Tapez votre PIN MoMo</strong> pour valider.
                             </p>
-                            <div className="flex items-center justify-center gap-2 text-[10px] text-slate-400 uppercase font-bold">
+                            <div className="flex items-center justify-center gap-2 text-[10px] text-stone-400 uppercase font-bold">
                                 <Loader2 className="w-3 h-3 animate-spin" /> En attente de confirmation…
                             </div>
                         </>
                     )}
                     {momoStep === 'failed' && (
                         <>
-                            <div className="w-16 h-16 rounded-full bg-red-100 flex items-center justify-center mx-auto text-3xl">✗</div>
-                            <p className="font-black uppercase italic text-xl text-red-600">Paiement refusé</p>
-                            <p className="text-sm text-slate-500">{momoError || 'Le paiement a été refusé par MTN.'}</p>
-                            <button onClick={() => setMomoStep('idle')} className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-black uppercase text-sm hover:bg-orange-500 transition-all">
+                            <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto">
+                                <XIcon className="w-8 h-8 text-red-500" />
+                            </div>
+                            <p className="font-black uppercase italic text-xl text-red-600 tracking-tight">Paiement refusé</p>
+                            <p className="text-sm text-stone-500">{momoError || 'Le paiement a été refusé par MTN.'}</p>
+                            <button onClick={() => setMomoStep('idle')} className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-4 rounded-2xl font-black uppercase text-sm hover:opacity-90 transition-all shadow-lg shadow-orange-500/25">
                                 Réessayer
                             </button>
                         </>
                     )}
                     {momoStep === 'timeout' && (
                         <>
-                            <div className="w-16 h-16 rounded-full bg-amber-100 flex items-center justify-center mx-auto">
+                            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto">
                                 <Clock className="w-8 h-8 text-amber-500" />
                             </div>
-                            <p className="font-black uppercase italic text-xl">Délai dépassé</p>
-                            <p className="text-sm text-slate-500">Le paiement n&apos;a pas été confirmé dans le temps imparti. Votre commande est enregistrée — l&apos;admin va vérifier manuellement.</p>
-                            <button onClick={() => router.push('/')} className="w-full bg-black dark:bg-white text-white dark:text-black py-4 rounded-2xl font-black uppercase text-sm hover:bg-orange-500 transition-all">
+                            <p className="font-black uppercase italic text-xl tracking-tight">Délai dépassé</p>
+                            <p className="text-sm text-stone-500">Le paiement n&apos;a pas été confirmé dans le temps imparti. Votre commande est enregistrée — l&apos;admin va vérifier manuellement.</p>
+                            <button onClick={() => router.push('/')} className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-4 rounded-2xl font-black uppercase text-sm hover:opacity-90 transition-all shadow-lg shadow-orange-500/25">
                                 Retour à l&apos;accueil
                             </button>
                         </>
@@ -505,10 +509,10 @@ export default function CheckoutPage() {
         )
     }
 
-    if (loadingProfile) return <div className="min-h-screen flex items-center justify-center font-black italic uppercase animate-pulse">Chargement de vos infos...</div>
+    if (loadingProfile) return <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-center justify-center font-black italic uppercase text-sm tracking-widest text-stone-400 animate-pulse">Chargement de vos infos...</div>
 
     return (
-        <div className="min-h-screen bg-slate-50 dark:bg-slate-950 py-12 px-4">
+        <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] py-12 px-4">
             <CitySelectModal
                 open={needsCity}
                 onSelected={(c) => {
@@ -552,7 +556,7 @@ export default function CheckoutPage() {
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         {/* ═══ INFORMATIONS DE LIVRAISON ═══ */}
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-4">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-4">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3 text-orange-500 font-black uppercase text-xs italic">
                                     <MapPin size={18} /> Informations de livraison
@@ -561,7 +565,7 @@ export default function CheckoutPage() {
                             </div>
 
                             <div className="space-y-1">
-                                <input {...register('full_name')} placeholder="Nom & Prénom" className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                                <input {...register('full_name')} placeholder="Nom & Prénom" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                                 {errors.full_name && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.full_name.message}</p>}
                             </div>
 
@@ -571,7 +575,7 @@ export default function CheckoutPage() {
                                     <select
                                         {...register('city')}
                                         required
-                                        className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500 appearance-none"
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none"
                                     >
                                         <option value="">Choisir…</option>
                                         {DELIVERY_CITY_LIST.map((c) => (
@@ -583,7 +587,7 @@ export default function CheckoutPage() {
                                     {errors.city && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.city.message}</p>}
                                 </div>
                                 <div className="space-y-1">
-                                    <input {...register('district')} placeholder="Quartier" className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                                    <input {...register('district')} placeholder="Quartier" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
                                     {errors.district && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.district.message}</p>}
                                 </div>
                             </div>
@@ -602,7 +606,7 @@ export default function CheckoutPage() {
                                 </div>
                             ) : null}
 
-                            <input {...register('landmark')} placeholder="Point de repère (ex: Derrière l'école...)" className="w-full bg-slate-50 dark:bg-slate-800 p-4 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                            <input {...register('landmark')} placeholder="Point de repère (ex: Derrière l'école...)" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
 
                             <div className="space-y-1">
                                 <div className="relative">
@@ -611,7 +615,7 @@ export default function CheckoutPage() {
                                         {...register('phone')}
                                         placeholder="Ex: 06 XXX XX XX"
                                         inputMode="tel"
-                                        className="w-full bg-slate-50 dark:bg-slate-800 p-4 pl-12 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500 placeholder:text-slate-400 placeholder:font-normal"
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 pl-12 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none placeholder:text-stone-400 placeholder:font-normal"
                                     />
                                 </div>
                                 {errors.phone
@@ -622,7 +626,7 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* ═══ MODE DE LIVRAISON ═══ */}
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
                                 <Truck size={18} /> Livraison
                             </div>
@@ -786,17 +790,17 @@ export default function CheckoutPage() {
 
                                     {selectedDelivery === 'express' && (
                                         <div className="bg-orange-50 dark:bg-orange-900/10 p-4 rounded-2xl border border-orange-200 dark:border-orange-800/30 mt-2">
-                                            <div className="flex flex-col gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">🏍️</span>
+                                            <div className="flex flex-col gap-2.5">
+                                                <div className="flex items-center gap-2.5">
+                                                    <Truck size={13} className="text-orange-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Livreur dédié à votre commande</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">📞</span>
+                                                <div className="flex items-center gap-2.5">
+                                                    <Phone size={13} className="text-orange-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Le livreur vous appelle avant d&apos;arriver</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">📍</span>
+                                                <div className="flex items-center gap-2.5">
+                                                    <MapPin size={13} className="text-orange-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-orange-700 dark:text-orange-400">Suivi en temps réel par SMS</span>
                                                 </div>
                                             </div>
@@ -805,17 +809,17 @@ export default function CheckoutPage() {
 
                                     {selectedDelivery === 'standard' && (
                                         <div className="bg-green-50 dark:bg-green-900/10 p-4 rounded-2xl border border-green-200 dark:border-green-800/30 mt-2">
-                                            <div className="flex flex-col gap-2">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">📦</span>
+                                            <div className="flex flex-col gap-2.5">
+                                                <div className="flex items-center gap-2.5">
+                                                    <Package size={13} className="text-green-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Livraison groupée éco-responsable</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">📱</span>
+                                                <div className="flex items-center gap-2.5">
+                                                    <Smartphone size={13} className="text-green-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Notification SMS à la livraison</span>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm">🕐</span>
+                                                <div className="flex items-center gap-2.5">
+                                                    <Clock size={13} className="text-green-500 flex-shrink-0" />
                                                     <span className="text-[10px] font-bold text-green-700 dark:text-green-400">Créneau de livraison communiqué par SMS</span>
                                                 </div>
                                             </div>
@@ -830,7 +834,7 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* ═══ MÉTHODE DE PAIEMENT ═══ */}
-                        <div className="bg-white dark:bg-slate-900 p-8 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 space-y-3">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
                                 <CreditCard size={18} /> Méthode de paiement
                             </div>
@@ -909,7 +913,7 @@ export default function CheckoutPage() {
                                 (!isPatisserieOrder && needsInterUrbanDelivery &&
                                     (!interUrbanPreAlertAccepted || !interUrbanAccepted))
                             }
-                            className="w-full bg-black dark:bg-white text-white dark:text-black py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:bg-orange-500 hover:text-white transition-all shadow-2xl disabled:opacity-50"
+                            className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-7 rounded-[2.5rem] font-black uppercase italic text-xl flex items-center justify-center gap-4 hover:opacity-90 hover:scale-[1.01] active:scale-[0.99] transition-all duration-200 shadow-xl shadow-orange-500/30 hover:shadow-orange-500/50 disabled:opacity-50 disabled:cursor-not-allowed disabled:scale-100"
                         >
                             {loading ? <Loader2 className="animate-spin" /> : <>Confirmer la commande <ArrowRight size={20} /></>}
                         </button>
@@ -918,7 +922,7 @@ export default function CheckoutPage() {
 
                 {/* COLONNE DROITE : RÉCAPITULATIF */}
                 <div className="lg:sticky lg:top-12 h-fit">
-                    <div className="bg-white dark:bg-slate-900 p-10 rounded-[3.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+                    <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-10 rounded-[3.5rem] shadow-xl shadow-black/[0.08] border border-stone-200/80 dark:border-stone-800/60">
                         <h2 className="font-black uppercase text-xs italic mb-8 flex items-center gap-3 tracking-widest text-slate-400">
                             <Truck size={16} /> Résumé du panier
                         </h2>
@@ -942,7 +946,7 @@ export default function CheckoutPage() {
 
                         {/* Programme fidélité : appliquer la cagnotte */}
                         {isLoyaltyEnabled() && loyaltyState && loyaltyState.balanceAvailable > 0 && (
-                            <div className="pt-6 border-t border-slate-100 dark:border-slate-800">
+                            <div className="pt-6 border-t border-stone-100 dark:border-stone-800">
                                 <LoyaltyPointsApplier
                                     balanceAvailable={loyaltyState.balanceAvailable}
                                     orderTotal={totalBeforeLoyalty}
@@ -951,7 +955,7 @@ export default function CheckoutPage() {
                             </div>
                         )}
 
-                        <div className="space-y-3 pt-6 border-t border-slate-100 dark:border-slate-800">
+                        <div className="space-y-3 pt-6 border-t border-stone-100 dark:border-stone-800">
                             <div className="flex justify-between text-[10px] font-bold uppercase text-slate-400">
                                 <span>Sous-total</span>
                                 <span>{total.toLocaleString('fr-FR')} FCFA</span>
@@ -992,7 +996,7 @@ export default function CheckoutPage() {
                             {loyaltyPointsToUse > 0 && (
                                 <div className="flex justify-between text-[10px] font-bold uppercase">
                                     <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
-                                        🎁 <span>Cagnotte fidélité</span>
+                                        Cagnotte fidélité
                                     </span>
                                     <span className="text-orange-600 dark:text-orange-400 italic">
                                         −{loyaltyPointsToUse.toLocaleString('fr-FR')} FCFA
@@ -1008,7 +1012,7 @@ export default function CheckoutPage() {
                             </div>
                         </div>
 
-                        <div className="mt-10 p-5 bg-slate-50 dark:bg-slate-800/50 rounded-3xl border border-dashed border-slate-200 dark:border-slate-700">
+                        <div className="mt-10 p-5 bg-stone-50 dark:bg-stone-800/40 rounded-3xl border border-dashed border-stone-200 dark:border-stone-700/60">
                             <div className="flex gap-3">
                                 <ShieldCheck className="text-green-500 flex-shrink-0" size={18} />
                                 <p className="text-[9px] font-bold text-slate-500 uppercase leading-relaxed">

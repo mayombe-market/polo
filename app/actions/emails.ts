@@ -24,17 +24,27 @@ interface OrderEmailData {
 
 // Email de confirmation de commande (envoyé à l'acheteur)
 export async function sendOrderConfirmationEmail(data: OrderEmailData) {
-    const paymentLabel = data.paymentMethod === 'cash' ? 'Cash à la livraison' : 'Mobile Money'
     const safeName = escapeHtml(data.customerName)
     const safeCity = escapeHtml(data.city)
     const safeDistrict = escapeHtml(data.district)
 
+    const paymentLabel = data.paymentMethod === 'cash' ? 'Paiement à la livraison' : 'Mobile Money (MTN MoMo)'
+    const deliveryModeLabel = data.deliveryMode === 'express'
+        ? 'Express · 3-6H'
+        : data.deliveryMode === 'inter_urban'
+            ? 'Inter-ville'
+            : data.deliveryMode === 'standard'
+                ? 'Standard · 6-48H'
+                : ''
+    const deliveryFee = data.deliveryFee ?? 0
+    const subtotal = data.items.reduce((s, i) => s + i.price * i.quantity, 0)
+
     const itemsHtml = data.items
         .map(item => `
             <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #f1f5f9;">${escapeHtml(item.name)}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: center;">x${item.quantity}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #f1f5f9; text-align: right; font-weight: bold;">${(item.price * item.quantity).toLocaleString('fr-FR')} FCFA</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #f5f5f4;font-size:13px;color:#1c1917;">${escapeHtml(item.name)}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #f5f5f4;text-align:center;font-size:13px;color:#78716c;">×${item.quantity}</td>
+                <td style="padding:14px 16px;border-bottom:1px solid #f5f5f4;text-align:right;font-weight:700;font-size:13px;color:#1c1917;">${(item.price * item.quantity).toLocaleString('fr-FR')} FCFA</td>
             </tr>
         `)
         .join('')
@@ -43,66 +53,87 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
         await resend.emails.send({
             from: FROM_EMAIL,
             to: data.customerEmail,
-            subject: `Commande reçue — Mayombe Market`,
-            html: `
-                <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; background: #ffffff;">
-                    <div style="background: #000000; padding: 30px; text-align: center;">
-                        <h1 style="color: #f97316; margin: 0; font-size: 24px; font-style: italic; text-transform: uppercase;">Mayombe Market</h1>
-                    </div>
+            subject: `Commande confirmée — Mayombe Market`,
+            html: `<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:20px;background:#f5f5f4;">
+<div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:580px;margin:0 auto;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 4px 40px rgba(0,0,0,0.10);">
 
-                    <div style="padding: 30px;">
-                        <h2 style="color: #0f172a; margin-bottom: 5px;">Merci ${safeName} !</h2>
-                        <p style="color: #64748b; font-size: 14px;">Votre commande a bien été enregistrée. Voici le récapitulatif :</p>
+  <!-- HEADER -->
+  <div style="background:#1c1917;padding:36px 32px;text-align:center;">
+    <div style="display:inline-block;border:1.5px solid #ca8a04;border-radius:10px;padding:5px 16px;margin-bottom:20px;">
+      <span style="color:#ca8a04;font-size:10px;font-weight:800;letter-spacing:4px;text-transform:uppercase;">MAYOMBE MARKET</span>
+    </div>
+    <h1 style="color:#ffffff;margin:0;font-size:24px;font-weight:900;letter-spacing:-0.5px;">Commande confirmée</h1>
+    <p style="color:#a8a29e;margin:10px 0 0;font-size:12px;">Merci ${safeName} — votre commande a bien été enregistrée</p>
+  </div>
 
-                        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
-                            <thead>
-                                <tr style="background: #f8fafc;">
-                                    <th style="padding: 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #94a3b8;">Produit</th>
-                                    <th style="padding: 12px; text-align: center; font-size: 12px; text-transform: uppercase; color: #94a3b8;">Qté</th>
-                                    <th style="padding: 12px; text-align: right; font-size: 12px; text-transform: uppercase; color: #94a3b8;">Prix</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                ${itemsHtml}
-                            </tbody>
-                        </table>
+  <!-- BODY -->
+  <div style="padding:32px;">
 
-                        <div style="background: #f8fafc; padding: 20px; border-radius: 12px; margin: 20px 0;">
-                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-                                <span style="color: #64748b; font-size: 14px;">Total</span>
-                                <span style="font-size: 24px; font-weight: bold; color: #f97316;">${data.total.toLocaleString('fr-FR')} FCFA</span>
-                            </div>
-                            <div style="margin-top: 8px;">
-                                <span style="color: #64748b; font-size: 13px;">Paiement : ${paymentLabel}</span>
-                            </div>
-                            <div style="margin-top: 4px;">
-                                <span style="color: #64748b; font-size: 13px;">Livraison : ${safeCity}, ${safeDistrict}</span>
-                            </div>
-                            ${data.deliveryMode ? `
-                            <div style="margin-top: 8px; background: ${data.deliveryMode === 'express' ? '#fff7ed' : '#f0fdf4'}; border: 1px solid ${data.deliveryMode === 'express' ? '#fed7aa' : '#bbf7d0'}; padding: 10px 14px; border-radius: 8px;">
-                                <span style="font-weight: bold; color: ${data.deliveryMode === 'express' ? '#ea580c' : '#16a34a'}; font-size: 13px;">
-                                    ${data.deliveryMode === 'express' ? '⚡ Express (3-6H)' : '📦 Standard (6-48H)'}
-                                </span>
-                                <span style="color: #64748b; font-size: 12px;"> — ${(data.deliveryFee || 0).toLocaleString('fr-FR')} FCFA</span>
-                            </div>
-                            ` : ''}
-                        </div>
+    <!-- ORDER ID -->
+    <table width="100%" style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:12px;margin-bottom:24px;"><tr>
+      <td style="padding:12px 16px;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;color:#78716c;">Commande</td>
+      <td style="padding:12px 16px;text-align:right;font-size:11px;font-weight:800;color:#1c1917;font-family:monospace;">#${data.orderId.slice(-8).toUpperCase()}</td>
+    </tr></table>
 
-                        ${data.paymentMethod === 'mobile_money' ? `
-                        <div style="background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 12px; margin: 20px 0;">
-                            <p style="color: #166534; font-weight: bold; font-size: 13px; margin: 0 0 8px 0;">Paiement Mobile Money</p>
-                            <p style="color: #15803d; font-size: 13px; margin: 0;">Envoyez <strong>${data.total.toLocaleString('fr-FR')} FCFA</strong> au <strong>06 938 71 69</strong> via MTN MoMo ou Airtel Money.</p>
-                        </div>
-                        ` : ''}
+    <!-- PRODUCTS TABLE -->
+    <p style="color:#78716c;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin:0 0 10px;">Produits commandés</p>
+    <table width="100%" style="border-collapse:collapse;border:1px solid #f5f5f4;border-radius:14px;overflow:hidden;margin-bottom:20px;">
+      <thead><tr style="background:#fafaf9;">
+        <th style="padding:11px 16px;text-align:left;font-size:9px;text-transform:uppercase;color:#a8a29e;font-weight:700;letter-spacing:1.5px;">Produit</th>
+        <th style="padding:11px 16px;text-align:center;font-size:9px;text-transform:uppercase;color:#a8a29e;font-weight:700;letter-spacing:1.5px;">Qté</th>
+        <th style="padding:11px 16px;text-align:right;font-size:9px;text-transform:uppercase;color:#a8a29e;font-weight:700;letter-spacing:1.5px;">Prix</th>
+      </tr></thead>
+      <tbody>${itemsHtml}</tbody>
+    </table>
 
-                        <p style="color: #64748b; font-size: 13px; margin-top: 20px;">Vous recevrez un email à chaque mise à jour de votre commande.</p>
-                    </div>
+    <!-- TOTALS -->
+    <div style="background:#fafaf9;border:1px solid #e7e5e4;border-radius:14px;padding:18px;margin-bottom:22px;">
+      <table width="100%">
+        <tr><td style="padding-bottom:10px;font-size:13px;color:#78716c;">Sous-total produits</td>
+            <td style="padding-bottom:10px;text-align:right;font-size:13px;font-weight:700;color:#1c1917;">${subtotal.toLocaleString('fr-FR')} FCFA</td></tr>
+        ${deliveryFee > 0 ? `
+        <tr><td style="padding-bottom:10px;font-size:13px;color:#78716c;">Livraison${deliveryModeLabel ? ` · ${deliveryModeLabel}` : ''}</td>
+            <td style="padding-bottom:10px;text-align:right;font-size:13px;font-weight:700;color:#1c1917;">+${deliveryFee.toLocaleString('fr-FR')} FCFA</td></tr>
+        ` : ''}
+        <tr style="border-top:1px solid #e7e5e4;">
+          <td style="padding-top:12px;font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:0.5px;color:#1c1917;">Total payé</td>
+          <td style="padding-top:12px;text-align:right;font-size:22px;font-weight:900;color:#ca8a04;">${data.total.toLocaleString('fr-FR')} FCFA</td>
+        </tr>
+      </table>
+    </div>
 
-                    <div style="background: #f8fafc; padding: 20px; text-align: center;">
-                        <p style="color: #94a3b8; font-size: 11px; margin: 0;">Mayombe Market — contact@mayombe-market.com</p>
-                    </div>
-                </div>
-            `,
+    <!-- DELIVERY + PAYMENT INFO -->
+    <table width="100%" style="margin-bottom:22px;"><tr>
+      <td width="49%" style="vertical-align:top;background:#fafaf9;border:1px solid #e7e5e4;border-radius:12px;padding:16px;">
+        <p style="color:#a8a29e;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin:0 0 6px;">Livraison</p>
+        <p style="color:#1c1917;font-size:13px;font-weight:700;margin:0;">${safeCity}, ${safeDistrict}</p>
+        ${deliveryModeLabel ? `<p style="color:#78716c;font-size:11px;margin:4px 0 0;">${deliveryModeLabel}</p>` : ''}
+      </td>
+      <td width="2%"></td>
+      <td width="49%" style="vertical-align:top;background:#fafaf9;border:1px solid #e7e5e4;border-radius:12px;padding:16px;">
+        <p style="color:#a8a29e;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:2px;margin:0 0 6px;">Paiement</p>
+        <p style="color:#1c1917;font-size:13px;font-weight:700;margin:0;">${paymentLabel}</p>
+      </td>
+    </tr></table>
+
+    <!-- NEXT STEPS -->
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:12px;padding:16px;">
+      <p style="color:#92400e;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:1.5px;margin:0 0 6px;">Prochaines étapes</p>
+      <p style="color:#78350f;font-size:13px;margin:0;line-height:1.6;">Votre commande est prise en charge. Vous serez notifié par email à chaque mise à jour de statut.</p>
+    </div>
+
+  </div>
+
+  <!-- FOOTER -->
+  <div style="background:#1c1917;padding:22px 32px;text-align:center;">
+    <p style="color:#a8a29e;font-size:11px;margin:0;">© Mayombe Market · contact@mayombe-market.com</p>
+    <p style="color:#57534e;font-size:10px;margin:5px 0 0;">Brazzaville, République du Congo</p>
+  </div>
+
+</div>
+</body></html>`,
         })
         return { success: true }
     } catch (error) {

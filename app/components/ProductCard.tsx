@@ -5,12 +5,12 @@
  *
  * Problèmes adressés :
  * 1) **Affichage seulement quand les données minimales sont cohérentes** — pas de `Link` vers `/product/undefined`
- *    ni de `.toLocaleString()` sur un prix manquant (évite page blanche / erreur jusqu’au refresh).
+ *    ni de `.toLocaleString()` sur un prix manquant (évite page blanche / erreur jusqu'au refresh).
  * 2) **État de chargement explicite** — prop optionnelle `isLoading` ou produit encore incomplet → squelette
  *    aux mêmes dimensions (pas de saut de layout quand les données arrivent).
  * 3) **Données partielles** — libellés et image de repli sans casser le rendu.
  * 4) **Pas besoin de refresh pour voir la bonne image** — `key` sur `<img>` liée à `id` + URL effective pour forcer
- *    le remontage si le parent met à jour l’objet produit après coup (navigation client).
+ *    le remontage si le parent met à jour l'objet produit après coup (navigation client).
  * 5) **`<img>` natif** : URL Cloudinary directe (`res.cloudinary.com`) avec `f_auto,q_auto` / vignette grille — **jamais** `/_next/image`.
  */
 
@@ -19,7 +19,7 @@ import { debugImageSrc } from '@/lib/debugImageSrc'
 import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 import { catalogImageUrl } from '@/lib/heroImageUrl'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
-import { ShoppingBag, Eye } from 'lucide-react'
+import { ShoppingBag, Flame, Sparkles, PackageX } from 'lucide-react'
 import LikeButton from './LikeButton'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
@@ -40,6 +40,8 @@ export interface ProductCardProduct {
     promo_end_date?: string | null
     views_count?: number | null
     created_at?: string | null
+    /** Prix barré — fonctionnalité pro/premium */
+    compare_price?: number | null
 }
 
 export type ProductCardProps = {
@@ -85,16 +87,16 @@ function resolveImageSrc(p: ProductCardProduct): string {
     return PLACEHOLDER_IMG
 }
 
-/** Placeholder discret (réseau lent) : réserve l’espace sans bloc gris animé. */
+/** Placeholder discret (réseau lent) : réserve l'espace sans bloc gris animé. */
 function ProductCardEmptyPlaceholder() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 shadow-sm dark:shadow-none"
+            className="relative bg-white dark:bg-stone-900 rounded-[1.75rem] overflow-hidden border border-stone-100 dark:border-stone-800"
             aria-busy="true"
             aria-label="Emplacement produit"
         >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-white dark:bg-slate-950 min-h-[140px]" />
-            <div className="mt-4 px-2 pb-2 h-14" />
+            <div className="aspect-[4/5] bg-stone-50 dark:bg-stone-950 min-h-[140px]" />
+            <div className="px-4 pt-3 pb-4 h-[72px]" />
         </div>
     )
 }
@@ -103,17 +105,17 @@ function ProductCardEmptyPlaceholder() {
 function ProductCardSkeleton() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-slate-100 dark:border-slate-800 animate-pulse"
+            className="relative bg-white dark:bg-stone-900 rounded-[1.75rem] overflow-hidden border border-stone-100 dark:border-stone-800 animate-pulse"
             aria-busy="true"
             aria-label="Chargement du produit"
         >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800" />
-            <div className="mt-4 px-2 pb-2 space-y-3">
-                <div className="h-3 w-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                <div className="h-4 w-[85%] bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                <div className="flex justify-between items-center mt-3">
-                    <div className="h-6 w-28 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                    <div className="h-10 w-10 bg-slate-200 dark:bg-slate-800 rounded-xl animate-pulse" />
+            <div className="aspect-[4/5] bg-stone-200 dark:bg-stone-800" />
+            <div className="px-4 pt-3 pb-4 space-y-2.5">
+                <div className="h-2 w-16 bg-stone-200 dark:bg-stone-800 rounded-full" />
+                <div className="h-3.5 w-[80%] bg-stone-200 dark:bg-stone-800 rounded-full" />
+                <div className="flex justify-between items-center pt-1">
+                    <div className="h-5 w-24 bg-stone-200 dark:bg-stone-800 rounded-full" />
+                    <div className="h-9 w-9 bg-stone-200 dark:bg-stone-800 rounded-xl" />
                 </div>
             </div>
         </div>
@@ -124,13 +126,13 @@ function ProductCardSkeleton() {
 function ProductCardPending() {
     return (
         <div
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 border border-dashed border-slate-200 dark:border-slate-600"
+            className="relative bg-white dark:bg-stone-900 rounded-[1.75rem] overflow-hidden border border-dashed border-stone-200 dark:border-stone-700"
             aria-live="polite"
         >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-200 dark:bg-slate-800 animate-pulse" />
-            <div className="mt-4 px-2 pb-2 space-y-2">
-                <div className="h-2 w-20 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
-                <div className="h-3 w-32 bg-slate-200 dark:bg-slate-800 rounded mx-auto animate-pulse" />
+            <div className="aspect-[4/5] bg-stone-100 dark:bg-stone-800 animate-pulse" />
+            <div className="px-4 pt-3 pb-4 space-y-2">
+                <div className="h-2 w-16 bg-stone-200 dark:bg-stone-800 rounded-full mx-auto animate-pulse" />
+                <div className="h-3 w-28 bg-stone-200 dark:bg-stone-800 rounded-full mx-auto animate-pulse" />
             </div>
         </div>
     )
@@ -150,24 +152,20 @@ function ProductCardInner({
     const hasPromo = isPromoActive(product as Parameters<typeof isPromoActive>[0])
     const basePrice = typeof product.price === 'number' && Number.isFinite(product.price) ? product.price : 0
     const promoPrice = hasPromo ? getPromoPrice(product as Parameters<typeof getPromoPrice>[0]) : basePrice
+    const effectivePrice = hasPromo ? promoPrice : basePrice
     const timeRemaining = hasPromo ? getPromoTimeRemaining(product.promo_end_date) : ''
+    const hasComparePrice = typeof product.compare_price === 'number' && product.compare_price > effectivePrice
+    const discountPct = hasComparePrice ? Math.round((1 - effectivePrice / product.compare_price!) * 100) : 0
+
     const imageSrc = resolveImageSrc(product)
     const displayUrl = useMemo(() => catalogImageUrl(withCloudinaryCatalogThumb(imageSrc)), [imageSrc])
     const [imgBroken, setImgBroken] = useState(false)
 
-    useEffect(() => {
-        setImgBroken(false)
-    }, [displayUrl])
-
-    const onImgError = useCallback(() => {
-        setImgBroken(true)
-    }, [])
-
+    useEffect(() => { setImgBroken(false) }, [displayUrl])
+    const onImgError = useCallback(() => { setImgBroken(true) }, [])
     const imgSrc = imgBroken ? PLACEHOLDER_IMG : displayUrl
 
-    useEffect(() => {
-        debugImageSrc('ProductCard', imgSrc)
-    }, [imgSrc])
+    useEffect(() => { debugImageSrc('ProductCard', imgSrc) }, [imgSrc])
 
     const displayName = product.name?.trim() || 'Produit'
     const categoryLabel = product.category?.trim() || 'Collection'
@@ -175,88 +173,101 @@ function ProductCardInner({
     return (
         <Link
             href={`/product/${product.id}`}
-            className="group relative bg-white dark:bg-slate-900 rounded-[2rem] p-3 transition-all duration-500 hover:shadow-[0_20px_50px_rgba(0,0,0,0.05)] dark:hover:shadow-[0_20px_50px_rgba(0,0,0,0.35)] border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 block"
+            className="group relative bg-white dark:bg-stone-900 rounded-[1.75rem] overflow-hidden border border-stone-100/80 dark:border-stone-800/60 shadow-[0_2px_8px_rgba(0,0,0,0.04)] dark:shadow-none transition-all duration-300 motion-safe:hover:-translate-y-1 hover:shadow-[0_20px_48px_-8px_rgba(0,0,0,0.13)] dark:hover:shadow-[0_20px_48px_-8px_rgba(0,0,0,0.5)] hover:border-stone-200/80 dark:hover:border-stone-700/60 block cursor-pointer"
         >
-            <div className="relative aspect-[4/5] overflow-hidden rounded-[1.5rem] bg-slate-100 dark:bg-slate-800">
-                {/*
-                  key = id + src : si le parent met à jour l’URL d’image après le 1er rendu (ex. données async),
-                  le navigateur recharge la vignette sans refresh de page entière.
-                */}
+            {/* ── Image ── */}
+            <div className="relative aspect-[4/5] overflow-hidden bg-stone-100 dark:bg-stone-800">
                 <img
                     key={`${product.id}-${imgSrc}`}
                     src={imgSrc}
                     alt={displayName}
-                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+                    className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 motion-safe:group-hover:scale-[1.07]"
                     loading={aboveFold ? 'eager' : 'lazy'}
                     fetchPriority={aboveFold ? 'high' : undefined}
                     decoding="async"
                     onError={onImgError}
                 />
 
+                {/* Gradient overlay bas → lisibilité */}
+                <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/30 to-transparent pointer-events-none" />
+
+                {/* Badges — top left */}
+                <div className="absolute top-3 left-3 flex flex-col gap-1.5 z-10">
+                    {hasPromo && product.promo_percentage != null && (
+                        <div className="inline-flex items-center gap-1 bg-red-500 text-white px-2.5 py-1 rounded-full shadow-md shadow-red-500/30">
+                            <Flame size={9} strokeWidth={2.5} />
+                            <span className="text-[10px] font-black tracking-wide">-{product.promo_percentage}%</span>
+                        </div>
+                    )}
+                    {isNew && !hasPromo && (
+                        <div className="inline-flex items-center gap-1 bg-emerald-500 text-white px-2.5 py-1 rounded-full shadow-md shadow-emerald-500/25">
+                            <Sparkles size={9} strokeWidth={2.5} />
+                            <span className="text-[10px] font-black">Nouveau</span>
+                        </div>
+                    )}
+                    {isOutOfStock && (
+                        <div className="inline-flex items-center gap-1 bg-stone-800/90 backdrop-blur-sm text-white px-2.5 py-1 rounded-full">
+                            <PackageX size={9} strokeWidth={2.5} />
+                            <span className="text-[9px] font-black uppercase tracking-wide">Épuisé</span>
+                        </div>
+                    )}
+                </div>
+
+                {/* Badge réduction compare_price — bottom left */}
+                {hasComparePrice && !hasPromo && (
+                    <div className="absolute bottom-3 left-3 z-10 inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full shadow-md">
+                        <Flame size={8} strokeWidth={2.5} />
+                        -{discountPct}%
+                    </div>
+                )}
+
+                {/* LikeButton — top right */}
                 <div className="absolute top-3 right-3 z-20">
                     <LikeButton productId={product.id!} />
                 </div>
 
-                <div className="absolute top-0 left-0 flex flex-col items-start gap-1.5 z-10">
-                    {hasPromo && product.promo_percentage != null && (
-                        <div className="bg-red-600 text-white font-black uppercase shadow-lg rounded-tl-[1.5rem] rounded-br-2xl px-4 py-2.5 flex items-center gap-1.5">
-                            <span className="text-[10px] md:text-xs tracking-wide">🔥 PROMO</span>
-                            <span className="text-sm md:text-base font-black">-{product.promo_percentage}%</span>
-                        </div>
-                    )}
-                    {isNew && !hasPromo && (
-                        <div className="bg-emerald-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-tl-[1.5rem] rounded-br-2xl shadow-lg">
-                            Nouveau
-                        </div>
-                    )}
-                    {isOutOfStock && (
-                        <div className="bg-red-500 text-white text-[8px] font-black uppercase px-3 py-1.5 rounded-full shadow-lg ml-4 mt-2">
-                            Épuisé
-                        </div>
-                    )}
-                </div>
-
-                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center gap-2">
-                    <div className="bg-white text-black p-3 rounded-full transform translate-y-4 group-hover:translate-y-0 transition-transform duration-300">
-                        <Eye size={18} />
-                    </div>
-                </div>
+                {/* Hover overlay — vue rapide */}
+                <div className="absolute inset-0 bg-black/10 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
             </div>
 
-            <div className="mt-4 px-2 pb-2">
-                <div className="flex justify-between items-start gap-2">
-                    <div>
-                        <p className="text-[10px] font-black uppercase text-orange-500 tracking-widest mb-1">
-                            {categoryLabel}
+            {/* ── Infos ── */}
+            <div className="px-4 pt-3 pb-4">
+                <p className="text-[9px] font-black uppercase tracking-[0.18em] text-amber-600 dark:text-amber-500 mb-1 truncate">
+                    {categoryLabel}
+                </p>
+                <h3 className="text-[13px] font-bold text-stone-900 dark:text-stone-50 line-clamp-1 leading-snug mb-3">
+                    {displayName}
+                </h3>
+
+                <div className="flex items-end justify-between gap-2">
+                    <div className="min-w-0">
+                        {/* Ancien prix barré */}
+                        {(hasComparePrice || hasPromo) && (
+                            <p className="text-[10px] text-stone-400 dark:text-stone-500 line-through leading-none mb-0.5">
+                                {hasComparePrice
+                                    ? `${product.compare_price!.toLocaleString('fr-FR')} FCFA`
+                                    : `${basePrice.toLocaleString('fr-FR')} F`
+                                }
+                            </p>
+                        )}
+                        {/* Prix courant */}
+                        <p className="text-[15px] font-black tracking-tight text-amber-700 dark:text-amber-400 leading-none">
+                            {effectivePrice.toLocaleString('fr-FR')}
+                            <span className="text-[10px] font-bold ml-1 text-amber-600 dark:text-amber-500">FCFA</span>
                         </p>
-                        <h3 className="text-sm font-black uppercase tracking-tighter leading-tight text-slate-900 dark:text-slate-50 line-clamp-1">
-                            {displayName}
-                        </h3>
+                        {hasPromo && timeRemaining && (
+                            <p className="text-[9px] text-red-500 dark:text-red-400 font-bold mt-0.5 leading-none">
+                                Expire dans {timeRemaining}
+                            </p>
+                        )}
                     </div>
-                </div>
 
-                <div className="mt-3 flex items-center justify-between">
-                    {hasPromo ? (
-                        <div>
-                            <p className="text-xs text-slate-500 dark:text-slate-400 line-through font-bold">
-                                {basePrice.toLocaleString('fr-FR')} F
-                            </p>
-                            <p className="text-lg font-black tracking-tighter text-red-600 dark:text-red-400">
-                                {promoPrice.toLocaleString('fr-FR')}{' '}
-                                <span className="text-[10px] ml-0.5">FCFA</span>
-                            </p>
-                            {timeRemaining ? (
-                                <p className="text-[9px] font-bold text-red-500 dark:text-red-300 mt-0.5">Expire dans {timeRemaining}</p>
-                            ) : null}
-                        </div>
-                    ) : (
-                        <p className="text-lg font-black tracking-tighter text-slate-900 dark:text-slate-50">
-                            {basePrice.toLocaleString('fr-FR')} <span className="text-[10px] ml-0.5">FCFA</span>
-                        </p>
-                    )}
-
-                    <div className="bg-slate-50 dark:bg-slate-800 p-2.5 rounded-xl group-hover:bg-black group-hover:text-white dark:group-hover:bg-orange-500 transition-colors">
-                        <ShoppingBag size={16} />
+                    {/* Bouton panier */}
+                    <div className="flex-shrink-0 w-9 h-9 rounded-[0.75rem] bg-stone-100 dark:bg-stone-800 flex items-center justify-center transition-all duration-200 group-hover:bg-stone-900 dark:group-hover:bg-amber-500 group-hover:shadow-md">
+                        <ShoppingBag
+                            size={15}
+                            className="text-stone-500 dark:text-stone-400 group-hover:text-white transition-colors duration-200"
+                        />
                     </div>
                 </div>
             </div>
@@ -265,22 +276,15 @@ function ProductCardInner({
 }
 
 function ProductCard({ product, isLoading = false, aboveFold = false }: ProductCardProps) {
-    // 1) Chargement explicite côté parent
     if (isLoading) {
         return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardSkeleton />
     }
-
-    // 2) Objet absent
     if (product == null) {
         return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardSkeleton />
     }
-
-    // 3) Données encore incomplètes → pas de carte « vide » ni de lien invalide
     if (!isProductDisplayReady(product)) {
         return aboveFold ? <ProductCardEmptyPlaceholder /> : <ProductCardPending />
     }
-
-    // 4) À ce stade id / name / price sont garantis pour l’affichage métier
     return <ProductCardInner product={product} aboveFold={aboveFold} />
 }
 
@@ -298,6 +302,7 @@ const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
         a.id === b.id &&
         a.name === b.name &&
         a.price === b.price &&
+        a.compare_price === b.compare_price &&
         a.img === b.img &&
         a.image_url === b.image_url &&
         JSON.stringify(a.images_gallery ?? null) === JSON.stringify(b.images_gallery ?? null) &&

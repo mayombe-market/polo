@@ -827,19 +827,7 @@ export default function CheckoutPage() {
                                 <CreditCard size={18} /> Méthode de paiement
                             </div>
 
-                            {/* OPTION 1 : Cash à la livraison */}
-                            <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'cod' ? 'border-orange-500 bg-orange-50/50 dark:bg-orange-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
-                                <div className="flex items-center gap-4">
-                                    <div className="w-10 h-10 bg-orange-500 rounded-full flex items-center justify-center text-white font-black italic">F</div>
-                                    <div>
-                                        <p className="font-black uppercase text-xs italic">Cash à la livraison</p>
-                                        <p className="text-[9px] font-bold text-slate-500 uppercase">Payez quand vous recevez</p>
-                                    </div>
-                                </div>
-                                <input type="radio" value="cod" {...register('payment_method')} className="text-orange-500 w-5 h-5" />
-                            </label>
-
-                            {/* OPTION 2 : Mobile Money */}
+                            {/* OPTION : Mobile Money */}
                             <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
                                 <div className="flex items-center gap-3">
                                     <div className="flex items-center gap-2">

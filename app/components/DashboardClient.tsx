@@ -990,6 +990,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                                     verificationStatus={profile?.verification_status}
                                     vendorType={profile?.vendor_type}
                                     vendorPages={profile?.vendor_pages}
+                                    subscriptionPlan={profile?.subscription_plan}
                                 />
                             </>
                         )}

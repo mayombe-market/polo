@@ -1265,6 +1265,8 @@ export async function createProduct(input: {
     listing_extras?: Record<string, unknown> | null
     /** Options/combos du produit pâtisserie : [{id,name,required,choices:[{id,name,price}]}] */
     options?: any[] | null
+    /** Prix avant réduction affiché barré (fonctionnalité pro/premium uniquement). */
+    compare_price?: number | null
     /** Doit être l’UUID auth actuel ; sinon refus (alignement client / serveur, anti usurpation seller_id). */
     expected_seller_id?: string
 }): Promise<
@@ -1396,6 +1398,9 @@ export async function createProduct(input: {
                     ? rawExtras
                     : {},
             options: Array.isArray(input.options) ? input.options : [],
+            ...(typeof input.compare_price === 'number' && input.compare_price > input.price
+                ? { compare_price: Math.round(input.compare_price) }
+                : { compare_price: null }),
         }
 
         const { data: product, error } = await supabase

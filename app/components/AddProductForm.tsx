@@ -786,6 +786,8 @@ export type AddProductFormProps = {
     vendorType?: string | null
     /** Pages auxquelles le vendeur a accès — pilote les catégories visibles */
     vendorPages?: string[] | null
+    /** Plan d’abonnement — débloque la fonctionnalité de prix barré (pro/premium) */
+    subscriptionPlan?: string | null
 }
 
 export default function AddProductForm({
@@ -794,6 +796,7 @@ export default function AddProductForm({
     verificationStatus,
     vendorType,
     vendorPages,
+    subscriptionPlan,
 }: AddProductFormProps) {
     /**
      * Anti-course / double envoi :
@@ -820,6 +823,7 @@ export default function AddProductForm({
 
     // Step 2: Prix & Stock
     const [price, setPrice] = useState('')
+    const [comparePrice, setComparePrice] = useState('')
     const [hasStock, setHasStock] = useState(false)
     const [stockQuantity, setStockQuantity] = useState('')
 
@@ -1287,6 +1291,7 @@ export default function AddProductForm({
             setPublishLabel('Enregistrement du produit…')
 
             const publishAsRealEstate = selectedCategory === IMMOBILIER_CATEGORY
+            const isPremiumPlan = subscriptionPlan === 'pro' || subscriptionPlan === 'premium'
             const parsedPrice = parseInt(price, 10)
             let priceToSend = Number.isFinite(parsedPrice) ? parsedPrice : 0
             if (publishAsRealEstate) {
@@ -1331,6 +1336,9 @@ export default function AddProductForm({
                     sizes: publishAsRealEstate || !hasVariantsPayload ? [] : sizes,
                     colors: publishAsRealEstate || !hasVariantsPayload ? [] : selectedColors,
                     listing_extras: listingExtrasPayload as Record<string, unknown> | undefined,
+                    compare_price: !publishAsRealEstate && isPremiumPlan && comparePrice
+                        ? parseInt(comparePrice, 10)
+                        : null,
                     expected_seller_id: storageUserId,
                 })
                 if (!ownsPublishUi()) return
@@ -1620,6 +1628,41 @@ export default function AddProductForm({
                                 </p>
                             )}
                         </div>
+
+                        {/* Ancien prix barré — fonctionnalité pro/premium uniquement */}
+                        {!isRealEstate && (subscriptionPlan === 'pro' || subscriptionPlan === 'premium') && (
+                        <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 rounded-2xl border border-amber-200/60 dark:border-amber-800/40 space-y-3">
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs font-black uppercase tracking-widest text-amber-700 dark:text-amber-400">Prix barré (optionnel)</span>
+                                <span className="text-[10px] font-bold bg-amber-500 text-white px-2 py-0.5 rounded-full">
+                                    {subscriptionPlan === 'premium' ? 'Premium' : 'Pro'}
+                                </span>
+                            </div>
+                            <p className="text-[10px] text-amber-700/70 dark:text-amber-400/70 font-semibold -mt-1">
+                                Affichez l'ancien prix barré pour montrer la réduction. Doit être supérieur au prix actuel.
+                            </p>
+                            <div className="relative">
+                                <input
+                                    type="number"
+                                    value={comparePrice}
+                                    onChange={e => setComparePrice(e.target.value)}
+                                    placeholder="Ex: 8000"
+                                    className="w-full p-4 pr-20 rounded-2xl bg-white dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-amber-400 text-xl font-black line-through text-slate-400"
+                                />
+                                <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">FCFA</span>
+                            </div>
+                            {comparePrice && price && parseInt(comparePrice) > parseInt(price) && (
+                                <p className="text-[10px] text-green-600 dark:text-green-400 font-bold">
+                                    Réduction affichée : -{Math.round((1 - parseInt(price) / parseInt(comparePrice)) * 100)}% sur la fiche produit
+                                </p>
+                            )}
+                            {comparePrice && price && parseInt(comparePrice) <= parseInt(price) && (
+                                <p className="text-[10px] text-red-500 font-bold">
+                                    L'ancien prix doit être supérieur au prix actuel.
+                                </p>
+                            )}
+                        </div>
+                        )}
 
                         {!isRealEstate && (
                         <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-4">

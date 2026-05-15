@@ -331,6 +331,9 @@ export default function ProductDetailPage() {
 
     const isImmo = isRealEstateProduct(product)
     const isHotelProduct = isHotelListing(product?.listing_extras)
+    const isPremiumSeller = shop?.subscription_plan === 'pro' || shop?.subscription_plan === 'premium'
+    const hasComparePrice = isPremiumSeller && typeof product.compare_price === 'number' && product.compare_price > effectivePrice
+    const discountPct = hasComparePrice ? Math.round((1 - effectivePrice / product.compare_price) * 100) : 0
 
     const breakdown = [5, 4, 3, 2, 1].map(stars => {
         const count = reviews.filter((r: any) => r.rating === stars).length
@@ -789,11 +792,25 @@ export default function ProductDetailPage() {
                     {/* Prix unique (rouge) — hors immo */}
                     {!isImmo && showNegotiationBlock && (
                         <div className="rounded-2xl border border-orange-200/60 dark:border-orange-900/40 bg-gradient-to-br from-orange-50/80 to-white dark:from-[#1a0e00]/60 dark:to-[#0A0A12]/95 backdrop-blur-md px-5 py-4 mb-3 shadow-[0_8px_32px_-12px_rgba(234,88,12,0.15)]">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 dark:text-orange-400 mb-1">
-                                Prix
-                            </p>
+                            <div className="flex items-center gap-2 mb-1">
+                                <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 dark:text-orange-400">
+                                    Prix
+                                </p>
+                                {hasComparePrice && (
+                                    <span className="inline-flex items-center gap-1 bg-red-500 text-white text-[10px] font-black px-2 py-0.5 rounded-full">
+                                        -{discountPct}%
+                                    </span>
+                                )}
+                            </div>
                             <div className="flex flex-wrap items-baseline gap-3">
-                                {hasPromo && (
+                                {/* Ancien prix barré (pro/premium) */}
+                                {hasComparePrice && (
+                                    <span className="text-xl text-slate-400 dark:text-slate-500 line-through font-bold tabular-nums">
+                                        {fmt(Number(product.compare_price))} FCFA
+                                    </span>
+                                )}
+                                {/* Prix promo existant (promo active) */}
+                                {!hasComparePrice && hasPromo && (
                                     <span className="text-xl text-slate-400 line-through font-bold tabular-nums">
                                         {fmt(Number(product.price))} F
                                     </span>
@@ -803,6 +820,12 @@ export default function ProductDetailPage() {
                                     <span className="text-lg font-bold text-orange-500 dark:text-orange-300">FCFA</span>
                                 </span>
                             </div>
+                            {/* Économies en FCFA */}
+                            {hasComparePrice && (
+                                <p className="text-[11px] font-bold text-green-600 dark:text-green-400 mt-1">
+                                    Vous économisez {fmt(product.compare_price - effectivePrice)} FCFA
+                                </p>
+                            )}
                             <LoyaltyEarnBadge price={Number(effectivePrice)} className="mt-2" />
                         </div>
                     )}
@@ -871,31 +894,39 @@ export default function ProductDetailPage() {
                         </p>
                     )}
 
-                    {/* Stock : urgence seulement si 1–5 ; pas de « X en stock » au-delà */}
+                    {/* Urgence stock : ≤5 pour tous, ≤10 pour pro/premium */}
                     {product.has_stock &&
                         (product.stock_quantity <= 0 ||
-                            (product.stock_quantity > 0 && product.stock_quantity <= 5)) && (
+                            (product.stock_quantity > 0 && product.stock_quantity <= (isPremiumSeller ? 10 : 5))) && (
                         <div className="flex items-center gap-3 mb-5 flex-wrap">
                             <div
-                                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] border border-white/10 backdrop-blur-md ${
-                                    product.stock_quantity > 0
-                                        ? 'bg-red-500/[0.08] motion-safe:animate-pulse'
-                                        : 'bg-red-500/[0.08]'
+                                className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-[10px] border backdrop-blur-md ${
+                                    product.stock_quantity <= 0
+                                        ? 'bg-red-500/[0.08] border-red-500/20'
+                                        : product.stock_quantity <= 3
+                                        ? 'bg-red-500/[0.08] border-red-500/20 motion-safe:animate-pulse'
+                                        : 'bg-orange-500/[0.08] border-orange-500/20'
                                 }`}
                             >
                                 <div
                                     className={`w-[7px] h-[7px] rounded-full ${
-                                        product.stock_quantity > 0 ? 'bg-red-500' : 'bg-red-500 motion-safe:animate-pulse'
+                                        product.stock_quantity <= 0
+                                            ? 'bg-red-500 motion-safe:animate-pulse'
+                                            : product.stock_quantity <= 3
+                                            ? 'bg-red-500'
+                                            : 'bg-orange-500'
                                     }`}
                                 />
                                 <span
                                     className={`text-xs font-semibold ${
-                                        product.stock_quantity > 0 ? 'text-red-400' : 'text-red-400'
+                                        product.stock_quantity <= 0 || product.stock_quantity <= 3
+                                            ? 'text-red-400'
+                                            : 'text-orange-400'
                                     }`}
                                 >
-                                    {product.stock_quantity > 0
-                                        ? `Plus que ${product.stock_quantity} en stock !`
-                                        : 'Rupture de stock'}
+                                    {product.stock_quantity <= 0
+                                        ? 'Rupture de stock'
+                                        : `Plus que ${product.stock_quantity} en stock !`}
                                 </span>
                             </div>
                         </div>

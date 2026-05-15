@@ -12,10 +12,17 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'orderId, phone et amount requis' }, { status: 400 })
         }
 
-        // Nettoyer le numéro : garder uniquement les chiffres
-        const cleanPhone = String(phone).replace(/\D/g, '')
-        if (cleanPhone.length < 9) {
-            return NextResponse.json({ error: 'Numéro de téléphone invalide' }, { status: 400 })
+        // Normaliser au format MSISDN Congo : 24206XXXXXXX
+        let cleanPhone = String(phone).replace(/\D/g, '')
+        if (cleanPhone.startsWith('242')) {
+            // déjà avec l'indicatif pays
+        } else if (cleanPhone.startsWith('0')) {
+            cleanPhone = '242' + cleanPhone   // 06XXXXXXX → 24206XXXXXXX
+        } else {
+            cleanPhone = '2420' + cleanPhone  // 6XXXXXXX → 24206XXXXXXX
+        }
+        if (cleanPhone.length !== 12) {
+            return NextResponse.json({ error: 'Numéro MTN invalide (format attendu : 06 XXX XX XX)' }, { status: 400 })
         }
 
         const referenceId = randomUUID()

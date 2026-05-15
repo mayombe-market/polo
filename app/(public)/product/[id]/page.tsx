@@ -18,12 +18,11 @@ import LoyaltyEarnBadge from '@/app/components/loyalty/LoyaltyEarnBadge'
 import RealEstateGallery from '@/app/components/RealEstateGallery'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import AddToCartButton from '../../../components/AddToCartButton'
-import FollowButton from '../../../components/FollowButton'
 import StarRating from '../../../components/StarRating'
 import OrderAction from '../../../components/OrderAction'
 import ShareButtons from '../../../components/ShareButtons'
-import SimilarProducts from '../../../components/SimilarProducts'
 import MessageButton from '../../../components/MessageButton'
+import SimilarProducts from '../../../components/SimilarProducts'
 import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isHotelListing } from '@/lib/hotelListing'
@@ -769,19 +768,6 @@ export default function ProductDetailPage() {
                                 </p>
                             )}
                         </div>
-                        <div className="flex items-center gap-2" onClick={e => e.preventDefault()}>
-                            <MessageButton
-                                sellerId={product.seller_id}
-                                productId={product.id}
-                                user={user}
-                                realEstateContactAdmin={isRealEstateProduct(product)}
-                                viewerIsAdmin={viewerIsAdmin}
-                            />
-                            <FollowButton
-                                sellerId={product.seller_id}
-                                onFollowChange={(delta: number) => setFollowerCount(prev => Math.max(0, prev + delta))}
-                            />
-                        </div>
                     </Link>
 
                     {/* Category badge */}
@@ -1033,17 +1019,6 @@ export default function ProductDetailPage() {
                     </div>
                     )}
 
-                    {/* Partage produit */}
-                    {!isRealEstateProduct(product) && (
-                        <div className="mb-5">
-                            <ShareButtons
-                                title={product.name}
-                                text={`Découvre ${product.name} — ${sharePriceText} sur Mayombe Market !`}
-                                url={typeof window !== 'undefined' ? `${window.location.origin}/product/${product.id}` : ''}
-                                inline
-                            />
-                        </div>
-                    )}
 
                     {!isImmo && (
                         <div className="relative z-[25] hidden lg:flex flex-col sm:flex-row gap-4 pt-4 pointer-events-auto">

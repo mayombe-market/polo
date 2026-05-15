@@ -607,9 +607,17 @@ export default function CheckoutPage() {
                             <div className="space-y-1">
                                 <div className="relative">
                                     <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-                                    <input {...register('phone')} placeholder="Numéro de téléphone" className="w-full bg-slate-50 dark:bg-slate-800 p-4 pl-12 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500" />
+                                    <input
+                                        {...register('phone')}
+                                        placeholder="Ex: 06 XXX XX XX"
+                                        inputMode="tel"
+                                        className="w-full bg-slate-50 dark:bg-slate-800 p-4 pl-12 rounded-2xl border-none font-bold focus:ring-2 focus:ring-orange-500 placeholder:text-slate-400 placeholder:font-normal"
+                                    />
                                 </div>
-                                {errors.phone && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.phone.message}</p>}
+                                {errors.phone
+                                    ? <p className="text-red-500 text-[10px] font-black uppercase ml-2">{errors.phone.message}</p>
+                                    : <p className="text-slate-400 text-[9px] font-bold ml-2">Numéro MTN Congo — format : 06 XXX XX XX</p>
+                                }
                             </div>
                         </div>
 

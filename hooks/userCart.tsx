@@ -181,6 +181,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
     // Sauvegarder le panier (optimistic update) via server action sécurisée
     const saveCart = useCallback(async (newCart: CartItem[]) => {
         const previousCart = cartRef.current
+        cartRef.current = newCart
         setCart(newCart)
 
         try {

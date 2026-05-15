@@ -29,7 +29,7 @@ export default function OrderAction({
     selectedVariant,
 }: OrderActionProps) {
     const router = useRouter()
-    const { addToCart, updateQuantity } = useCart()
+    const { addToCart, updateQuantity, clearCart } = useCart()
     const [isAuthOpen, setIsAuthOpen] = useState(false)
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [profileGateDetail, setProfileGateDetail] = useState<string | undefined>(undefined)
@@ -65,6 +65,7 @@ export default function OrderAction({
 
             const qty = Math.max(1, Math.min(99, Math.floor(Number(quantityProp)) || 1))
             const cartId = `${product.id}-${selectedVariant?.size || ''}-${selectedVariant?.color || ''}`
+            clearCart()
             await addToCart({
                 id: cartId,
                 product_id: product.id,

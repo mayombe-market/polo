@@ -356,7 +356,7 @@ export default function ProductDetailPage() {
     return (
         <div
             className={`${isImmo ? 'max-w-5xl' : 'max-w-7xl'} mx-auto min-h-screen bg-white dark:bg-[#0A0A12] relative antialiased selection:bg-blue-500/20 ${
-                isImmo ? 'pb-[calc(6rem+env(safe-area-inset-bottom,0px))]' : ''
+                isImmo ? 'pb-[calc(6rem+env(safe-area-inset-bottom,0px))]' : 'pb-[calc(9rem+env(safe-area-inset-bottom,0px))]'
             }`}
         >
 
@@ -802,8 +802,8 @@ export default function ProductDetailPage() {
 
                     {/* Prix unique (rouge) — hors immo */}
                     {!isImmo && showNegotiationBlock && (
-                        <div className="rounded-2xl border border-red-200/55 dark:border-red-900/45 bg-gradient-to-br from-red-50/95 to-white/95 dark:from-red-950/40 dark:to-[#0A0A12]/90 backdrop-blur-md px-5 py-4 mb-3 shadow-[0_8px_32px_-12px_rgba(220,38,38,0.2)]">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-red-600 dark:text-red-400 mb-1">
+                        <div className="rounded-2xl border border-orange-200/60 dark:border-orange-900/40 bg-gradient-to-br from-orange-50/80 to-white dark:from-[#1a0e00]/60 dark:to-[#0A0A12]/95 backdrop-blur-md px-5 py-4 mb-3 shadow-[0_8px_32px_-12px_rgba(234,88,12,0.15)]">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-orange-500 dark:text-orange-400 mb-1">
                                 Prix
                             </p>
                             <div className="flex flex-wrap items-baseline gap-3">
@@ -812,9 +812,9 @@ export default function ProductDetailPage() {
                                         {fmt(Number(product.price))} F
                                     </span>
                                 )}
-                                <span className="text-3xl font-black tabular-nums text-red-600 dark:text-red-400">
+                                <span className="text-3xl font-black tabular-nums text-orange-600 dark:text-orange-400">
                                     {fmt(effectivePrice)}{' '}
-                                    <span className="text-lg font-bold text-red-500 dark:text-red-300">FCFA</span>
+                                    <span className="text-lg font-bold text-orange-500 dark:text-orange-300">FCFA</span>
                                 </span>
                             </div>
                             <LoyaltyEarnBadge price={Number(effectivePrice)} className="mt-2" />
@@ -1359,12 +1359,14 @@ export default function ProductDetailPage() {
                     </div>
                 </div>
             ) : (
-                <div className="sticky bottom-0 w-full bg-white/95 dark:bg-[#0A0A12]/95 backdrop-blur-xl border-t border-slate-100 dark:border-white/[0.06] px-5 py-3.5 pb-6 flex items-center gap-3 z-40 lg:hidden">
+                <div className="sticky bottom-16 w-full bg-white/98 dark:bg-[#0D0D0D]/98 backdrop-blur-2xl border-t border-stone-100/80 dark:border-white/[0.06] px-4 py-3 flex items-center gap-3 z-50 lg:hidden shadow-[0_-8px_32px_-4px_rgba(0,0,0,0.12)]">
                     {/* Total */}
-                    <div className="flex-shrink-0 mr-1">
-                        <p className="text-slate-400 text-[10px] uppercase tracking-widest font-semibold mb-0.5">Total</p>
-                        <p className="text-xl font-extrabold" style={{ color: '#E8A838' }}>{fmt(total)} F</p>
+                    <div className="flex-shrink-0">
+                        <p className="text-[9px] font-black uppercase tracking-[0.2em] text-stone-400 mb-0.5">Total</p>
+                        <p className="text-lg font-black tracking-tight" style={{ color: '#E8A838' }}>{fmt(total)} <span className="text-xs font-bold">F</span></p>
                     </div>
+
+                    <div className="w-px h-8 bg-stone-200 dark:bg-white/10 flex-shrink-0" />
 
                     {/* Add to cart */}
                     <div className="flex-1 min-w-0">
@@ -1375,7 +1377,7 @@ export default function ProductDetailPage() {
                         />
                     </div>
 
-                    {/* Order */}
+                    {/* Commander */}
                     <div className="flex-1 min-w-0">
                         <OrderAction
                             product={{ ...product, price: effectivePrice }}

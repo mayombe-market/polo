@@ -23,7 +23,7 @@ import OrderAction from '../../../components/OrderAction'
 import ShareButtons from '../../../components/ShareButtons'
 import MessageButton from '../../../components/MessageButton'
 import SimilarProducts from '../../../components/SimilarProducts'
-import { ArrowLeft, Heart, Minus, Plus } from 'lucide-react'
+import { ArrowLeft, Check, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { isHotelListing } from '@/lib/hotelListing'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
@@ -65,6 +65,7 @@ export default function ProductDetailPage() {
     const [selectedColor, setSelectedColor] = useState<string>('')
     const [showColorError, setShowColorError] = useState(false)
     const [showSizeError, setShowSizeError] = useState(false)
+    const [justSelectedColor, setJustSelectedColor] = useState<string>('')
     const [followerCount, setFollowerCount] = useState<number>(0)
     const [qty, setQty] = useState(1)
     const [activeTab, setActiveTab] = useState<'desc' | 'details' | 'reviews'>('desc')
@@ -938,38 +939,81 @@ export default function ProductDetailPage() {
                     <div id="variant-selectors">
                     {product.colors && product.colors.length > 0 && (
                         <div
-                            className={`mb-5 rounded-[14px] p-3 -mx-1 transition-[box-shadow,border-color] ${
+                            className={`mb-6 rounded-2xl px-4 py-4 -mx-1 transition-all duration-200 ${
                                 showColorError
-                                    ? 'ring-1 ring-red-500/50 border border-red-500/40 animate-shake'
-                                    : 'border border-transparent'
+                                    ? 'ring-1 ring-red-500/50 bg-red-500/[0.03] animate-shake'
+                                    : 'bg-transparent'
                             }`}
                         >
-                            <span className="sr-only">Couleur</span>
+                            {/* Header */}
+                            <div className="flex items-center justify-between mb-3">
+                                <span className="text-[10px] font-black uppercase tracking-[0.18em] text-stone-500 dark:text-stone-400">
+                                    Couleur
+                                </span>
+                                {selectedColor && (
+                                    <span className="text-[11px] font-bold text-stone-700 dark:text-stone-200 capitalize transition-all duration-200">
+                                        {selectedColor}
+                                    </span>
+                                )}
+                            </div>
+
+                            {/* Swatches */}
                             <div className="flex gap-3 flex-wrap items-center">
                                 {product.colors.map((colorName: string) => {
                                     const hex = getVariantColorHex(colorName) ?? '#94a3b8'
-                                    const isLight = hex.toUpperCase() === '#FFFFFF' || hex === '#fff'
-                                    const isDark = hex === '#171717' || hex === '#000000' || hex === '#000'
+                                    const isLight = ['#ffffff', '#fff', '#fafafa', '#f5f5f5', '#fffde7', '#ffff00', '#fff9c4'].includes(hex.toLowerCase())
                                     const selected = selectedColor === colorName
+                                    const isJust = justSelectedColor === colorName
                                     return (
                                         <button
                                             key={colorName}
                                             type="button"
-                                            onClick={() => { setSelectedColor(colorName); setShowColorError(false) }}
+                                            onClick={() => {
+                                                setSelectedColor(colorName)
+                                                setShowColorError(false)
+                                                setJustSelectedColor(colorName)
+                                                setTimeout(() => setJustSelectedColor(''), 380)
+                                            }}
                                             aria-label={colorName}
+                                            aria-pressed={selected}
                                             title={colorName}
-                                            className={`rounded-full p-0.5 transition-transform ${selected ? 'scale-110' : 'hover:scale-105'}`}
+                                            className={`relative flex items-center justify-center rounded-full transition-all duration-200 active:scale-90 cursor-pointer ${
+                                                selected
+                                                    ? 'scale-110 ring-2 ring-amber-500 ring-offset-[3px] ring-offset-white dark:ring-offset-[#0c0a09]'
+                                                    : 'scale-100 ring-2 ring-transparent hover:ring-stone-300 dark:hover:ring-stone-600 hover:scale-105'
+                                            }`}
                                         >
+                                            {/* Swatch circle */}
                                             <span
-                                                className={`block w-11 h-11 rounded-full ${isLight ? 'border-2 border-slate-300 dark:border-slate-500' : ''} ${isDark ? 'border-2 border-slate-500 dark:border-slate-400' : ''} ${selected ? 'ring-4 ring-orange-500 ring-offset-2 ring-offset-white dark:ring-offset-[#0A0A12]' : 'ring-2 ring-transparent'}`}
+                                                className={`flex items-center justify-center w-10 h-10 rounded-full transition-all duration-200 ${
+                                                    isLight ? 'border border-stone-300 dark:border-stone-600' : ''
+                                                }`}
                                                 style={{ backgroundColor: hex }}
-                                            />
+                                            >
+                                                {/* Checkmark */}
+                                                <span className={`transition-all duration-150 ${selected ? 'opacity-100 scale-100' : 'opacity-0 scale-50'}`}>
+                                                    <Check
+                                                        size={13}
+                                                        strokeWidth={3}
+                                                        className={isLight ? 'text-stone-700' : 'text-white'}
+                                                    />
+                                                </span>
+                                            </span>
+
+                                            {/* Ripple one-shot au clic */}
+                                            {isJust && (
+                                                <span
+                                                    className="absolute inset-0 rounded-full animate-ping opacity-25 pointer-events-none"
+                                                    style={{ backgroundColor: hex }}
+                                                />
+                                            )}
                                         </button>
                                     )
                                 })}
                             </div>
+
                             {showColorError && (
-                                <p className="text-red-500 dark:text-red-400 text-xs font-medium mt-1" role="alert">
+                                <p className="text-red-500 dark:text-red-400 text-[11px] font-bold mt-2.5" role="alert">
                                     Veuillez sélectionner une couleur
                                 </p>
                             )}

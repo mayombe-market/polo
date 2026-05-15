@@ -62,6 +62,8 @@ const nextConfig = {
             { source: '/sub_category/:path*', headers: noStoreCatalog },
             { source: '/product/:path*', headers: noStoreCatalog },
             { source: '/store/:path*', headers: noStoreCatalog },
+            { source: '/checkout', headers: noStoreCatalog },
+            { source: '/checkout/:path*', headers: noStoreCatalog },
             {
                 source: '/(.*)',
                 headers: [

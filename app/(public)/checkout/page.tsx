@@ -21,9 +21,9 @@ import {
     INTER_URBAN_AT_LOCATION_WARNING,
     getFirstInterUrbanSellerCityDisplay,
 } from '@/lib/deliveryLocation'
-import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
+import { DELIVERY_CITY_LIST, DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, Smartphone, X as XIcon } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, Smartphone, X as XIcon, CheckCircle2 } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
@@ -91,6 +91,9 @@ export default function CheckoutPage() {
     const selectedPayment = watch('payment_method')
     const selectedDelivery = watch('delivery_mode')
     const watchedCity = watch('city')
+
+    // Reset quartier quand la ville change
+    useEffect(() => { setValue('district', '') }, [watchedCity])
 
     const sellerIds = useMemo(
         () => [...new Set(cart.map((i) => i.seller_id).filter(Boolean))] as string[],
@@ -356,6 +359,8 @@ export default function CheckoutPage() {
                 delivery_mode: formData.delivery_mode,
                 delivery_fee: currentDeliveryFee,
                 loyalty_points_to_use: pointsToUse,
+                latitude: buyerGps?.lat,
+                longitude: buyerGps?.lng,
             })
 
             if (result.error) {
@@ -569,27 +574,42 @@ export default function CheckoutPage() {
                                 {errors.full_name && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.full_name.message}</p>}
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                    <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Ville *</label>
+                            {/* Ville */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Ville *</label>
+                                <div className="relative">
                                     <select
                                         {...register('city')}
                                         required
-                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none"
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer"
                                     >
-                                        <option value="">Choisir…</option>
+                                        <option value="">Choisir une ville…</option>
                                         {DELIVERY_CITY_LIST.map((c) => (
-                                            <option key={c} value={c}>
-                                                {c}
-                                            </option>
+                                            <option key={c} value={c}>{c}</option>
                                         ))}
                                     </select>
-                                    {errors.city && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.city.message}</p>}
+                                    <svg className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-stone-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
-                                <div className="space-y-1">
-                                    <input {...register('district')} placeholder="Quartier" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
-                                    {errors.district && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.district.message}</p>}
+                                {errors.city && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.city.message}</p>}
+                            </div>
+
+                            {/* Quartier — filtré par ville */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Quartier *</label>
+                                <div className="relative">
+                                    <select
+                                        {...register('district')}
+                                        disabled={!watchedCity}
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                                    >
+                                        <option value="">{watchedCity ? 'Choisir un quartier…' : '— Sélectionnez d\'abord une ville —'}</option>
+                                        {(DELIVERY_LOCATIONS[watchedCity] ?? []).map((q) => (
+                                            <option key={q} value={q}>{q}</option>
+                                        ))}
+                                    </select>
+                                    <svg className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-stone-400" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                                 </div>
+                                {errors.district && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.district.message}</p>}
                             </div>
 
                             {needsInterUrbanDelivery && watchedCity ? (
@@ -606,7 +626,35 @@ export default function CheckoutPage() {
                                 </div>
                             ) : null}
 
-                            <input {...register('landmark')} placeholder="Point de repère (ex: Derrière l'école...)" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                            {/* Point de repère */}
+                            <div className="space-y-1">
+                                <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Point de repère</label>
+                                <input {...register('landmark')} placeholder="Ex: Derrière l'école, face au marché…" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                            </div>
+
+                            {/* Partager ma position */}
+                            {buyerGps ? (
+                                <div className="flex items-center gap-3 p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-300 dark:border-emerald-700/50">
+                                    <CheckCircle2 size={20} className="text-emerald-500 shrink-0" />
+                                    <div>
+                                        <p className="text-[10px] font-black uppercase text-emerald-700 dark:text-emerald-400">Position enregistrée</p>
+                                        <p className="text-[9px] text-emerald-600 dark:text-emerald-500 font-bold">{buyerGps.lat.toFixed(5)}, {buyerGps.lng.toFixed(5)}</p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleGetBuyerGps}
+                                    disabled={gpsLoading}
+                                    className="w-full flex items-center justify-center gap-2.5 p-4 rounded-2xl border-2 border-dashed border-stone-300 dark:border-stone-600 text-stone-500 dark:text-stone-400 font-bold text-sm hover:border-orange-400 hover:text-orange-500 dark:hover:border-orange-500 dark:hover:text-orange-400 transition-colors duration-200 disabled:opacity-60 cursor-pointer"
+                                >
+                                    {gpsLoading
+                                        ? <><Loader2 size={16} className="animate-spin" /> Localisation…</>
+                                        : <><Navigation size={16} /> Partager ma position</>
+                                    }
+                                </button>
+                            )}
+                            {gpsError && <p className="text-red-500 text-[10px] font-bold ml-2">{gpsError}</p>}
 
                             <div className="space-y-1">
                                 <div className="relative">

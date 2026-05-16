@@ -699,6 +699,9 @@ export async function createOrder(input: {
     delivery_fee?: number
     /** Points fidélité à utiliser sur cette commande (FCFA entiers). */
     loyalty_points_to_use?: number
+    /** Coordonnées GPS partagées par l'acheteur (optionnel — pour admin et livreur). */
+    latitude?: number
+    longitude?: number
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -872,6 +875,11 @@ export async function createOrder(input: {
         landmark: input.landmark || null,
         delivery_mode: deliveryMode,
         delivery_fee: deliveryFee,
+        ...(input.latitude != null && input.longitude != null ? {
+            delivery_location_type: 'gps',
+            delivery_latitude: input.latitude,
+            delivery_longitude: input.longitude,
+        } : {}),
     }]).select().single()
 
     if (error) return { error: error.message }

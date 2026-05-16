@@ -801,51 +801,64 @@ export default function AdminOrders() {
                                         </div>
                                     </div>
 
-                                    {/* VÉRIFICATION TRANSACTION ID (Mobile Money / Airtel) */}
-                                    {order.status === 'pending' && order.transaction_id && (
-                                        <div className="mb-6 bg-amber-50/50 dark:bg-amber-500/5 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-800/30">
-                                            <p className="text-[8px] font-black uppercase text-amber-600 mb-3 tracking-[0.2em]">🔐 Vérification Transaction</p>
-
-                                            <div className="mb-3">
-                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">ID saisi par le client</p>
-                                                <p className="text-base font-black font-mono tracking-wider text-amber-600">
-                                                    {order.transaction_id.replace(/(\d{3})(?=\d)/g, '$1 ')}
-                                                </p>
-                                            </div>
-
-                                            <div className="mb-3">
-                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Entrez l'ID reçu par SMS</p>
-                                                <input
-                                                    type="text"
-                                                    inputMode="numeric"
-                                                    maxLength={13}
-                                                    value={adminInputs[order.id] || ''}
-                                                    onChange={e => {
-                                                        const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
-                                                        setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
-                                                    }}
-                                                    placeholder="ID du SMS (10 chiffres)"
-                                                    disabled={!canAct}
-                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                    className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
-                                                />
-                                            </div>
-
-                                            {/* Indicateur de correspondance */}
-                                            {adminInputs[order.id]?.length === 10 && (
-                                                <div className="mt-2">
-                                                    {adminInputs[order.id] === order.transaction_id ? (
-                                                        <p className="text-green-600 text-[10px] font-black uppercase">
-                                                            ✓ Les ID correspondent — vous pouvez valider
-                                                        </p>
-                                                    ) : (
-                                                        <p className="text-red-500 text-[10px] font-black uppercase">
-                                                            ✗ Les ID ne correspondent PAS — vérifiez le numéro
-                                                        </p>
-                                                    )}
+                                    {/* VÉRIFICATION PAIEMENT */}
+                                    {order.status === 'pending' && (
+                                        order.mtn_reference_id ? (
+                                            /* MTN MoMo — paiement auto-vérifié via API */
+                                            <div className="mb-6 bg-green-50/60 dark:bg-green-500/5 p-5 rounded-[2rem] border border-green-200 dark:border-green-800/30">
+                                                <p className="text-[8px] font-black uppercase text-green-600 mb-3 tracking-[0.2em]">📡 MTN MoMo — Vérification automatique</p>
+                                                <div className="flex items-start gap-3">
+                                                    <div className="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                                                        <ShieldCheck size={14} className="text-green-600" />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[11px] font-black text-green-700 dark:text-green-400">Paiement vérifié directement via l&apos;API MTN MoMo</p>
+                                                        <p className="text-[10px] font-bold text-slate-500 mt-1">Aucune action manuelle requise — la confirmation est automatique.</p>
+                                                        <p className="text-[9px] font-mono text-slate-400 mt-2">Réf : {order.mtn_reference_id}</p>
+                                                        {order.mtn_transaction_id && (
+                                                            <p className="text-[9px] font-mono text-green-600 mt-0.5">TX : {order.mtn_transaction_id}</p>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                            )}
-                                        </div>
+                                            </div>
+                                        ) : order.transaction_id ? (
+                                            /* Paiement manuel — saisie ID transaction */
+                                            <div className="mb-6 bg-amber-50/50 dark:bg-amber-500/5 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-800/30">
+                                                <p className="text-[8px] font-black uppercase text-amber-600 mb-3 tracking-[0.2em]">🔐 Vérification Transaction</p>
+                                                <div className="mb-3">
+                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">ID saisi par le client</p>
+                                                    <p className="text-base font-black font-mono tracking-wider text-amber-600">
+                                                        {order.transaction_id.replace(/(\d{3})(?=\d)/g, '$1 ')}
+                                                    </p>
+                                                </div>
+                                                <div className="mb-3">
+                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Entrez l&apos;ID reçu par SMS</p>
+                                                    <input
+                                                        type="text"
+                                                        inputMode="numeric"
+                                                        maxLength={13}
+                                                        value={adminInputs[order.id] || ''}
+                                                        onChange={e => {
+                                                            const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                                            setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
+                                                        }}
+                                                        placeholder="ID du SMS (10 chiffres)"
+                                                        disabled={!canAct}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                        className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
+                                                    />
+                                                </div>
+                                                {adminInputs[order.id]?.length === 10 && (
+                                                    <div className="mt-2">
+                                                        {adminInputs[order.id] === order.transaction_id ? (
+                                                            <p className="text-green-600 text-[10px] font-black uppercase">✓ Les ID correspondent — vous pouvez valider</p>
+                                                        ) : (
+                                                            <p className="text-red-500 text-[10px] font-black uppercase">✗ Les ID ne correspondent PAS — vérifiez le numéro</p>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ) : null
                                     )}
 
                                     {/* ASSIGNATION LOGISTICIEN */}

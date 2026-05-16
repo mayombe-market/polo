@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
 
         await requestToPay(referenceId, {
             amount,
-            currency: 'EUR', // sandbox MTN utilise EUR, en production : XAF
+            currency: process.env.MTN_MOMO_ENVIRONMENT === 'sandbox' ? 'EUR' : 'XAF',
             externalId: orderId,
             partyId: cleanPhone,
             payerMessage: `Paiement commande Mayombe Market`,

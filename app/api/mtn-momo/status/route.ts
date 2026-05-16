@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
 import { getPaymentStatus } from '@/lib/mtnMomo'
+import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 
 export async function GET(req: NextRequest) {
     try {
@@ -16,19 +16,16 @@ export async function GET(req: NextRequest) {
         const { status, reason } = await getPaymentStatus(referenceId)
 
         if (status === 'SUCCESSFUL') {
-            // Confirmer la commande automatiquement
-            const cookieStore = await cookies()
-            const supabase = createServerClient(
+            const supabase = createClient(
                 process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-                { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+                process.env.SUPABASE_SERVICE_ROLE_KEY!
             )
-
-            await supabase
-                .from('orders')
-                .update({ status: 'confirmed', confirmed_at: new Date().toISOString() })
-                .eq('id', orderId)
-                .eq('status', 'pending')
+            const trackingNumber = generateTrackingNumber()
+            await supabase.rpc('mtn_auto_confirm_order', {
+                p_order_id: orderId,
+                p_tracking_number: trackingNumber,
+                p_mtn_transaction_id: null,
+            })
         }
 
         return NextResponse.json({ status, reason: reason ?? null })

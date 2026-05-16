@@ -1,8 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 
-// MTN MoMo appellera ce endpoint quand un paiement est confirmé ou refusé
+// MTN MoMo appelle ce endpoint dès qu'un paiement est confirmé ou refusé.
+// Sécurité : on valide un token secret passé en query param (?secret=...).
 export async function POST(req: NextRequest) {
+    // Validation du token secret webhook
+    const secret = req.nextUrl.searchParams.get('secret')
+    if (process.env.MTN_MOMO_WEBHOOK_SECRET && secret !== process.env.MTN_MOMO_WEBHOOK_SECRET) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
     try {
         const body = await req.json()
         const { externalId, status, financialTransactionId } = body
@@ -17,19 +25,16 @@ export async function POST(req: NextRequest) {
         )
 
         if (status === 'SUCCESSFUL') {
-            await supabase
-                .from('orders')
-                .update({
-                    status: 'confirmed',
-                    confirmed_at: new Date().toISOString(),
-                    mtn_transaction_id: financialTransactionId ?? null,
-                })
-                .eq('id', externalId)
-                .eq('status', 'pending')
+            const trackingNumber = generateTrackingNumber()
+            await supabase.rpc('mtn_auto_confirm_order', {
+                p_order_id: externalId,
+                p_tracking_number: trackingNumber,
+                p_mtn_transaction_id: financialTransactionId ?? null,
+            })
         } else if (status === 'FAILED') {
             await supabase
                 .from('orders')
-                .update({ status: 'payment_failed' })
+                .update({ status: 'rejected' })
                 .eq('id', externalId)
                 .eq('status', 'pending')
         }

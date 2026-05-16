@@ -33,7 +33,11 @@ export interface RequestToPayInput {
 
 export async function requestToPay(referenceId: string, input: RequestToPayInput): Promise<void> {
     const token = await getMomoToken()
-    const callbackUrl = process.env.MTN_MOMO_CALLBACK_URL
+    const callbackBase = process.env.MTN_MOMO_CALLBACK_URL
+    const webhookSecret = process.env.MTN_MOMO_WEBHOOK_SECRET
+    const callbackUrl = callbackBase
+        ? (webhookSecret ? `${callbackBase}?secret=${webhookSecret}` : callbackBase)
+        : undefined
     const headers: Record<string, string> = {
         'Authorization': `Bearer ${token}`,
         'X-Reference-Id': referenceId,

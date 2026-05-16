@@ -26,6 +26,7 @@ import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, Smartphone, X as XIcon, CheckCircle2 } from 'lucide-react'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
@@ -80,6 +81,7 @@ export default function CheckoutPage() {
     const [sellerCoords, setSellerCoords] = useState<Record<string, { lat: number; lng: number } | null>>({})
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
+    const { getOrCreate: getIdempotencyKey, clear: clearIdempotencyKey } = useIdempotencyKey()
 
     const supabase = getSupabaseBrowserClient()
 
@@ -347,6 +349,7 @@ export default function CheckoutPage() {
                 seller_id: item.seller_id || '',
             }))
 
+            const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items,
                 city: formData.city,
@@ -361,6 +364,7 @@ export default function CheckoutPage() {
                 loyalty_points_to_use: pointsToUse,
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
+                idempotency_key: idempotencyKey,
             })
 
             if (result.error) {
@@ -411,6 +415,7 @@ export default function CheckoutPage() {
                     if (!payRes.ok || payData.error) throw new Error(payData.error || 'Erreur MTN')
                     setMomoReferenceId(payData.referenceId)
                     setMomoStep('waiting')
+                    clearIdempotencyKey()
                     clearCart()
                 } catch (err: any) {
                     setMomoError(err.message || 'Impossible de contacter MTN MoMo.')
@@ -419,6 +424,7 @@ export default function CheckoutPage() {
                 return
             }
 
+            clearIdempotencyKey()
             clearCart()
             router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}&delivery=${formData.delivery_mode}`)
 

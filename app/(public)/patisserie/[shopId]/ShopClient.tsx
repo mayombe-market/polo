@@ -43,6 +43,7 @@ import { DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import type { ShopProduct, ShopSeller, OptionGroup, OptionChoice } from './page'
 import type { SelectedOption } from '@/hooks/userCart'
 import { computeIsOpen, formatScheduleText } from '@/lib/shopSchedule'
+import { useIdempotencyKey } from '@/lib/useIdempotencyKey'
 
 // ─── Checkout steps ───────────────────────────────────────────────────────────
 
@@ -1033,6 +1034,7 @@ interface Props {
 export default function ShopClient({ seller, products, averageRating, reviewCount, reviews = [] }: Props) {
     const { cart, total, itemCount, updateQuantity, clearCart, removeFromCart } = useCart()
     const { profile } = useAuth()
+    const { getOrCreate: getIdempotencyKey, clear: clearIdempotencyKey } = useIdempotencyKey()
 
     // ── Checkout state ────────────────────────────────────────────────────────
     const [isAuthOpen, setIsAuthOpen]         = useState(false)
@@ -1179,15 +1181,18 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 quantity: item.quantity, img: item.img || '', seller_id: item.seller_id || '',
                 selectedSize: item.selectedSize, selectedColor: item.selectedColor,
             }))
+            const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items, city, district, payment_method: paymentMethod,
                 total_amount: shopSubtotalValue + fee, transaction_id: id,
                 delivery_mode: deliveryMode, delivery_fee: fee,
+                idempotency_key: idempotencyKey,
             })
             if (result.error) {
                 if ((result as { code?: string }).code === 'profile_incomplete') setProfileGateOpen(true)
                 setOrderError(result.error); return
             }
+            clearIdempotencyKey()
             setOrderId(result.order.id); setOrderData(result.order); setStep('waiting')
             // Email de confirmation envoyé en arrière-plan
             if (user?.email) {
@@ -1219,16 +1224,19 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 quantity: item.quantity, img: item.img || '', seller_id: item.seller_id || '',
                 selectedSize: item.selectedSize, selectedColor: item.selectedColor,
             }))
+            const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items, city, district, payment_method: paymentMethod,
                 total_amount: shopSubtotalValue + fee, customer_name: deliveryInfo.name,
                 phone: deliveryInfo.phone, landmark: deliveryInfo.address,
                 delivery_mode: deliveryMode, delivery_fee: fee,
+                idempotency_key: idempotencyKey,
             })
             if (result.error) {
                 if ((result as { code?: string }).code === 'profile_incomplete') setProfileGateOpen(true)
                 setOrderError(result.error); return
             }
+            clearIdempotencyKey()
             setOrderId(result.order.id); setOrderData(result.order)
             // Email de confirmation envoyé en arrière-plan
             if (user?.email) {

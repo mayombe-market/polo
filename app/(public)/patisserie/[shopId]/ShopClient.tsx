@@ -15,6 +15,7 @@ import {
 import { useCart } from '@/hooks/userCart'
 import { useAuth } from '@/hooks/useAuth'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { safeGetUser } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import AuthModal from '@/app/components/AuthModal'
@@ -1188,6 +1189,20 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 setOrderError(result.error); return
             }
             setOrderId(result.order.id); setOrderData(result.order); setStep('waiting')
+            // Email de confirmation envoyé en arrière-plan
+            if (user?.email) {
+                sendOrderConfirmationEmail({
+                    customerName: result.order.customer_name || user.email,
+                    customerEmail: user.email,
+                    orderId: result.order.id,
+                    items: items.map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
+                    total: result.order.total_amount,
+                    paymentMethod: paymentMethod,
+                    city, district,
+                    deliveryMode: deliveryMode || undefined,
+                    deliveryFee: fee,
+                }).catch(() => {})
+            }
         } catch (err: any) {
             setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
         } finally { setSaving(false) }
@@ -1215,6 +1230,21 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                 setOrderError(result.error); return
             }
             setOrderId(result.order.id); setOrderData(result.order)
+            // Email de confirmation envoyé en arrière-plan
+            if (user?.email) {
+                const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode!]
+                sendOrderConfirmationEmail({
+                    customerName: deliveryInfo.name || result.order.customer_name || user.email,
+                    customerEmail: user.email,
+                    orderId: result.order.id,
+                    items: shopItems.map(i => ({ name: i.name, price: i.price, quantity: i.quantity })),
+                    total: result.order.total_amount,
+                    paymentMethod: paymentMethod,
+                    city, district,
+                    deliveryMode: deliveryMode || undefined,
+                    deliveryFee: fee,
+                }).catch(() => {})
+            }
             await clearShopCart(); setStep('confirmed')
         } catch (err: any) {
             setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')

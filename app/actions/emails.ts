@@ -28,7 +28,10 @@ export async function sendOrderConfirmationEmail(data: OrderEmailData) {
     const safeCity = escapeHtml(data.city)
     const safeDistrict = escapeHtml(data.district)
 
-    const paymentLabel = data.paymentMethod === 'cash' ? 'Paiement à la livraison' : 'Mobile Money (MTN MoMo)'
+    const paymentLabel =
+        data.paymentMethod === 'cash'        ? 'Paiement à la livraison' :
+        data.paymentMethod === 'airtel_money' ? 'Airtel Money' :
+        'Mobile Money (MTN MoMo)'
     const deliveryModeLabel = data.deliveryMode === 'express'
         ? 'Express · 3-6H'
         : data.deliveryMode === 'inter_urban'

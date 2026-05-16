@@ -443,54 +443,62 @@ function CartSidebar({
     }
 
     return (
-        <div className="bg-white rounded-2xl border border-neutral-100 shadow-sm overflow-hidden">
-            <div className="px-4 py-3.5 border-b border-neutral-50 bg-neutral-50/50">
-                <h3 className="font-black text-neutral-900 text-sm">Votre commande</h3>
-                <p className="text-xs text-neutral-400 mt-0.5 truncate">{shopName}</p>
+        <div className="bg-white rounded-3xl border border-neutral-100/80 shadow-lg shadow-black/[0.07] overflow-hidden">
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-neutral-100 bg-gradient-to-r from-neutral-50 to-orange-50/30 flex items-center justify-between">
+                <div>
+                    <h3 className="font-black text-neutral-900 text-sm tracking-tight">Votre commande</h3>
+                    <p className="text-[11px] text-neutral-400 font-medium mt-0.5 truncate">{shopName}</p>
+                </div>
+                <span className="bg-orange-100 text-orange-600 text-[10px] font-black px-2.5 py-1 rounded-full">
+                    {shopItems.reduce((s, i) => s + i.quantity, 0)} art.
+                </span>
             </div>
 
+            {/* Items */}
             <div className="divide-y divide-neutral-50 max-h-80 overflow-y-auto">
                 {shopItems.map(item => (
-                    <div key={item.id} className="flex items-center gap-3 px-4 py-3">
+                    <div key={item.id} className="flex items-center gap-3 px-4 py-3.5">
                         {item.img ? (
-                            <div className="relative w-11 h-11 rounded-lg overflow-hidden flex-shrink-0 bg-rose-50">
-                                <Image src={item.img} alt={item.name} fill className="object-cover" sizes="44px" />
+                            <div className="relative w-12 h-12 rounded-xl overflow-hidden flex-shrink-0 bg-rose-50 shadow-sm">
+                                <Image src={item.img} alt={item.name} fill className="object-cover" sizes="48px" />
                             </div>
                         ) : (
-                            <div className="w-11 h-11 rounded-lg bg-rose-50 flex items-center justify-center flex-shrink-0">
+                            <div className="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center flex-shrink-0">
                                 <Cake className="w-5 h-5 text-rose-200" />
                             </div>
                         )}
                         <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-neutral-800 truncate">{item.name}</p>
-                            <p className="text-xs text-rose-600 font-bold mt-0.5">{formatPrice(item.price)}</p>
+                            <p className="text-xs font-bold text-neutral-800 truncate">{item.name}</p>
+                            <p className="text-xs text-orange-500 font-black mt-0.5">{formatPrice(item.price)}</p>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors">
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <button onClick={() => updateQuantity(item.id, item.quantity - 1)} className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 active:scale-95 flex items-center justify-center transition-all cursor-pointer">
                                 <Minus className="w-3 h-3 text-neutral-700" />
                             </button>
                             <span className="w-5 text-center text-xs font-black text-neutral-900">{item.quantity}</span>
-                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-full bg-neutral-100 hover:bg-neutral-200 flex items-center justify-center transition-colors">
-                                <Plus className="w-3 h-3 text-neutral-700" />
+                            <button onClick={() => updateQuantity(item.id, item.quantity + 1)} className="w-7 h-7 rounded-full bg-amber-900 hover:bg-amber-800 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-sm">
+                                <Plus className="w-3 h-3 text-white" />
                             </button>
                         </div>
                     </div>
                 ))}
             </div>
 
-            <div className="px-4 py-4 bg-neutral-50/50 border-t border-neutral-100">
-                <div className="flex justify-between items-center mb-3">
-                    <span className="text-sm text-neutral-500">Sous-total</span>
+            {/* Footer */}
+            <div className="px-5 py-4 bg-neutral-50/60 border-t border-neutral-100">
+                <div className="flex justify-between items-center mb-4">
+                    <span className="text-sm text-neutral-500 font-medium">Sous-total</span>
                     <span className="text-sm font-black text-neutral-900">{formatPrice(shopSubtotal)}</span>
                 </div>
                 {otherCount > 0 && (
-                    <p className="text-[10px] text-neutral-400 mb-2">
+                    <p className="text-[10px] text-neutral-400 mb-3">
                         + {otherCount} article{otherCount > 1 ? 's' : ''} d'autres boutiques dans votre panier
                     </p>
                 )}
                 <button
                     onClick={onCommander}
-                    className="flex items-center justify-between w-full bg-orange-500 hover:bg-orange-600 text-white text-sm font-black px-4 py-3 rounded-xl transition-colors shadow-sm shadow-orange-200"
+                    className="flex items-center justify-between w-full bg-orange-500 hover:bg-orange-600 active:scale-[0.98] text-white text-sm font-black px-5 py-3.5 rounded-2xl transition-all shadow-md shadow-orange-300/40 cursor-pointer"
                 >
                     <span>Commander</span>
                     <ChevronRight className="w-4 h-4" />
@@ -1554,6 +1562,13 @@ export default function ShopClient({ seller, products, averageRating, reviewCoun
                     <CartSidebar sellerId={seller.id} shopName={shopName} onCommander={handleCheckout} />
                 </div>
             </div>
+
+            {/* ── Cart panel (mobile) — visible sous les produits ── */}
+            {shopItemCount > 0 && (
+                <div className="lg:hidden max-w-6xl mx-auto px-4 pb-6 mt-1">
+                    <CartSidebar sellerId={seller.id} shopName={shopName} onCommander={handleCheckout} />
+                </div>
+            )}
 
             {/* ═══════════════════════════════════════════════════════════════
                 REVIEWS SECTION

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useCallback } from 'react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
@@ -12,48 +12,79 @@ import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 export default function OrdersListClient({ initialOrders, currentVendorId }: { initialOrders: any[], currentVendorId: string }) {
     const [orders, setOrders] = useState(initialOrders)
     const [updating, setUpdating] = useState<string | null>(null)
-
-    // État pour le filtre actif
     const [activeFilter, setActiveFilter] = useState('all')
+    const audioCtxRef = useRef<AudioContext | null>(null)
 
-    // REAL-TIME : Écouter les nouvelles commandes et mises à jour
+    // ─── Son d'alerte (Do→Mi→Sol sawtooth fort) ──────────────────────────────
+    const playOrderSound = useCallback(() => {
+        try {
+            if (!audioCtxRef.current) audioCtxRef.current = new AudioContext()
+            const ctx = audioCtxRef.current
+            if (ctx.state === 'suspended') ctx.resume()
+            const now = ctx.currentTime
+            const comp = ctx.createDynamicsCompressor()
+            comp.threshold.value = -6; comp.knee.value = 0
+            comp.ratio.value = 20; comp.attack.value = 0.001; comp.release.value = 0.05
+            comp.connect(ctx.destination)
+            const notes = [
+                { freq: 1046, t: 0.00 }, { freq: 1318, t: 0.22 },
+                { freq: 1568, t: 0.44 }, { freq: 1318, t: 0.66 }, { freq: 1046, t: 0.88 },
+            ]
+            for (const { freq, t } of notes) {
+                const osc = ctx.createOscillator(); const gain = ctx.createGain()
+                osc.type = 'sawtooth'; osc.frequency.value = freq
+                const s = now + t
+                gain.gain.setValueAtTime(0, s)
+                gain.gain.linearRampToValueAtTime(1.0, s + 0.015)
+                gain.gain.setValueAtTime(1.0, s + 0.14)
+                gain.gain.linearRampToValueAtTime(0, s + 0.19)
+                osc.connect(gain).connect(comp); osc.start(s); osc.stop(s + 0.21)
+            }
+        } catch {}
+    }, [])
+
+    // ─── REALTIME : nouvelles commandes ──────────────────────────────────────
     useRealtime('order:insert', (payload) => {
         const newOrder = payload.new as any
-        const vendorItems = newOrder.items?.filter(
-            (i: any) => i.seller_id === currentVendorId
-        ) || []
-
+        const vendorItems = newOrder.items?.filter((i: any) => i.seller_id === currentVendorId) || []
         if (vendorItems.length > 0 && newOrder.status !== 'pending') {
-            setOrders((prev) => [newOrder, ...prev])
-            toast.success('Nouvelle commande !', {
-                description: `${newOrder.customer_name} - ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`,
-                duration: 8000,
+            setOrders(prev => [newOrder, ...prev])
+            playOrderSound()
+            toast.success('🛍️ Nouvelle commande !', {
+                description: `${newOrder.customer_name} · ${newOrder.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                duration: 10000,
             })
         }
-    }, [currentVendorId])
+    }, [currentVendorId, playOrderSound])
 
     useRealtime('order:update', (payload) => {
         const updated = payload.new as any
-        const vendorItems = updated.items?.filter(
-            (i: any) => i.seller_id === currentVendorId
-        ) || []
+        const vendorItems = updated.items?.filter((i: any) => i.seller_id === currentVendorId) || []
+        if (vendorItems.length === 0) return
 
-        if (vendorItems.length > 0) {
-            setOrders((prev) => {
-                const exists = prev.find(o => o.id === updated.id)
-                if (exists) {
-                    return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
-                } else if (updated.status !== 'pending') {
-                    toast.success('Nouvelle commande confirmée !', {
-                        description: `${updated.customer_name} - ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`,
-                        duration: 8000,
-                    })
-                    return [updated, ...prev]
-                }
-                return prev
+        setOrders(prev => {
+            const exists = prev.find(o => o.id === updated.id)
+            if (exists) return prev.map(o => o.id === updated.id ? { ...o, ...updated } : o)
+            if (updated.status !== 'pending') {
+                playOrderSound()
+                toast.success('✅ Commande confirmée !', {
+                    description: `${updated.customer_name} · ${updated.total_amount?.toLocaleString('fr-FR')} FCFA`,
+                    duration: 10000,
+                })
+                return [updated, ...prev]
+            }
+            return prev
+        })
+
+        if (updated.status === 'confirmed') {
+            playOrderSound()
+            const label = vendorItems.map((i: any) => i.name).join(', ')
+            toast.success('✅ Paiement confirmé — commande à préparer !', {
+                description: label,
+                duration: 10000,
             })
         }
-    }, [currentVendorId])
+    }, [currentVendorId, playOrderSound])
 
     const updateStatus = async (orderId: string, newStatus: string) => {
         setUpdating(orderId)

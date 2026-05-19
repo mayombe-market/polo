@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import OrdersListClient from '@/app/components/OrdersListClient'
+import VendorPushPrompt from '@/app/components/VendorPushPrompt'
 import { Loader2 } from 'lucide-react'
 import { getVendorOrders } from '@/app/actions/orders'
 
@@ -43,6 +44,7 @@ export default function VendorOrders() {
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900">
+            <VendorPushPrompt />
             <header className="bg-white dark:bg-slate-800 border-b dark:border-slate-700 shadow-sm sticky top-0 z-50">
                 <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
                     <h1 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">

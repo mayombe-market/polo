@@ -702,11 +702,27 @@ export async function createOrder(input: {
     /** Coordonnées GPS partagées par l'acheteur (optionnel — pour admin et livreur). */
     latitude?: number
     longitude?: number
+    /** Clé d'idempotency générée côté client — évite les doublons si le réseau coupe. */
+    idempotency_key?: string
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
     if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+
+    // ═══ IDEMPOTENCY : renvoyer la commande existante si même clé ═══
+    if (input.idempotency_key) {
+        const { data: existingOrder } = await supabase
+            .from('orders')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('idempotency_key', input.idempotency_key)
+            .maybeSingle()
+        if (existingOrder) {
+            console.log('[createOrder] idempotent replay →', existingOrder.id)
+            return { order: JSON.parse(JSON.stringify(existingOrder)) }
+        }
+    }
 
     // ═══ PROFIL ACHETEUR : ville + téléphone obligatoires pour commander ═══
     const { data: buyerProfile } = await supabase
@@ -880,6 +896,7 @@ export async function createOrder(input: {
             delivery_latitude: input.latitude,
             delivery_longitude: input.longitude,
         } : {}),
+        idempotency_key: input.idempotency_key ?? null,
     }]).select().single()
 
     if (error) return { error: error.message }
@@ -921,9 +938,23 @@ export async function createOrder(input: {
         })
         .eq('id', user.id)
 
-    // NOTE : pas de push vendeur ici — la commande est en attente de paiement (pending).
-    // Le push est envoyé uniquement à la confirmation admin (adminConfirmPayment)
-    // pour ne pas alerter le vendeur sur une commande qui pourrait être rejetée.
+    // ── Push immédiat pour cash + airtel_money (patisserie / restaurant) ──────
+    // Pour ces méthodes la commande est ferme (livraison cash) ou le paiement
+    // est déjà fait (Airtel) : le vendeur doit être alerté tout de suite.
+    // Pour mobile_money (MTN MoMo) on attend la confirmation (évite faux positifs).
+    if (input.payment_method === 'cash' || input.payment_method === 'airtel_money') {
+        const sellerIds = [...new Set(input.items.map(i => i.seller_id).filter(Boolean))] as string[]
+        if (sellerIds.length > 0) {
+            const productNames = input.items.map(i => i.name).join(', ')
+            const methodLabel = input.payment_method === 'cash' ? '💵 Paiement à la livraison' : '📲 Airtel Money'
+            sendPushToUsers(
+                sellerIds,
+                '🛍️ Nouvelle commande !',
+                `${productNames} · ${methodLabel}`,
+                '/vendor/dashboard'
+            ).catch(() => {})
+        }
+    }
 
     return { order: JSON.parse(JSON.stringify(order)) }
 }

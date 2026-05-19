@@ -31,9 +31,9 @@ export interface RequestToPayInput {
     payeeNote: string
 }
 
-export async function requestToPay(referenceId: string, input: RequestToPayInput): Promise<void> {
+export async function requestToPay(referenceId: string, input: RequestToPayInput, callbackUrlOverride?: string): Promise<void> {
     const token = await getMomoToken()
-    const callbackBase = process.env.MTN_MOMO_CALLBACK_URL
+    const callbackBase = callbackUrlOverride ?? process.env.MTN_MOMO_CALLBACK_URL
     const webhookSecret = process.env.MTN_MOMO_WEBHOOK_SECRET
     const callbackUrl = callbackBase
         ? (webhookSecret ? `${callbackBase}?secret=${webhookSecret}` : callbackBase)

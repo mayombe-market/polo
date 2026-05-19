@@ -534,8 +534,11 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
   onBack: () => void
   onComplete: () => void
 }) {
-  const [step, setStep] = useState<'method' | 'transfer' | 'txid' | 'waiting' | 'success' | 'rejected'>('method')
+  const [step, setStep] = useState<'method' | 'phone' | 'requesting' | 'transfer' | 'txid' | 'waiting' | 'success' | 'rejected' | 'timeout'>('method')
   const [method, setMethod] = useState('')
+  const [phone, setPhone] = useState('')
+  const [phoneError, setPhoneError] = useState('')
+  const [referenceId, setReferenceId] = useState('')
   const [txCode, setTxCode] = useState('')
   const [txError, setTxError] = useState('')
   const [orderId, setOrderId] = useState('')
@@ -568,10 +571,22 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
     return () => clearInterval(i)
   }, [step])
 
-  // Supabase Realtime — écouter la validation admin
+  // Realtime + polling (MTN) — écouter confirmation
   useEffect(() => {
     if (step !== 'waiting' || !orderId) return
-const supabase = getSupabaseBrowserClient()
+    const supabase = getSupabaseBrowserClient()
+    const playSuccess = () => {
+      try {
+        const ctx = new AudioContext(); const now = ctx.currentTime
+        ;[523, 659, 784].forEach((f, i) => {
+          const o = ctx.createOscillator(); const g = ctx.createGain()
+          o.type = 'sine'; const t = now + i * 0.15
+          o.frequency.setValueAtTime(f, t)
+          g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2)
+          o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.2)
+        })
+      } catch {}
+    }
     const channel = supabase
       .channel(`sub-${orderId}`)
       .on('postgres_changes', {
@@ -579,23 +594,42 @@ const supabase = getSupabaseBrowserClient()
         filter: `id=eq.${orderId}`,
       }, (payload: { new: { status?: string } }) => {
         const s = payload.new?.status
-        if (s === 'confirmed') {
-          try {
-            const ctx = new AudioContext(); const now = ctx.currentTime
-            ;[523, 659, 784].forEach((f, i) => {
-              const o = ctx.createOscillator(); const g = ctx.createGain()
-              o.type = 'sine'; const t = now + i * 0.15
-              o.frequency.setValueAtTime(f, t)
-              g.gain.setValueAtTime(0.3, t); g.gain.exponentialRampToValueAtTime(0.01, t + 0.2)
-              o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.2)
-            })
-          } catch {}
-          setStep('success')
-        } else if (s === 'rejected') setStep('rejected')
+        if (s === 'confirmed') { playSuccess(); setStep('success') }
+        else if (s === 'rejected') setStep('rejected')
       })
       .subscribe()
-    return () => { supabase.removeChannel(channel) }
-  }, [step, orderId])
+
+    // MTN polling : vérifier le statut toutes les 5s
+    let pollInterval: ReturnType<typeof setInterval> | null = null
+    if (method === 'mobile_money' && referenceId) {
+      let localPollCount = 0
+      pollInterval = setInterval(async () => {
+        localPollCount++
+        if (localPollCount > 60) { // 5 minutes
+          clearInterval(pollInterval!)
+          setStep('timeout')
+          return
+        }
+        try {
+          const res = await fetch(`/api/mtn-momo/status?referenceId=${referenceId}&orderId=${orderId}`)
+          const data = await res.json()
+          if (data.status === 'SUCCESSFUL') {
+            clearInterval(pollInterval!)
+            playSuccess()
+            setStep('success')
+          } else if (data.status === 'FAILED') {
+            clearInterval(pollInterval!)
+            setStep('rejected')
+          }
+        } catch {}
+      }, 5000)
+    }
+
+    return () => {
+      supabase.removeChannel(channel)
+      if (pollInterval) clearInterval(pollInterval)
+    }
+  }, [step, orderId, method, referenceId])
 
   const digits = txCode.replace(/\D/g, '')
   const isTxComplete = digits.length === 10
@@ -614,6 +648,35 @@ const supabase = getSupabaseBrowserClient()
       setLoading(false); setStep('waiting')
     } catch (err: any) {
       setServerError(err.message || 'Erreur'); setLoading(false)
+    }
+  }
+
+  const handleMtnRequest = async () => {
+    const cleanPhone = phone.replace(/\D/g, '')
+    if (cleanPhone.length < 6) { setPhoneError('Entrez votre numéro MTN'); return }
+    setPhoneError(''); setServerError(''); setStep('requesting')
+    try {
+      const orderRes = await createSubscriptionOrder({
+        planId: plan.id, planName: plan.name, price, billing,
+        payment_method: 'mobile_money',
+      })
+      if (orderRes.error) { setServerError(orderRes.error); setStep('phone'); return }
+      const newOrderId = orderRes.order.id
+      setOrderId(newOrderId); setOrderData(orderRes.order)
+
+      const payRes = await fetch('/api/mtn-momo/pay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: newOrderId, phone: cleanPhone, amount: price }),
+      })
+      const payData = await payRes.json()
+      if (!payRes.ok || payData.error) {
+        setServerError(payData.error || 'Erreur MTN MoMo'); setStep('phone'); return
+      }
+      setReferenceId(payData.referenceId)
+      setStep('waiting')
+    } catch (err: any) {
+      setServerError(err.message || 'Erreur'); setStep('phone')
     }
   }
 
@@ -786,11 +849,13 @@ const supabase = getSupabaseBrowserClient()
         </div>
 
         <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 8px" }}>
-          Vérification en cours{dots}
+          {method === 'mobile_money' ? `En attente de confirmation MTN${dots}` : `Vérification en cours${dots}`}
         </h2>
         <p style={{ color: "#888", fontSize: 11, margin: "0 0 24px", lineHeight: 1.7 }}>
-          Notre équipe vérifie votre transaction.<br />
-          Cela prend généralement 1-3 minutes.
+          {method === 'mobile_money'
+            ? <>Confirmez le paiement de <strong style={{ color: "#FBBF24" }}>{fmt(price)} FCFA</strong> sur votre téléphone MTN.<br />Ne fermez pas cette page.</>
+            : <>Notre équipe vérifie votre transaction.<br />Cela prend généralement 1-3 minutes.</>
+          }
         </p>
 
         {/* Info commande */}
@@ -829,6 +894,104 @@ const supabase = getSupabaseBrowserClient()
           @keyframes spin { to { transform: rotate(360deg); } }
           @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
         `}</style>
+      </div>
+    )
+  }
+
+  // ═══ TIMEOUT MTN ═══
+  if (step === 'timeout') {
+    return (
+      <div style={{ textAlign: "center", padding: "40px 0" }}>
+        <div style={{
+          width: 80, height: 80, borderRadius: 24,
+          background: "rgba(232,168,56,0.1)", border: "2px solid rgba(232,168,56,0.2)",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 40, margin: "0 auto 20px",
+        }}>⏱️</div>
+        <h2 style={{ color: "#E8A838", fontSize: 22, fontWeight: 800, margin: "0 0 8px" }}>Délai dépassé</h2>
+        <p style={{ color: "#888", fontSize: 13, margin: "0 0 24px", lineHeight: 1.6 }}>
+          Le paiement n&apos;a pas été confirmé à temps.<br />Réessayez ou contactez le support.
+        </p>
+        <button onClick={() => { setStep('phone'); setReferenceId(''); setOrderId(''); setOrderData(null) }} style={{
+          width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+          background: plan.gradient, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
+        }}>Réessayer</button>
+      </div>
+    )
+  }
+
+  // ═══ REQUÊTE MTN EN COURS ═══
+  if (step === 'requesting') {
+    return (
+      <div style={{ textAlign: "center", padding: "60px 0" }}>
+        <div style={{ width: 64, height: 64, margin: "0 auto 24px", position: "relative" }}>
+          <div style={{ position: "absolute", inset: -6, borderRadius: "50%", border: "2px solid transparent", borderTopColor: plan.color, animation: "spin 1s linear infinite" }} />
+          <div style={{ position: "absolute", inset: 0, borderRadius: "50%", background: `${plan.color}08`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>📱</div>
+        </div>
+        <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 8px" }}>Initialisation MTN MoMo{dots}</h2>
+        <p style={{ color: "#888", fontSize: 12, lineHeight: 1.7 }}>
+          Création de la demande de paiement…<br />Vérifiez votre téléphone dans quelques secondes.
+        </p>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    )
+  }
+
+  // ═══ SAISIE DU NUMÉRO MTN ═══
+  if (step === 'phone') {
+    return (
+      <div>
+        <button onClick={() => { setMethod(''); setStep('method'); setPhone(''); setPhoneError(''); setServerError('') }} style={{
+          display: "flex", alignItems: "center", gap: 6,
+          background: "none", border: "none", color: "#888",
+          fontSize: 13, cursor: "pointer", marginBottom: 20, padding: 0,
+        }}>← Retour</button>
+        <SummaryHeader />
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 48, marginBottom: 8 }}>📱</div>
+          <h2 style={{ color: "#F0ECE2", fontSize: 18, fontWeight: 800, margin: "0 0 4px" }}>MTN Mobile Money</h2>
+          <p style={{ color: "#888", fontSize: 11 }}>Entrez le numéro MTN à débiter pour payer {fmt(price)} FCFA</p>
+        </div>
+        <div style={{ marginBottom: 20 }}>
+          <div style={{
+            borderRadius: 16, padding: 4,
+            border: `2px solid ${phoneError ? 'rgba(239,68,68,0.5)' : 'rgba(255,255,255,0.08)'}`,
+          }}>
+            <input
+              type="tel" inputMode="numeric"
+              value={phone}
+              onChange={e => { setPhone(e.target.value); setPhoneError('') }}
+              onKeyDown={e => e.key === 'Enter' && handleMtnRequest()}
+              placeholder="06 938 71 69"
+              autoFocus
+              style={{
+                width: "100%", padding: "16px 20px",
+                background: "transparent", border: "none", outline: "none",
+                color: "#F0ECE2", fontSize: 20, fontFamily: "monospace",
+                letterSpacing: 3, textAlign: "center",
+              }}
+            />
+          </div>
+          {phoneError && <p style={{ color: "#F87171", fontSize: 11, fontWeight: 700, marginTop: 8 }}>⚠ {phoneError}</p>}
+        </div>
+        {serverError && (
+          <div style={{ marginBottom: 16, padding: 12, borderRadius: 12, background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+            <p style={{ color: "#F87171", fontSize: 11, fontWeight: 700, margin: 0 }}>⚠ {serverError}</p>
+          </div>
+        )}
+        <button
+          onClick={handleMtnRequest}
+          disabled={phone.replace(/\D/g, '').length < 6}
+          style={{
+            width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
+            background: phone.replace(/\D/g, '').length >= 6 ? plan.gradient : "rgba(255,255,255,0.06)",
+            color: phone.replace(/\D/g, '').length >= 6 ? "#fff" : "#444",
+            fontSize: 15, fontWeight: 700,
+            cursor: phone.replace(/\D/g, '').length >= 6 ? "pointer" : "not-allowed",
+          }}
+        >
+          Payer {fmt(price)} FCFA →
+        </button>
       </div>
     )
   }
@@ -1018,7 +1181,7 @@ const supabase = getSupabaseBrowserClient()
         {METHODS.map(m => (
           <button
             key={m.id}
-            onClick={() => { setMethod(m.id); setStep('transfer') }}
+            onClick={() => { setMethod(m.id); setStep(m.id === 'mobile_money' ? 'phone' : 'transfer') }}
             style={{
               display: "flex", alignItems: "center", gap: 14,
               padding: "18px 20px", borderRadius: 16,

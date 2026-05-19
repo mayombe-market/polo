@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 import { sendOrderStatusEmail } from '@/app/actions/emails'
+import { activateSubscription } from '@/lib/subscriptionActivation'
 
 // MTN MoMo appelle ce endpoint dès qu'un paiement est confirmé ou refusé.
 // Sécurité : on valide un token secret passé en query param (?secret=...).
@@ -33,15 +34,17 @@ export async function POST(req: NextRequest) {
                 p_mtn_transaction_id: financialTransactionId ?? null,
             })
 
-            // Envoyer l'email de statut uniquement si la commande vient d'être confirmée
+            // Uniquement si la commande vient d'être confirmée (première confirmation)
             if (confirmed) {
                 const { data: order } = await supabase
                     .from('orders')
-                    .select('customer_email, customer_name, tracking_number, delivery_mode, items')
+                    .select('order_type, customer_email, customer_name, tracking_number, delivery_mode, items')
                     .eq('id', externalId)
                     .maybeSingle()
 
-                if (order?.customer_email) {
+                if (order?.order_type === 'subscription') {
+                    activateSubscription(supabase, externalId).catch(() => {})
+                } else if (order?.customer_email) {
                     const productNames = Array.isArray(order.items)
                         ? order.items.map((i: any) => i.name).filter(Boolean).join(', ')
                         : undefined

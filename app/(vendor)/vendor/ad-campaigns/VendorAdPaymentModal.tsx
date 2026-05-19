@@ -8,7 +8,7 @@ import { getAdminPaymentNumber } from '@/lib/adminPaymentConfig'
 import { declareVendorAdPayment, type VendorAdPaymentMethod } from '@/app/actions/vendorAdCampaigns'
 import { profileCityToCheckoutDisplay, normalizeToServiceCityCode } from '@/lib/deliveryLocation'
 
-type Step = 'method' | 'transfer' | 'confirm'
+type Step = 'method' | 'phone' | 'requesting' | 'transfer' | 'waiting' | 'confirm' | 'failed' | 'timeout'
 
 const METHOD_OPTIONS: {
     id: VendorAdPaymentMethod
@@ -118,6 +118,9 @@ export default function VendorAdPaymentModal({
     const [mounted, setMounted] = useState(false)
     const [step, setStep] = useState<Step>('method')
     const [paymentMethod, setPaymentMethod] = useState<VendorAdPaymentMethod | null>(null)
+    const [phone, setPhone] = useState('')
+    const [phoneError, setPhoneError] = useState('')
+    const [referenceId, setReferenceId] = useState('')
     const [code, setCode] = useState('')
     const [fieldError, setFieldError] = useState('')
     const [serverError, setServerError] = useState('')
@@ -133,6 +136,9 @@ export default function VendorAdPaymentModal({
         if (!isOpen) {
             setStep('method')
             setPaymentMethod(null)
+            setPhone('')
+            setPhoneError('')
+            setReferenceId('')
             setCode('')
             setFieldError('')
             setServerError('')
@@ -160,7 +166,7 @@ export default function VendorAdPaymentModal({
         }
     }, [isOpen, step])
 
-    const activeStepIndex = step === 'method' ? 0 : step === 'transfer' ? 1 : 2
+    const activeStepIndex = (step === 'method' || step === 'phone') ? 0 : (step === 'transfer' || step === 'requesting' || step === 'waiting') ? 1 : 2
 
     const digits = code.replace(/\D/g, '')
     const isComplete = digits.length === 10
@@ -176,7 +182,46 @@ export default function VendorAdPaymentModal({
 
     const selectMethod = (m: VendorAdPaymentMethod) => {
         setPaymentMethod(m)
-        setStep('transfer')
+        setStep(m === 'mobile_money' ? 'phone' : 'transfer')
+    }
+
+    const handleMtnRequest = async () => {
+        const cleanPhone = phone.replace(/\D/g, '')
+        if (cleanPhone.length < 6) { setPhoneError('Entrez votre numéro MTN'); return }
+        setPhoneError(''); setServerError(''); setStep('requesting')
+        try {
+            const payRes = await fetch('/api/mtn-momo/pay-ad', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ campaignId, phone: cleanPhone, amount: priceFcfa }),
+            })
+            const payData = await payRes.json()
+            if (!payRes.ok || payData.error) {
+                setServerError(payData.error || 'Erreur MTN MoMo'); setStep('phone'); return
+            }
+            setReferenceId(payData.referenceId)
+            // Poll until confirmed
+            let localPollCount = 0
+            setStep('waiting')
+            const poll = setInterval(async () => {
+                localPollCount++
+                if (localPollCount > 60) { clearInterval(poll); setStep('timeout'); return }
+                try {
+                    const sRes = await fetch(`/api/mtn-momo/status-ad?referenceId=${payData.referenceId}&campaignId=${campaignId}`)
+                    const sData = await sRes.json()
+                    if (sData.status === 'SUCCESSFUL') {
+                        clearInterval(poll)
+                        onSuccess?.()
+                        setStep('confirm')
+                    } else if (sData.status === 'FAILED') {
+                        clearInterval(poll)
+                        setStep('failed')
+                    }
+                } catch {}
+            }, 5000)
+        } catch (err: any) {
+            setServerError(err.message || 'Erreur'); setStep('phone')
+        }
     }
 
     const handleValidatePayment = async () => {
@@ -278,6 +323,87 @@ export default function VendorAdPaymentModal({
                         >
                             ← Annuler
                         </button>
+                    </div>
+                )}
+
+                {step === 'timeout' && (
+                    <div className="animate-fadeIn text-center">
+                        <div className="w-16 h-16 rounded-full bg-yellow-50 dark:bg-yellow-500/10 border-2 border-yellow-200 dark:border-yellow-500/30 flex items-center justify-center text-3xl mx-auto mb-4">⏱️</div>
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Délai dépassé</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 mb-6">Le paiement n&apos;a pas été confirmé à temps.</p>
+                        <button type="button" onClick={() => { setStep('phone'); setReferenceId('') }} className="w-full py-4 rounded-2xl font-black uppercase italic text-sm bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98] transition-all">Réessayer</button>
+                    </div>
+                )}
+
+                {step === 'failed' && (
+                    <div className="animate-fadeIn text-center">
+                        <div className="w-16 h-16 rounded-full bg-red-50 dark:bg-red-500/10 border-2 border-red-200 dark:border-red-500/30 flex items-center justify-center text-3xl mx-auto mb-4">✗</div>
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white">Paiement échoué</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-2 mb-6">Le paiement MTN a été refusé ou annulé.</p>
+                        <button type="button" onClick={() => { setStep('phone'); setReferenceId('') }} className="w-full py-4 rounded-2xl font-black uppercase italic text-sm bg-orange-500 text-white active:scale-[0.98] transition-all">Réessayer</button>
+                    </div>
+                )}
+
+                {step === 'waiting' && (
+                    <div className="animate-fadeIn text-center py-8">
+                        <div className="w-16 h-16 mx-auto mb-6 relative">
+                            <div className="absolute inset-0 rounded-full border-2 border-slate-200 dark:border-slate-700" />
+                            <div className="absolute -inset-1 rounded-full border-2 border-transparent border-t-orange-500 animate-spin" />
+                            <div className="absolute inset-0 rounded-full bg-orange-500/5 flex items-center justify-center text-2xl">📱</div>
+                        </div>
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white mb-2">En attente MTN…</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Confirmez le paiement sur votre téléphone MTN</p>
+                        <p className="text-xs font-bold text-orange-500 mt-3">{priceFcfa.toLocaleString('fr-FR')} FCFA</p>
+                    </div>
+                )}
+
+                {step === 'requesting' && (
+                    <div className="animate-fadeIn text-center py-8">
+                        <div className="w-16 h-16 mx-auto mb-6 relative">
+                            <div className="absolute -inset-1 rounded-full border-2 border-transparent border-t-orange-500 animate-spin" />
+                            <div className="absolute inset-0 rounded-full bg-orange-500/5 flex items-center justify-center text-2xl">📱</div>
+                        </div>
+                        <h2 className="text-xl font-black uppercase italic tracking-tighter text-slate-900 dark:text-white mb-2">Initialisation…</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Création de la demande de paiement MTN</p>
+                    </div>
+                )}
+
+                {step === 'phone' && (
+                    <div className="animate-fadeIn">
+                        <div className="text-center mb-6">
+                            <div className="text-5xl mb-3">📱</div>
+                            <h2 className="text-lg font-black uppercase italic tracking-tighter">MTN Mobile Money</h2>
+                            <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
+                                Entrez le numéro MTN à débiter
+                            </p>
+                        </div>
+                        <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-5 text-center mb-5 border border-slate-200 dark:border-slate-700">
+                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Montant</p>
+                            <p className="text-2xl font-black italic text-orange-500">{priceFcfa.toLocaleString('fr-FR')} FCFA</p>
+                        </div>
+                        <div className={`rounded-2xl p-1 border-2 mb-1 transition-colors ${phoneError ? 'border-red-500/60' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
+                            <input
+                                type="tel"
+                                inputMode="numeric"
+                                autoComplete="tel"
+                                autoFocus
+                                value={phone}
+                                onChange={e => { setPhone(e.target.value); setPhoneError('') }}
+                                onKeyDown={e => e.key === 'Enter' && handleMtnRequest()}
+                                placeholder="06 938 71 69"
+                                className="w-full py-4 px-5 bg-transparent text-xl font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                            />
+                        </div>
+                        {phoneError && <p className="text-red-500 text-[10px] font-bold mt-1 mb-3">⚠ {phoneError}</p>}
+                        {serverError && (
+                            <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/20">
+                                <p className="text-red-600 dark:text-red-400 text-[11px] font-bold">⚠ {serverError}</p>
+                            </div>
+                        )}
+                        <button type="button" onClick={handleMtnRequest} disabled={phone.replace(/\D/g, '').length < 6} className={`w-full mt-3 py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${phone.replace(/\D/g, '').length >= 6 ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}>
+                            Payer {priceFcfa.toLocaleString('fr-FR')} FCFA →
+                        </button>
+                        <button type="button" onClick={() => { setStep('method'); setPhone(''); setPhoneError(''); setServerError('') }} className="w-full mt-3 py-3 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors">← Retour</button>
                     </div>
                 )}
 

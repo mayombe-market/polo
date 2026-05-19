@@ -1203,7 +1203,7 @@ export async function createSubscriptionOrder(input: {
     price: number
     billing: string
     payment_method: string
-    transaction_id: string
+    transaction_id?: string
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -1237,8 +1237,8 @@ export async function createSubscriptionOrder(input: {
         .eq('id', user.id)
         .single()
 
-    const txDigits = digitsOnly(input.transaction_id)
-    if (!isExactly10Digits(txDigits)) {
+    const txDigits = input.transaction_id ? digitsOnly(input.transaction_id) : undefined
+    if (txDigits !== undefined && !isExactly10Digits(txDigits)) {
         return { error: 'L\'ID de transaction doit contenir exactement 10 chiffres.' }
     }
 
@@ -1264,7 +1264,7 @@ export async function createSubscriptionOrder(input: {
         commission_amount: 0,
         vendor_payout: 0,
         payout_status: 'paid',
-        transaction_id: txDigits,
+        transaction_id: txDigits ?? null,
         order_type: 'subscription',
         subscription_plan_id: input.planId,
         subscription_billing: input.billing,

@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { getPaymentStatus } from '@/lib/mtnMomo'
 import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 import { sendOrderStatusEmail } from '@/app/actions/emails'
+import { activateSubscription } from '@/lib/subscriptionActivation'
 
 export async function GET(req: NextRequest) {
     try {
@@ -28,15 +29,16 @@ export async function GET(req: NextRequest) {
                 p_mtn_transaction_id: null,
             })
 
-            // Envoyer l'email uniquement si c'est la première confirmation (évite les doublons webhook+polling)
             if (confirmed) {
                 const { data: order } = await supabase
                     .from('orders')
-                    .select('customer_email, customer_name, tracking_number, delivery_mode, items')
+                    .select('order_type, customer_email, customer_name, tracking_number, delivery_mode, items')
                     .eq('id', orderId)
                     .maybeSingle()
 
-                if (order?.customer_email) {
+                if (order?.order_type === 'subscription') {
+                    activateSubscription(supabase, orderId).catch(() => {})
+                } else if (order?.customer_email) {
                     const productNames = Array.isArray(order.items)
                         ? order.items.map((i: any) => i.name).filter(Boolean).join(', ')
                         : undefined

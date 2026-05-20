@@ -53,8 +53,8 @@ async function requireAdmin() {
 }
 
 export type SubmitVendorAdCampaignInput = {
-    linkUrl: string
-    linkType: 'product' | 'store'
+    linkUrl?: string          // auto-construit pour patisserie / restaurant
+    linkType: 'product' | 'store' | 'patisserie' | 'restaurant'
     imageUrl: string
     title?: string
     description?: string
@@ -67,40 +67,62 @@ export async function submitVendorAdCampaign(input: SubmitVendorAdCampaignInput)
     const { supabase, user } = await requireVendor()
 
     const img = input.imageUrl?.trim()
-    const link = input.linkUrl?.trim()
-    if (!img || !link) return { error: 'Image et lien obligatoires' }
+    if (!img) return { error: 'Image obligatoire' }
     if (!isDurationDays(input.durationDays)) return { error: 'Durée invalide' }
     if (input.placement !== 'hero' && input.placement !== 'tile') return { error: 'Emplacement invalide' }
 
     const price_fcfa = priceForCampaign(input.placement, input.durationDays)
 
-    // Vérifier que le lien correspond bien au vendeur
-    if (input.linkType === 'product') {
-        const productId = extractUuidFromPath(link, 'product')
-        if (!productId) return { error: 'Lien produit invalide' }
-        const { data: p } = await supabase.from('products').select('seller_id').eq('id', productId).single()
-        if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
+    let link: string
+
+    if (input.linkType === 'patisserie' || input.linkType === 'restaurant') {
+        // Vérifier que le vendor_type correspond
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('vendor_type')
+            .eq('id', user.id)
+            .single()
+        if (prof?.vendor_type !== input.linkType) {
+            return { error: 'Type de boutique incompatible avec votre compte' }
+        }
+        link = `/${input.linkType}/${user.id}`
     } else {
-        const storeId = extractUuidFromPath(link, 'store')
-        if (!storeId || storeId !== user.id) return { error: "Lien boutique : utilisez l'URL de votre boutique" }
+        const rawLink = input.linkUrl?.trim()
+        if (!rawLink) return { error: 'Lien obligatoire' }
+        link = rawLink
+
+        // Vérifier que le lien correspond bien au vendeur
+        if (input.linkType === 'product') {
+            const productId = extractUuidFromPath(link, 'product')
+            if (!productId) return { error: 'Lien produit invalide' }
+            const { data: p } = await supabase.from('products').select('seller_id').eq('id', productId).single()
+            if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
+        } else {
+            const storeId = extractUuidFromPath(link, 'store')
+            if (!storeId || storeId !== user.id) return { error: "Lien boutique : utilisez l'URL de votre boutique" }
+        }
     }
 
-    const { error } = await supabase.from('vendor_ad_campaigns').insert({
-        seller_id: user.id,
-        link_url: link,
-        link_type: input.linkType,
-        image_url: img,
-        title: input.title?.trim() || null,
-        description: input.description?.trim() || null,
-        placement: input.placement,
-        duration_days: input.durationDays,
-        price_fcfa,
-        status: 'pending_payment',
-    })
+    const { data: newCampaign, error } = await supabase
+        .from('vendor_ad_campaigns')
+        .insert({
+            seller_id: user.id,
+            link_url: link,
+            link_type: input.linkType,
+            image_url: img,
+            title: input.title?.trim() || null,
+            description: input.description?.trim() || null,
+            placement: input.placement,
+            duration_days: input.durationDays,
+            price_fcfa,
+            status: 'pending_payment',
+        })
+        .select('id, price_fcfa, title, image_url, link_url, link_type, placement, duration_days, status')
+        .single()
 
     if (error) return { error: error.message }
     revalidatePath('/vendor/ad-campaigns')
-    return { success: true }
+    return { success: true, campaign: newCampaign }
 }
 
 function extractUuidFromPath(url: string, segment: 'product' | 'store'): string | null {
@@ -373,8 +395,7 @@ export async function submitVendorAdCampaignWithPayment(input: SubmitVendorAdCam
     const { supabase, user } = await requireVendor()
 
     const img = input.imageUrl?.trim()
-    const link = input.linkUrl?.trim()
-    if (!img || !link) return { error: 'Image et lien obligatoires' }
+    if (!img) return { error: 'Image obligatoire' }
     if (!isDurationDays(input.durationDays)) return { error: 'Durée invalide' }
     if (input.placement !== 'hero' && input.placement !== 'tile') return { error: 'Emplacement invalide' }
 
@@ -386,14 +407,31 @@ export async function submitVendorAdCampaignWithPayment(input: SubmitVendorAdCam
 
     const price_fcfa = priceForCampaign(input.placement, input.durationDays)
 
-    if (input.linkType === 'product') {
-        const productId = extractUuidFromPath(link, 'product')
-        if (!productId) return { error: 'Lien produit invalide' }
-        const { data: p } = await supabase.from('products').select('seller_id').eq('id', productId).single()
-        if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
+    let link: string
+
+    if (input.linkType === 'patisserie' || input.linkType === 'restaurant') {
+        const { data: prof } = await supabase
+            .from('profiles')
+            .select('vendor_type')
+            .eq('id', user.id)
+            .single()
+        if (prof?.vendor_type !== input.linkType) {
+            return { error: 'Type de boutique incompatible avec votre compte' }
+        }
+        link = `/${input.linkType}/${user.id}`
     } else {
-        const storeId = extractUuidFromPath(link, 'store')
-        if (!storeId || storeId !== user.id) return { error: "Lien boutique invalide" }
+        const rawLink = input.linkUrl?.trim()
+        if (!rawLink) return { error: 'Lien obligatoire' }
+        link = rawLink
+        if (input.linkType === 'product') {
+            const productId = extractUuidFromPath(link, 'product')
+            if (!productId) return { error: 'Lien produit invalide' }
+            const { data: p } = await supabase.from('products').select('seller_id').eq('id', productId).single()
+            if (!p || p.seller_id !== user.id) return { error: 'Ce produit ne vous appartient pas' }
+        } else {
+            const storeId = extractUuidFromPath(link, 'store')
+            if (!storeId || storeId !== user.id) return { error: "Lien boutique invalide" }
+        }
     }
 
     const { data: campaign, error: insertError } = await supabase

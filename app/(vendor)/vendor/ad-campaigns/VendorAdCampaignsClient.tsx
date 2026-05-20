@@ -7,7 +7,8 @@ import {
     HERO_PRICES_FCFA,
     TILE_PRICES_FCFA,
 } from '@/lib/adCampaignPricing'
-import { cancelVendorAdCampaign } from '@/app/actions/vendorAdCampaigns'
+import { cancelVendorAdCampaign, submitVendorAdCampaign } from '@/app/actions/vendorAdCampaigns'
+import { priceForCampaign, type AdPlacement, type AdDurationDays, isDurationDays } from '@/lib/adCampaignPricing'
 import VendorAdPaymentModal from './VendorAdPaymentModal'
 import { toast } from 'sonner'
 import { Loader2, Megaphone, ArrowLeft, Info } from 'lucide-react'
@@ -32,11 +33,62 @@ type CampaignRow = {
     created_at?: string
 }
 
-export default function VendorAdCampaignsClient({ initialCampaigns }: { initialCampaigns: CampaignRow[] }) {
+type NewCampaignDraft = {
+    imageUrl: string
+    title: string
+    placement: AdPlacement
+    durationDays: AdDurationDays
+}
+
+const DURATIONS: AdDurationDays[] = [3, 7, 14, 30]
+
+export default function VendorAdCampaignsClient({
+    initialCampaigns,
+    vendorType,
+    vendorId,
+}: {
+    initialCampaigns: CampaignRow[]
+    vendorType: string | null
+    vendorId: string
+}) {
     const router = useRouter()
     const [campaigns, setCampaigns] = useState<CampaignRow[]>(initialCampaigns)
     const [loading, setLoading] = useState(false)
     const [paymentModalCampaign, setPaymentModalCampaign] = useState<CampaignRow | null>(null)
+
+    // Form création standalone (patisserie / restaurant)
+    const isShopVendor = vendorType === 'patisserie' || vendorType === 'restaurant'
+    const [showForm, setShowForm] = useState(false)
+    const [draft, setDraft] = useState<NewCampaignDraft>({
+        imageUrl: '', title: '', placement: 'tile', durationDays: 7,
+    })
+    const [creating, setCreating] = useState(false)
+    const [createError, setCreateError] = useState('')
+
+    const draftPrice = priceForCampaign(draft.placement, draft.durationDays)
+
+    const handleCreateCampaign = async () => {
+        if (!draft.imageUrl.trim()) { setCreateError('Ajoutez une image pour la pub'); return }
+        setCreateError('')
+        setCreating(true)
+        const res = await submitVendorAdCampaign({
+            linkType: vendorType as 'patisserie' | 'restaurant',
+            imageUrl: draft.imageUrl.trim(),
+            title: draft.title.trim() || undefined,
+            placement: draft.placement,
+            durationDays: draft.durationDays,
+        })
+        setCreating(false)
+        if (res.error) { setCreateError(res.error); return }
+        setShowForm(false)
+        setDraft({ imageUrl: '', title: '', placement: 'tile', durationDays: 7 })
+        // Ajouter la campagne à la liste locale et ouvrir le modal de paiement immédiatement
+        if (res.campaign) {
+            const c = res.campaign as CampaignRow
+            setCampaigns(prev => [c, ...prev])
+            setPaymentModalCampaign(c)
+        }
+    }
 
     useEffect(() => {
         setCampaigns(initialCampaigns)
@@ -94,24 +146,139 @@ export default function VendorAdCampaignsClient({ initialCampaigns }: { initialC
                 et fixe les dates de diffusion.
             </p>
 
-            {/* Bannière info — création via formulaire produit */}
-            <div className="flex items-start gap-3 bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-2xl p-4 mb-10">
-                <Info size={16} className="text-orange-500 shrink-0 mt-0.5" />
-                <div>
-                    <p className="text-sm font-black text-orange-700 dark:text-orange-400 mb-1">
-                        Comment créer une publicité ?
-                    </p>
-                    <p className="text-xs text-orange-600/80 dark:text-orange-400/70 leading-relaxed">
-                        Publiez un produit depuis votre dashboard — à la fin de la publication, un assistant vous proposera automatiquement de créer une pub avec le choix de l&apos;emplacement, des dates et du paiement.
-                    </p>
-                    <Link
-                        href="/vendor/dashboard?tab=products"
-                        className="inline-block mt-2 text-xs font-black uppercase text-orange-500 hover:underline"
+            {/* Bannière info — selon le type de vendeur */}
+            {isShopVendor ? (
+                <div className="mb-8">
+                    <button
+                        type="button"
+                        onClick={() => { setShowForm(v => !v); setCreateError('') }}
+                        className="w-full flex items-center justify-center gap-2 py-4 rounded-2xl bg-orange-500 text-white font-black uppercase italic text-sm shadow-lg shadow-orange-500/20 hover:bg-orange-600 active:scale-[0.98] transition-all"
                     >
-                        → Aller à mes produits
-                    </Link>
+                        <Megaphone size={16} />
+                        {showForm ? 'Annuler' : 'Créer une nouvelle pub'}
+                    </button>
+
+                    {showForm && (
+                        <div className="mt-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 space-y-5">
+                            <h3 className="text-sm font-black uppercase italic text-slate-900 dark:text-white">
+                                Nouvelle campagne — {vendorType === 'patisserie' ? 'Pâtisserie' : 'Restaurant'}
+                            </h3>
+
+                            {/* Image */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">
+                                    URL de l&apos;image publicitaire *
+                                </label>
+                                <input
+                                    type="url"
+                                    placeholder="https://…"
+                                    value={draft.imageUrl}
+                                    onChange={e => setDraft(d => ({ ...d, imageUrl: e.target.value }))}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:border-orange-400"
+                                />
+                                {draft.imageUrl && (
+                                    <img src={draft.imageUrl} alt="" className="mt-2 h-28 w-full object-cover rounded-xl" onError={e => (e.currentTarget.style.display = 'none')} />
+                                )}
+                            </div>
+
+                            {/* Titre */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-1.5">
+                                    Titre (facultatif)
+                                </label>
+                                <input
+                                    type="text"
+                                    placeholder="ex : Gâteau de mariage sur commande"
+                                    value={draft.title}
+                                    onChange={e => setDraft(d => ({ ...d, title: e.target.value }))}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm font-bold outline-none focus:border-orange-400"
+                                />
+                            </div>
+
+                            {/* Emplacement */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">
+                                    Emplacement
+                                </label>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {(['hero', 'tile'] as AdPlacement[]).map(p => (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => setDraft(d => ({ ...d, placement: p }))}
+                                            className={`py-3 rounded-xl border-2 text-xs font-black uppercase transition-all ${draft.placement === p ? 'border-orange-500 bg-orange-50 dark:bg-orange-500/10 text-orange-600' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                        >
+                                            {p === 'hero' ? '🎯 Hero (grande bannière)' : '📌 Tuile (grille produits)'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Durée */}
+                            <div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block mb-2">
+                                    Durée
+                                </label>
+                                <div className="grid grid-cols-4 gap-2">
+                                    {DURATIONS.map(d => (
+                                        <button
+                                            key={d}
+                                            type="button"
+                                            onClick={() => setDraft(dr => ({ ...dr, durationDays: d }))}
+                                            className={`py-3 rounded-xl border-2 text-xs font-black transition-all ${draft.durationDays === d ? 'border-orange-500 bg-orange-50 dark:bg-orange-500/10 text-orange-600' : 'border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                        >
+                                            {d} j
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Prix + récap */}
+                            <div className="bg-slate-50 dark:bg-slate-800 rounded-xl p-4 flex items-center justify-between">
+                                <div>
+                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Total</p>
+                                    <p className="text-xl font-black italic text-orange-500">{draftPrice.toLocaleString('fr-FR')} FCFA</p>
+                                </div>
+                                <p className="text-[10px] font-bold text-slate-400 text-right">
+                                    {draft.placement === 'hero' ? 'Grande bannière' : 'Tuile produit'}<br />
+                                    {draft.durationDays} jours
+                                </p>
+                            </div>
+
+                            {createError && (
+                                <p className="text-xs font-bold text-red-500">⚠ {createError}</p>
+                            )}
+
+                            <button
+                                type="button"
+                                disabled={creating}
+                                onClick={handleCreateCampaign}
+                                className="w-full py-4 rounded-2xl font-black uppercase italic text-sm bg-orange-500 text-white shadow-lg shadow-orange-500/20 hover:bg-orange-600 active:scale-[0.98] transition-all disabled:opacity-50"
+                            >
+                                {creating ? <span className="inline-flex items-center gap-2"><Loader2 size={16} className="animate-spin" />Création…</span> : `Créer & payer ${draftPrice.toLocaleString('fr-FR')} FCFA →`}
+                            </button>
+                        </div>
+                    )}
                 </div>
-            </div>
+            ) : (
+                <div className="flex items-start gap-3 bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-2xl p-4 mb-10">
+                    <Info size={16} className="text-orange-500 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-black text-orange-700 dark:text-orange-400 mb-1">
+                            Comment créer une publicité ?
+                        </p>
+                        <p className="text-xs text-orange-600/80 dark:text-orange-400/70 leading-relaxed">
+                            Publiez un produit depuis votre dashboard — à la fin de la publication, un assistant vous proposera automatiquement de créer une pub avec le choix de l&apos;emplacement, des dates et du paiement.
+                        </p>
+                        <Link
+                            href="/vendor/dashboard?tab=products"
+                            className="inline-block mt-2 text-xs font-black uppercase text-orange-500 hover:underline"
+                        >
+                            → Aller à mes produits
+                        </Link>
+                    </div>
+                </div>
+            )}
 
             <h2 className="text-sm font-black uppercase italic text-slate-800 dark:text-white mb-4">Mes campagnes</h2>
             {campaigns.length === 0 ? (

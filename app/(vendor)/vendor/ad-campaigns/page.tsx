@@ -38,10 +38,16 @@ export default async function VendorAdCampaignsPage() {
     }
     if (!user) redirect('/')
 
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('role, vendor_type').eq('id', user.id).single()
     if (profile?.role !== 'vendor') redirect('/')
 
     const { campaigns } = await listMyVendorAdCampaigns()
 
-    return <VendorAdCampaignsClient initialCampaigns={campaigns} />
+    return (
+        <VendorAdCampaignsClient
+            initialCampaigns={campaigns}
+            vendorType={profile?.vendor_type ?? null}
+            vendorId={user.id}
+        />
+    )
 }

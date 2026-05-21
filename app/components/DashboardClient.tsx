@@ -655,6 +655,28 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         <Megaphone size={20} />
                         {sidebarOpen && <span>Campagnes pub</span>}
                     </Link>
+                    {profile?.verification_status !== 'verified' && (
+                        <Link
+                            href="/vendor/verification"
+                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative ${
+                                profile?.verification_status === 'pending'
+                                    ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                                    : 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
+                            }`}
+                        >
+                            <Shield size={20} />
+                            {sidebarOpen && (
+                                <span className="flex-1 flex items-center justify-between gap-2">
+                                    Vérification
+                                    {profile?.verification_status !== 'pending' && (
+                                        <span className="text-[9px] font-black uppercase bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
+                                            Requis
+                                        </span>
+                                    )}
+                                </span>
+                            )}
+                        </Link>
+                    )}
                 </nav>
 
                 {showVendorPlanCta && (
@@ -723,6 +745,17 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <Megaphone size={18} />
                     <span className="text-[7px] font-black uppercase whitespace-nowrap">Pubs</span>
                 </Link>
+                {profile?.verification_status !== 'verified' && (
+                    <Link
+                        href="/vendor/verification"
+                        className={`relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 ${
+                            profile?.verification_status === 'pending' ? 'text-blue-500' : 'text-amber-500'
+                        }`}
+                    >
+                        <Shield size={18} />
+                        <span className="text-[7px] font-black uppercase whitespace-nowrap">Vérif</span>
+                    </Link>
+                )}
             </div>
 
             {/* ===== MAIN CONTENT ===== */}

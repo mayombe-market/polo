@@ -205,82 +205,102 @@ export default function AdminVerificationsPage() {
                                     </div>
 
                                     {/* Photos */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Photo boutique</p>
-                                            <div
-                                                className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
-                                                onClick={() => setZoomImage(v.shop_photo_url)}
-                                            >
-                                                <img src={v.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
-                                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors">
-                                                    <Eye size={20} className="text-white opacity-0 hover:opacity-100" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
-                                                {v.id_type === 'passport' ? '📗 Passeport' : '🪪 CNI'}
-                                            </p>
-                                            {(v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url) ? (
+                                    <div className={`grid gap-3 ${v.shop_photo_url ? 'grid-cols-2' : 'grid-cols-1'}`}>
+                                        {/* Photo boutique (ancien format) */}
+                                        {v.shop_photo_url && (
+                                            <div>
+                                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Photo boutique</p>
                                                 <div
                                                     className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
-                                                    onClick={() => setZoomImage(v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url)}
+                                                    onClick={() => setZoomImage(v.shop_photo_url)}
                                                 >
-                                                    <img
-                                                        src={v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url}
-                                                        alt="Pièce d'identité"
-                                                        className="absolute inset-0 h-full w-full object-cover"
-                                                        loading="lazy"
-                                                        decoding="async"
-                                                    />
+                                                    <img src={v.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
                                                 </div>
-                                            ) : (
-                                                <div className="w-full aspect-video rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 text-xs">
-                                                    Non fournie
-                                                </div>
-                                            )}
+                                            </div>
+                                        )}
+                                        {/* Photo pièce d'identité — nouveau champ unifié ou anciens champs */}
+                                        <div>
+                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                                                Pièce d&apos;identité ({v.id_type === 'passport' ? 'Passeport' : v.id_type === 'permis' ? 'Permis' : 'CNI'})
+                                            </p>
+                                            {(() => {
+                                                const photoUrl = v.id_photo_url
+                                                    || (v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url)
+                                                return photoUrl ? (
+                                                    <div
+                                                        className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                        onClick={() => setZoomImage(photoUrl)}
+                                                    >
+                                                        <img
+                                                            src={photoUrl}
+                                                            alt="Pièce d'identité"
+                                                            className="absolute inset-0 h-full w-full object-cover"
+                                                            loading="lazy"
+                                                            decoding="async"
+                                                        />
+                                                    </div>
+                                                ) : (
+                                                    <div className="w-full aspect-video rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 text-xs">
+                                                        Non fournie
+                                                    </div>
+                                                )
+                                            })()}
                                         </div>
                                     </div>
 
-                                    {/* Comparaison noms */}
-                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4">
-                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-3">Comparaison des noms</p>
-                                        <div className="grid grid-cols-2 gap-4">
+                                    {/* Dossier vendeur */}
+                                    <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
+                                        <p className="text-[10px] font-bold uppercase text-slate-400">Dossier vendeur</p>
+
+                                        {/* RCCM (nouveau) */}
+                                        {v.rccm_number && (
                                             <div>
-                                                <p className="text-[10px] text-slate-400">
-                                                    Nom sur {v.id_type === 'passport' ? 'le passeport' : 'la CNI'}
-                                                </p>
-                                                <p className="text-sm font-bold dark:text-white">{v.cni_name}</p>
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] text-slate-400">Nom Mobile Money</p>
-                                                <p className="text-sm font-bold dark:text-white">{v.momo_name}</p>
-                                            </div>
-                                        </div>
-                                        {v.cni_name.trim().toLowerCase() === v.momo_name.trim().toLowerCase() ? (
-                                            <div className="mt-2 flex items-center gap-1 text-green-500 text-xs font-bold">
-                                                <Check size={14} /> Les noms correspondent
-                                            </div>
-                                        ) : (
-                                            <div className="mt-2 flex items-center gap-1 text-amber-500 text-xs font-bold">
-                                                ⚠️ Les noms ne correspondent pas exactement
+                                                <p className="text-[10px] text-slate-400">RCCM</p>
+                                                <p className="text-sm font-bold dark:text-white font-mono">🏢 {v.rccm_number}</p>
                                             </div>
                                         )}
 
-                                        <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                            <p className="text-[10px] text-slate-400">Mobile Money</p>
-                                            <p className="text-sm font-bold dark:text-white">
-                                                {v.momo_operator === 'MTN' ? '🟡' : '🔴'} {v.momo_operator} — +242 {v.momo_number}
-                                            </p>
-                                        </div>
-
+                                        {/* NIU */}
                                         {v.niu_number && (
-                                            <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                                                <p className="text-[10px] text-slate-400">NIU / RCCM</p>
-                                                <p className="text-sm font-bold dark:text-white font-mono">
-                                                    🏢 {v.niu_number}
+                                            <div className={v.rccm_number ? 'pt-3 border-t border-slate-200 dark:border-slate-700' : ''}>
+                                                <p className="text-[10px] text-slate-400">NIU</p>
+                                                <p className="text-sm font-bold dark:text-white font-mono">🔢 {v.niu_number}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Nom gérant (nouveau) ou ancien cni_name */}
+                                        {(v.manager_name || v.cni_name) && (
+                                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                <p className="text-[10px] text-slate-400">
+                                                    Nom du gérant ({v.id_type === 'passport' ? 'passeport' : v.id_type === 'permis' ? 'permis' : 'CNI'})
                                                 </p>
+                                                <p className="text-sm font-bold dark:text-white">{v.manager_name || v.cni_name}</p>
+                                            </div>
+                                        )}
+
+                                        {/* Adresse (nouveau) */}
+                                        {v.address && (
+                                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                <p className="text-[10px] text-slate-400">Adresse</p>
+                                                <p className="text-sm font-bold dark:text-white">{v.address}</p>
+                                                {v.address_lat && v.address_lng && (
+                                                    <p className="text-[10px] text-green-500 font-mono mt-0.5">
+                                                        GPS {Number(v.address_lat).toFixed(5)}, {Number(v.address_lng).toFixed(5)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* Mobile Money (ancien format) */}
+                                        {v.momo_operator && (
+                                            <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
+                                                <p className="text-[10px] text-slate-400">Mobile Money</p>
+                                                <p className="text-sm font-bold dark:text-white">
+                                                    {v.momo_operator === 'MTN' ? '🟡' : '🔴'} {v.momo_operator} — +242 {v.momo_number}
+                                                </p>
+                                                {v.momo_name && (
+                                                    <p className="text-xs text-slate-400 mt-0.5">{v.momo_name}</p>
+                                                )}
                                             </div>
                                         )}
                                     </div>

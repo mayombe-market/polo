@@ -1,52 +1,32 @@
 import '@/lib/zod-jitless'
 import { z } from 'zod'
 
-const phoneCongo242 = z
-    .string()
-    .trim()
-    .regex(/^\d{9}$/, 'Le numéro doit contenir exactement 9 chiffres (sans +242)')
-
 const nameField = z.string().trim().min(3, 'Minimum 3 caractères').max(120, 'Maximum 120 caractères')
 
 export const VendorVerificationSubmitSchema = z.object({
-    /** Type de pièce d'identité choisie */
-    idType: z.enum(['cni', 'passport']).default('cni'),
+    /** Numéro RCCM (Registre du Commerce et du Crédit Mobilier) */
+    rccmNumber: z.string().trim().min(3, 'Minimum 3 caractères').max(100, 'Maximum 100 caractères'),
 
-    /** Photo de la boutique / lieu de vente */
-    shopPhotoUrl: z.string().url('URL photo boutique invalide').min(10),
+    /** Type de pièce d'identité du gérant */
+    idType: z.enum(['cni', 'passport', 'permis']).default('cni'),
 
-    /** Photo CNI — obligatoire si idType === 'cni' */
-    cniPhotoUrl: z.string().url('URL photo CNI invalide').min(10).optional(),
+    /** Photo de la pièce d'identité (CNI, passeport ou permis) */
+    idPhotoUrl: z.string().url("URL photo pièce d'identité invalide").min(10),
 
-    /** Photo passeport (page principale) — obligatoire si idType === 'passport' */
-    passportPhotoUrl: z.string().url('URL photo passeport invalide').min(10).optional(),
+    /** Nom complet du gérant (tel qu'il figure sur la pièce d'identité) */
+    managerName: nameField,
 
-    /** Nom complet tel qu'il figure sur la pièce d'identité (CNI ou passeport) */
-    cniName: nameField,
+    /** NIU (Numéro d'Identification Unique) — obligatoire */
+    niuNumber: z.string().trim().min(3, 'Minimum 3 caractères').max(50, 'Maximum 50 caractères'),
 
-    /** Nom sur le compte Mobile Money */
-    momoName: nameField,
+    /** Adresse de l'établissement */
+    address: z.string().trim().min(5, 'Minimum 5 caractères').max(300, 'Maximum 300 caractères'),
 
-    momoNumber: phoneCongo242,
-    momoOperator: z.enum(['MTN', 'Airtel']),
+    /** Latitude GPS (optionnel, si position capturée) */
+    addressLat: z.number().optional(),
 
-    /** NIU (Numéro d'Identification Unique) — optionnel */
-    niuNumber: z.string().trim().max(50, 'Maximum 50 caractères').optional(),
-}).superRefine((data, ctx) => {
-    if (data.idType === 'cni' && !data.cniPhotoUrl) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'La photo de la CNI est obligatoire',
-            path: ['cniPhotoUrl'],
-        })
-    }
-    if (data.idType === 'passport' && !data.passportPhotoUrl) {
-        ctx.addIssue({
-            code: z.ZodIssueCode.custom,
-            message: 'La photo du passeport est obligatoire',
-            path: ['passportPhotoUrl'],
-        })
-    }
+    /** Longitude GPS (optionnel, si position capturée) */
+    addressLng: z.number().optional(),
 })
 
 export type VendorVerificationSubmitInput = z.infer<typeof VendorVerificationSubmitSchema>

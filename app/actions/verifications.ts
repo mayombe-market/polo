@@ -31,15 +31,14 @@ async function getSupabase() {
 
 /** Soumettre une demande de vérification vendeur */
 export async function submitVerification(input: {
-    idType: 'cni' | 'passport'
-    shopPhotoUrl: string
-    cniPhotoUrl?: string
-    passportPhotoUrl?: string
-    cniName: string
-    momoName: string
-    momoNumber: string
-    momoOperator: 'MTN' | 'Airtel'
-    niuNumber?: string
+    rccmNumber: string
+    idType: 'cni' | 'passport' | 'permis'
+    idPhotoUrl: string
+    managerName: string
+    niuNumber: string
+    address: string
+    addressLat?: number
+    addressLng?: number
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -69,15 +68,22 @@ export async function submitVerification(input: {
         .from('vendor_verifications')
         .insert({
             vendor_id: user.id,
-            id_type: payload.idType ?? 'cni',
-            shop_photo_url: payload.shopPhotoUrl,
-            cni_photo_url: payload.cniPhotoUrl ?? null,
-            passport_photo_url: payload.passportPhotoUrl ?? null,
-            cni_name: payload.cniName,
-            momo_name: payload.momoName,
-            momo_number: payload.momoNumber,
-            momo_operator: payload.momoOperator,
-            niu_number: payload.niuNumber ?? null,
+            id_type: payload.idType,
+            id_photo_url: payload.idPhotoUrl,
+            manager_name: payload.managerName,
+            rccm_number: payload.rccmNumber,
+            niu_number: payload.niuNumber,
+            address: payload.address,
+            address_lat: payload.addressLat ?? null,
+            address_lng: payload.addressLng ?? null,
+            // Legacy fields — nullable via migration v2
+            cni_name: payload.managerName,
+            shop_photo_url: null,
+            cni_photo_url: null,
+            passport_photo_url: null,
+            momo_name: null,
+            momo_number: null,
+            momo_operator: null,
         })
 
     if (insertError) return { error: insertError.message }

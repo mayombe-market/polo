@@ -23,7 +23,8 @@ import {
 } from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST, DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, Smartphone, X as XIcon, CheckCircle2 } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, CheckCircle2, Smartphone } from 'lucide-react'
+import { getAdminPaymentNumber } from '@/lib/adminPaymentConfig'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey'
@@ -71,10 +72,13 @@ export default function CheckoutPage() {
     const [interUrbanAccepted, setInterUrbanAccepted] = useState(false)
     const [interUrbanModalDismissed, setInterUrbanModalDismissed] = useState(false)
     const [userEmail, setUserEmail] = useState('')
-    const [momoStep, setMomoStep] = useState<'idle' | 'requesting' | 'waiting' | 'failed' | 'timeout'>('idle')
-    const [momoReferenceId, setMomoReferenceId] = useState<string | null>(null)
-    const [momoOrderId, setMomoOrderId] = useState<string | null>(null)
-    const [momoError, setMomoError] = useState('')
+    // Écran intermédiaire : l'acheteur doit saisir son ID de transaction MTN manuellement
+    const [manualPayStep, setManualPayStep] = useState(false)
+    const [savedFormData, setSavedFormData] = useState<CheckoutType | null>(null)
+    const [savedTotal, setSavedTotal] = useState(0)
+    const [txCode, setTxCode] = useState('')
+    const [txError, setTxError] = useState('')
+    const [txLoading, setTxLoading] = useState(false)
     const [buyerGps, setBuyerGps] = useState<{ lat: number; lng: number } | null>(null)
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState('')
@@ -316,6 +320,21 @@ export default function CheckoutPage() {
             return
         }
 
+        // ── MTN MoMo : flux manuel — on montre l'écran "entrez votre ID de transaction" ──
+        if (formData.payment_method === 'mobile_money') {
+            const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
+                ? patisserieDeliveryFee
+                : formData.delivery_mode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[formData.delivery_mode]
+            setSavedFormData(formData)
+            setSavedTotal(total + currentDeliveryFee)
+            setTxCode('')
+            setTxError('')
+            setManualPayStep(true)
+            return
+        }
+
         setLoading(true)
         try {
             const { user } = await safeGetUser(supabase)
@@ -397,33 +416,6 @@ export default function CheckoutPage() {
                 }).catch(err => console.error('Erreur email:', err))
             }
 
-            // ── MTN MoMo : déclencher la demande de paiement ──
-            if (formData.payment_method === 'mobile_money') {
-                setMomoStep('requesting')
-                setMomoOrderId(result.order.id)
-                try {
-                    const payRes = await fetch('/api/mtn-momo/pay', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            orderId: result.order.id,
-                            phone: formData.phone,
-                            amount: totalWithDelivery,
-                        }),
-                    })
-                    const payData = await payRes.json()
-                    if (!payRes.ok || payData.error) throw new Error(payData.error || 'Erreur MTN')
-                    setMomoReferenceId(payData.referenceId)
-                    setMomoStep('waiting')
-                    clearIdempotencyKey()
-                    clearCart()
-                } catch (err: any) {
-                    setMomoError(err.message || 'Impossible de contacter MTN MoMo.')
-                    setMomoStep('failed')
-                }
-                return
-            }
-
             clearIdempotencyKey()
             clearCart()
             router.push(`/checkout/success?method=${formData.payment_method}&orderId=${result.order.id}&delivery=${formData.delivery_mode}`)
@@ -436,85 +428,175 @@ export default function CheckoutPage() {
         }
     }
 
-    // ── Polling statut MTN MoMo ──
-    useEffect(() => {
-        if (momoStep !== 'waiting' || !momoReferenceId || !momoOrderId) return
-        let attempts = 0
-        const MAX = 20 // 20 × 3s = 60s max
-        const interval = setInterval(async () => {
-            attempts++
-            try {
-                const res = await fetch(`/api/mtn-momo/status?referenceId=${momoReferenceId}&orderId=${momoOrderId}`)
-                const data = await res.json()
-                if (data.status === 'SUCCESSFUL') {
-                    clearInterval(interval)
-                    router.push(`/checkout/success?method=mobile_money&orderId=${momoOrderId}&delivery=${getValues('delivery_mode')}`)
-                } else if (data.status === 'FAILED') {
-                    clearInterval(interval)
-                    setMomoError(data.reason || 'Paiement refusé.')
-                    setMomoStep('failed')
-                } else if (attempts >= MAX) {
-                    clearInterval(interval)
-                    setMomoStep('timeout')
-                }
-            } catch {
-                if (attempts >= MAX) { clearInterval(interval); setMomoStep('timeout') }
-            }
-        }, 3000)
-        return () => clearInterval(interval)
-    }, [momoStep, momoReferenceId, momoOrderId, router, getValues])
+    // ── Fonction de soumission de l'ID de transaction MTN manuel ──
+    const handleTxSubmit = async () => {
+        if (!savedFormData) return
+        const digits = txCode.replace(/\D/g, '')
+        if (digits.length !== 10) {
+            setTxError('Le code doit contenir exactement 10 chiffres.')
+            return
+        }
+        setTxError('')
+        setTxLoading(true)
+        try {
+            const { user } = await safeGetUser(supabase)
+            if (!user) { alert('Connectez-vous pour finaliser.'); return }
 
-    // ── Écran d'attente MTN MoMo ──
-    if (momoStep === 'requesting' || momoStep === 'waiting' || momoStep === 'failed' || momoStep === 'timeout') {
+            const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
+                ? patisserieDeliveryFee
+                : savedFormData.delivery_mode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : DELIVERY_FEES[savedFormData.delivery_mode]
+            const totalWithDelivery = total + currentDeliveryFee
+            const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
+
+            const items = cart.map(item => ({
+                id: item.product_id || item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity || 1,
+                img: item.img || '',
+                seller_id: item.seller_id || '',
+            }))
+
+            const idempotencyKey = getIdempotencyKey()
+            const result = await createOrderAction({
+                items,
+                city: savedFormData.city,
+                district: savedFormData.district,
+                payment_method: 'mobile_money',
+                total_amount: totalWithDelivery,
+                customer_name: savedFormData.full_name,
+                phone: savedFormData.phone,
+                landmark: savedFormData.landmark,
+                delivery_mode: savedFormData.delivery_mode,
+                delivery_fee: currentDeliveryFee,
+                transaction_id: digits,
+                loyalty_points_to_use: pointsToUse,
+                latitude: buyerGps?.lat,
+                longitude: buyerGps?.lng,
+                idempotency_key: idempotencyKey,
+            })
+
+            if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') {
+                    setProfileGateOpen(true)
+                    setManualPayStep(false)
+                } else {
+                    setTxError(result.error)
+                }
+                return
+            }
+
+            if (!result.order) {
+                setTxError('Erreur inattendue. Réessayez.')
+                return
+            }
+
+            if (userEmail) {
+                sendOrderConfirmationEmail({
+                    customerName: savedFormData.full_name,
+                    customerEmail: userEmail,
+                    orderId: result.order.id,
+                    items,
+                    total: result.order.total_amount,
+                    paymentMethod: 'mobile_money',
+                    city: savedFormData.city,
+                    district: savedFormData.district,
+                    deliveryMode: savedFormData.delivery_mode,
+                    deliveryFee: currentDeliveryFee,
+                }).catch(() => {})
+            }
+
+            clearIdempotencyKey()
+            clearCart()
+            router.push(`/checkout/success?method=mobile_money&orderId=${result.order.id}&delivery=${savedFormData.delivery_mode}`)
+        } catch (err) {
+            console.error('Erreur commande MTN manuel:', err)
+            setTxError('Une erreur est survenue. Réessayez.')
+        } finally {
+            setTxLoading(false)
+        }
+    }
+
+    // ── Écran manuel MTN MoMo : saisie du code de transaction ──
+    if (manualPayStep && savedFormData) {
+        const adminNumber = getAdminPaymentNumber(
+            sellerIds.length > 0 ? sellerCities[sellerIds[0]] : null,
+            'mobile_money'
+        )
+        const txDigits = txCode.replace(/\D/g, '')
+        const isComplete = txDigits.length === 10
+        const formatTx = (val: string) => val.replace(/\D/g, '').slice(0, 10).replace(/(\d{3})(?=\d)/g, '$1 ')
         return (
             <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-center justify-center px-4">
-                <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm rounded-[2.5rem] p-10 max-w-sm w-full text-center shadow-2xl shadow-black/10 border border-stone-200/80 dark:border-stone-800/60 space-y-6">
-                    {momoStep === 'requesting' && (
-                        <>
-                            <Loader2 className="w-12 h-12 animate-spin text-orange-500 mx-auto" />
-                            <p className="font-black uppercase italic text-lg tracking-tight">Connexion MTN…</p>
-                            <p className="text-sm text-stone-400">Envoi de la demande de paiement</p>
-                        </>
-                    )}
-                    {momoStep === 'waiting' && (
-                        <>
-                            <div className="w-16 h-16 rounded-2xl bg-orange-500/10 border border-orange-500/20 flex items-center justify-center mx-auto">
-                                <Smartphone className="w-8 h-8 text-orange-500" />
-                            </div>
-                            <p className="font-black uppercase italic text-xl tracking-tight">Confirmez sur votre téléphone</p>
-                            <p className="text-sm text-stone-500 leading-relaxed">
-                                Une notification MTN MoMo a été envoyée.<br />
-                                <strong>Tapez votre PIN MoMo</strong> pour valider.
-                            </p>
-                            <div className="flex items-center justify-center gap-2 text-[10px] text-stone-400 uppercase font-bold">
-                                <Loader2 className="w-3 h-3 animate-spin" /> En attente de confirmation…
-                            </div>
-                        </>
-                    )}
-                    {momoStep === 'failed' && (
-                        <>
-                            <div className="w-16 h-16 rounded-2xl bg-red-50 border border-red-100 flex items-center justify-center mx-auto">
-                                <XIcon className="w-8 h-8 text-red-500" />
-                            </div>
-                            <p className="font-black uppercase italic text-xl text-red-600 tracking-tight">Paiement refusé</p>
-                            <p className="text-sm text-stone-500">{momoError || 'Le paiement a été refusé par MTN.'}</p>
-                            <button onClick={() => setMomoStep('idle')} className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-4 rounded-2xl font-black uppercase text-sm hover:opacity-90 transition-all shadow-lg shadow-orange-500/25">
-                                Réessayer
-                            </button>
-                        </>
-                    )}
-                    {momoStep === 'timeout' && (
-                        <>
-                            <div className="w-16 h-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center mx-auto">
-                                <Clock className="w-8 h-8 text-amber-500" />
-                            </div>
-                            <p className="font-black uppercase italic text-xl tracking-tight">Délai dépassé</p>
-                            <p className="text-sm text-stone-500">Le paiement n&apos;a pas été confirmé dans le temps imparti. Votre commande est enregistrée — l&apos;admin va vérifier manuellement.</p>
-                            <button onClick={() => router.push('/')} className="w-full bg-gradient-to-r from-orange-500 to-amber-500 text-white py-4 rounded-2xl font-black uppercase text-sm hover:opacity-90 transition-all shadow-lg shadow-orange-500/25">
-                                Retour à l&apos;accueil
-                            </button>
-                        </>
-                    )}
+                <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl shadow-black/10 border border-stone-200/80 dark:border-stone-800/60 space-y-5">
+                    {/* Header */}
+                    <div className="text-center">
+                        <div className="text-4xl mb-3">📱</div>
+                        <h2 className="font-black uppercase italic text-lg tracking-tight">MTN Mobile Money</h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Paiement manuel</p>
+                    </div>
+
+                    {/* Numéro de transfert */}
+                    <div className="bg-yellow-50 dark:bg-yellow-400/5 rounded-2xl p-5 text-center border border-yellow-300/40">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2">Numéro de transfert</p>
+                        <p className="text-3xl font-black font-mono tracking-wider text-yellow-600">{adminNumber}</p>
+                    </div>
+
+                    {/* Montant */}
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-center border border-slate-200 dark:border-slate-700">
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Montant exact à envoyer</p>
+                        <p className="text-2xl font-black italic text-orange-500">{savedTotal.toLocaleString('fr-FR')} FCFA</p>
+                    </div>
+
+                    {/* Warning */}
+                    <div className="bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 flex gap-3">
+                        <span className="text-base flex-shrink-0">⚠️</span>
+                        <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 leading-relaxed">
+                            Effectuez le transfert <strong>avant</strong> de continuer.
+                            Vous recevrez un code de transaction à <strong>10 chiffres</strong> par SMS.
+                        </p>
+                    </div>
+
+                    {/* Input code */}
+                    <div>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Code de transaction (SMS)</p>
+                        <div className={`rounded-2xl p-1 border-2 transition-colors ${txError ? 'border-red-500/60' : isComplete ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
+                            <input
+                                type="text"
+                                inputMode="numeric"
+                                value={formatTx(txCode)}
+                                onChange={e => { setTxCode(e.target.value); setTxError('') }}
+                                onKeyDown={e => e.key === 'Enter' && handleTxSubmit()}
+                                placeholder="000 000 000 0"
+                                maxLength={13}
+                                className="w-full py-4 px-5 bg-transparent text-xl font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                            />
+                        </div>
+                        <div className="flex justify-between mt-1 px-1">
+                            {txError
+                                ? <span className="text-red-500 text-[10px] font-bold">⚠ {txError}</span>
+                                : <span className="text-slate-400 text-[10px] font-bold">Format : 10 chiffres</span>
+                            }
+                            <span className={`text-[10px] font-black ${isComplete ? 'text-green-500' : 'text-slate-400'}`}>{txDigits.length}/10</span>
+                        </div>
+                    </div>
+
+                    <button
+                        onClick={handleTxSubmit}
+                        disabled={!isComplete || txLoading}
+                        className={`w-full py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${isComplete && !txLoading ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                    >
+                        {txLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Valider le paiement'}
+                    </button>
+
+                    <button
+                        onClick={() => setManualPayStep(false)}
+                        className="w-full py-3 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                        ← Retour au formulaire
+                    </button>
                 </div>
             </div>
         )
@@ -908,45 +990,38 @@ export default function CheckoutPage() {
                                 <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0" />
                             </label>
 
-                            {/* FLOW AUTOMATIQUE MTN */}
+                            {/* INSTRUCTIONS PAIEMENT MANUEL MTN */}
                             {selectedPayment === 'mobile_money' && (
-                                <div className="mt-1 rounded-3xl border-2 border-green-200 dark:border-green-800/50 overflow-hidden">
-
-                                    {/* Montant à payer */}
-                                    <div className="bg-green-500 px-5 py-4 flex items-center justify-between">
+                                <div className="mt-1 rounded-3xl border-2 border-yellow-200 dark:border-yellow-700/40 overflow-hidden">
+                                    <div className="bg-yellow-400 px-5 py-4 flex items-center justify-between">
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-green-100">Montant total à payer</p>
-                                            <p className="text-2xl font-black text-white italic mt-0.5">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-yellow-900">Montant à transférer</p>
+                                            <p className="text-2xl font-black text-yellow-900 italic mt-0.5">
                                                 {(deliveryFee > 0 ? grandTotal : total).toLocaleString('fr-FR')}
                                                 <span className="text-sm ml-1 font-bold">FCFA</span>
                                             </p>
                                         </div>
-                                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center">
-                                            <Phone className="w-6 h-6 text-white" />
+                                        <div className="w-12 h-12 bg-yellow-900/20 rounded-2xl flex items-center justify-center">
+                                            <Phone className="w-6 h-6 text-yellow-900" />
                                         </div>
                                     </div>
-
-                                    {/* Les 3 étapes */}
-                                    <div className="bg-green-50 dark:bg-green-950/30 px-5 py-4 space-y-3">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-green-700 dark:text-green-400 mb-1">Comment ça marche</p>
-
+                                    <div className="bg-yellow-50 dark:bg-yellow-400/5 px-5 py-4 space-y-3">
+                                        <p className="text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-400 mb-1">Comment ça marche</p>
                                         {[
                                             { n: '1', text: 'Cliquez "Confirmer la commande" ci-dessous' },
-                                            { n: '2', text: 'Vous recevez une notification MTN MoMo sur votre téléphone' },
-                                            { n: '3', text: 'Tapez votre PIN MoMo → commande confirmée automatiquement' },
+                                            { n: '2', text: 'Transférez le montant exact au numéro MTN qui s\'affichera' },
+                                            { n: '3', text: 'Entrez votre code de transaction SMS (10 chiffres) → commande enregistrée' },
+                                            { n: '4', text: 'Notre équipe valide votre paiement et confirme la commande' },
                                         ].map(step => (
                                             <div key={step.n} className="flex items-start gap-3">
-                                                <div className="w-5 h-5 rounded-full bg-green-500 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">
-                                                    {step.n}
-                                                </div>
-                                                <p className="text-[11px] font-bold text-green-800 dark:text-green-300 leading-snug">{step.text}</p>
+                                                <div className="w-5 h-5 rounded-full bg-yellow-500 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{step.n}</div>
+                                                <p className="text-[11px] font-bold text-yellow-800 dark:text-yellow-300 leading-snug">{step.text}</p>
                                             </div>
                                         ))}
-
-                                        <div className="mt-3 pt-3 border-t border-green-200 dark:border-green-800/40 flex items-start gap-2">
-                                            <ShieldCheck className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                                            <p className="text-[9px] font-bold text-green-600 dark:text-green-500">
-                                                La notification sera envoyée au numéro saisi dans le formulaire ci-dessus.
+                                        <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-700/30 flex items-start gap-2">
+                                            <ShieldCheck className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                                            <p className="text-[9px] font-bold text-yellow-600 dark:text-yellow-500">
+                                                Paiement vérifié manuellement par notre équipe avant expédition.
                                             </p>
                                         </div>
                                     </div>

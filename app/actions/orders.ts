@@ -9,7 +9,7 @@ import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
 import { FEATURES } from '@/lib/featureFlags'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
-import { digitsOnly, isExactly10Digits } from '@/lib/phonePaymentValidation'
+import { digitsOnly, isExactly10Digits, isValidTransactionId } from '@/lib/phonePaymentValidation'
 import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { orderRequiresInterUrbanDelivery, orderCityToProfileCity } from '@/lib/deliveryLocation'
 import {
@@ -216,13 +216,11 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
     if (order.transaction_id && adminTransactionId) {
         const clientId = digitsOnly(order.transaction_id)
         const adminId = digitsOnly(adminTransactionId)
-        if (!isExactly10Digits(adminId)) {
-            return { error: 'L\'ID saisi doit contenir exactement 10 chiffres.' }
+        if (!isValidTransactionId(adminId)) {
+            return { error: 'L\'ID de transaction saisi est invalide (6 à 16 chiffres).' }
         }
-        // Commandes récentes : 10 chiffres. Anciennes entrées plus longues : comparer les 10 derniers chiffres.
-        const clientRef = clientId.length === 10 ? clientId : clientId.slice(-10)
-        if (clientRef !== adminId) {
-            return { error: 'Les ID de transaction ne correspondent pas' }
+        if (clientId !== adminId) {
+            return { error: 'Les ID de transaction ne correspondent pas.' }
         }
     }
 

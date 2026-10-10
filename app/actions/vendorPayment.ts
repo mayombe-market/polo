@@ -229,7 +229,7 @@ export async function vendorConfirmPayment(
         .single()
     if (profile?.role !== 'vendor') return { error: 'Réservé aux vendeurs' }
 
-    // Récupérer la commande
+    // Vérifier que la commande existe et est en attente + que le vendeur y a bien une entrée
     const { data: order } = await supabase
         .from('orders')
         .select('vendor_payments, status, user_id')
@@ -242,23 +242,15 @@ export async function vendorConfirmPayment(
     const vp = (order.vendor_payments || {}) as Record<string, any>
     if (!vp[user.id]) return { error: 'Aucun paiement associé à votre compte pour cette commande' }
 
-    // Mettre à jour l'entrée du vendeur
-    const updatedVp = {
-        ...vp,
-        [user.id]: {
-            ...vp[user.id],
-            vendor_confirmed: confirmed,
-            vendor_confirmed_at: confirmed ? new Date().toISOString() : null,
-            disputed: !confirmed,
-        }
-    }
-
-    const { error } = await svc()
-        .from('orders')
-        .update({ vendor_payments: updatedVp })
-        .eq('id', orderId)
+    // Mise à jour atomique via RPC pour éviter la race condition JSONB (panier multi-vendeurs)
+    const { data: ok, error } = await svc().rpc('confirm_vendor_payment', {
+        p_order_id: orderId,
+        p_vendor_id: user.id,
+        p_confirmed: confirmed,
+    })
 
     if (error) return { error: error.message }
+    if (!ok) return { error: 'Impossible de mettre à jour le paiement (commande peut-être déjà traitée).' }
 
     // Notifier l'admin si le vendeur confirme ou conteste
     // (on notifie via la notification système des admins s'il y en a)

@@ -60,6 +60,55 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_notifications_dedup
     ON notifications (user_id, type, reference_id)
     WHERE reference_id IS NOT NULL;
 
+-- ─── 6. RPC ATOMIQUE : confirmation de paiement par un vendeur ───────────────
+-- Utilise jsonb_set pour mettre à jour uniquement l'entrée du vendeur
+-- sans écraser les confirmations des autres vendeurs (panier multi-vendeurs).
+-- Remplace la logique read-modify-write en TypeScript qui était sujette à des
+-- race conditions lorsque deux vendeurs confirment simultanément.
+
+CREATE OR REPLACE FUNCTION public.confirm_vendor_payment(
+    p_order_id  UUID,
+    p_vendor_id TEXT,
+    p_confirmed BOOLEAN
+)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    rows_affected INT;
+BEGIN
+    UPDATE orders
+    SET vendor_payments =
+        jsonb_set(
+            jsonb_set(
+                jsonb_set(
+                    vendor_payments,
+                    ARRAY[p_vendor_id, 'vendor_confirmed'],
+                    to_jsonb(p_confirmed)
+                ),
+                ARRAY[p_vendor_id, 'vendor_confirmed_at'],
+                CASE
+                    WHEN p_confirmed THEN to_jsonb(NOW()::text)
+                    ELSE 'null'::jsonb
+                END
+            ),
+            ARRAY[p_vendor_id, 'disputed'],
+            to_jsonb(NOT p_confirmed)
+        )
+    WHERE id = p_order_id
+      AND status = 'pending'
+      AND vendor_payments ? p_vendor_id;
+
+    GET DIAGNOSTICS rows_affected = ROW_COUNT;
+    RETURN rows_affected > 0;
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.confirm_vendor_payment(UUID, TEXT, BOOLEAN) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.confirm_vendor_payment(UUID, TEXT, BOOLEAN) TO service_role;
+
 -- =============================================================================
 -- VÉRIFICATIONS POST-MIGRATION (à exécuter pour valider)
 -- =============================================================================

@@ -26,6 +26,26 @@ export async function POST(req: NextRequest) {
             process.env.SUPABASE_SERVICE_ROLE_KEY!
         )
 
+        // Vérifier le type de commande avant traitement
+        // Les commandes marketplace utilisent désormais le paiement manuel (admin confirme).
+        // Cette callback n'auto-confirme que les abonnements (subscription).
+        const { data: orderInfo } = await supabase
+            .from('orders')
+            .select('order_type')
+            .eq('id', externalId)
+            .maybeSingle()
+
+        if (!orderInfo) {
+            console.warn('[mtn-momo/callback] order not found:', externalId)
+            return NextResponse.json({ received: true })
+        }
+
+        if (orderInfo.order_type !== 'subscription') {
+            // Commande marketplace — ne pas auto-confirmer, l'admin valide manuellement
+            console.warn('[mtn-momo/callback] ignored non-subscription order:', externalId, orderInfo.order_type)
+            return NextResponse.json({ received: true })
+        }
+
         if (status === 'SUCCESSFUL') {
             const trackingNumber = generateTrackingNumber()
             const { data: confirmed } = await supabase.rpc('mtn_auto_confirm_order', {
@@ -34,30 +54,8 @@ export async function POST(req: NextRequest) {
                 p_mtn_transaction_id: financialTransactionId ?? null,
             })
 
-            // Uniquement si la commande vient d'être confirmée (première confirmation)
             if (confirmed) {
-                const { data: order } = await supabase
-                    .from('orders')
-                    .select('order_type, customer_email, customer_name, tracking_number, delivery_mode, items')
-                    .eq('id', externalId)
-                    .maybeSingle()
-
-                if (order?.order_type === 'subscription') {
-                    activateSubscription(supabase, externalId).catch(() => {})
-                } else if (order?.customer_email) {
-                    const productNames = Array.isArray(order.items)
-                        ? order.items.map((i: any) => i.name).filter(Boolean).join(', ')
-                        : undefined
-                    sendOrderStatusEmail(
-                        order.customer_email,
-                        order.customer_name || 'Client',
-                        externalId,
-                        'confirmed',
-                        order.tracking_number,
-                        order.delivery_mode,
-                        productNames,
-                    ).catch(() => {})
-                }
+                activateSubscription(supabase, externalId).catch(() => {})
             }
         } else if (status === 'FAILED') {
             await supabase

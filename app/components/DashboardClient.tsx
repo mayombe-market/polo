@@ -53,6 +53,7 @@ import { getSubscriptionStatus, getDaysRemaining, getPendingPlan } from '@/lib/s
 import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 import VendorPushPrompt from '@/app/components/VendorPushPrompt'
 import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
+import { FEATURES } from '@/lib/featureFlags'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -184,7 +185,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const isFreeTier = !planKey || planKey === 'free' || planKey === 'gratuit' || planKey === 'immo_free' || planKey === 'hotel_free'
     const vendorHasPaidCoverage =
         !isFreeTier && (subscriptionStatus === 'active' || subscriptionStatus === 'legacy')
-    const showVendorPlanCta = !vendorHasPaidCoverage
+    const showVendorPlanCta = !vendorHasPaidCoverage && FEATURES.subscriptions
 
     const vendorPlanBtnStyle = {
         background: 'linear-gradient(135deg, #E8A838 0%, #D4782F 100%)',
@@ -1139,7 +1140,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             </main>
 
             {/* ═══ MODAL : Limite atteinte ═══ */}
-            {showLimitWarning && maxProducts !== -1 && (
+            {FEATURES.subscriptions && showLimitWarning && maxProducts !== -1 && (
                 <LimitWarning
                     currentProducts={currentProductCount}
                     maxProducts={maxProducts}
@@ -1330,7 +1331,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             })()}
 
             {/* ═══ OVERLAY : Pricing upgrade (immobilier) ═══ */}
-            {showUpgradePricing && isImmo && (
+            {FEATURES.subscriptions && showUpgradePricing && isImmo && (
                 <ImmoUpgradeOverlay
                     currentPlan={currentPlan}
                     onClose={() => setShowUpgradePricing(false)}
@@ -1338,7 +1339,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             )}
 
             {/* ═══ OVERLAY : Pricing upgrade (hôtellerie) ═══ */}
-            {showUpgradePricing && isHotel && (
+            {FEATURES.subscriptions && showUpgradePricing && isHotel && (
                 <HotelUpgradeOverlay
                     currentPlan={currentPlan}
                     onClose={() => setShowUpgradePricing(false)}
@@ -1346,7 +1347,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             )}
 
             {/* ═══ OVERLAY : Pricing upgrade (marketplace) ═══ */}
-            {showUpgradePricing && !isImmo && !isHotel && (
+            {FEATURES.subscriptions && showUpgradePricing && !isImmo && !isHotel && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 1000,
                     background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",
@@ -1383,7 +1384,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
             )}
 
             {/* ═══ OVERLAY : Checkout upgrade ═══ */}
-            {showUpgradeCheckout && upgradeSelectedPlan && (
+            {FEATURES.subscriptions && showUpgradeCheckout && upgradeSelectedPlan && (
                 <div style={{
                     position: "fixed", inset: 0, zIndex: 1000,
                     background: "rgba(0,0,0,0.85)", backdropFilter: "blur(12px)",

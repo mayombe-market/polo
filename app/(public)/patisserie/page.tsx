@@ -1,3 +1,5 @@
+import { redirect } from 'next/navigation'
+import { FEATURES } from '@/lib/featureFlags'
 import { createClient } from '@supabase/supabase-js'
 import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import PatisserieClient from './PatisserieClient'
@@ -51,6 +53,8 @@ export type PatisserieSeller = {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function PatisseriePage() {
+    if (!FEATURES.patisserie) redirect('/marketplace')
+
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!

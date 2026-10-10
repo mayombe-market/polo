@@ -4,12 +4,27 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PricingSection, PLANS } from "@/app/components/SellerSubscription";
 import { SYSTEM_FONT_STACK } from "@/lib/systemFontStack";
+import { FEATURES } from "@/lib/featureFlags";
 
 const fmt = (n: number) => new Intl.NumberFormat("fr-FR").format(n);
 
 export default function TarificationPage() {
   const router = useRouter();
   const [billing, setBilling] = useState("monthly");
+
+  if (!FEATURES.subscriptions) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(180deg, #08080E, #0D0D14, #08080E)", fontFamily: SYSTEM_FONT_STACK, display: "flex", alignItems: "center", justifyContent: "center", padding: "40px 24px", textAlign: "center" }}>
+        <div>
+          <p style={{ color: "#E8A838", fontSize: 40, marginBottom: 16 }}>🚧</p>
+          <h1 style={{ color: "#fff", fontSize: 22, fontWeight: 800, marginBottom: 12 }}>Abonnements temporairement suspendus</h1>
+          <p style={{ color: "#888", fontSize: 14, maxWidth: 400, margin: "0 auto" }}>
+            Les plans payants sont en cours de reconfiguration. L'inscription vendeur reste gratuite pendant cette période.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{

@@ -7,6 +7,7 @@ import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejec
 import { revalidateProductCatalog } from '@/app/actions/revalidate'
 import { createNotification } from '@/app/actions/notifications'
 import { PLAN_PRICES } from '@/lib/planPrices'
+import { FEATURES } from '@/lib/featureFlags'
 import { computeNewEndDate, isSubscriptionExpiredPastGrace } from '@/lib/subscription'
 import { digitsOnly, isExactly10Digits } from '@/lib/phonePaymentValidation'
 import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
@@ -847,14 +848,15 @@ export async function createOrder(input: {
     const sellerPlanMap = new Map((sellerProfiles || []).map(p => [p.id, p.subscription_plan || 'free']))
 
     let totalCommission = 0
-    for (const item of validatedItems) {
-        const plan = sellerPlanMap.get(item.seller_id) || 'free'
-        const rate = getPlanCommissionRate(plan)
-        totalCommission += Math.round(item.price * item.quantity * rate)
+    if (FEATURES.commissions) {
+        for (const item of validatedItems) {
+            const plan = sellerPlanMap.get(item.seller_id) || 'free'
+            const rate = getPlanCommissionRate(plan)
+            totalCommission += Math.round(item.price * item.quantity * rate)
+        }
     }
-    // Commission uniquement sur les produits, pas sur les frais de livraison
     const vendorPayout = itemsTotal - totalCommission
-    const avgCommissionRate = itemsTotal > 0 ? totalCommission / itemsTotal : 0.10
+    const avgCommissionRate = FEATURES.commissions && itemsTotal > 0 ? totalCommission / itemsTotal : 0
 
     // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK (via RPC SECURITY DEFINER) ═══
     for (const item of validatedItems) {

@@ -2,39 +2,34 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { ShoppingBag, Cake, UtensilsCrossed, Building2, UserCircle2, LogIn } from 'lucide-react'
+import { ShoppingBag, Search, BookOpen, UserCircle2, LogIn } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { FEATURES } from '@/lib/featureFlags'
 
 const NAV_ITEMS = [
     {
-        label: 'Marketplace',
+        label: 'Accueil',
         href: '/marketplace',
         icon: ShoppingBag,
         match: (p: string) => p === '/' || p === '/marketplace' || p.startsWith('/marketplace'),
     },
     {
-        label: 'Pâtisserie',
-        href: '/patisserie',
-        icon: Cake,
-        match: (p: string) => p.startsWith('/patisserie'),
+        label: 'Recherche',
+        href: '/search',
+        icon: Search,
+        match: (p: string) => p.startsWith('/search'),
     },
     {
-        label: 'Restaurant',
-        href: '/restaurant',
-        icon: UtensilsCrossed,
-        match: (p: string) => p.startsWith('/restaurant'),
-    },
-    {
-        label: 'Immobilier',
-        href: '/category/Immobilier',
-        icon: Building2,
-        match: (p: string) => p.startsWith('/category/Immobilier') || p.startsWith('/category/immobilier'),
+        label: 'Guide',
+        href: '/guide-vendeur',
+        icon: BookOpen,
+        match: (p: string) => p.startsWith('/guide-vendeur'),
     },
 ]
 
 function shouldHide(pathname: string): boolean {
     if (pathname.startsWith('/checkout') || pathname === '/cart') return true
-    if (/^\/patisserie\/[^/]+/.test(pathname)) return true
+    if (!FEATURES.patisserie && /^\/patisserie\/[^/]+/.test(pathname)) return true
     return false
 }
 

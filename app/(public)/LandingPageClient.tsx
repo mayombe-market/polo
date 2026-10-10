@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 import dynamic from 'next/dynamic'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import MayombeLogo from '@/app/components/MayombeLogo'
+import { FEATURES } from '@/lib/featureFlags'
 
 const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 const supabase = getSupabaseBrowserClient()
@@ -27,40 +28,46 @@ interface Props {
 }
 
 /* ─── Constants ───────────────────────────────────────────────────────────── */
-const FILTERS = [
-    { key: 'immobilier',  Icon: Home,            color: 'bg-emerald-500', ring: 'ring-emerald-300', category: 'Immobilier',              label: 'Immobilier'  },
-    { key: 'patisserie',  Icon: Cake,            color: 'bg-pink-500',    ring: 'ring-pink-300',    category: 'Pâtisserie & Traiteur',   label: 'Pâtisserie'  },
-    { key: 'restaurant',  Icon: UtensilsCrossed, color: 'bg-orange-500',  ring: 'ring-orange-300',  category: 'Alimentation & Boissons', label: 'Restaurants' },
-    { key: 'marketplace', Icon: ShoppingBag,     color: 'bg-blue-500',    ring: 'ring-blue-300',    category: null,                      label: 'Marketplace' },
+const ALL_FILTERS = [
+    { key: 'immobilier',  Icon: Home,            color: 'bg-emerald-500', ring: 'ring-emerald-300', category: 'Immobilier',              label: 'Immobilier',  enabled: FEATURES.immobilier  },
+    { key: 'patisserie',  Icon: Cake,            color: 'bg-pink-500',    ring: 'ring-pink-300',    category: 'Pâtisserie & Traiteur',   label: 'Pâtisserie',  enabled: FEATURES.patisserie  },
+    { key: 'restaurant',  Icon: UtensilsCrossed, color: 'bg-orange-500',  ring: 'ring-orange-300',  category: 'Alimentation & Boissons', label: 'Restaurants', enabled: FEATURES.restaurant  },
+    { key: 'marketplace', Icon: ShoppingBag,     color: 'bg-blue-500',    ring: 'ring-blue-300',    category: null,                      label: 'Marketplace', enabled: true                 },
 ] as const
-type FilterKey = typeof FILTERS[number]['key']
+const FILTERS = ALL_FILTERS.filter(f => f.enabled)
+type FilterKey = typeof ALL_FILTERS[number]['key']
 
-const MODULES = [
+const ALL_MODULES = [
     {
         key: 'immobilier', label: 'Immobilier', badge: 'Biens disponibles',
         description: 'Appartements, villas, terrains à Brazzaville et Pointe-Noire.',
         cta: 'Explorer les biens', href: '/category/Immobilier',
         Icon: Home, gradient: 'from-emerald-500 to-teal-700', glow: '#10B981',
+        enabled: FEATURES.immobilier,
     },
     {
         key: 'patisserie', label: 'Pâtisserie', badge: 'Sur mesure',
         description: 'Gâteaux artisanaux, layer cakes et pains livrés chez vous.',
         cta: 'Voir les créations', href: '/patisserie',
         Icon: Cake, gradient: 'from-rose-500 to-pink-700', glow: '#F43F5E',
+        enabled: FEATURES.patisserie,
     },
     {
         key: 'restaurant', label: 'Restaurants', badge: 'Plats du jour',
         description: 'Cuisine congolaise, burgers, grillades livrés chez vous.',
         cta: 'Commander un plat', href: '/restaurant',
         Icon: UtensilsCrossed, gradient: 'from-orange-500 to-amber-600', glow: '#F97316',
+        enabled: FEATURES.restaurant,
     },
     {
         key: 'marketplace', label: 'Marketplace', badge: 'Boutique en ligne',
         description: 'Mode, high-tech, maison et beauté. Achetez et vendez.',
         cta: 'Visiter la boutique', href: '/marketplace',
         Icon: ShoppingBag, gradient: 'from-blue-500 to-indigo-600', glow: '#3B82F6',
+        enabled: true,
     },
 ] as const
+const MODULES = ALL_MODULES.filter(m => m.enabled)
 
 const TRUST_ITEMS = [
     { Icon: MapPin,        text: 'Brazzaville & Pointe-Noire', color: '#10B981' },
@@ -622,9 +629,9 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
 
                         {/* Carousels */}
                         <DiscoveryCarousel label="Marketplace"  title="Découvertes du moment" href="/marketplace"          accentColor="text-blue-400"    emptyIcon="🛍️" products={marketplaceProducts} />
-                        <DiscoveryCarousel label="Immobilier"   title="Biens disponibles"     href="/category/Immobilier"  accentColor="text-emerald-400" emptyIcon="🏠"  products={immobilierProducts}  isImmobilier />
-                        <DiscoveryCarousel label="Pâtisserie"   title="Douceurs du jour"      href="/patisserie"           accentColor="text-pink-400"    emptyIcon="🎂"  products={patisserieProducts} />
-                        <DiscoveryCarousel label="Restaurants"  title="Plats à commander"     href="/restaurant"           accentColor="text-orange-400"  emptyIcon="🍽️" products={restaurantProducts} />
+                        {FEATURES.immobilier && <DiscoveryCarousel label="Immobilier"   title="Biens disponibles"     href="/category/Immobilier"  accentColor="text-emerald-400" emptyIcon="🏠"  products={immobilierProducts}  isImmobilier />}
+                        {FEATURES.patisserie  && <DiscoveryCarousel label="Pâtisserie"   title="Douceurs du jour"      href="/patisserie"           accentColor="text-pink-400"    emptyIcon="🎂"  products={patisserieProducts} />}
+                        {FEATURES.restaurant  && <DiscoveryCarousel label="Restaurants"  title="Plats à commander"     href="/restaurant"           accentColor="text-orange-400"  emptyIcon="🍽️" products={restaurantProducts} />}
 
                         {/* Why section */}
                         <div className="mt-20 mb-4">

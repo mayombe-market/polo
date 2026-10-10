@@ -853,7 +853,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
                         copied={copied}
                         onCopyLink={copyLink}
                         onNavigate={(page: Page) => {
-                            if (page === 'add' && (isAtLimit || isExpired)) {
+                            if (page === 'add' && isAtLimit) {
                                 setShowLimitWarning(true)
                                 return
                             }
@@ -901,27 +901,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
                 {activePage === 'add' && (
                     <div className="p-4 md:p-8 max-w-4xl mx-auto">
-                        {/* Gate abonnement — pas encore de plan choisi */}
-                        {!profile?.subscription_plan ? (
-                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-orange-200 dark:border-orange-800/30">
-                                <div className="text-6xl mb-4">📦</div>
-                                <h2 className="text-xl font-black uppercase italic text-orange-500 mb-2">Abonnement requis</h2>
-                                <p className="text-sm text-slate-500 mb-2 max-w-md mx-auto">
-                                    Vous pouvez explorer votre dashboard librement.
-                                </p>
-                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-                                    Pour publier des produits et commencer à vendre, choisissez d'abord votre abonnement.
-                                </p>
-                                <button
-                                    onClick={() => openUpgradeFlow()}
-                                    className="inline-block text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg no-underline"
-                                    style={{ background: 'linear-gradient(135deg, #E8A838, #D4782F)', boxShadow: '0 8px 24px rgba(232,168,56,0.3)' }}
-                                >
-                                    🚀 Choisir mon abonnement
-                                </button>
-                            </div>
-                        ) : /* Gate vérification */
-                        profile?.verification_status !== 'verified' ? (
+                        {/* Gate vérification */}
+                        {profile?.verification_status !== 'verified' ? (
                             <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30">
                                 <div className="text-6xl mb-4">🔒</div>
                                 <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">Vérification requise</h2>
@@ -948,16 +929,8 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             }`}>
                                 <div className="flex items-center justify-between mb-2">
                                     <span className="text-xs font-black uppercase text-slate-500">
-                                        📦 Produits : {currentProductCount} / {maxProducts} (Plan {getPlanName(currentPlan)})
+                                        📦 Produits publiés : {currentProductCount} / {maxProducts}
                                     </span>
-                                    {isApproachingLimit && (
-                                        <button
-                                            onClick={() => openUpgradeFlow()}
-                                            className="text-[10px] font-black uppercase text-orange-500 hover:underline"
-                                        >
-                                            ⚡ Upgrader
-                                        </button>
-                                    )}
                                 </div>
                                 <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                                     <div
@@ -970,37 +943,20 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             </div>
                         )}
 
-                        {isExpired ? (
-                            /* Si abonnement expiré → message + bouton renouveler */
-                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-red-200 dark:border-red-800/30">
-                                <div className="text-6xl mb-4">🔴</div>
-                                <h2 className="text-xl font-black uppercase italic text-red-500 mb-2">Abonnement expiré</h2>
+                        {isAtLimit ? (
+                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-orange-200 dark:border-orange-800/30">
+                                <div className="text-6xl mb-4">📦</div>
+                                <h2 className="text-xl font-black uppercase italic text-orange-500 mb-2">Limite de produits atteinte</h2>
                                 <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-                                    Votre abonnement {getPlanName(currentPlan)} a expiré. Vos produits sont masqués du site.
-                                    Renouvelez pour les réactiver et continuer à publier.
+                                    Vous avez atteint la limite de produits pour votre compte.
+                                    Contactez-nous pour augmenter votre quota.
                                 </p>
-                                <button
-                                    onClick={() => openUpgradeFlow()}
-                                    className="bg-gradient-to-r from-red-500 to-red-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-red-500/20"
+                                <a
+                                    href="/contact"
+                                    className="inline-block bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg no-underline"
                                 >
-                                    🔄 Renouveler mon abonnement
-                                </button>
-                            </div>
-                        ) : isAtLimit ? (
-                            /* Si limite atteinte → message + bouton upgrade */
-                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-red-200 dark:border-red-800/30">
-                                <div className="text-6xl mb-4">🔒</div>
-                                <h2 className="text-xl font-black uppercase italic text-red-500 mb-2">Limite de produits atteinte</h2>
-                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-                                    Votre plan {getPlanName(currentPlan)} est limité à {maxProducts} produits.
-                                    Passez au niveau supérieur pour continuer à publier.
-                                </p>
-                                <button
-                                    onClick={() => openUpgradeFlow()}
-                                    className="bg-gradient-to-r from-orange-500 to-orange-600 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-orange-500/20"
-                                >
-                                    🚀 Voir les plans supérieurs
-                                </button>
+                                    📩 Contacter le support
+                                </a>
                             </div>
                         ) : profile?.vendor_type === 'patisserie' ? (
                             /* Pâtissier → formulaire spécialisé avec options/combos */
@@ -1430,7 +1386,7 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
     const stats = [
         { label: 'Revenus', value: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 dark:bg-green-900/20' },
         { label: 'Commandes', value: totalOrders, icon: ShoppingCart, color: 'text-blue-600', bg: 'bg-blue-50 dark:bg-blue-900/20' },
-        { label: 'Produits', value: maxProducts === -1 ? `${productCount || 0} ∞` : `${productCount || 0} / ${maxProducts}`, icon: Package, color: isAtLimit ? 'text-red-500' : 'text-orange-500', bg: isAtLimit ? 'bg-red-50 dark:bg-red-900/20' : 'bg-orange-50 dark:bg-orange-900/20' },
+        { label: 'Produits', value: productCount || 0, icon: Package, color: 'text-orange-500', bg: 'bg-orange-50 dark:bg-orange-900/20' },
         { label: 'Vues', value: totalViews, icon: Eye, color: 'text-purple-600', bg: 'bg-purple-50 dark:bg-purple-900/20' },
         { label: 'Abonnés', value: followerCount, icon: Users, color: 'text-pink-500', bg: 'bg-pink-50 dark:bg-pink-900/20' },
     ]
@@ -1446,121 +1402,8 @@ function DashboardHome({ user, profile, orders, followerCount, totalRevenue, tot
                 </h1>
                 <div className="flex items-center gap-3 mt-1">
                     <p className="text-sm text-slate-400 font-bold">Voici un résumé de votre activité.</p>
-                    <span className={`text-[9px] font-black uppercase px-3 py-1 rounded-full ${
-                        currentPlan === 'premium' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-                        : currentPlan === 'pro' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                        : currentPlan === 'starter' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                        : 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
-                    }`}>
-                        Plan {getPlanName(currentPlan)}
-                    </span>
                 </div>
             </div>
-
-            {/* ═══ Bandeau expiration abonnement ═══ */}
-            {currentPlan !== 'free' && subscriptionStatus !== 'legacy' && subscriptionStatus !== 'free' && (
-                <div className={`rounded-3xl p-5 ${
-                    isExpired
-                        ? 'bg-gradient-to-r from-red-600 to-red-700 text-white'
-                        : isGrace
-                            ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
-                            : daysRemaining <= 5
-                                ? 'bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800'
-                                : 'bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800'
-                }`}>
-                    {isExpired ? (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div>
-                                <h3 className="font-black uppercase text-sm">🔴 Abonnement expiré — Vos produits sont masqués</h3>
-                                <p className="text-white/80 text-xs font-bold mt-1">
-                                    Vos {productCount || 0} produit(s) ne sont plus visibles sur le site. Renouvelez pour les réactiver.
-                                </p>
-                            </div>
-                            <button
-                                onClick={onUpgrade}
-                                className="flex items-center gap-2 bg-white text-red-600 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
-                            >
-                                🔄 Renouveler maintenant
-                            </button>
-                        </div>
-                    ) : isGrace ? (
-                        <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-                            <div>
-                                <h3 className="font-black uppercase text-sm">⚠️ Abonnement expiré — Période de grâce</h3>
-                                <p className="text-white/80 text-xs font-bold mt-1">
-                                    Vos produits seront masqués dans {Math.max(0, daysRemaining + 3)} jour(s). Renouvelez maintenant pour éviter l'interruption.
-                                </p>
-                            </div>
-                            <button
-                                onClick={onUpgrade}
-                                className="flex items-center gap-2 bg-white text-red-500 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
-                            >
-                                🔄 Renouveler
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="flex items-center justify-between mb-2">
-                                <span className={`text-xs font-black uppercase ${
-                                    daysRemaining <= 5 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
-                                }`}>
-                                    📦 Plan {getPlanName(currentPlan)} · {daysRemaining} jour{daysRemaining > 1 ? 's' : ''} restant{daysRemaining > 1 ? 's' : ''}
-                                </span>
-                                {daysRemaining <= 5 && (
-                                    <button
-                                        onClick={onUpgrade}
-                                        className="text-[10px] font-black text-red-500 dark:text-red-400 hover:underline uppercase"
-                                    >
-                                        Renouveler
-                                    </button>
-                                )}
-                            </div>
-                            <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                                <div
-                                    className={`h-full rounded-full transition-all duration-500 ${
-                                        daysRemaining <= 5 ? 'bg-red-500' : 'bg-green-500'
-                                    }`}
-                                    style={{ width: `${Math.max(0, Math.min(100, (daysRemaining / totalDays) * 100))}%` }}
-                                />
-                            </div>
-                            {daysRemaining <= 5 && (
-                                <p className={`text-[10px] font-bold mt-2 ${
-                                    daysRemaining <= 5 ? 'text-red-500 dark:text-red-400' : 'text-slate-400'
-                                }`}>
-                                    ⚠️ Pensez à renouveler votre abonnement !
-                                </p>
-                            )}
-                        </>
-                    )}
-                </div>
-            )}
-
-            {/* Upgrade banner — visible quand on approche de la limite */}
-            {isApproachingLimit && !isExpired && (
-                <div className={`rounded-3xl p-5 flex flex-col sm:flex-row items-center justify-between gap-4 ${
-                    isAtLimit
-                        ? 'bg-gradient-to-r from-red-500 to-red-600 text-white'
-                        : 'bg-gradient-to-r from-amber-500 to-orange-500 text-white'
-                }`}>
-                    <div>
-                        <h3 className="font-black uppercase text-sm">
-                            {isAtLimit ? '🔒 Limite de produits atteinte' : '⚡ Vous approchez de la limite'}
-                        </h3>
-                        <p className="text-white/80 text-xs font-bold mt-1">
-                            {isAtLimit
-                                ? `Votre plan ${getPlanName(currentPlan)} est limité à ${maxProducts} produits.`
-                                : `${productCount || 0} / ${maxProducts} produits — Passez au niveau supérieur.`
-                            }
-                        </p>
-                    </div>
-                    <button
-                        onClick={onUpgrade}
-                        className="flex items-center gap-2 bg-white text-orange-600 px-5 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:scale-105 transition-all shadow-lg whitespace-nowrap"
-                    >
-                        🚀 Upgrader mon plan
-                    </button>
-                </div>
-            )}
 
             {/* Share banner */}
             <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-3xl p-6 text-white flex flex-col sm:flex-row items-center justify-between gap-4">

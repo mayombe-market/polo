@@ -87,7 +87,6 @@ export default function Footer() {
             links: [
                 { label: "Devenir vendeur", href: "/devenir-vendeur", highlight: true },
                 { label: "Centre vendeur", href: "/vendeur" },
-                { label: "Tarification & commissions", href: "/tarification" },
                 { label: "Guide vendeur", href: "/guide-vendeur" },
                 { label: "Conditions vendeurs", href: "/conditions-vendeurs" },
             ],

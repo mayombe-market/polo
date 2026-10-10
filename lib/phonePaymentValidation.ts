@@ -13,6 +13,12 @@ export function isExactly10Digits(input: string): boolean {
     return /^\d{10}$/.test(digitsOnly(input))
 }
 
+/** Accepte les identifiants de transaction des deux opérateurs : 6 à 16 chiffres. */
+export function isValidTransactionId(input: string): boolean {
+    const d = digitsOnly(input)
+    return d.length >= 6 && d.length <= 16
+}
+
 /** Retourne les 10 chiffres ou `null` si invalide. */
 export function parseStrict10Digits(input: string | undefined | null): string | null {
     if (input == null || input === '') return null
@@ -52,8 +58,17 @@ export const zodPhone10Digits = z
     })
     .transform((s) => digitsOnly(s))
 
-/** Zod : ID de transaction Mobile Money / Airtel → exactement 10 chiffres. */
+/** Zod : ID de transaction Mobile Money / Airtel → exactement 10 chiffres (legacy, subscriptions). */
 export const zodTransactionId10Digits = z
     .string()
     .transform((s) => digitsOnly(s))
     .refine((s) => /^\d{10}$/.test(s), { message: EXACTLY_10_DIGITS_MESSAGE })
+
+/** Zod : ID de transaction Mobile Money / Airtel → 6 à 16 chiffres (tous opérateurs). */
+export const TRANSACTION_ID_MESSAGE =
+    'Identifiant de transaction invalide (entre 6 et 16 chiffres, tel qu\'indiqué dans votre SMS).'
+
+export const zodTransactionId = z
+    .string()
+    .transform((s) => digitsOnly(s))
+    .refine((s) => s.length >= 6 && s.length <= 16, { message: TRANSACTION_ID_MESSAGE })

@@ -54,6 +54,8 @@ import { SHOP_DESCRIPTION_MAX_LENGTH } from '@/lib/shopDescription'
 import VendorPushPrompt from '@/app/components/VendorPushPrompt'
 import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 import { FEATURES } from '@/lib/featureFlags'
+import VendorPaymentSettings from '@/app/components/VendorPaymentSettings'
+import VendorPaymentConfirmations from '@/app/components/VendorPaymentConfirmations'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -3183,6 +3185,27 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                     </div>
                 </div>
             </div>
+
+            {/* Paiements Mobile Money (vendeurs uniquement) */}
+            {profile?.role === 'vendor' && (
+                <>
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800">
+                        <VendorPaymentSettings profile={profile} />
+                    </div>
+
+                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800">
+                        <div className="mb-4">
+                            <h3 className="text-sm font-black dark:text-white uppercase tracking-wide">
+                                Paiements à confirmer
+                            </h3>
+                            <p className="text-xs text-slate-400 mt-1">
+                                Confirmez les paiements reçus de vos clients.
+                            </p>
+                        </div>
+                        <VendorPaymentConfirmations />
+                    </div>
+                </>
+            )}
 
             {/* Save button */}
             <button

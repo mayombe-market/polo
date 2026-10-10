@@ -24,7 +24,7 @@ import {
 import { DELIVERY_CITY_LIST, DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
 import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, CheckCircle2, Smartphone } from 'lucide-react'
-import { getAdminPaymentNumber } from '@/lib/adminPaymentConfig'
+import { getVendorPaymentNumbers } from '@/app/actions/vendorPayment'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey'
@@ -83,6 +83,8 @@ export default function CheckoutPage() {
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState('')
     const [sellerCoords, setSellerCoords] = useState<Record<string, { lat: number; lng: number } | null>>({})
+    const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null; whatsapp: string | null; shop_name: string | null; vendor_delivery_fee: number | null; vendor_pickup_address: string | null }>>({})
+    const [vendorTxCodes, setVendorTxCodes] = useState<Record<string, string>>({})
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
     const { getOrCreate: getIdempotencyKey, clear: clearIdempotencyKey } = useIdempotencyKey()
@@ -143,6 +145,35 @@ export default function CheckoutPage() {
             cancelled = true
         }
     }, [supabase, sellerIds])
+
+    // Fetch vendor payment numbers for direct payment tunnel
+    useEffect(() => {
+        if (sellerIds.length === 0) { setVendorNumbers({}); return }
+        getVendorPaymentNumbers(sellerIds).then(setVendorNumbers).catch(() => {})
+    }, [sellerIds])
+
+    // Computed: which Mobile Money operators are available (ALL vendors must support it)
+    const vendorPaymentMethods = useMemo(() => {
+        const loaded = sellerIds.length > 0 && sellerIds.every(sid => sid in vendorNumbers)
+        if (!loaded) return { mtn: true, airtel: false, noneConfigured: false, loading: true }
+        const allHaveMtn = sellerIds.every(sid => !!vendorNumbers[sid]?.mtn)
+        const allHaveAirtel = sellerIds.every(sid => !!vendorNumbers[sid]?.airtel)
+        const noneConfigured = sellerIds.every(sid => !vendorNumbers[sid]?.mtn && !vendorNumbers[sid]?.airtel)
+        return { mtn: allHaveMtn, airtel: allHaveAirtel, noneConfigured, loading: false }
+    }, [sellerIds, vendorNumbers])
+
+    // Computed: delivery options offered by vendors
+    const vendorDeliveryOptions = useMemo(() => {
+        const loaded = sellerIds.length > 0 && sellerIds.every(sid => sid in vendorNumbers)
+        if (!loaded) return { hasPickup: false, hasVendorDelivery: false, vendorDeliveryFee: 0, pickupAddresses: [] as string[], loading: true }
+        const hasPickup = sellerIds.some(sid => !!vendorNumbers[sid]?.vendor_pickup_address)
+        const vendorDeliveryFee = sellerIds.reduce((sum, sid) => sum + (vendorNumbers[sid]?.vendor_delivery_fee ?? 0), 0)
+        const hasVendorDelivery = sellerIds.some(sid => vendorNumbers[sid]?.vendor_delivery_fee != null)
+        const pickupAddresses = sellerIds
+            .map(sid => vendorNumbers[sid]?.vendor_pickup_address)
+            .filter(Boolean) as string[]
+        return { hasPickup, hasVendorDelivery, vendorDeliveryFee, pickupAddresses, loading: false }
+    }, [sellerIds, vendorNumbers])
 
     const needsInterUrbanDelivery = useMemo(
         () =>
@@ -248,7 +279,9 @@ export default function CheckoutPage() {
             ? DELIVERY_FEE_INTER_URBAN
             : selectedDelivery === 'standard' || selectedDelivery === 'express'
               ? DELIVERY_FEES[selectedDelivery]
-              : 0
+              : selectedDelivery === 'vendor_delivery'
+                ? vendorDeliveryOptions.vendorDeliveryFee
+                : 0   // pickup = 0, fallback = 0
     const totalBeforeLoyalty = total + deliveryFee
 
     // ═══ PROGRAMME FIDÉLITÉ ═══
@@ -320,17 +353,22 @@ export default function CheckoutPage() {
             return
         }
 
-        // ── MTN MoMo : flux manuel — on montre l'écran "entrez votre ID de transaction" ──
-        if (formData.payment_method === 'mobile_money') {
+        // ── Mobile Money (MTN ou Airtel) : flux manuel ──
+        if (formData.payment_method === 'mobile_money' || formData.payment_method === 'airtel_money') {
             const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
                 ? patisserieDeliveryFee
                 : formData.delivery_mode === 'inter_urban'
                     ? DELIVERY_FEE_INTER_URBAN
-                    : DELIVERY_FEES[formData.delivery_mode]
+                    : formData.delivery_mode === 'vendor_delivery'
+                        ? vendorDeliveryOptions.vendorDeliveryFee
+                        : formData.delivery_mode === 'pickup'
+                            ? 0
+                            : DELIVERY_FEES[formData.delivery_mode as 'standard' | 'express'] ?? 0
             setSavedFormData(formData)
             setSavedTotal(total + currentDeliveryFee)
             setTxCode('')
             setTxError('')
+            setVendorTxCodes({})
             setManualPayStep(true)
             return
         }
@@ -354,7 +392,11 @@ export default function CheckoutPage() {
                 ? patisserieDeliveryFee
                 : formData.delivery_mode === 'inter_urban'
                     ? DELIVERY_FEE_INTER_URBAN
-                    : DELIVERY_FEES[formData.delivery_mode]
+                    : formData.delivery_mode === 'vendor_delivery'
+                        ? vendorDeliveryOptions.vendorDeliveryFee
+                        : formData.delivery_mode === 'pickup'
+                            ? 0
+                            : DELIVERY_FEES[formData.delivery_mode as 'standard' | 'express'] ?? 0
             const totalWithDelivery = total + currentDeliveryFee
             // Points fidélité : clamp final au total (au cas où)
             const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
@@ -431,11 +473,25 @@ export default function CheckoutPage() {
     // ── Fonction de soumission de l'ID de transaction MTN manuel ──
     const handleTxSubmit = async () => {
         if (!savedFormData) return
-        const digits = txCode.replace(/\D/g, '')
-        if (digits.length !== 10) {
-            setTxError('Le code doit contenir exactement 10 chiffres.')
-            return
+
+        // Multi-vendeur : vérifier que tous les codes sont saisis
+        const isMultiVendor = sellerIds.length > 1
+        if (isMultiVendor) {
+            for (const sid of sellerIds) {
+                const d = (vendorTxCodes[sid] || '').replace(/\D/g, '')
+                if (d.length !== 10) {
+                    setTxError(`Saisissez le code de transaction pour tous les vendeurs (10 chiffres chacun).`)
+                    return
+                }
+            }
+        } else {
+            const digits = txCode.replace(/\D/g, '')
+            if (digits.length !== 10) {
+                setTxError('Le code doit contenir exactement 10 chiffres.')
+                return
+            }
         }
+
         setTxError('')
         setTxLoading(true)
         try {
@@ -446,7 +502,11 @@ export default function CheckoutPage() {
                 ? patisserieDeliveryFee
                 : savedFormData.delivery_mode === 'inter_urban'
                     ? DELIVERY_FEE_INTER_URBAN
-                    : DELIVERY_FEES[savedFormData.delivery_mode]
+                    : savedFormData.delivery_mode === 'vendor_delivery'
+                        ? vendorDeliveryOptions.vendorDeliveryFee
+                        : savedFormData.delivery_mode === 'pickup'
+                            ? 0
+                            : DELIVERY_FEES[savedFormData.delivery_mode as 'standard' | 'express'] ?? 0
             const totalWithDelivery = total + currentDeliveryFee
             const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
 
@@ -459,19 +519,42 @@ export default function CheckoutPage() {
                 seller_id: item.seller_id || '',
             }))
 
+            const isMultiVendorTx = sellerIds.length > 1
+            const singleDigits = isMultiVendorTx ? '' : txCode.replace(/\D/g, '')
+            const paymentMethod = savedFormData.payment_method as 'mobile_money' | 'airtel_money'
+
+            // Build vendor_payment_info for direct vendor payment tracking
+            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string }> = {}
+            for (const sid of sellerIds) {
+                const vn = vendorNumbers[sid]
+                const number = paymentMethod === 'airtel_money' ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
+                const txForVendor = isMultiVendorTx
+                    ? (vendorTxCodes[sid] || '').replace(/\D/g, '')
+                    : singleDigits
+                if (txForVendor) {
+                    vendorPaymentInfo[sid] = {
+                        method: paymentMethod,
+                        vendor_number: number,
+                        holder_name: vn?.holder ?? null,
+                        transaction_id: txForVendor,
+                    }
+                }
+            }
+
             const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items,
                 city: savedFormData.city,
                 district: savedFormData.district,
-                payment_method: 'mobile_money',
+                payment_method: paymentMethod,
                 total_amount: totalWithDelivery,
                 customer_name: savedFormData.full_name,
                 phone: savedFormData.phone,
                 landmark: savedFormData.landmark,
                 delivery_mode: savedFormData.delivery_mode,
                 delivery_fee: currentDeliveryFee,
-                transaction_id: digits,
+                transaction_id: isMultiVendorTx ? undefined : singleDigits,
+                vendor_payment_info: Object.keys(vendorPaymentInfo).length > 0 ? vendorPaymentInfo : undefined,
                 loyalty_points_to_use: pointsToUse,
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
@@ -510,86 +593,237 @@ export default function CheckoutPage() {
 
             clearIdempotencyKey()
             clearCart()
-            router.push(`/checkout/success?method=mobile_money&orderId=${result.order.id}&delivery=${savedFormData.delivery_mode}`)
+            router.push(`/checkout/success?method=${paymentMethod}&orderId=${result.order.id}&delivery=${savedFormData.delivery_mode}`)
         } catch (err) {
-            console.error('Erreur commande MTN manuel:', err)
+            console.error('Erreur commande paiement direct:', err)
             setTxError('Une erreur est survenue. Réessayez.')
         } finally {
             setTxLoading(false)
         }
     }
 
-    // ── Écran manuel MTN MoMo : saisie du code de transaction ──
+    // ── Écran paiement direct vendeur (MTN MoMo ou Airtel Money) ──
     if (manualPayStep && savedFormData) {
-        const adminNumber = getAdminPaymentNumber(
-            sellerIds.length > 0 ? sellerCities[sellerIds[0]] : null,
-            'mobile_money'
-        )
-        const txDigits = txCode.replace(/\D/g, '')
-        const isComplete = txDigits.length === 10
+        const paymentMethodSelected = savedFormData.payment_method as 'mobile_money' | 'airtel_money'
+        const isAirtel = paymentMethodSelected === 'airtel_money'
+        const isMultiVendor = sellerIds.length > 1
         const formatTx = (val: string) => val.replace(/\D/g, '').slice(0, 10).replace(/(\d{3})(?=\d)/g, '$1 ')
+
+        // Calcul montant articles par vendeur (hors livraison)
+        const vendorItemsAmount = (sid: string) =>
+            cart.filter(i => i.seller_id === sid).reduce((s, i) => s + i.price * (i.quantity || 1), 0)
+        const itemsTotal = cart.reduce((s, i) => s + i.price * (i.quantity || 1), 0)
+        const deliveryFeeDisplay = savedTotal - itemsTotal
+
+        // Vérifier si au moins un vendeur n'a pas de numéro pour la méthode choisie
+        const vendorsMissingNumber = sellerIds.filter(sid => {
+            const vn = vendorNumbers[sid]
+            return isAirtel ? !vn?.airtel : !vn?.mtn
+        })
+        const hasBlockingMissing = vendorsMissingNumber.length > 0
+
+        const getVendorNumber = (sid: string) => {
+            const vn = vendorNumbers[sid]
+            return isAirtel ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
+        }
+
+        const txDigits = txCode.replace(/\D/g, '')
+        const isComplete = !hasBlockingMissing && (isMultiVendor
+            ? sellerIds.every(sid => (vendorTxCodes[sid] || '').replace(/\D/g, '').length === 10)
+            : txDigits.length === 10)
+
         return (
-            <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-center justify-center px-4">
+            <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-start justify-center px-4 py-8 overflow-y-auto">
                 <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm rounded-[2.5rem] p-8 max-w-sm w-full shadow-2xl shadow-black/10 border border-stone-200/80 dark:border-stone-800/60 space-y-5">
                     {/* Header */}
                     <div className="text-center">
-                        <div className="text-4xl mb-3">📱</div>
-                        <h2 className="font-black uppercase italic text-lg tracking-tight">MTN Mobile Money</h2>
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Paiement manuel</p>
-                    </div>
-
-                    {/* Numéro de transfert */}
-                    <div className="bg-yellow-50 dark:bg-yellow-400/5 rounded-2xl p-5 text-center border border-yellow-300/40">
-                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2">Numéro de transfert</p>
-                        <p className="text-3xl font-black font-mono tracking-wider text-yellow-600">{adminNumber}</p>
-                    </div>
-
-                    {/* Montant */}
-                    <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 text-center border border-slate-200 dark:border-slate-700">
-                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Montant exact à envoyer</p>
-                        <p className="text-2xl font-black italic text-orange-500">{savedTotal.toLocaleString('fr-FR')} FCFA</p>
-                    </div>
-
-                    {/* Warning */}
-                    <div className="bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 flex gap-3">
-                        <span className="text-base flex-shrink-0">⚠️</span>
-                        <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 leading-relaxed">
-                            Effectuez le transfert <strong>avant</strong> de continuer.
-                            Vous recevrez un code de transaction à <strong>10 chiffres</strong> par SMS.
+                        <div className="text-4xl mb-3">{isAirtel ? '📲' : '📱'}</div>
+                        <h2 className="font-black uppercase italic text-lg tracking-tight">
+                            {isAirtel ? 'Airtel Money' : 'MTN Mobile Money'}
+                        </h2>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                            {isMultiVendor ? `${sellerIds.length} vendeurs · paiements directs` : 'Paiement direct au vendeur'}
                         </p>
                     </div>
 
-                    {/* Input code */}
-                    <div>
-                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Code de transaction (SMS)</p>
-                        <div className={`rounded-2xl p-1 border-2 transition-colors ${txError ? 'border-red-500/60' : isComplete ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
-                            <input
-                                type="text"
-                                inputMode="numeric"
-                                value={formatTx(txCode)}
-                                onChange={e => { setTxCode(e.target.value); setTxError('') }}
-                                onKeyDown={e => e.key === 'Enter' && handleTxSubmit()}
-                                placeholder="000 000 000 0"
-                                maxLength={13}
-                                className="w-full py-4 px-5 bg-transparent text-xl font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
-                            />
+                    {/* Blocage : vendeur sans numéro configuré */}
+                    {hasBlockingMissing && (
+                        <div className="space-y-4">
+                            <div className="bg-red-50 dark:bg-red-500/5 border border-red-200 dark:border-red-500/20 rounded-2xl p-5">
+                                <p className="text-xs font-black text-red-700 dark:text-red-400 mb-2">
+                                    ⚠️ Paiement mobile non disponible
+                                </p>
+                                <p className="text-[11px] text-red-600 dark:text-red-300 leading-relaxed">
+                                    {vendorsMissingNumber.length === 1
+                                        ? `Un vendeur de votre panier n'a pas encore configuré son numéro ${isAirtel ? 'Airtel Money' : 'MTN MoMo'}.`
+                                        : `${vendorsMissingNumber.length} vendeurs de votre panier n'ont pas encore configuré leur numéro ${isAirtel ? 'Airtel Money' : 'MTN MoMo'}.`}
+                                </p>
+                            </div>
+                            {vendorsMissingNumber.map(sid => {
+                                const vn = vendorNumbers[sid]
+                                const whatsapp = vn?.whatsapp?.replace(/\D/g, '') || ''
+                                return (
+                                    <div key={sid} className="rounded-2xl border border-slate-200 dark:border-slate-700 p-4 flex items-center justify-between gap-3">
+                                        <div>
+                                            <p className="text-xs font-black dark:text-white">{vn?.shop_name || 'Vendeur'}</p>
+                                            <p className="text-[10px] text-slate-400">Aucun numéro configuré</p>
+                                        </div>
+                                        {whatsapp && (
+                                            <a
+                                                href={`https://wa.me/${whatsapp}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-green-500 text-white text-[10px] font-black uppercase shrink-0"
+                                            >
+                                                WhatsApp
+                                            </a>
+                                        )}
+                                    </div>
+                                )
+                            })}
+                            <button
+                                onClick={() => setManualPayStep(false)}
+                                className="w-full py-3 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors border border-slate-200 dark:border-slate-700"
+                            >
+                                ← Choisir un autre mode de paiement
+                            </button>
                         </div>
-                        <div className="flex justify-between mt-1 px-1">
-                            {txError
-                                ? <span className="text-red-500 text-[10px] font-bold">⚠ {txError}</span>
-                                : <span className="text-slate-400 text-[10px] font-bold">Format : 10 chiffres</span>
-                            }
-                            <span className={`text-[10px] font-black ${isComplete ? 'text-green-500' : 'text-slate-400'}`}>{txDigits.length}/10</span>
-                        </div>
-                    </div>
+                    )}
 
-                    <button
-                        onClick={handleTxSubmit}
-                        disabled={!isComplete || txLoading}
-                        className={`w-full py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${isComplete && !txLoading ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
-                    >
-                        {txLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Valider le paiement'}
-                    </button>
+                    {/* Flux normal : tous les vendeurs ont un numéro */}
+                    {!hasBlockingMissing && (
+                        <>
+                            {/* Single vendor */}
+                            {!isMultiVendor && (() => {
+                                const sid = sellerIds[0]
+                                const displayNum = getVendorNumber(sid)
+                                const vn = vendorNumbers[sid]
+                                return (
+                                    <>
+                                        <div className={`rounded-2xl p-5 text-center border ${isAirtel ? 'bg-red-50 dark:bg-red-400/5 border-red-200/60' : 'bg-yellow-50 dark:bg-yellow-400/5 border-yellow-300/40'}`}>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-2">Numéro de transfert</p>
+                                            <p className={`text-3xl font-black font-mono tracking-wider ${isAirtel ? 'text-red-600' : 'text-yellow-600'}`}>{displayNum}</p>
+                                            {vn?.holder && <p className="text-xs font-bold text-slate-500 mt-1">{vn.holder}</p>}
+                                        </div>
+
+                                        {/* Montant articles + note frais livraison */}
+                                        <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl p-4 border border-slate-200 dark:border-slate-700 space-y-2">
+                                            <div className="flex justify-between items-center">
+                                                <p className="text-[10px] font-black uppercase text-slate-500">Articles</p>
+                                                <p className="text-xl font-black italic text-orange-500">{itemsTotal.toLocaleString('fr-FR')} FCFA</p>
+                                            </div>
+                                            {deliveryFeeDisplay > 0 && (
+                                                <div className="flex justify-between items-center pt-2 border-t border-slate-200 dark:border-slate-700">
+                                                    <p className="text-[10px] font-bold text-slate-400">Frais de livraison</p>
+                                                    <p className="text-xs font-black text-slate-500">{deliveryFeeDisplay.toLocaleString('fr-FR')} FCFA</p>
+                                                </div>
+                                            )}
+                                            <p className="text-[9px] text-slate-400 mt-1">
+                                                {deliveryFeeDisplay > 0
+                                                    ? `Transférez les articles au vendeur. Les frais de livraison (${deliveryFeeDisplay.toLocaleString('fr-FR')} FCFA) sont réglés séparément.`
+                                                    : 'Transférez ce montant exact au numéro ci-dessus.'}
+                                            </p>
+                                        </div>
+
+                                        <div className="bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 flex gap-3">
+                                            <span className="text-base flex-shrink-0">⚠️</span>
+                                            <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 leading-relaxed">
+                                                Effectuez le transfert <strong>avant</strong> de continuer.
+                                                Vous recevrez un code de transaction à <strong>10 chiffres</strong> par SMS.
+                                            </p>
+                                        </div>
+
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Code de transaction (SMS)</p>
+                                            <div className={`rounded-2xl p-1 border-2 transition-colors ${txError ? 'border-red-500/60' : txDigits.length === 10 ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
+                                                <input
+                                                    type="text"
+                                                    inputMode="numeric"
+                                                    value={formatTx(txCode)}
+                                                    onChange={e => { setTxCode(e.target.value); setTxError('') }}
+                                                    onKeyDown={e => e.key === 'Enter' && handleTxSubmit()}
+                                                    placeholder="000 000 000 0"
+                                                    maxLength={13}
+                                                    className="w-full py-4 px-5 bg-transparent text-xl font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                />
+                                            </div>
+                                            <div className="flex justify-between mt-1 px-1">
+                                                {txError
+                                                    ? <span className="text-red-500 text-[10px] font-bold">⚠ {txError}</span>
+                                                    : <span className="text-slate-400 text-[10px] font-bold">Format : 10 chiffres</span>
+                                                }
+                                                <span className={`text-[10px] font-black ${txDigits.length === 10 ? 'text-green-500' : 'text-slate-400'}`}>{txDigits.length}/10</span>
+                                            </div>
+                                        </div>
+                                    </>
+                                )
+                            })()}
+
+                            {/* Multi-vendor */}
+                            {isMultiVendor && (
+                                <div className="space-y-4">
+                                    <div className="bg-blue-50 dark:bg-blue-500/5 border border-blue-200 dark:border-blue-500/20 rounded-xl p-4">
+                                        <p className="text-[10px] font-bold text-blue-700 dark:text-blue-300 leading-relaxed">
+                                            Votre panier contient {sellerIds.length} vendeurs. Effectuez un virement séparé à chacun et saisissez chaque code de transaction.
+                                            {deliveryFeeDisplay > 0 && ` Les frais de livraison (${deliveryFeeDisplay.toLocaleString('fr-FR')} FCFA) sont traités séparément.`}
+                                        </p>
+                                    </div>
+
+                                    {sellerIds.map((sid, idx) => {
+                                        const vn = vendorNumbers[sid]
+                                        const displayNum = getVendorNumber(sid)
+                                        const vendorAmount = vendorItemsAmount(sid)
+                                        const vendorCode = vendorTxCodes[sid] || ''
+                                        const vendorDigits = vendorCode.replace(/\D/g, '')
+                                        return (
+                                            <div key={sid} className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                                <div className="bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 flex items-center justify-between">
+                                                    <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400">
+                                                        {vn?.shop_name || `Vendeur ${idx + 1}`}
+                                                    </span>
+                                                    <span className="text-xs font-black text-orange-500">{vendorAmount.toLocaleString('fr-FR')} FCFA</span>
+                                                </div>
+                                                <div className="p-4 space-y-3">
+                                                    <div className="text-center">
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Envoyer à</p>
+                                                        <p className={`text-xl font-black font-mono tracking-wider ${isAirtel ? 'text-red-600' : 'text-yellow-600'}`}>{displayNum}</p>
+                                                        {vn?.holder && <p className="text-xs text-slate-500 mt-0.5">{vn.holder}</p>}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Code de transaction</p>
+                                                        <div className={`rounded-xl p-1 border-2 transition-colors ${vendorDigits.length === 10 ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                value={formatTx(vendorCode)}
+                                                                onChange={e => {
+                                                                    setVendorTxCodes(prev => ({ ...prev, [sid]: e.target.value }))
+                                                                    setTxError('')
+                                                                }}
+                                                                placeholder="000 000 000 0"
+                                                                maxLength={13}
+                                                                className="w-full py-3 px-4 bg-transparent text-lg font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                            />
+                                                        </div>
+                                                        <p className={`text-[10px] font-black text-right mt-1 px-1 ${vendorDigits.length === 10 ? 'text-green-500' : 'text-slate-400'}`}>{vendorDigits.length}/10</p>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+                                    {txError && <p className="text-red-500 text-[10px] font-bold text-center">⚠ {txError}</p>}
+                                </div>
+                            )}
+
+                            <button
+                                onClick={handleTxSubmit}
+                                disabled={!isComplete || txLoading}
+                                className={`w-full py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${isComplete && !txLoading ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                            >
+                                {txLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Valider le paiement'}
+                            </button>
+                        </>
+                    )}
 
                     <button
                         onClick={() => setManualPayStep(false)}
@@ -856,6 +1090,70 @@ export default function CheckoutPage() {
                                 </>
                             ) : (
                                 <>
+                                    {/* RETRAIT EN BOUTIQUE */}
+                                    {vendorDeliveryOptions.hasPickup && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setValue('delivery_mode', 'pickup')}
+                                            className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'pickup'
+                                                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-500/5'
+                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-blue-500/10 rounded-2xl flex items-center justify-center">
+                                                    <MapPin size={22} className="text-blue-500" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-black uppercase text-xs italic">Retrait en boutique</p>
+                                                        <span className="text-[8px] font-black bg-blue-100 dark:bg-blue-500/10 text-blue-600 px-2 py-0.5 rounded-full uppercase">Gratuit</span>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">
+                                                        {vendorDeliveryOptions.pickupAddresses[0] || 'Adresse fournie par le vendeur'}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex items-center gap-3">
+                                                <p className="font-black italic text-sm text-blue-500">0 F</p>
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'pickup' ? 'border-blue-500 bg-blue-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                                    {selectedDelivery === 'pickup' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    )}
+
+                                    {/* LIVRAISON PAR LE VENDEUR */}
+                                    {vendorDeliveryOptions.hasVendorDelivery && (
+                                        <button
+                                            type="button"
+                                            onClick={() => setValue('delivery_mode', 'vendor_delivery')}
+                                            className={`w-full flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all text-left ${selectedDelivery === 'vendor_delivery'
+                                                ? 'border-purple-500 bg-purple-50/50 dark:bg-purple-500/5'
+                                                : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'
+                                                }`}
+                                        >
+                                            <div className="flex items-center gap-4">
+                                                <div className="w-12 h-12 bg-purple-500/10 rounded-2xl flex items-center justify-center">
+                                                    <Truck size={22} className="text-purple-500" />
+                                                </div>
+                                                <div>
+                                                    <div className="flex items-center gap-2">
+                                                        <p className="font-black uppercase text-xs italic">Livraison vendeur</p>
+                                                        <span className="text-[8px] font-black bg-purple-100 dark:bg-purple-500/10 text-purple-600 px-2 py-0.5 rounded-full uppercase">Direct</span>
+                                                    </div>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase mt-1">Organisée et livrée par le vendeur</p>
+                                                </div>
+                                            </div>
+                                            <div className="text-right flex items-center gap-3">
+                                                <p className="font-black italic text-sm text-purple-500">{vendorDeliveryOptions.vendorDeliveryFee.toLocaleString('fr-FR')} F</p>
+                                                <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${selectedDelivery === 'vendor_delivery' ? 'border-purple-500 bg-purple-500' : 'border-slate-300 dark:border-slate-600'}`}>
+                                                    {selectedDelivery === 'vendor_delivery' && <div className="w-2 h-2 bg-white rounded-full" />}
+                                                </div>
+                                            </div>
+                                        </button>
+                                    )}
+
                                     {/* EXPRESS */}
                                     <button
                                         type="button"
@@ -975,53 +1273,106 @@ export default function CheckoutPage() {
                                 <CreditCard size={18} /> Méthode de paiement
                             </div>
 
-                            {/* OPTION : Mobile Money */}
-                            <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
-                                <div className="flex items-center gap-3">
-                                    <div className="flex items-center gap-2">
-                                        <MtnMomoLogo className="h-7 w-[88px]" />
-                                    </div>
-                                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
-                                    <div>
-                                        <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Mobile Money</p>
-                                        <p className="text-[9px] font-bold text-green-600 uppercase tracking-wide">Paiement instantané</p>
-                                    </div>
+                            {/* Skeleton pendant le chargement des numéros vendeur */}
+                            {vendorPaymentMethods.loading && sellerIds.length > 0 && (
+                                <div className="rounded-3xl border-2 border-slate-100 dark:border-slate-800 p-5 animate-pulse">
+                                    <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded-full w-40 mb-2" />
+                                    <div className="h-3 bg-slate-100 dark:bg-slate-800 rounded-full w-28" />
                                 </div>
-                                <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0" />
-                            </label>
+                            )}
 
-                            {/* INSTRUCTIONS PAIEMENT MANUEL MTN */}
-                            {selectedPayment === 'mobile_money' && (
-                                <div className="mt-1 rounded-3xl border-2 border-yellow-200 dark:border-yellow-700/40 overflow-hidden">
-                                    <div className="bg-yellow-400 px-5 py-4 flex items-center justify-between">
+                            {/* Aucun vendeur n'a configuré de numéro de paiement mobile */}
+                            {!vendorPaymentMethods.loading && vendorPaymentMethods.noneConfigured && (
+                                <div className="rounded-3xl border-2 border-amber-200 dark:border-amber-700/30 bg-amber-50 dark:bg-amber-500/5 p-5">
+                                    <p className="text-xs font-black text-amber-800 dark:text-amber-300 mb-1">Paiement mobile non disponible</p>
+                                    <p className="text-[10px] text-amber-700 dark:text-amber-400 leading-relaxed mb-3">
+                                        Le ou les vendeurs de votre panier n&apos;ont pas encore activé le paiement mobile. Choisissez le paiement à la livraison ou contactez-les via WhatsApp.
+                                    </p>
+                                    {sellerIds.map(sid => {
+                                        const vn = vendorNumbers[sid]
+                                        const wa = vn?.whatsapp?.replace(/\D/g, '')
+                                        if (!wa) return null
+                                        return (
+                                            <a key={sid} href={`https://wa.me/${wa}`} target="_blank" rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-green-500 text-white text-[10px] font-black mr-2 mb-1">
+                                                WhatsApp {vn?.shop_name || 'Vendeur'}
+                                            </a>
+                                        )
+                                    })}
+                                </div>
+                            )}
+
+                            {/* OPTION : MTN Mobile Money */}
+                            {!vendorPaymentMethods.loading && vendorPaymentMethods.mtn && (
+                                <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-2">
+                                            <MtnMomoLogo className="h-7 w-[88px]" />
+                                        </div>
+                                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
                                         <div>
-                                            <p className="text-[9px] font-black uppercase tracking-widest text-yellow-900">Montant à transférer</p>
-                                            <p className="text-2xl font-black text-yellow-900 italic mt-0.5">
-                                                {(deliveryFee > 0 ? grandTotal : total).toLocaleString('fr-FR')}
+                                            <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Mobile Money</p>
+                                            <p className="text-[9px] font-bold text-green-600 uppercase tracking-wide">Paiement direct au vendeur</p>
+                                        </div>
+                                    </div>
+                                    <input type="radio" value="mobile_money" {...register('payment_method')} className="text-green-500 w-5 h-5 shrink-0" />
+                                </label>
+                            )}
+
+                            {/* OPTION : Airtel Money */}
+                            {!vendorPaymentMethods.loading && vendorPaymentMethods.airtel && (
+                                <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'airtel_money' ? 'border-red-500 bg-red-50/50 dark:bg-red-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
+                                            <Smartphone size={18} className="text-red-500" />
+                                        </div>
+                                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
+                                        <div>
+                                            <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Airtel Money</p>
+                                            <p className="text-[9px] font-bold text-red-500 uppercase tracking-wide">Paiement direct au vendeur</p>
+                                        </div>
+                                    </div>
+                                    <input type="radio" value="airtel_money" {...register('payment_method')} className="text-red-500 w-5 h-5 shrink-0" />
+                                </label>
+                            )}
+
+                            {/* INSTRUCTIONS PAIEMENT MOBILE (MTN ou Airtel) */}
+                            {(selectedPayment === 'mobile_money' || selectedPayment === 'airtel_money') && !vendorPaymentMethods.loading && (
+                                <div className={`mt-1 rounded-3xl border-2 overflow-hidden ${selectedPayment === 'airtel_money' ? 'border-red-200 dark:border-red-700/40' : 'border-yellow-200 dark:border-yellow-700/40'}`}>
+                                    <div className={`px-5 py-4 flex items-center justify-between ${selectedPayment === 'airtel_money' ? 'bg-red-500' : 'bg-yellow-400'}`}>
+                                        <div>
+                                            <p className={`text-[9px] font-black uppercase tracking-widest ${selectedPayment === 'airtel_money' ? 'text-white/80' : 'text-yellow-900'}`}>Articles à transférer</p>
+                                            <p className={`text-2xl font-black italic mt-0.5 ${selectedPayment === 'airtel_money' ? 'text-white' : 'text-yellow-900'}`}>
+                                                {total.toLocaleString('fr-FR')}
                                                 <span className="text-sm ml-1 font-bold">FCFA</span>
                                             </p>
+                                            {deliveryFee > 0 && (
+                                                <p className={`text-[9px] font-bold mt-0.5 ${selectedPayment === 'airtel_money' ? 'text-white/70' : 'text-yellow-800'}`}>
+                                                    + {deliveryFee.toLocaleString('fr-FR')} FCFA livraison (réglé séparément)
+                                                </p>
+                                            )}
                                         </div>
-                                        <div className="w-12 h-12 bg-yellow-900/20 rounded-2xl flex items-center justify-center">
-                                            <Phone className="w-6 h-6 text-yellow-900" />
+                                        <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${selectedPayment === 'airtel_money' ? 'bg-white/20' : 'bg-yellow-900/20'}`}>
+                                            <Phone className={`w-6 h-6 ${selectedPayment === 'airtel_money' ? 'text-white' : 'text-yellow-900'}`} />
                                         </div>
                                     </div>
-                                    <div className="bg-yellow-50 dark:bg-yellow-400/5 px-5 py-4 space-y-3">
-                                        <p className="text-[9px] font-black uppercase tracking-widest text-yellow-700 dark:text-yellow-400 mb-1">Comment ça marche</p>
+                                    <div className={`px-5 py-4 space-y-3 ${selectedPayment === 'airtel_money' ? 'bg-red-50 dark:bg-red-500/5' : 'bg-yellow-50 dark:bg-yellow-400/5'}`}>
+                                        <p className={`text-[9px] font-black uppercase tracking-widest mb-1 ${selectedPayment === 'airtel_money' ? 'text-red-700 dark:text-red-400' : 'text-yellow-700 dark:text-yellow-400'}`}>Comment ça marche</p>
                                         {[
                                             { n: '1', text: 'Cliquez "Confirmer la commande" ci-dessous' },
-                                            { n: '2', text: 'Transférez le montant exact au numéro MTN qui s\'affichera' },
+                                            { n: '2', text: `Transférez le montant des articles au numéro ${selectedPayment === 'airtel_money' ? 'Airtel Money' : 'MTN MoMo'} du vendeur` },
                                             { n: '3', text: 'Entrez votre code de transaction SMS (10 chiffres) → commande enregistrée' },
-                                            { n: '4', text: 'Notre équipe valide votre paiement et confirme la commande' },
+                                            { n: '4', text: 'Le vendeur confirme la réception du paiement' },
                                         ].map(step => (
                                             <div key={step.n} className="flex items-start gap-3">
-                                                <div className="w-5 h-5 rounded-full bg-yellow-500 text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5">{step.n}</div>
-                                                <p className="text-[11px] font-bold text-yellow-800 dark:text-yellow-300 leading-snug">{step.text}</p>
+                                                <div className={`w-5 h-5 rounded-full text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5 ${selectedPayment === 'airtel_money' ? 'bg-red-500' : 'bg-yellow-500'}`}>{step.n}</div>
+                                                <p className={`text-[11px] font-bold leading-snug ${selectedPayment === 'airtel_money' ? 'text-red-800 dark:text-red-300' : 'text-yellow-800 dark:text-yellow-300'}`}>{step.text}</p>
                                             </div>
                                         ))}
-                                        <div className="mt-3 pt-3 border-t border-yellow-200 dark:border-yellow-700/30 flex items-start gap-2">
-                                            <ShieldCheck className="w-3.5 h-3.5 text-yellow-600 flex-shrink-0 mt-0.5" />
-                                            <p className="text-[9px] font-bold text-yellow-600 dark:text-yellow-500">
-                                                Paiement vérifié manuellement par notre équipe avant expédition.
+                                        <div className={`mt-3 pt-3 border-t flex items-start gap-2 ${selectedPayment === 'airtel_money' ? 'border-red-200 dark:border-red-700/30' : 'border-yellow-200 dark:border-yellow-700/30'}`}>
+                                            <ShieldCheck className={`w-3.5 h-3.5 flex-shrink-0 mt-0.5 ${selectedPayment === 'airtel_money' ? 'text-red-500' : 'text-yellow-600'}`} />
+                                            <p className={`text-[9px] font-bold ${selectedPayment === 'airtel_money' ? 'text-red-600 dark:text-red-500' : 'text-yellow-600 dark:text-yellow-500'}`}>
+                                                Paiement direct au vendeur. Le vendeur confirme la réception avant expédition.
                                             </p>
                                         </div>
                                     </div>

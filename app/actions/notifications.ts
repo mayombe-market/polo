@@ -30,33 +30,52 @@ function getServiceSupabase() {
     )
 }
 
-/** Crée une notification pour un utilisateur.
- *  Utilise le service_role pour bypasser la RLS —
- *  l'admin peut ainsi notifier les vendeurs sans restriction. */
+/**
+ * Crée une notification pour un utilisateur via service_role.
+ *
+ * @param referenceId  Identifiant de l'entité source (ex: order.id).
+ *   Quand fourni, l'insertion est idempotente : un doublon (même userId + type +
+ *   referenceId) est ignoré silencieusement grâce à l'index unique
+ *   idx_notifications_dedup (migration supabase-migration-notifications-delivery.sql).
+ */
 export async function createNotification(
     userId: string,
     type: string,
     title: string,
     body: string,
-    link?: string
+    link?: string,
+    referenceId?: string
 ) {
     try {
-        // Vérifier que l'appelant est bien connecté (sécurité minimale)
-        const supabase = await getSupabase()
-        const { data: { user } } = await supabase.auth.getUser()
-        if (!user) return
-
-        // Insert via service_role pour ne pas être bloqué par RLS
         const adminSupabase = getServiceSupabase()
-        const { error } = await adminSupabase.from('notifications').insert({
-            user_id: userId,
-            type,
-            title,
-            body,
-            link: link || null,
-        })
-        if (error) {
-            console.error('[createNotification] insert error:', error.message, { userId, type })
+
+        if (referenceId) {
+            // Upsert idempotent : ignore le doublon sans lever d'erreur
+            const { error } = await adminSupabase.from('notifications').upsert(
+                {
+                    user_id: userId,
+                    type,
+                    title,
+                    body,
+                    link: link || null,
+                    reference_id: referenceId,
+                },
+                { onConflict: 'user_id,type,reference_id', ignoreDuplicates: true }
+            )
+            if (error) {
+                console.error('[createNotification] upsert error:', error.message, { userId, type, referenceId })
+            }
+        } else {
+            const { error } = await adminSupabase.from('notifications').insert({
+                user_id: userId,
+                type,
+                title,
+                body,
+                link: link || null,
+            })
+            if (error) {
+                console.error('[createNotification] insert error:', error.message, { userId, type })
+            }
         }
     } catch (e) {
         console.error('[createNotification] exception:', e)

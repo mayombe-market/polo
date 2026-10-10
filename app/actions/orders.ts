@@ -169,7 +169,7 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
     if (order.user_id && newStatus === 'shipped') {
         const productNames = (order.items || []).map((i: any) => i.name).join(', ')
         const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
-        createNotification(order.user_id, 'order_shipped', `Colis expédié — ${dlvLabel}`, `${productNames} est en route vers vous !`, `/account/dashboard?tab=orders`).catch(() => {})
+        createNotification(order.user_id, 'order_shipped', `Colis expédié — ${dlvLabel}`, `${productNames} est en route vers vous !`, `/account/dashboard?tab=orders`, `${orderId}:shipped`).catch(err => console.error('[notif:shipped]', err))
     }
 
     return { success: true }
@@ -366,10 +366,10 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
         const dlvLabel = order.delivery_mode === 'express' ? '⚡ Express 3-6H' : '📦 Standard'
         const sellerIds = [...new Set((order.items || []).map((i: any) => i.seller_id).filter(Boolean))]
 
-        // Notifier chaque vendeur impliqué
+        // Notifier chaque vendeur impliqué — idempotent
         for (const sellerId of sellerIds) {
             const sellerItems = (order.items || []).filter((i: any) => i.seller_id === sellerId).map((i: any) => i.name).join(', ')
-            createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/vendor/dashboard`).catch(() => {})
+            createNotification(sellerId as string, 'order_confirmed', `Commande confirmée — ${dlvLabel}`, `${sellerItems} · Paiement validé, préparez la commande !`, `/vendor/dashboard?tab=orders`, `${orderId}:confirmed:${sellerId}`).catch(err => console.error('[notif:order_confirmed:vendor]', err))
         }
 
         // Push téléphone vendeur à la confirmation du paiement
@@ -378,13 +378,13 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
                 sellerIds as string[],
                 '✅ Paiement confirmé !',
                 `${productNames} · ${dlvLabel} · Préparez la commande !`,
-                '/vendor/dashboard'
-            ).catch(() => {})
+                '/vendor/dashboard?tab=orders'
+            ).catch(err => console.error('[push:order_confirmed]', err))
         }
 
-        // Notifier l'acheteur
+        // Notifier l'acheteur — idempotent
         if (order.user_id) {
-            createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé ✓', `${productNames} · ${dlvLabel} · Votre commande est en cours de préparation.`, `/account/dashboard?tab=orders`).catch(() => {})
+            createNotification(order.user_id, 'order_confirmed', 'Paiement confirmé ✓', `${productNames} · ${dlvLabel} · Votre commande est en cours de préparation.`, `/account/dashboard?tab=orders`, `${orderId}:confirmed:buyer`).catch(err => console.error('[notif:order_confirmed:buyer]', err))
         }
     }
 
@@ -591,6 +591,24 @@ export async function buyerUpdatePendingTransactionId(orderId: string, rawTransa
     } = await supabase.auth.getUser()
     if (!user) return { error: 'Non connecté' }
 
+    const txDigits = digitsOnly(rawTransactionId)
+    if (txDigits.length < 6 || txDigits.length > 16) {
+        return { error: 'Identifiant de transaction invalide (entre 6 et 16 chiffres).' }
+    }
+
+    // Vérifier que ce transaction_id n'est pas déjà utilisé sur une autre commande confirmée
+    const { data: duplicate } = await supabase
+        .from('orders')
+        .select('id')
+        .eq('transaction_id', txDigits)
+        .neq('id', orderId)
+        .in('status', ['confirmed', 'delivered'])
+        .maybeSingle()
+
+    if (duplicate) {
+        return { error: 'Ce code de transaction est déjà associé à une commande confirmée. Vérifiez votre code ou contactez le support.' }
+    }
+
     const { data, error } = await supabase.rpc('buyer_update_pending_transaction_id', {
         p_order_id: orderId,
         p_raw: rawTransactionId,
@@ -705,6 +723,16 @@ export async function createOrder(input: {
     longitude?: number
     /** Clé d'idempotency générée côté client — évite les doublons si le réseau coupe. */
     idempotency_key?: string
+    /**
+     * Informations de paiement par vendeur pour le tunnel direct (Mission 3).
+     * Clé = seller_id. Si absent, vendor_payments est laissé à {}.
+     */
+    vendor_payment_info?: Record<string, {
+        method: string
+        vendor_number: string | null
+        holder_name: string | null
+        transaction_id: string
+    }>
 }) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -766,6 +794,21 @@ export async function createOrder(input: {
     if (phoneDigits.length > 0 && phoneDigits.length < 9) {
         return { error: 'Numéro de téléphone invalide.' }
     }
+
+    // Vérifier que le transaction_id n'est pas déjà utilisé (protection anti-fraude)
+    if (txDigits.length >= 6 && ['mobile_money', 'airtel_money'].includes(input.payment_method)) {
+        const { data: duplicateTx } = await supabase
+            .from('orders')
+            .select('id')
+            .eq('transaction_id', txDigits)
+            .in('status', ['confirmed', 'delivered'])
+            .maybeSingle()
+
+        if (duplicateTx) {
+            return { error: 'Ce code de transaction a déjà été validé sur une autre commande. Vérifiez votre identifiant ou contactez le support.' }
+        }
+    }
+
     if (!input.items || input.items.length === 0 || input.items.length > 50) {
         return { error: 'Panier invalide.' }
     }
@@ -818,7 +861,28 @@ export async function createOrder(input: {
     let deliveryMode: string
     let deliveryFee: number
 
-    if (interUrban) {
+    if (modeInput === 'pickup') {
+        // Retrait en boutique : aucun frais
+        deliveryMode = 'pickup'
+        deliveryFee = 0
+        if (feeInput !== 0) {
+            return { error: 'Retrait en boutique : les frais de livraison doivent être 0 FCFA.' }
+        }
+    } else if (modeInput === 'vendor_delivery') {
+        // Livraison organisée par le vendeur : frais récupérés depuis son profil
+        const { data: vendorProfiles } = await supabase
+            .from('profiles')
+            .select('id, vendor_delivery_fee')
+            .in('id', sellerIds)
+        const totalVendorFee = (vendorProfiles || []).reduce(
+            (sum, p) => sum + (p.vendor_delivery_fee || 0), 0
+        )
+        deliveryMode = 'vendor_delivery'
+        deliveryFee = totalVendorFee
+        if (feeInput !== totalVendorFee) {
+            return { error: 'Frais de livraison vendeur invalides. Rafraîchissez la page.' }
+        }
+    } else if (interUrban) {
         deliveryMode = 'inter_urban'
         deliveryFee = DELIVERY_FEE_INTER_URBAN
         if (modeInput !== 'inter_urban' || feeInput !== DELIVERY_FEE_INTER_URBAN) {
@@ -873,6 +937,28 @@ export async function createOrder(input: {
         }
     }
 
+    // ═══ VENDOR_PAYMENTS JSONB (tunnel paiement direct) ═══
+    const vendorPaymentsMap: Record<string, object> = {}
+    if (input.vendor_payment_info && Object.keys(input.vendor_payment_info).length > 0) {
+        for (const sid of sellerIds) {
+            const vpi = input.vendor_payment_info[sid]
+            if (!vpi) continue
+            const vendorItemsTotal = validatedItems
+                .filter(i => i.seller_id === sid)
+                .reduce((s, i) => s + i.price * i.quantity, 0)
+            vendorPaymentsMap[sid] = {
+                amount: vendorItemsTotal,
+                method: vpi.method,
+                vendor_number: vpi.vendor_number || null,
+                holder_name: vpi.holder_name || null,
+                transaction_id: digitsOnly(vpi.transaction_id || ''),
+                vendor_confirmed: false,
+                vendor_confirmed_at: null,
+                disputed: false,
+            }
+        }
+    }
+
     // ═══ CRÉATION DE LA COMMANDE ═══
     const { data: order, error } = await supabase.from('orders').insert([{
         user_id: user.id,
@@ -890,6 +976,7 @@ export async function createOrder(input: {
         vendor_payout: vendorPayout,
         payout_status: 'pending',
         transaction_id: ['mobile_money', 'airtel_money'].includes(input.payment_method) ? txDigits : null,
+        vendor_payments: Object.keys(vendorPaymentsMap).length > 0 ? vendorPaymentsMap : {},
         landmark: input.landmark || null,
         delivery_mode: deliveryMode,
         delivery_fee: deliveryFee,
@@ -949,13 +1036,31 @@ export async function createOrder(input: {
             : input.payment_method === 'airtel_money'
                 ? '📲 Airtel Money'
                 : '📱 MTN MoMo — paiement en attente'
-        // Push immédiat pour cash et Airtel (commande ferme) ; in-app pour MTN (à confirmer)
-        if (input.payment_method === 'cash' || input.payment_method === 'airtel_money') {
-            sendPushToUsers(orderSellerIds, '🛍️ Nouvelle commande !', `${productNames} · ${methodLabel}`, '/vendor/dashboard').catch(() => {})
+        const vendorOrderLink = `/vendor/dashboard?tab=orders`
+        // Push immédiat : cash + Airtel (commande ferme) + MTN avec paiement déclaré
+        const hasDeclaredPayment = input.vendor_payment_info && Object.keys(input.vendor_payment_info).length > 0
+        if (input.payment_method === 'cash' || input.payment_method === 'airtel_money' || hasDeclaredPayment) {
+            sendPushToUsers(orderSellerIds, '🛍️ Nouvelle commande !', `${productNames} · ${methodLabel}`, vendorOrderLink)
+                .catch(err => console.error('[push:new_order]', err))
         }
-        // In-app notification pour tous les modes (y compris MTN)
+        // In-app notification idempotente par vendeur (ref = orderId:vendorId)
         for (const sid of orderSellerIds) {
-            createNotification(sid, 'new_order', '🛍️ Nouvelle commande', `${productNames} · ${methodLabel}`, '/vendor/dashboard').catch(() => {})
+            createNotification(
+                sid, 'new_order', '🛍️ Nouvelle commande', `${productNames} · ${methodLabel}`, vendorOrderLink,
+                `${order.id}:${sid}`
+            ).catch(err => console.error('[notif:new_order]', err))
+        }
+        // Notification spécifique "paiement déclaré" — idempotente par vendeur
+        if (hasDeclaredPayment) {
+            for (const sid of orderSellerIds) {
+                if (input.vendor_payment_info![sid]) {
+                    createNotification(
+                        sid, 'payment_declared', '💳 Paiement déclaré par le client',
+                        `${productNames} — vérifiez la réception et confirmez.`, vendorOrderLink,
+                        `${order.id}:${sid}:payment_declared`
+                    ).catch(err => console.error('[notif:payment_declared]', err))
+                }
+            }
         }
     }
 
@@ -1241,8 +1346,8 @@ export async function createSubscriptionOrder(input: {
         .single()
 
     const txDigits = input.transaction_id ? digitsOnly(input.transaction_id) : undefined
-    if (txDigits !== undefined && !isExactly10Digits(txDigits)) {
-        return { error: 'L\'ID de transaction doit contenir exactement 10 chiffres.' }
+    if (txDigits !== undefined && (txDigits.length < 6 || txDigits.length > 16)) {
+        return { error: 'L\'ID de transaction doit contenir entre 6 et 16 chiffres.' }
     }
 
     const { data: order, error } = await supabase.from('orders').insert([{

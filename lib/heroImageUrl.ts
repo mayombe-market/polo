@@ -4,7 +4,7 @@
  * Sans repasser par l'optimizer Next (`unoptimized: true` dans next.config.mjs),
  * on transforme directement l'URL côté CDN source :
  *  - Cloudinary  → `f_auto,q_auto,w_<W>,c_limit`
- *  - Supabase    → `/storage/v1/render/image/public/...?width=<W>&quality=70`
+ *  - Supabase    → `/storage/v1/object/public/...` (URL directe — Image Transform API payante désactivée)
  *  - Unsplash    → `?w=<W>&q=70&auto=format&fit=crop`
  *  - Sinon       → URL renvoyée telle quelle.
  *
@@ -48,9 +48,15 @@ export function heroImageUrl(rawUrl: string | null | undefined, width: number): 
     }
 
     if (isSupabaseObjectPublic(url)) {
-        const rendered = url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/')
-        const sep = rendered.includes('?') ? '&' : '?'
-        return `${rendered}${sep}width=${w}&quality=70&resize=cover`
+        // Supabase Image Transformation (/render/image/) est une feature payante.
+        // On retourne l'URL directe /object/public/ sans transformation.
+        try {
+            const u = new URL(url)
+            u.search = ''
+            return u.toString()
+        } catch {
+            return url
+        }
     }
 
     if (isUnsplash(url)) {

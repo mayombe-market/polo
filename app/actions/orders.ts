@@ -1579,6 +1579,10 @@ export async function createProduct(input: {
             } catch (revErr) {
                 console.error('[createProduct] revalidate après insert:', revErr)
             }
+            // Notifier les abonnés en arrière-plan (non bloquant)
+            void import('./analytics').then(({ notifyFollowersNewProduct }) =>
+                notifyFollowersNewProduct(newId, user.id, input.name ?? '')
+            ).catch(() => {})
         }
 
         return { product: productRecord }

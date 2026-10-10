@@ -56,6 +56,7 @@ import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 import { FEATURES } from '@/lib/featureFlags'
 import VendorPaymentSettings from '@/app/components/VendorPaymentSettings'
 import VendorPaymentConfirmations from '@/app/components/VendorPaymentConfirmations'
+import VendorAnalyticsDashboard from '@/app/components/VendorAnalyticsDashboard'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -1125,7 +1126,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                 )}
 
                 {activePage === 'stats' && (
-                    <StatsPage orders={orders} products={products} followerCount={followerCount} />
+                    <VendorAnalyticsDashboard
+                        sellerId={user?.id ?? ''}
+                        shopName={profile?.shop_name || profile?.full_name}
+                        orders={orders}
+                        products={products}
+                        followerCount={followerCount}
+                    />
                 )}
 
                 {activePage === 'wallet' && (

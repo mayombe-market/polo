@@ -281,6 +281,25 @@ export default function StorePublicPage() {
         }
     }, [sellerIdParam, retryNonce])
 
+    // Tracking visite boutique (fire-and-forget, après chargement réussi)
+    useEffect(() => {
+        if (phase !== 'ready' || !sellerIdParam) return
+        import('@/lib/analytics').then(({ captureAnalyticsContext }) => {
+            const ctx = captureAnalyticsContext()
+            import('@/app/actions/analytics').then(({ trackEvent }) => {
+                void trackEvent({
+                    shop_id: sellerIdParam,
+                    event_type: 'shop_view',
+                    session_id: ctx.session_id,
+                    source: ctx.source,
+                    utm_source: ctx.utm_source,
+                    utm_medium: ctx.utm_medium,
+                    utm_campaign: ctx.utm_campaign,
+                })
+            })
+        })
+    }, [phase, sellerIdParam])
+
     // ── Chargement / hydratation : pas de header ni grille avec données undefined ──
     if (phase === 'loading') {
         return (

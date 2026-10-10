@@ -240,6 +240,26 @@ export default function ProductDetailPage() {
         }
     }, [productId, retryNonce])
 
+    // Tracking vue produit (fire-and-forget, après chargement réussi)
+    useEffect(() => {
+        if (phase !== 'ready' || !product?.id || !product?.seller_id) return
+        import('@/lib/analytics').then(({ captureAnalyticsContext }) => {
+            const ctx = captureAnalyticsContext()
+            import('@/app/actions/analytics').then(({ trackEvent }) => {
+                void trackEvent({
+                    shop_id: product.seller_id,
+                    product_id: product.id,
+                    event_type: 'product_view',
+                    session_id: ctx.session_id,
+                    source: ctx.source,
+                    utm_source: ctx.utm_source,
+                    utm_medium: ctx.utm_medium,
+                    utm_campaign: ctx.utm_campaign,
+                })
+            })
+        })
+    }, [phase, product?.id, product?.seller_id])
+
     useEffect(() => {
         if (selectedColor) setShowColorError(false)
     }, [selectedColor])
@@ -871,13 +891,21 @@ export default function ProductDetailPage() {
                         </div>
                     )}
 
-                    {/* Avis / vues — masquer la ligne « 0 avis » */}
-                    {(reviews.length > 0 || product.views_count > 0) && (
+                    {/* Avis / vues / ventes confirmées */}
+                    {(reviews.length > 0 || product.views_count > 0 || product.confirmed_sales_count > 0) && (
                         <div className="flex items-center gap-2.5 mb-4 flex-wrap">
                             {reviews.length > 0 && (
                                 <>
                                     <StarRating rating={avgRating} size={14} />
                                     <span className="text-slate-400 text-[11px] font-semibold">{reviews.length} avis</span>
+                                </>
+                            )}
+                            {product.confirmed_sales_count > 0 && (
+                                <>
+                                    {reviews.length > 0 && <span className="text-slate-300 dark:text-slate-600 text-[8px]">●</span>}
+                                    <span className="text-slate-500 dark:text-slate-400 text-[11px] font-semibold">
+                                        {new Intl.NumberFormat('fr-FR').format(product.confirmed_sales_count)} ventes
+                                    </span>
                                 </>
                             )}
                             {reviews.length > 0 && product.views_count > 0 && (

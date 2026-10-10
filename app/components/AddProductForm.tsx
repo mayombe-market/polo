@@ -16,6 +16,8 @@
 import type { Session } from '@supabase/supabase-js'
 import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
 const AdCampaignModal = lazy(() => import('@/app/components/AdCampaignModal'))
+const ProductPhotoStudio = lazy(() => import('@/app/components/ProductPhotoStudio'))
+import type { StudioState } from '@/app/components/ProductPhotoStudio'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -35,7 +37,8 @@ import {
 } from '@/lib/realEstateListing'
 import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
-    Loader2, Package, Tag, Palette, FileText, Image as ImageIcon
+    Loader2, Package, Tag, Palette, FileText, Image as ImageIcon,
+    Camera, Ruler
 } from 'lucide-react'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
@@ -852,9 +855,19 @@ export default function AddProductForm({
     // Step 4: Détails
     const [features, setFeatures] = useState<string[]>([''])
 
+    // Step 3: Guide des tailles (stocké dans listing_extras.size_guide côté serveur)
+    type SizeGuideRow = { chest?: string; waist?: string; hips?: string; length?: string; foot?: string }
+    const [sizeGuide, setSizeGuide] = useState<Record<string, SizeGuideRow>>({})
+    const updateSizeGuide = (sz: string, field: keyof SizeGuideRow, val: string) =>
+        setSizeGuide(prev => ({ ...prev, [sz]: { ...prev[sz], [field]: val } }))
+
     // Step 5: Images
     const [mainImage, setMainImage] = useState<File | null>(null)
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
+    // Studio photo
+    const [studioOpen, setStudioOpen] = useState(false)
+    const [studioFile, setStudioFile] = useState<File | null>(null)
+    const [studioSlot, setStudioSlot] = useState<'main' | number>('main')
     /** Fallback si les props serveur (user.id) sont vides alors que la session navigateur existe */
     const [sessionUserId, setSessionUserId] = useState<string | null>(null)
 
@@ -1335,7 +1348,10 @@ export default function AddProductForm({
                     has_variants: publishAsRealEstate ? false : hasVariantsPayload,
                     sizes: publishAsRealEstate || !hasVariantsPayload ? [] : sizes,
                     colors: publishAsRealEstate || !hasVariantsPayload ? [] : selectedColors,
-                    listing_extras: listingExtrasPayload as Record<string, unknown> | undefined,
+                    listing_extras: {
+                        ...(listingExtrasPayload as Record<string, unknown> | undefined ?? {}),
+                        ...(Object.keys(sizeGuide).length > 0 ? { size_guide: sizeGuide } : {}),
+                    },
                     compare_price: !publishAsRealEstate && isPremiumPlan && comparePrice
                         ? parseInt(comparePrice, 10)
                         : null,
@@ -1802,6 +1818,74 @@ export default function AddProductForm({
                             )}
                         </div>
 
+                        {/* Guide des tailles — vêtements & chaussures */}
+                        {(sizeKind === 'clothing' || sizeKind === 'shoes') && sizes.length > 0 && (
+                            <div className="p-5 bg-slate-50 dark:bg-slate-800 rounded-2xl border border-slate-100 dark:border-slate-700 space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <Ruler size={14} className="text-orange-500" />
+                                    <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                                        Guide des tailles (optionnel)
+                                    </span>
+                                </div>
+                                <p className="text-[11px] text-slate-400">Renseignez les mesures réelles pour chaque taille proposée (en cm).</p>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-xs min-w-[340px]">
+                                        <thead>
+                                            <tr className="text-[10px] font-black uppercase text-slate-400">
+                                                <th className="text-left py-1.5 pr-3 w-14">Taille</th>
+                                                {sizeKind === 'clothing' && (
+                                                    <>
+                                                        <th className="text-center px-1">Poitrine</th>
+                                                        <th className="text-center px-1">Taille</th>
+                                                        <th className="text-center px-1">Hanches</th>
+                                                        <th className="text-center px-1">Longueur</th>
+                                                    </>
+                                                )}
+                                                {sizeKind === 'shoes' && (
+                                                    <th className="text-center px-1">Longueur pied (cm)</th>
+                                                )}
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
+                                            {sizes.map(sz => (
+                                                <tr key={sz}>
+                                                    <td className="py-1.5 pr-3 font-black text-slate-600 dark:text-slate-300">{sz}</td>
+                                                    {sizeKind === 'clothing' && (
+                                                        <>
+                                                            {(['chest', 'waist', 'hips', 'length'] as const).map(field => (
+                                                                <td key={field} className="px-1">
+                                                                    <input
+                                                                        type="text"
+                                                                        inputMode="decimal"
+                                                                        value={sizeGuide[sz]?.[field] ?? ''}
+                                                                        onChange={e => updateSizeGuide(sz, field, e.target.value)}
+                                                                        placeholder="—"
+                                                                        className="w-16 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg py-1 px-1 text-xs font-bold text-slate-700 dark:text-slate-200 focus:border-orange-400 outline-none"
+                                                                    />
+                                                                </td>
+                                                            ))}
+                                                        </>
+                                                    )}
+                                                    {sizeKind === 'shoes' && (
+                                                        <td className="px-1">
+                                                            <input
+                                                                type="text"
+                                                                inputMode="decimal"
+                                                                value={sizeGuide[sz]?.foot ?? ''}
+                                                                onChange={e => updateSizeGuide(sz, 'foot', e.target.value)}
+                                                                placeholder="—"
+                                                                className="w-20 text-center bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-600 rounded-lg py-1 px-1 text-xs font-bold text-slate-700 dark:text-slate-200 focus:border-orange-400 outline-none"
+                                                            />
+                                                        </td>
+                                                    )}
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Couleurs : pastilles uniquement (noms en accessibilité seulement) */}
                         <div>
                             <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Couleurs</span>
@@ -2082,6 +2166,15 @@ export default function AddProductForm({
                             )}
                         </div>
 
+                        {/* Studio Photo — CTA */}
+                        <div className="p-4 rounded-2xl bg-gradient-to-r from-orange-950/30 to-amber-950/30 border border-orange-800/30 flex items-center gap-3">
+                            <Camera size={22} className="text-orange-400 shrink-0" />
+                            <div className="flex-1 min-w-0">
+                                <p className="text-sm font-black text-orange-300 uppercase tracking-wide">Studio Photo</p>
+                                <p className="text-[11px] text-orange-400/70">Ajoutez des flèches de dimensions, du texte et recadrez après sélection d'une image.</p>
+                            </div>
+                        </div>
+
                         {/* Main image */}
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Image principale</label>
@@ -2095,6 +2188,13 @@ export default function AddProductForm({
                                             className="absolute top-3 right-3 w-8 h-8 bg-red-500 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-red-600"
                                         >
                                             <X size={14} />
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { setStudioFile(mainImage); setStudioSlot('main'); setStudioOpen(true) }}
+                                            className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-orange-500/80 transition-colors"
+                                        >
+                                            <Camera size={12} /> Studio
                                         </button>
                                     </>
                                 ) : (
@@ -2137,6 +2237,13 @@ export default function AddProductForm({
                                                     className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px]"
                                                 >
                                                     <X size={10} />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setStudioFile(file); setStudioSlot(i); setStudioOpen(true) }}
+                                                    className="absolute bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-black/70 text-white rounded text-[9px] font-black uppercase flex items-center gap-0.5 hover:bg-orange-500/80"
+                                                >
+                                                    <Camera size={9} />
                                                 </button>
                                             </>
                                         ) : (
@@ -2231,6 +2338,27 @@ export default function AddProductForm({
                     productImages={adModal.images}
                     onClose={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
                     onSuccess={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
+                />
+            </Suspense>
+        )}
+
+        {/* ── Studio Photo ── */}
+        {studioOpen && studioFile && (
+            <Suspense fallback={<div className="fixed inset-0 z-50 bg-slate-950 flex items-center justify-center text-white font-black animate-pulse">Chargement du studio…</div>}>
+                <ProductPhotoStudio
+                    file={studioFile}
+                    onExport={(exportedFile: File, _state: StudioState) => {
+                        if (studioSlot === 'main') {
+                            setMainImage(exportedFile)
+                        } else {
+                            const n = [...gallery]
+                            n[studioSlot as number] = exportedFile
+                            setGallery(n)
+                        }
+                        setStudioOpen(false)
+                        setStudioFile(null)
+                    }}
+                    onClose={() => { setStudioOpen(false); setStudioFile(null) }}
                 />
             </Suspense>
         )}

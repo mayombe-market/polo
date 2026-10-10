@@ -37,6 +37,7 @@ import { getMyLoyaltyUiState } from '@/app/actions/loyalty'
 import { isLoyaltyEnabled, formatFcfa } from '@/lib/loyalty/rules'
 import type { LoyaltyUiState } from '@/lib/loyalty/types'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
+import { FEATURES } from '@/lib/featureFlags'
 import {
     MtnMomoLogo,
     AirtelMoneyLogo,
@@ -355,6 +356,12 @@ export default function CheckoutPage() {
 
         // ── Mobile Money (MTN ou Airtel) : flux manuel ──
         if (formData.payment_method === 'mobile_money' || formData.payment_method === 'airtel_money') {
+            if (!FEATURES.directVendorPayment) {
+                // Flag désactivé : aucun parcours de paiement direct disponible
+                // Ne pas rediriger vers le numéro Mayombe Market
+                alert('Le paiement Mobile Money est temporairement indisponible. Veuillez sélectionner un autre mode de paiement.')
+                return
+            }
             const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
                 ? patisserieDeliveryFee
                 : formData.delivery_mode === 'inter_urban'
@@ -1302,8 +1309,8 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
-                            {/* OPTION : MTN Mobile Money */}
-                            {!vendorPaymentMethods.loading && vendorPaymentMethods.mtn && (
+                            {/* OPTION : MTN Mobile Money — masqué si directVendorPayment désactivé */}
+                            {!vendorPaymentMethods.loading && vendorPaymentMethods.mtn && FEATURES.directVendorPayment && (
                                 <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'mobile_money' ? 'border-green-500 bg-green-50/50 dark:bg-green-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
                                     <div className="flex items-center gap-3">
                                         <div className="flex items-center gap-2">
@@ -1319,8 +1326,8 @@ export default function CheckoutPage() {
                                 </label>
                             )}
 
-                            {/* OPTION : Airtel Money */}
-                            {!vendorPaymentMethods.loading && vendorPaymentMethods.airtel && (
+                            {/* OPTION : Airtel Money — masqué si directVendorPayment désactivé */}
+                            {!vendorPaymentMethods.loading && vendorPaymentMethods.airtel && FEATURES.directVendorPayment && (
                                 <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'airtel_money' ? 'border-red-500 bg-red-50/50 dark:bg-red-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
                                     <div className="flex items-center gap-3">
                                         <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center">
@@ -1336,8 +1343,17 @@ export default function CheckoutPage() {
                                 </label>
                             )}
 
+                            {/* Message indisponibilité Mobile Money quand directVendorPayment est désactivé */}
+                            {!FEATURES.directVendorPayment && !vendorPaymentMethods.loading && (vendorPaymentMethods.mtn || vendorPaymentMethods.airtel) && (
+                                <div className="p-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 text-center">
+                                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
+                                        Paiement Mobile Money temporairement indisponible
+                                    </p>
+                                </div>
+                            )}
+
                             {/* INSTRUCTIONS PAIEMENT MOBILE (MTN ou Airtel) */}
-                            {(selectedPayment === 'mobile_money' || selectedPayment === 'airtel_money') && !vendorPaymentMethods.loading && (
+                            {FEATURES.directVendorPayment && (selectedPayment === 'mobile_money' || selectedPayment === 'airtel_money') && !vendorPaymentMethods.loading && (
                                 <div className={`mt-1 rounded-3xl border-2 overflow-hidden ${selectedPayment === 'airtel_money' ? 'border-red-200 dark:border-red-700/40' : 'border-yellow-200 dark:border-yellow-700/40'}`}>
                                     <div className={`px-5 py-4 flex items-center justify-between ${selectedPayment === 'airtel_money' ? 'bg-red-500' : 'bg-yellow-400'}`}>
                                         <div>

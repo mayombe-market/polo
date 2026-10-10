@@ -144,6 +144,36 @@ CREATE INDEX IF NOT EXISTS idx_seller_follows_date
 CREATE INDEX IF NOT EXISTS idx_favorites_product
     ON favorites (product_id, created_at DESC);
 
+-- ─── 10. RPC : DÉCRÉMENTER LE COMPTEUR DE VENTES (annulation) ────────────────
+
+CREATE OR REPLACE FUNCTION decrement_confirmed_sales(
+    p_product_id uuid,
+    p_quantity   integer DEFAULT 1
+)
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+BEGIN
+    UPDATE products
+    SET confirmed_sales_count = GREATEST(0, COALESCE(confirmed_sales_count, 0) - p_quantity)
+    WHERE id = p_product_id;
+END;
+$$;
+
+-- ─── 11. PRÉFÉRENCES NOTIFICATIONS SUR SELLER_FOLLOWS ────────────────────────
+
+ALTER TABLE seller_follows
+    ADD COLUMN IF NOT EXISTS notify_new_products boolean NOT NULL DEFAULT true;
+
+-- ─── 12. ATTRIBUTION UTM SUR ORDERS ──────────────────────────────────────────
+
+ALTER TABLE orders
+    ADD COLUMN IF NOT EXISTS utm_source            text,
+    ADD COLUMN IF NOT EXISTS utm_medium            text,
+    ADD COLUMN IF NOT EXISTS utm_campaign          text,
+    ADD COLUMN IF NOT EXISTS attribution_session_id text;
+
 -- =============================================================================
 -- ACTIONS MANUELLES APRÈS MIGRATION :
 -- 1. Déployer le code (Vercel)

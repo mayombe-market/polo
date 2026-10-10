@@ -1,7 +1,7 @@
 'use client'
 
 import StarRating from './StarRating'
-import { MessageSquare } from 'lucide-react'
+import { MessageSquare, Reply } from 'lucide-react'
 
 interface SellerReviewsListProps {
     reviews: any[]
@@ -121,9 +121,9 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                         )}
 
                         {/* Commentaire */}
-                        {review.comment && (
+                        {(review.comment || review.content) && (
                             <p className="text-sm text-slate-600 dark:text-slate-400 leading-relaxed">
-                                {review.comment}
+                                {review.comment || review.content}
                             </p>
                         )}
 
@@ -133,6 +133,24 @@ export default function SellerReviewsList({ reviews, averageRating }: SellerRevi
                                 ✓ Achat vérifié
                             </span>
                         </div>
+
+                        {/* Réponse du vendeur */}
+                        {review.vendor_reply && (
+                            <div className="mt-3 ml-4 pl-4 border-l-2 border-orange-200 dark:border-orange-900/50">
+                                <div className="flex items-center gap-1.5 mb-1.5">
+                                    <Reply size={12} className="text-orange-500" />
+                                    <span className="text-[9px] font-black uppercase text-orange-500">Réponse du vendeur</span>
+                                    {review.vendor_reply_at && (
+                                        <span className="text-[9px] text-slate-400 ml-auto">
+                                            {new Date(review.vendor_reply_at).toLocaleDateString('fr-FR')}
+                                        </span>
+                                    )}
+                                </div>
+                                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed italic">
+                                    {review.vendor_reply}
+                                </p>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>

@@ -36,7 +36,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
     const { data } = await supabase
         .from('profiles')
-        .select('store_name, shop_name, first_name')
+        .select('store_name, shop_name, first_name, avatar_url, bio, shop_banner')
         .eq('id', id)
         .maybeSingle()
 
@@ -45,7 +45,26 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         data?.shop_name ||
         data?.first_name ||
         'Boutique'
-    return { title: sanitizePageTitleSegment(String(label), 60) }
+    const title = sanitizePageTitleSegment(String(label), 60)
+    const description = data?.bio || `Découvrez les produits de ${title} sur Mayombe Market`
+    const image = data?.shop_banner || data?.avatar_url || null
+
+    return {
+        title,
+        description,
+        openGraph: {
+            title,
+            description,
+            type: 'website',
+            ...(image ? { images: [{ url: image, width: 1200, height: 630 }] } : {}),
+        },
+        twitter: {
+            card: image ? 'summary_large_image' : 'summary',
+            title,
+            description,
+            ...(image ? { images: [image] } : {}),
+        },
+    }
 }
 
 export default function StoreLayout({ children }: { children: React.ReactNode }) {

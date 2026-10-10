@@ -34,9 +34,29 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
         }
     )
 
-    const { data } = await supabase.from('products').select('name').eq('id', id).maybeSingle()
-    const name = data?.name ? sanitizePageTitleSegment(String(data.name), 60) : 'Produit'
-    return { title: name }
+    const { data } = await supabase.from('products').select('name, description, img, image_url').eq('id', id).maybeSingle()
+    const title = data?.name ? sanitizePageTitleSegment(String(data.name), 60) : 'Produit'
+    const description = data?.description
+        ? String(data.description).slice(0, 200)
+        : `${title} — disponible sur Mayombe Market`
+    const image = data?.img || data?.image_url || null
+
+    return {
+        title,
+        description,
+        openGraph: {
+            title,
+            description,
+            type: 'website',
+            ...(image ? { images: [{ url: image, width: 1200, height: 630 }] } : {}),
+        },
+        twitter: {
+            card: image ? 'summary_large_image' : 'summary',
+            title,
+            description,
+            ...(image ? { images: [image] } : {}),
+        },
+    }
 }
 
 export default function ProductDetailLayout({ children }: { children: React.ReactNode }) {

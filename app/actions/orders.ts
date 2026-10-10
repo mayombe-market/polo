@@ -151,6 +151,21 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
         .update(updateData)
         .eq('id', orderId)
 
+    // Incrémenter confirmed_sales_count lors de la première confirmation vendeur
+    if (!error && newStatus === 'confirmed') {
+        const vendorItems = (order.items || []).filter((item: any) => item?.seller_id === user.id)
+        for (const item of vendorItems) {
+            if (item?.id) {
+                void (async () => {
+                    await supabase.rpc('increment_confirmed_sales', {
+                        p_product_id: item.id,
+                        p_quantity: item.quantity ?? 1,
+                    })
+                })()
+            }
+        }
+    }
+
     if (error) return { error: error.message }
 
     // Envoyer un email au client
@@ -235,6 +250,20 @@ export async function adminConfirmPayment(orderId: string, adminTransactionId?: 
 
     if (rpcError) return { error: rpcError.message }
     if (!rpcResult) return { error: 'Cette commande a déjà été confirmée par un autre admin.' }
+
+    // Incrémenter confirmed_sales_count pour chaque produit (fire-and-forget)
+    if (order.items && Array.isArray(order.items)) {
+        for (const item of order.items as Array<{ id?: string; quantity?: number }>) {
+            if (item?.id) {
+                void (async () => {
+                    await supabase.rpc('increment_confirmed_sales', {
+                        p_product_id: item.id,
+                        p_quantity: item.quantity ?? 1,
+                    })
+                })()
+            }
+        }
+    }
 
     // Si c'est un abonnement → activer le plan vendeur automatiquement
     if (order.order_type === 'subscription' && order.subscription_plan_id) {
@@ -721,6 +750,11 @@ export async function createOrder(input: {
     longitude?: number
     /** Clé d'idempotency générée côté client — évite les doublons si le réseau coupe. */
     idempotency_key?: string
+    /** Attribution marketing : source UTM de la session d'achat. */
+    utm_source?: string | null
+    utm_medium?: string | null
+    utm_campaign?: string | null
+    attribution_session_id?: string | null
     /**
      * Informations de paiement par vendeur pour le tunnel direct (Mission 3).
      * Clé = seller_id. Si absent, vendor_payments est laissé à {}.
@@ -984,6 +1018,10 @@ export async function createOrder(input: {
             delivery_longitude: input.longitude,
         } : {}),
         idempotency_key: input.idempotency_key ?? null,
+        utm_source: input.utm_source ?? null,
+        utm_medium: input.utm_medium ?? null,
+        utm_campaign: input.utm_campaign ?? null,
+        attribution_session_id: input.attribution_session_id ?? null,
     }]).select().single()
 
     if (error) return { error: error.message }

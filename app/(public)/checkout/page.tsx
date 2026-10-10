@@ -418,6 +418,13 @@ export default function CheckoutPage() {
             }))
 
             const idempotencyKey = getIdempotencyKey()
+            let utmCtx: { utm_source?: string; utm_medium?: string; utm_campaign?: string; session_id?: string } = {}
+            try {
+                const raw = sessionStorage.getItem('mmk_utm')
+                if (raw) { const p = JSON.parse(raw); utmCtx = { utm_source: p.utm_source, utm_medium: p.utm_medium, utm_campaign: p.utm_campaign } }
+                const sid = sessionStorage.getItem('mmk_sid')
+                if (sid) utmCtx.session_id = sid
+            } catch {}
             const result = await createOrderAction({
                 items,
                 city: formData.city,
@@ -433,6 +440,10 @@ export default function CheckoutPage() {
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
                 idempotency_key: idempotencyKey,
+                utm_source: utmCtx.utm_source,
+                utm_medium: utmCtx.utm_medium,
+                utm_campaign: utmCtx.utm_campaign,
+                attribution_session_id: utmCtx.session_id,
             })
 
             if (result.error) {
@@ -549,6 +560,13 @@ export default function CheckoutPage() {
             }
 
             const idempotencyKey = getIdempotencyKey()
+            let utmCtx2: { utm_source?: string; utm_medium?: string; utm_campaign?: string; session_id?: string } = {}
+            try {
+                const raw = sessionStorage.getItem('mmk_utm')
+                if (raw) { const p = JSON.parse(raw); utmCtx2 = { utm_source: p.utm_source, utm_medium: p.utm_medium, utm_campaign: p.utm_campaign } }
+                const sid = sessionStorage.getItem('mmk_sid')
+                if (sid) utmCtx2.session_id = sid
+            } catch {}
             const result = await createOrderAction({
                 items,
                 city: savedFormData.city,
@@ -566,6 +584,10 @@ export default function CheckoutPage() {
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
                 idempotency_key: idempotencyKey,
+                utm_source: utmCtx2.utm_source,
+                utm_medium: utmCtx2.utm_medium,
+                utm_campaign: utmCtx2.utm_campaign,
+                attribution_session_id: utmCtx2.session_id,
             })
 
             if (result.error) {

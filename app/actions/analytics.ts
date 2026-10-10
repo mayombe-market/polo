@@ -45,6 +45,15 @@ export async function trackEvent(params: {
         const supabase = getServiceSupabase()
 
         const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString()
+        const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+        // Rate limit : 50 événements max par session par 24h (protection contre le flood)
+        const { count: dailyCount } = await supabase
+            .from('analytics_events')
+            .select('id', { count: 'exact', head: true })
+            .eq('session_id', params.session_id)
+            .gte('created_at', oneDayAgo)
+        if (dailyCount && dailyCount >= 50) return { ok: true, rateLimited: true }
 
         // Déduplication côté serveur
         let dupQuery = supabase
@@ -340,8 +349,11 @@ export async function submitVerifiedReview(params: {
         .eq('user_id', user.id)
         .in('status', ['confirmed', 'shipped', 'delivered'])
 
+    // Vérifie que le produit commandé appartient bien au même vendeur (anti-abus cross-vendor)
     const hasPurchased = orders?.some(o =>
-        Array.isArray(o.items) && o.items.some((item: any) => item?.id === params.product_id)
+        Array.isArray(o.items) && o.items.some((item: any) =>
+            item?.id === params.product_id && item?.seller_id === product?.seller_id
+        )
     ) ?? false
 
     if (!hasPurchased) throw new Error('Vous devez avoir acheté ce produit pour laisser un avis')
@@ -391,10 +403,14 @@ export async function notifyFollowersNewProduct(
 
         const { data: followers } = await adminSb
             .from('seller_follows')
-            .select('follower_id')
+            .select('follower_id, notify_new_products')
             .eq('seller_id', vendorId)
 
         if (!followers || followers.length === 0) return
+
+        // Respecter la préférence de notification (colonne ajoutée par migration — défaut: true si absent)
+        const activeFollowers = followers.filter(f => f.notify_new_products !== false)
+        if (activeFollowers.length === 0) return
 
         const { data: vendor } = await adminSb
             .from('profiles')
@@ -405,7 +421,7 @@ export async function notifyFollowersNewProduct(
         const shopName = vendor?.shop_name || vendor?.full_name || 'Une boutique'
         const today = new Date().toISOString().slice(0, 10)
 
-        const notifications = followers.map(({ follower_id }) => ({
+        const notifications = activeFollowers.map(({ follower_id }) => ({
             user_id: follower_id,
             type: 'new_product',
             title: `${shopName} a publié un nouveau produit`,

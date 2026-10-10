@@ -56,6 +56,22 @@ END $$;
 -- RLS (no-op si déjà activé)
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 
+-- INSERT : ouvert à tous (anonymes inclus — pas de données personnelles)
+DROP POLICY IF EXISTS "analytics_insert_all" ON analytics_events;
+CREATE POLICY "analytics_insert_all" ON analytics_events
+    FOR INSERT WITH CHECK (true);
+
+-- SELECT : vendeur voit ses propres données, admin voit tout
+DROP POLICY IF EXISTS "analytics_select_owner" ON analytics_events;
+CREATE POLICY "analytics_select_owner" ON analytics_events
+    FOR SELECT USING (
+        auth.uid() = shop_id
+        OR EXISTS (
+            SELECT 1 FROM profiles p
+            WHERE p.id = auth.uid() AND p.role = 'admin'
+        )
+    );
+
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 1. analytics_events — Index supplémentaires (hot paths non couverts)
 --    Les 3 index existants (idx_analytics_shop_date, idx_analytics_product_date,

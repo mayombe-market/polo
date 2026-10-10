@@ -26,12 +26,13 @@ import {
     ArrowUpRight, Clock, MapPin, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil
+    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { generateInvoice } from '@/lib/generateInvoice'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan } from '@/app/actions/orders'
+import { acceptCodOrder, rejectCodOrder, collectCodCash } from '@/app/actions/cod'
 import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
 import { isPromoActive } from '@/lib/promo'
 import { getSellerNegotiations, respondToNegotiation } from '@/app/actions/negotiations'
@@ -2052,6 +2053,35 @@ function OrdersPage({
     ordersBlockMessage = '',
     onRetryOrders,
 }: any) {
+    const [codAction, setCodAction] = useState<string | null>(null)
+    const [codCodeInput, setCodCodeInput] = useState<Record<string, string>>({})
+
+    const handleAcceptCod = async (orderId: string) => {
+        setCodAction(orderId + ':accept')
+        const res = await acceptCodOrder(orderId)
+        if ('error' in res) { toast.error(res.error) }
+        else { toast.success('Commande COD acceptée'); updateStatus(orderId, 'confirmed') }
+        setCodAction(null)
+    }
+
+    const handleRejectCod = async (orderId: string) => {
+        setCodAction(orderId + ':reject')
+        const res = await rejectCodOrder(orderId)
+        if ('error' in res) { toast.error(res.error) }
+        else { toast.success('Commande refusée — stock restauré'); updateStatus(orderId, 'rejected') }
+        setCodAction(null)
+    }
+
+    const handleCollectCash = async (orderId: string) => {
+        const code = (codCodeInput[orderId] || '').trim().toUpperCase()
+        if (code.length !== 6) { toast.error('Code de livraison invalide (6 caractères)'); return }
+        setCodAction(orderId + ':collect')
+        const res = await collectCodCash(orderId, code)
+        if ('error' in res) { toast.error(res.error) }
+        else { toast.success('Encaissement confirmé !'); updateStatus(orderId, 'delivered') }
+        setCodAction(null)
+    }
+
     return (
         <div className="p-4 md:p-8">
             <div className="mb-8">
@@ -2182,7 +2212,28 @@ function OrdersPage({
                                         <span className="text-lg font-black text-green-600">
                                             {(order.vendor_payout || Math.round((order.total_amount || 0) * 0.9))?.toLocaleString('fr-FR')} F
                                         </span>
-                                        {order.status === 'confirmed' && (
+                                        {/* COD : Accepter / Refuser si commande en attente */}
+                                        {FEATURES.cashOnDelivery && order.payment_method === 'cash' && order.status === 'pending' && (
+                                            <>
+                                                <button
+                                                    onClick={() => handleAcceptCod(order.id)}
+                                                    disabled={!!codAction}
+                                                    className="bg-green-500 text-white px-4 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-green-600 transition-all disabled:opacity-50"
+                                                >
+                                                    {codAction === order.id + ':accept' ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                                                    Accepter COD
+                                                </button>
+                                                <button
+                                                    onClick={() => handleRejectCod(order.id)}
+                                                    disabled={!!codAction}
+                                                    className="bg-white dark:bg-slate-800 text-red-500 border border-red-200 dark:border-red-800 px-4 py-2.5 rounded-2xl font-black uppercase text-[10px] hover:bg-red-50 transition-all disabled:opacity-50"
+                                                >
+                                                    {codAction === order.id + ':reject' ? <Loader2 size={12} className="animate-spin" /> : null}
+                                                    Refuser
+                                                </button>
+                                            </>
+                                        )}
+                                        {order.status === 'confirmed' && order.payment_method !== 'cash' && (
                                             <button
                                                 onClick={() => updateStatus(order.id, 'shipped')}
                                                 disabled={updating === order.id}
@@ -2191,6 +2242,27 @@ function OrdersPage({
                                                 {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Package size={12} />}
                                                 Colis prêt ✓
                                             </button>
+                                        )}
+                                        {/* COD : encaissement cash */}
+                                        {FEATURES.cashOnDelivery && order.payment_method === 'cash' && (order.status === 'confirmed' || order.status === 'shipped') && (
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="text"
+                                                    maxLength={6}
+                                                    placeholder="Code 6 car."
+                                                    value={codCodeInput[order.id] || ''}
+                                                    onChange={e => setCodCodeInput(prev => ({ ...prev, [order.id]: e.target.value.toUpperCase() }))}
+                                                    className="w-28 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 text-xs font-black uppercase tracking-widest text-center bg-amber-50 dark:bg-amber-900/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                                />
+                                                <button
+                                                    onClick={() => handleCollectCash(order.id)}
+                                                    disabled={!!codAction}
+                                                    className="bg-amber-500 text-white px-4 py-2.5 rounded-2xl font-black uppercase text-[10px] flex items-center gap-2 hover:bg-amber-600 transition-all disabled:opacity-50"
+                                                >
+                                                    {codAction === order.id + ':collect' ? <Loader2 size={12} className="animate-spin" /> : <Banknote size={12} />}
+                                                    Cash reçu
+                                                </button>
+                                            </div>
                                         )}
                                         <button
                                             onClick={() => generateInvoice(order)}

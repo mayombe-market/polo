@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { Smartphone, CreditCard, User, Save, Loader2, CheckCircle, AlertTriangle, Info, Package, MapPin } from 'lucide-react'
+import { Smartphone, CreditCard, User, Save, Loader2, CheckCircle, AlertTriangle, Info, Package, MapPin, Banknote, Clock } from 'lucide-react'
 import { updateVendorPaymentInfo, getVendorPaymentInfo } from '@/app/actions/vendorPayment'
 
 interface Props {
@@ -14,6 +14,9 @@ export default function VendorPaymentSettings({ profile }: Props) {
     const [holder, setHolder] = useState('')
     const [vendorDeliveryFee, setVendorDeliveryFee] = useState('')
     const [pickupAddress, setPickupAddress] = useState('')
+    const [acceptCod, setAcceptCod] = useState(true)
+    const [acceptPickupPayment, setAcceptPickupPayment] = useState(true)
+    const [codReservationHours, setCodReservationHours] = useState('24')
     const [loading, setLoading] = useState(false)
     const [fetchLoading, setFetchLoading] = useState(true)
     const [saved, setSaved] = useState(false)
@@ -31,6 +34,9 @@ export default function VendorPaymentSettings({ profile }: Props) {
             setHolder(res.payment_holder_name || '')
             setVendorDeliveryFee(res.vendor_delivery_fee != null ? String(res.vendor_delivery_fee) : '')
             setPickupAddress(res.vendor_pickup_address || '')
+            setAcceptCod(res.accept_cod ?? true)
+            setAcceptPickupPayment(res.accept_pickup_payment ?? true)
+            setCodReservationHours(String(res.cod_reservation_hours ?? 24))
         })
     }, [])
 
@@ -46,12 +52,22 @@ export default function VendorPaymentSettings({ profile }: Props) {
             return
         }
 
+        const reservHours = codReservationHours.trim() ? parseInt(codReservationHours.trim(), 10) : 24
+        if (isNaN(reservHours) || reservHours < 1 || reservHours > 168) {
+            setError('Durée de réservation invalide (1 – 168 heures)')
+            setLoading(false)
+            return
+        }
+
         const res = await updateVendorPaymentInfo({
             mtn_momo_number: mtn.trim() || null,
             airtel_money_number: airtel.trim() || null,
             payment_holder_name: holder.trim() || null,
             vendor_delivery_fee: fee,
             vendor_pickup_address: pickupAddress.trim() || null,
+            accept_cod: acceptCod,
+            accept_pickup_payment: acceptPickupPayment,
+            cod_reservation_hours: reservHours,
         })
 
         setLoading(false)
@@ -195,6 +211,62 @@ export default function VendorPaymentSettings({ profile }: Props) {
                     />
                     <p className="text-[10px] text-slate-400 mt-1">Laissez vide si vous ne proposez pas le retrait en boutique.</p>
                 </div>
+            </div>
+
+            {/* ── Section paiement à la livraison ── */}
+            <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                <h4 className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mb-3 flex items-center gap-1.5">
+                    <Banknote size={11} /> Paiement à la livraison (COD)
+                </h4>
+
+                {/* Accepter COD */}
+                <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                        <p className="text-xs font-bold text-slate-800 dark:text-white">Paiement cash à la livraison</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Le client paie en espèces lors de la réception du colis</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setAcceptCod(!acceptCod)}
+                        className={`relative w-10 h-6 rounded-full transition-colors ${acceptCod ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    >
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${acceptCod ? 'left-5' : 'left-1'}`} />
+                    </button>
+                </div>
+
+                {/* Accepter paiement au retrait */}
+                <div className="flex items-center justify-between py-3 border-b border-slate-100 dark:border-slate-800">
+                    <div>
+                        <p className="text-xs font-bold text-slate-800 dark:text-white">Paiement au retrait en boutique</p>
+                        <p className="text-[10px] text-slate-400 mt-0.5">Réservation gratuite, paiement à l'enlèvement</p>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => setAcceptPickupPayment(!acceptPickupPayment)}
+                        className={`relative w-10 h-6 rounded-full transition-colors ${acceptPickupPayment ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    >
+                        <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${acceptPickupPayment ? 'left-5' : 'left-1'}`} />
+                    </button>
+                </div>
+
+                {/* Durée de réservation */}
+                {acceptPickupPayment && (
+                    <div className="mt-3">
+                        <label className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mb-2">
+                            <Clock size={11} /> Durée de réservation (heures)
+                        </label>
+                        <input
+                            type="number"
+                            min={1}
+                            max={168}
+                            step={1}
+                            value={codReservationHours}
+                            onChange={e => setCodReservationHours(e.target.value)}
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1">Si le client ne vient pas dans ce délai, la réservation expire. Défaut : 24h</p>
+                    </div>
+                )}
             </div>
 
             {/* Erreur */}

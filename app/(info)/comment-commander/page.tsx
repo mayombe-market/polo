@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 /* ─────────────────────────────────────────────────────────────
    DONNÉES DES ÉTAPES
@@ -499,10 +500,70 @@ function MockupSuccess() {
   );
 }
 
+function MockupCODPayment() {
+  return (
+    <BrowserFrame url="mayombe-market.com/checkout">
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 10 }}>
+        <div style={{ fontSize: 12, fontWeight: 800, color: "#1a1a2e" }}>Mode de paiement</div>
+        {[
+          { label: "MTN Mobile Money", color: "#F59E0B", active: false },
+          { label: "Airtel Money", color: "#EF4444", active: false },
+        ].map((m, i) => (
+          <div key={i} style={{ padding: 10, borderRadius: 10, background: "#fff", border: "1px solid #eee" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <div style={{ width: 14, height: 14, borderRadius: "50%", border: "2px solid #eee", flexShrink: 0 }} />
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#999" }}>{m.label}</div>
+            </div>
+          </div>
+        ))}
+        <div style={{ padding: 12, borderRadius: 12, background: "#F59E0B10", border: "2px solid #F59E0B40" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#F59E0B", flexShrink: 0 }} />
+            <div style={{ fontSize: 12, fontWeight: 800, color: "#1a1a2e" }}>Paiement à la livraison</div>
+          </div>
+          <div style={{ fontSize: 11, color: "#666", lineHeight: 1.6 }}>
+            Payez en <strong>cash</strong> quand vous recevez votre colis. Aucune avance requise.
+          </div>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+function MockupCODCode() {
+  return (
+    <BrowserFrame url="mayombe-market.com/checkout/success">
+      <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12, alignItems: "center" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "linear-gradient(135deg, #22C55E, #16A34A)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>✓</div>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontSize: 13, fontWeight: 900, color: "#1a1a2e" }}>Commande enregistrée</div>
+          <div style={{ fontSize: 10, color: "#888", marginTop: 2 }}>Vendeur en cours d&apos;acceptation</div>
+        </div>
+        <div style={{ width: "100%", padding: 14, borderRadius: 14, background: "#F59E0B10", border: "1.5px solid #F59E0B40" }}>
+          <div style={{ fontSize: 9, fontWeight: 700, color: "#F59E0B", textTransform: "uppercase", letterSpacing: 2, marginBottom: 8, textAlign: "center" }}>Code de livraison</div>
+          <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.3em", color: "#D97706", textAlign: "center", fontFamily: "monospace" }}>X4R9TM</div>
+          <div style={{ fontSize: 9, color: "#888", textAlign: "center", marginTop: 6 }}>À montrer au livreur pour confirmer la remise</div>
+        </div>
+      </div>
+    </BrowserFrame>
+  );
+}
+
+const COD_STEPS = [
+  { id: 1, color: "#E8A838", label: "Choisir" },
+  { id: 2, color: "#3B82F6", label: "Panier" },
+  { id: 3, color: "#A855F7", label: "Infos" },
+  { id: 4, color: "#F97316", label: "Livraison" },
+  { id: 5, color: "#F59E0B", label: "COD" },
+  { id: 6, color: "#10B981", label: "Code" },
+  { id: 7, color: "#E8A838", label: "Confirmé" },
+];
+
 /* ─────────────────────────────────────────────────────────────
    PAGE PRINCIPALE
 ───────────────────────────────────────────────────────────── */
 export default function CommentCommanderPage() {
+  const [flow, setFlow] = useState<'momo' | 'cod'>('momo');
   const sections = [
     {
       step: 1,
@@ -633,6 +694,60 @@ export default function CommentCommanderPage() {
     },
   ];
 
+  const codSections = [
+    sections[0], sections[1], sections[2], sections[3],
+    {
+      step: 5,
+      color: "#F59E0B",
+      bg: "linear-gradient(135deg, #F59E0B08, #D9770608)",
+      icon: "💵",
+      title: "Sélectionnez le paiement à la livraison",
+      desc: "Choisissez l'option « Paiement à la livraison » sur la page de paiement. Aucun virement ni code SMS requis — vous payez en espèces à la réception de votre colis.",
+      tips: [
+        { icon: "✅", text: "Disponible si le vendeur accepte le paiement à la livraison" },
+        { icon: "💰", text: "Préparez le montant exact en espèces FCFA" },
+        { icon: "🚫", text: "Aucun code de transaction n'est demandé" },
+      ],
+      callouts: [],
+      mockup: <MockupCODPayment />,
+    },
+    {
+      step: 6,
+      color: "#10B981",
+      bg: "linear-gradient(135deg, #10B98108, #059B6B08)",
+      icon: "🔑",
+      title: "Recevez votre code de livraison",
+      desc: "Après acceptation de la commande par le vendeur, un code de livraison à 6 caractères s'affiche dans votre tableau de bord et sur la page de confirmation. Montrez-le au livreur lors de la remise du colis.",
+      tips: [
+        { icon: "📱", text: "Code visible dans l'espace « Mes commandes »" },
+        { icon: "🔐", text: "Ne partagez ce code qu'au moment de la remise" },
+        { icon: "✓", text: "Le livreur le saisit pour confirmer l'encaissement" },
+      ],
+      callouts: [
+        { n: "★", text: "Code à 6 caractères", color: "#10B981" },
+      ],
+      mockup: <MockupCODCode />,
+    },
+    {
+      step: 7,
+      color: "#E8A838",
+      bg: "linear-gradient(135deg, #E8A83808, #22C55E08)",
+      icon: "🎉",
+      title: "Livraison et encaissement confirmés",
+      desc: "À la livraison, montrez le code au livreur, payez en espèces et la commande est clôturée automatiquement. Le vendeur reçoit la confirmation d'encaissement.",
+      tips: [
+        { icon: "🔔", text: "Notification de confirmation dans votre tableau de bord" },
+        { icon: "📦", text: "Statut commande mis à jour en « Livrée »" },
+        { icon: "🚫", text: "En cas d'absence : le vendeur peut annuler et le stock est restauré" },
+      ],
+      callouts: [],
+      mockup: <MockupSuccess />,
+    },
+  ];
+
+  const activeSections = flow === 'cod' ? codSections : sections;
+  const activeSteps = flow === 'cod' ? COD_STEPS : STEPS;
+
   return (
     <div style={{ background: "#08080E", minHeight: "100vh", fontFamily: "system-ui, -apple-system, sans-serif" }}>
       <style>{`
@@ -714,12 +829,33 @@ export default function CommentCommanderPage() {
           Guide visuel complet — de la sélection du produit jusqu'à la livraison chez vous
         </p>
 
+        {/* Toggle flux de paiement */}
+        <div style={{
+          display: "flex", justifyContent: "center", gap: 12, marginBottom: 32,
+        }}>
+          {[
+            { id: 'momo', label: '📱 Mobile Money', color: '#F59E0B' },
+            { id: 'cod', label: '💵 Paiement à la livraison', color: '#10B981' },
+          ].map(tab => (
+            <button key={tab.id} onClick={() => setFlow(tab.id as 'momo' | 'cod')} style={{
+              padding: "10px 22px", borderRadius: 24,
+              background: flow === tab.id ? tab.color : "rgba(255,255,255,0.05)",
+              border: `1.5px solid ${flow === tab.id ? tab.color : 'rgba(255,255,255,0.1)'}`,
+              color: flow === tab.id ? "#1a1a2e" : "#888",
+              fontWeight: 800, fontSize: 13, cursor: "pointer",
+              transition: "all 0.2s ease",
+            }}>
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         {/* Steps bar */}
         <div className="steps-bar" style={{
           display: "flex", justifyContent: "center", flexWrap: "wrap",
           gap: 8, maxWidth: 700, margin: "0 auto",
         }}>
-          {STEPS.map((s, i) => (
+          {activeSteps.map((s, i) => (
             <a key={s.id} href={`#step-${s.id}`} style={{ textDecoration: "none" }}>
               <div className="step-pill" style={{
                 display: "flex", alignItems: "center", gap: 6,
@@ -752,14 +888,14 @@ export default function CommentCommanderPage() {
 
       {/* ══════════════ ÉTAPES ══════════════ */}
       <div style={{ maxWidth: 1100, margin: "0 auto", padding: "0 24px" }}>
-        {sections.map((sec, idx) => (
+        {activeSections.map((sec, idx) => (
           <div
             key={sec.step}
             id={`step-${sec.step}`}
             className="step-section"
             style={{
               padding: "64px 0",
-              borderBottom: idx < sections.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
+              borderBottom: idx < activeSections.length - 1 ? "1px solid rgba(255,255,255,0.04)" : "none",
             }}
           >
             <div className="step-inner" style={{

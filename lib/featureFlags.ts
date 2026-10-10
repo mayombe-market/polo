@@ -22,6 +22,10 @@ export const FEATURES = {
     // ── Paiement (Mission 3) ──────────────────────────────────────────────────
     /** Paiement direct au vendeur (sinon : paiement à Mayombe Market) */
     directVendorPayment: true, // tunnel paiement direct vendeur (migration appliquée en prod)
+
+    // ── Paiement à la livraison (COD) ─────────────────────────────────────────
+    /** Activer le paiement à la livraison (cash on delivery) */
+    cashOnDelivery: true,
 } as const
 
 export type FeatureFlag = keyof typeof FEATURES

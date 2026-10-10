@@ -12,7 +12,8 @@ export const CheckoutSchema = z.object({
     // pickup = retrait en boutique (frais = 0)
     // vendor_delivery = livraison par le vendeur (frais fixes par le vendeur dans son profil)
     // standard/express/inter_urban = livraison Mayombe Market (conserve, non active par defaut)
-    delivery_mode: z.enum(["standard", "express", "inter_urban", "pickup", "vendor_delivery"], {
+    // reserve_pickup = réservation avec paiement au retrait (COD en boutique)
+    delivery_mode: z.enum(["standard", "express", "inter_urban", "pickup", "vendor_delivery", "reserve_pickup"], {
         message: "Choisissez un mode de livraison",
     }),
 })

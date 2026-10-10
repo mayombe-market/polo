@@ -23,7 +23,7 @@ import {
 } from '@/lib/deliveryLocation'
 import { DELIVERY_CITY_LIST, DELIVERY_LOCATIONS } from '@/lib/deliveryZones'
 import { useCart } from '@/hooks/userCart'
-import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, CheckCircle2, Smartphone } from 'lucide-react'
+import { MapPin, Phone, Truck, CreditCard, ShieldCheck, Loader2, ArrowRight, Zap, Package, Clock, Navigation, CheckCircle2, Smartphone, Banknote } from 'lucide-react'
 import { getVendorPaymentNumbers } from '@/app/actions/vendorPayment'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
@@ -84,7 +84,7 @@ export default function CheckoutPage() {
     const [gpsLoading, setGpsLoading] = useState(false)
     const [gpsError, setGpsError] = useState('')
     const [sellerCoords, setSellerCoords] = useState<Record<string, { lat: number; lng: number } | null>>({})
-    const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null; whatsapp: string | null; shop_name: string | null; vendor_delivery_fee: number | null; vendor_pickup_address: string | null }>>({})
+    const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null; whatsapp: string | null; shop_name: string | null; vendor_delivery_fee: number | null; vendor_pickup_address: string | null; accept_cod: boolean }>>({})
     const [vendorTxCodes, setVendorTxCodes] = useState<Record<string, string>>({})
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
@@ -160,7 +160,8 @@ export default function CheckoutPage() {
         const allHaveMtn = sellerIds.every(sid => !!vendorNumbers[sid]?.mtn)
         const allHaveAirtel = sellerIds.every(sid => !!vendorNumbers[sid]?.airtel)
         const noneConfigured = sellerIds.every(sid => !vendorNumbers[sid]?.mtn && !vendorNumbers[sid]?.airtel)
-        return { mtn: allHaveMtn, airtel: allHaveAirtel, noneConfigured, loading: false }
+        const allAcceptCod = sellerIds.every(sid => vendorNumbers[sid]?.accept_cod !== false)
+        return { mtn: allHaveMtn, airtel: allHaveAirtel, noneConfigured, allAcceptCod, loading: false }
     }, [sellerIds, vendorNumbers])
 
     // Computed: delivery options offered by vendors
@@ -1371,6 +1372,61 @@ export default function CheckoutPage() {
                                     <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400">
                                         Paiement Mobile Money temporairement indisponible
                                     </p>
+                                </div>
+                            )}
+
+                            {/* OPTION : Paiement à la livraison (COD) */}
+                            {FEATURES.cashOnDelivery && !vendorPaymentMethods.loading && vendorPaymentMethods.allAcceptCod && (
+                                <label className={`flex items-center justify-between p-5 rounded-3xl border-2 cursor-pointer transition-all ${selectedPayment === 'cod' ? 'border-amber-500 bg-amber-50/50 dark:bg-amber-500/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 bg-amber-500/10 rounded-xl flex items-center justify-center">
+                                            <Banknote size={18} className="text-amber-600" />
+                                        </div>
+                                        <div className="w-px h-6 bg-slate-200 dark:bg-slate-700" />
+                                        <div>
+                                            <p className="font-black uppercase text-xs italic text-slate-900 dark:text-slate-100">Paiement à la livraison</p>
+                                            <p className="text-[9px] font-bold text-amber-600 uppercase tracking-wide">Cash à la réception</p>
+                                        </div>
+                                    </div>
+                                    <input type="radio" value="cod" {...register('payment_method')} className="text-amber-500 w-5 h-5 shrink-0" />
+                                </label>
+                            )}
+
+                            {/* INSTRUCTIONS COD */}
+                            {FEATURES.cashOnDelivery && selectedPayment === 'cod' && !vendorPaymentMethods.loading && (
+                                <div className="mt-1 rounded-3xl border-2 border-amber-200 dark:border-amber-700/40 overflow-hidden">
+                                    <div className="px-5 py-4 flex items-center justify-between bg-amber-500">
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-amber-900">Montant à préparer</p>
+                                            <p className="text-2xl font-black italic mt-0.5 text-amber-900">
+                                                {grandTotal.toLocaleString('fr-FR')}
+                                                <span className="text-sm ml-1 font-bold">FCFA</span>
+                                            </p>
+                                        </div>
+                                        <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-amber-900/20">
+                                            <Banknote className="w-6 h-6 text-amber-900" />
+                                        </div>
+                                    </div>
+                                    <div className="px-5 py-4 space-y-3 bg-amber-50 dark:bg-amber-500/5">
+                                        <p className="text-[9px] font-black uppercase tracking-widest mb-1 text-amber-700 dark:text-amber-400">Comment ça marche</p>
+                                        {[
+                                            { n: '1', text: 'Confirmez la commande — aucun paiement immédiat requis' },
+                                            { n: '2', text: 'Le vendeur accepte et prépare votre commande' },
+                                            { n: '3', text: 'Un code de livraison à 6 caractères vous sera communiqué' },
+                                            { n: '4', text: 'Montrez le code au livreur et payez en cash à la réception' },
+                                        ].map(step => (
+                                            <div key={step.n} className="flex items-start gap-3">
+                                                <div className="w-5 h-5 rounded-full text-white text-[9px] font-black flex items-center justify-center flex-shrink-0 mt-0.5 bg-amber-500">{step.n}</div>
+                                                <p className="text-[11px] font-bold leading-snug text-amber-800 dark:text-amber-300">{step.text}</p>
+                                            </div>
+                                        ))}
+                                        <div className="mt-3 pt-3 border-t border-amber-200 dark:border-amber-700/30 flex items-start gap-2">
+                                            <ShieldCheck className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-amber-600" />
+                                            <p className="text-[9px] font-bold text-amber-600 dark:text-amber-500">
+                                                Le vendeur peut refuser la commande. Préparez le montant exact en espèces.
+                                            </p>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
 

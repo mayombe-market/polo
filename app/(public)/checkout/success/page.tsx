@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useCart } from '@/hooks/userCart'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { CheckCircle, ShoppingBag, Package, Smartphone, Zap, Clock } from 'lucide-react'
+import { CheckCircle, ShoppingBag, Package, Smartphone, Zap, Clock, Banknote } from 'lucide-react'
 
 function SuccessContent() {
     const { clearCart } = useCart()
@@ -16,6 +16,7 @@ function SuccessContent() {
     const totalParam = searchParams.get('total') // fallback legacy
     const [orderTotal, setOrderTotal] = useState<number | null>(totalParam ? Number(totalParam) : null)
     const [deliveryFee, setDeliveryFee] = useState<number | null>(null)
+    const [deliveryCode, setDeliveryCode] = useState<string | null>(null)
 
     const supabase = useMemo(() => getSupabaseBrowserClient(), [])
 
@@ -28,12 +29,13 @@ function SuccessContent() {
         if (!orderId) return
         supabase
             .from('orders')
-            .select('total_amount, delivery_fee, delivery_mode')
+            .select('total_amount, delivery_fee, delivery_mode, delivery_code')
             .eq('id', orderId)
             .single()
-            .then(({ data }: { data: { total_amount?: number; delivery_fee?: number | null } | null }) => {
+            .then(({ data }: { data: { total_amount?: number; delivery_fee?: number | null; delivery_code?: string | null } | null }) => {
                 if (data?.total_amount) setOrderTotal(data.total_amount)
                 if (data?.delivery_fee != null) setDeliveryFee(data.delivery_fee)
+                if (data?.delivery_code) setDeliveryCode(data.delivery_code)
             })
     }, [orderId, supabase])
 
@@ -80,7 +82,7 @@ function SuccessContent() {
                 </div>
 
                 {/* INSTRUCTIONS SELON LA MÉTHODE DE PAIEMENT */}
-                {method === 'mobile_money' ? (
+                {(method === 'mobile_money' || method === 'airtel_money') ? (
                     <div className="bg-green-50 dark:bg-green-900/20 p-6 rounded-3xl border border-green-200 dark:border-green-800 text-left space-y-3">
                         <div className="flex items-center gap-3">
                             <Smartphone size={20} className="text-green-600" />
@@ -94,11 +96,33 @@ function SuccessContent() {
                             Votre commande sera confirmée dès réception du paiement.
                         </p>
                     </div>
+                ) : method === 'cod' ? (
+                    <div className="bg-amber-50 dark:bg-amber-900/20 p-6 rounded-3xl border border-amber-200 dark:border-amber-800 text-left space-y-4">
+                        <div className="flex items-center gap-3">
+                            <Banknote size={20} className="text-amber-600" />
+                            <p className="font-black uppercase text-xs text-amber-700 dark:text-amber-400">Paiement à la livraison</p>
+                        </div>
+                        <p className="text-sm text-amber-800 dark:text-amber-300 leading-relaxed">
+                            Préparez <strong>{orderTotal ? orderTotal.toLocaleString('fr-FR') : '...'} FCFA</strong> en espèces. Le vendeur doit d&apos;abord accepter votre commande.
+                        </p>
+                        {deliveryCode && (
+                            <div className="bg-white dark:bg-amber-900/30 rounded-2xl p-4 border border-amber-300 dark:border-amber-700/50">
+                                <p className="text-[9px] font-black uppercase tracking-widest text-amber-600 dark:text-amber-400 mb-2">Code de livraison — À montrer au livreur</p>
+                                <p className="text-4xl font-black tracking-[0.3em] text-amber-600 dark:text-amber-300 text-center">{deliveryCode}</p>
+                                <p className="text-[9px] font-bold text-amber-500 uppercase tracking-widest text-center mt-2">Ce code confirme la remise en main propre</p>
+                            </div>
+                        )}
+                        {!deliveryCode && (
+                            <p className="text-[10px] font-bold text-amber-600 uppercase tracking-widest">
+                                Votre code de livraison sera communiqué après acceptation par le vendeur.
+                            </p>
+                        )}
+                    </div>
                 ) : (
                     <div className="bg-orange-50 dark:bg-orange-900/20 p-6 rounded-3xl border border-orange-200 dark:border-orange-800 text-left space-y-3">
                         <div className="flex items-center gap-3">
                             <Package size={20} className="text-orange-600" />
-                            <p className="font-black uppercase text-xs text-orange-700 dark:text-orange-400">Cash à la livraison</p>
+                            <p className="font-black uppercase text-xs text-orange-700 dark:text-orange-400">Commande enregistrée</p>
                         </div>
                         <p className="text-sm text-orange-800 dark:text-orange-300 leading-relaxed">
                             Préparez <strong>{orderTotal ? orderTotal.toLocaleString('fr-FR') : '...'} FCFA</strong> en espèces pour le livreur.

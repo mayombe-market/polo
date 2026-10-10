@@ -50,6 +50,9 @@ export async function updateVendorPaymentInfo(input: {
     payment_holder_name?: string | null
     vendor_delivery_fee?: number | null
     vendor_pickup_address?: string | null
+    accept_cod?: boolean | null
+    accept_pickup_payment?: boolean | null
+    cod_reservation_hours?: number | null
 }): Promise<{ success: true } | { error: string }> {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -108,6 +111,22 @@ export async function updateVendorPaymentInfo(input: {
         ;(update as any).vendor_pickup_address = addr
     }
 
+    if (input.accept_cod !== undefined) {
+        ;(update as any).accept_cod = input.accept_cod === null ? true : Boolean(input.accept_cod)
+    }
+
+    if (input.accept_pickup_payment !== undefined) {
+        ;(update as any).accept_pickup_payment = input.accept_pickup_payment === null ? true : Boolean(input.accept_pickup_payment)
+    }
+
+    if (input.cod_reservation_hours !== undefined && input.cod_reservation_hours !== null) {
+        const hours = Number(input.cod_reservation_hours)
+        if (!Number.isInteger(hours) || hours < 1 || hours > 168) {
+            return { error: 'Durée de réservation invalide (1 – 168 heures)' }
+        }
+        ;(update as any).cod_reservation_hours = hours
+    }
+
     if (Object.keys(update).length === 0) return { success: true }
 
     const { error } = await svc()
@@ -128,6 +147,9 @@ export async function getVendorPaymentInfo(): Promise<{
     airtel_display: string | null
     vendor_delivery_fee: number | null
     vendor_pickup_address: string | null
+    accept_cod: boolean
+    accept_pickup_payment: boolean
+    cod_reservation_hours: number
 } | { error: string }> {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -135,7 +157,7 @@ export async function getVendorPaymentInfo(): Promise<{
 
     const { data, error } = await supabase
         .from('profiles')
-        .select('mtn_momo_number, airtel_money_number, payment_holder_name, vendor_delivery_fee, vendor_pickup_address')
+        .select('mtn_momo_number, airtel_money_number, payment_holder_name, vendor_delivery_fee, vendor_pickup_address, accept_cod, accept_pickup_payment, cod_reservation_hours')
         .eq('id', user.id)
         .single()
 
@@ -149,6 +171,9 @@ export async function getVendorPaymentInfo(): Promise<{
         airtel_display: data?.airtel_money_number ? formatPhoneDisplay(data.airtel_money_number) : null,
         vendor_delivery_fee: data?.vendor_delivery_fee ?? null,
         vendor_pickup_address: data?.vendor_pickup_address ?? null,
+        accept_cod: data?.accept_cod ?? true,
+        accept_pickup_payment: data?.accept_pickup_payment ?? true,
+        cod_reservation_hours: data?.cod_reservation_hours ?? 24,
     }
 }
 
@@ -292,6 +317,9 @@ export async function getVendorPaymentNumbers(sellerIds: string[]): Promise<
         shop_name: string | null
         vendor_delivery_fee: number | null
         vendor_pickup_address: string | null
+        accept_cod: boolean
+        accept_pickup_payment: boolean
+        cod_reservation_hours: number
     }>
 > {
     if (!sellerIds || sellerIds.length === 0) return {}
@@ -303,12 +331,13 @@ export async function getVendorPaymentNumbers(sellerIds: string[]): Promise<
 
     const { data } = await supabase
         .from('profiles')
-        .select('id, mtn_momo_number, airtel_money_number, payment_holder_name, whatsapp_number, shop_name, vendor_delivery_fee, vendor_pickup_address')
+        .select('id, mtn_momo_number, airtel_money_number, payment_holder_name, whatsapp_number, shop_name, vendor_delivery_fee, vendor_pickup_address, accept_cod, accept_pickup_payment, cod_reservation_hours')
         .in('id', sellerIds)
 
     const result: Record<string, {
         mtn: string | null; airtel: string | null; holder: string | null; whatsapp: string | null; shop_name: string | null
         vendor_delivery_fee: number | null; vendor_pickup_address: string | null
+        accept_cod: boolean; accept_pickup_payment: boolean; cod_reservation_hours: number
     }> = {}
     for (const row of data || []) {
         result[row.id] = {
@@ -319,6 +348,9 @@ export async function getVendorPaymentNumbers(sellerIds: string[]): Promise<
             shop_name: row.shop_name || null,
             vendor_delivery_fee: row.vendor_delivery_fee ?? null,
             vendor_pickup_address: row.vendor_pickup_address || null,
+            accept_cod: row.accept_cod ?? true,
+            accept_pickup_payment: row.accept_pickup_payment ?? true,
+            cod_reservation_hours: row.cod_reservation_hours ?? 24,
         }
     }
     return result

@@ -807,6 +807,19 @@ export async function createOrder(input: {
         return { error: 'Méthode de paiement invalide.' }
     }
 
+    // Pour COD (cash), vérifier que tous les vendeurs l'acceptent
+    if (input.payment_method === 'cash') {
+        const { data: vendorCodProfiles } = await supabase
+            .from('profiles')
+            .select('id, accept_cod')
+            .in('id', input.items.map(i => i.seller_id).filter(Boolean))
+
+        const vendorRefusing = (vendorCodProfiles || []).find(p => p.accept_cod === false)
+        if (vendorRefusing) {
+            return { error: 'Un ou plusieurs vendeurs de votre panier n\'acceptent pas le paiement à la livraison.' }
+        }
+    }
+
     if (!input.city?.trim() || input.city.length > 100) {
         return { error: 'Ville invalide (max 100 caractères).' }
     }
@@ -893,9 +906,9 @@ export async function createOrder(input: {
     let deliveryMode: string
     let deliveryFee: number
 
-    if (modeInput === 'pickup') {
-        // Retrait en boutique : aucun frais
-        deliveryMode = 'pickup'
+    if (modeInput === 'pickup' || modeInput === 'reserve_pickup') {
+        // Retrait / réservation en boutique : aucun frais
+        deliveryMode = modeInput
         deliveryFee = 0
         if (feeInput !== 0) {
             return { error: 'Retrait en boutique : les frais de livraison doivent être 0 FCFA.' }
@@ -991,6 +1004,21 @@ export async function createOrder(input: {
         }
     }
 
+    // ═══ RÉSERVATION (reserve_pickup) : calculer la date d'expiration ═══
+    let reservationExpiresAt: string | null = null
+    if (deliveryMode === 'reserve_pickup') {
+        // Récupérer la durée de réservation (max parmi les vendeurs, défaut 24h)
+        const { data: reservProfiles } = await supabase
+            .from('profiles')
+            .select('id, cod_reservation_hours')
+            .in('id', sellerIds)
+        const maxHours = Math.max(
+            ...((reservProfiles || []).map(p => p.cod_reservation_hours ?? 24)),
+            24
+        )
+        reservationExpiresAt = new Date(Date.now() + maxHours * 60 * 60 * 1000).toISOString()
+    }
+
     // ═══ CRÉATION DE LA COMMANDE ═══
     const { data: order, error } = await supabase.from('orders').insert([{
         user_id: user.id,
@@ -1007,11 +1035,13 @@ export async function createOrder(input: {
         commission_amount: totalCommission,
         vendor_payout: vendorPayout,
         payout_status: 'pending',
+        payment_status: input.payment_method === 'cash' ? 'unpaid' : 'paid',
         transaction_id: ['mobile_money', 'airtel_money'].includes(input.payment_method) ? txDigits : null,
         vendor_payments: Object.keys(vendorPaymentsMap).length > 0 ? vendorPaymentsMap : {},
         landmark: input.landmark || null,
         delivery_mode: deliveryMode,
         delivery_fee: deliveryFee,
+        ...(reservationExpiresAt ? { reservation_expires_at: reservationExpiresAt } : {}),
         ...(input.latitude != null && input.longitude != null ? {
             delivery_location_type: 'gps',
             delivery_latitude: input.latitude,
@@ -1026,6 +1056,14 @@ export async function createOrder(input: {
 
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
+
+    // ═══ COD : générer le code de livraison (synchrone pour l'afficher au client) ═══
+    if (input.payment_method === 'cash') {
+        const { data: deliveryCode } = await supabase.rpc('generate_delivery_code', { p_order_id: order.id })
+        if (deliveryCode) {
+            Object.assign(order, { delivery_code: deliveryCode })
+        }
+    }
 
     // ═══ PROGRAMME FIDÉLITÉ : application des points demandés ═══
     // Appelé APRÈS création de la commande. En cas d'échec, la commande

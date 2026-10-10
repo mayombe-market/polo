@@ -21,7 +21,7 @@ export const FEATURES = {
 
     // ── Paiement (Mission 3) ──────────────────────────────────────────────────
     /** Paiement direct au vendeur (sinon : paiement à Mayombe Market) */
-    directVendorPayment: true, // activé sur preview-marketplace (migration appliquée)
+    directVendorPayment: true, // tunnel paiement direct vendeur (migration appliquée en prod)
 } as const
 
 export type FeatureFlag = keyof typeof FEATURES

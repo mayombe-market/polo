@@ -25,7 +25,8 @@ export default function CompleteProfilePage() {
     const [phoneNumber, setPhoneNumber] = useState('')
     const [selectedCountry, setSelectedCountry] = useState(COUNTRIES[0])
     const [showCountryPicker, setShowCountryPicker] = useState(false)
-    const [role, setRole] = useState<'buyer' | 'vendor'>('buyer')
+    const isVendorPath = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'vendor'
+    const [role, setRole] = useState<'buyer' | 'vendor'>(isVendorPath ? 'vendor' : 'buyer')
     const [shopName, setShopName] = useState('')
     const [vendorConfirmed, setVendorConfirmed] = useState(false)
     const [city, setCity] = useState('')
@@ -517,13 +518,13 @@ export default function CompleteProfilePage() {
                 {/* HEADER */}
                 <div className="bg-gradient-to-r from-green-600 to-blue-600 px-6 py-8 text-center">
                     <div className="w-16 h-16 bg-white rounded-full mx-auto mb-3 flex items-center justify-center shadow-lg">
-                        <span className="text-3xl">🎉</span>
+                        <span className="text-3xl">{isVendorPath ? '🏪' : '🎉'}</span>
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-1">
-                        Email confirmé !
+                        {isVendorPath ? 'Créer votre boutique' : 'Bienvenue sur Mayombe Market !'}
                     </h1>
                     <p className="text-green-100 text-sm">
-                        Complétez votre profil pour continuer
+                        {isVendorPath ? 'Complétez votre profil vendeur' : 'Complétez votre profil pour continuer'}
                     </p>
                 </div>
 
@@ -681,58 +682,34 @@ export default function CompleteProfilePage() {
                         )}
                     </div>
 
-                    {/* CHOIX DU RÔLE */}
-                    <div>
-                        <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-4">
-                            Je suis *
-                        </label>
-                        <div className="grid md:grid-cols-2 gap-4">
-
-                            {/* ACHETEUR */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setRole('buyer')
-                                    setVendorConfirmed(false)
-                                    setShopName('')
-                                    setAcceptVendorTerms(false)
-                                }}
-                                className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'buyer'
-                                        ? 'border-green-500 bg-green-50 dark:bg-green-900/20'
-                                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
-                                    }`}
-                            >
-                                <div className="text-3xl mb-3">🛍️</div>
-                                <h3 className="font-bold text-gray-800 dark:text-white mb-1">
-                                    Acheteur
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Je veux acheter des produits
-                                </p>
-                            </button>
-
-                            {/* VENDEUR — bordure bleue */}
-                            <button
-                                type="button"
-                                onClick={() => {
-                                    setRole('vendor')
-                                    setAcceptClientTerms(false)
-                                }}
-                                className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'vendor'
-                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                                        : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'
-                                    }`}
-                            >
-                                <div className="text-3xl mb-3">🏪</div>
-                                <h3 className="font-bold text-gray-800 dark:text-white mb-1">
-                                    Vendeur
-                                </h3>
-                                <p className="text-sm text-gray-500 dark:text-gray-400">
-                                    Je veux vendre mes produits
-                                </p>
-                            </button>
+                    {/* CHOIX DU RÔLE — affiché uniquement sur le parcours vendeur (?role=vendor) */}
+                    {isVendorPath && (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 dark:text-gray-300 mb-4">
+                                Je suis *
+                            </label>
+                            <div className="grid md:grid-cols-2 gap-4">
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('buyer'); setVendorConfirmed(false); setShopName(''); setAcceptVendorTerms(false) }}
+                                    className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'buyer' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'}`}
+                                >
+                                    <div className="text-3xl mb-3">🛍️</div>
+                                    <h3 className="font-bold text-gray-800 dark:text-white mb-1">Acheteur</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Je veux acheter des produits</p>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setRole('vendor'); setAcceptClientTerms(false) }}
+                                    className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'vendor' ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'}`}
+                                >
+                                    <div className="text-3xl mb-3">🏪</div>
+                                    <h3 className="font-bold text-gray-800 dark:text-white mb-1">Vendeur</h3>
+                                    <p className="text-sm text-gray-500 dark:text-gray-400">Je veux vendre mes produits</p>
+                                </button>
+                            </div>
                         </div>
-                    </div>
+                    )}
 
                     {/* SECTION VENDEUR — bordure bleue pour marquer la différence */}
                     {role === 'vendor' && (

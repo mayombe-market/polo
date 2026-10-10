@@ -43,6 +43,8 @@ import {
     AirtelMoneyLogo,
     MobileMoneyTrustLine,
 } from '@/app/components/MobileMoneyBranding'
+import { createGuestOrder } from '@/app/actions/guestOrders'
+import type { GuestOrderInput } from '@/app/actions/guestOrders'
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371
@@ -64,6 +66,8 @@ const CHECKOUT_DEFAULTS: DefaultValues<CheckoutType> = {
 export default function CheckoutPage() {
     const [loading, setLoading] = useState(false)
     const [loadingProfile, setLoadingProfile] = useState(true)
+    const [isLoggedIn, setIsLoggedIn] = useState(false)
+    const [isGuestMode, setIsGuestMode] = useState(false)
     const [profileGateOpen, setProfileGateOpen] = useState(false)
     const [needsCity, setNeedsCity] = useState(false)
     const [interUrbanPreAlertModalOpen, setInterUrbanPreAlertModalOpen] = useState(false)
@@ -335,6 +339,10 @@ export default function CheckoutPage() {
                     reset({ ...CHECKOUT_DEFAULTS })
                 }
                 setUserEmail(user.email || '')
+                setIsLoggedIn(true)
+            } else if (FEATURES.guestCheckout) {
+                setIsGuestMode(true)
+                setNeedsCity(true)
             }
             setLoadingProfile(false)
         }
@@ -383,6 +391,69 @@ export default function CheckoutPage() {
 
         setLoading(true)
         try {
+            const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
+                ? patisserieDeliveryFee
+                : formData.delivery_mode === 'inter_urban'
+                    ? DELIVERY_FEE_INTER_URBAN
+                    : formData.delivery_mode === 'vendor_delivery'
+                        ? vendorDeliveryOptions.vendorDeliveryFee
+                        : formData.delivery_mode === 'pickup'
+                            ? 0
+                            : DELIVERY_FEES[formData.delivery_mode as 'standard' | 'express'] ?? 0
+            const totalWithDelivery = total + currentDeliveryFee
+
+            const items = cart.map(item => ({
+                id: item.product_id || item.id,
+                name: item.name,
+                price: item.price,
+                quantity: item.quantity || 1,
+                img: item.img || '',
+                seller_id: item.seller_id || '',
+            }))
+
+            let utmCtx: { utm_source?: string; utm_medium?: string; utm_campaign?: string; session_id?: string } = {}
+            try {
+                const raw = sessionStorage.getItem('mmk_utm')
+                if (raw) { const p = JSON.parse(raw); utmCtx = { utm_source: p.utm_source, utm_medium: p.utm_medium, utm_campaign: p.utm_campaign } }
+                const sid = sessionStorage.getItem('mmk_sid')
+                if (sid) utmCtx.session_id = sid
+            } catch {}
+
+            // ── Mode invité ──────────────────────────────────────────────────
+            if (isGuestMode) {
+                const idempotencyKey = getIdempotencyKey()
+                const guestInput: GuestOrderInput = {
+                    customer_name: formData.full_name,
+                    phone: formData.phone,
+                    city: formData.city,
+                    district: formData.district,
+                    landmark: formData.landmark,
+                    payment_method: formData.payment_method === 'cod' ? 'cash' : formData.payment_method as 'mobile_money' | 'airtel_money' | 'cash',
+                    delivery_mode: formData.delivery_mode as GuestOrderInput['delivery_mode'],
+                    delivery_fee: currentDeliveryFee,
+                    items,
+                    idempotency_key: idempotencyKey,
+                    utm_source: utmCtx.utm_source,
+                    utm_medium: utmCtx.utm_medium,
+                    utm_campaign: utmCtx.utm_campaign,
+                    attribution_session_id: utmCtx.session_id,
+                }
+                const guestResult = await createGuestOrder(guestInput)
+                if ('error' in guestResult) {
+                    if ((guestResult as any).code === 'feature_disabled') {
+                        alert('Le checkout invité est temporairement indisponible.')
+                    } else {
+                        alert(guestResult.error)
+                    }
+                    return
+                }
+                clearIdempotencyKey()
+                clearCart()
+                router.push(`/order/${guestResult.order.guest_token}`)
+                return
+            }
+
+            // ── Mode connecté ────────────────────────────────────────────────
             const { user } = await safeGetUser(supabase)
             if (!user) {
                 alert('Connectez-vous pour finaliser la commande.')
@@ -396,36 +467,10 @@ export default function CheckoutPage() {
                 return
             }
 
-            const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
-                ? patisserieDeliveryFee
-                : formData.delivery_mode === 'inter_urban'
-                    ? DELIVERY_FEE_INTER_URBAN
-                    : formData.delivery_mode === 'vendor_delivery'
-                        ? vendorDeliveryOptions.vendorDeliveryFee
-                        : formData.delivery_mode === 'pickup'
-                            ? 0
-                            : DELIVERY_FEES[formData.delivery_mode as 'standard' | 'express'] ?? 0
-            const totalWithDelivery = total + currentDeliveryFee
             // Points fidélité : clamp final au total (au cas où)
             const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
 
-            const items = cart.map(item => ({
-                id: item.product_id || item.id,
-                name: item.name,
-                price: item.price,
-                quantity: item.quantity || 1,
-                img: item.img || '',
-                seller_id: item.seller_id || '',
-            }))
-
             const idempotencyKey = getIdempotencyKey()
-            let utmCtx: { utm_source?: string; utm_medium?: string; utm_campaign?: string; session_id?: string } = {}
-            try {
-                const raw = sessionStorage.getItem('mmk_utm')
-                if (raw) { const p = JSON.parse(raw); utmCtx = { utm_source: p.utm_source, utm_medium: p.utm_medium, utm_campaign: p.utm_campaign } }
-                const sid = sessionStorage.getItem('mmk_sid')
-                if (sid) utmCtx.session_id = sid
-            } catch {}
             const result = await createOrderAction({
                 items,
                 city: formData.city,
@@ -514,8 +559,10 @@ export default function CheckoutPage() {
         setTxError('')
         setTxLoading(true)
         try {
-            const { user } = await safeGetUser(supabase)
-            if (!user) { alert('Connectez-vous pour finaliser.'); return }
+            if (!isGuestMode) {
+                const { user } = await safeGetUser(supabase)
+                if (!user) { alert('Connectez-vous pour finaliser.'); return }
+            }
 
             const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
                 ? patisserieDeliveryFee
@@ -568,6 +615,39 @@ export default function CheckoutPage() {
                 const sid = sessionStorage.getItem('mmk_sid')
                 if (sid) utmCtx2.session_id = sid
             } catch {}
+
+            // ── Mode invité (Mobile Money) ────────────────────────────────────
+            if (isGuestMode) {
+                const guestInput: GuestOrderInput = {
+                    customer_name: savedFormData.full_name,
+                    phone: savedFormData.phone,
+                    city: savedFormData.city,
+                    district: savedFormData.district,
+                    landmark: savedFormData.landmark,
+                    payment_method: paymentMethod,
+                    delivery_mode: savedFormData.delivery_mode as GuestOrderInput['delivery_mode'],
+                    delivery_fee: currentDeliveryFee,
+                    items,
+                    transaction_id: isMultiVendorTx ? undefined : singleDigits,
+                    vendor_payment_info: Object.keys(vendorPaymentInfo).length > 0 ? vendorPaymentInfo : undefined,
+                    idempotency_key: idempotencyKey,
+                    utm_source: utmCtx2.utm_source,
+                    utm_medium: utmCtx2.utm_medium,
+                    utm_campaign: utmCtx2.utm_campaign,
+                    attribution_session_id: utmCtx2.session_id,
+                }
+                const guestResult = await createGuestOrder(guestInput)
+                if ('error' in guestResult) {
+                    setTxError(guestResult.error)
+                    return
+                }
+                clearIdempotencyKey()
+                clearCart()
+                router.push(`/order/${guestResult.order.guest_token}`)
+                return
+            }
+
+            // ── Mode connecté (Mobile Money) ─────────────────────────────────
             const result = await createOrderAction({
                 items,
                 city: savedFormData.city,
@@ -910,6 +990,26 @@ export default function CheckoutPage() {
                         <h1 className="text-4xl font-black uppercase italic tracking-tighter">Votre <span className="text-orange-500">Commande</span></h1>
                         <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.3em] mt-2">Dernière étape avant la livraison</p>
                     </header>
+
+                    {/* Bannière invité / connexion */}
+                    {FEATURES.guestCheckout && !isLoggedIn && (
+                        <div className="flex gap-3 p-4 rounded-2xl border border-stone-200 dark:border-stone-700 bg-white dark:bg-stone-900 text-sm">
+                            <button
+                                type="button"
+                                onClick={() => setIsGuestMode(true)}
+                                className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors ${isGuestMode ? 'bg-orange-500 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200'}`}
+                            >
+                                Commander sans compte
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setIsGuestMode(false)}
+                                className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors ${!isGuestMode ? 'bg-orange-500 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200'}`}
+                            >
+                                Se connecter
+                            </button>
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         {/* ═══ INFORMATIONS DE LIVRAISON ═══ */}

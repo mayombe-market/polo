@@ -26,6 +26,14 @@ export const FEATURES = {
     // ── Paiement à la livraison (COD) ─────────────────────────────────────────
     /** Activer le paiement à la livraison (cash on delivery) */
     cashOnDelivery: true,
+
+    // ── Checkout invité ────────────────────────────────────────────────────────
+    /** Commander sans compte (migration supabase-migration-guest-checkout.sql requise) */
+    guestCheckout: false,
+
+    // ── Google Sign-In ─────────────────────────────────────────────────────────
+    /** Connexion / inscription via Google OAuth (config Supabase Dashboard requise) */
+    googleSignIn: false,
 } as const
 
 export type FeatureFlag = keyof typeof FEATURES

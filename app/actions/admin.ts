@@ -460,3 +460,120 @@ export async function adminGetEnrichedStats() {
         newUsersToday: newUsersToday.count || 0,
     }
 }
+
+export type PlatformAnalytics = {
+    uniqueVisitors: number
+    shopViews: number
+    productViews: number
+    checkoutStarts: number
+    ordersTotal: number
+    ordersConfirmed: number
+    newUsers: number
+    conversionRate: number
+    sourceBreakdown: Array<{ source: string; visitors: number; shop_views: number; product_views: number; checkout_starts: number }>
+    topCities: Array<{ city: string; orders: number }>
+    dailyTrend: Array<{ date: string; visitors: number; orders: number }>
+    topProducts: Array<{ product_id: string; views: number; checkouts: number }>
+}
+
+export async function adminGetPlatformAnalytics(period: '1d' | '7d' | '30d' | 'all'): Promise<PlatformAnalytics | { error: string }> {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
+
+    const db = svc()
+
+    let from: string | null = null
+    if (period === '1d') from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+    else if (period === '7d') from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+    else if (period === '30d') from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+    // ── Analytics events ──────────────────────────────────────────────────────
+    let q = db.from('analytics_events').select('session_id, event_type, source, product_id, created_at').limit(80000)
+    if (from) q = q.gte('created_at', from)
+    const { data: events } = await q
+
+    const sessions = new Set<string>()
+    type SrcAgg = { sessions: Set<string>; shop_views: number; product_views: number; checkout_starts: number }
+    const bySource: Record<string, SrcAgg> = {}
+    const byDate: Record<string, Set<string>> = {}
+    const productMap: Record<string, { views: number; checkouts: number }> = {}
+    let shopViews = 0, productViews = 0, checkoutStarts = 0
+
+    for (const e of (events ?? [])) {
+        sessions.add(e.session_id)
+
+        const src = e.source || 'unknown'
+        if (!bySource[src]) bySource[src] = { sessions: new Set(), shop_views: 0, product_views: 0, checkout_starts: 0 }
+        bySource[src].sessions.add(e.session_id)
+
+        const date = (e.created_at as string).slice(0, 10)
+        if (!byDate[date]) byDate[date] = new Set()
+        byDate[date].add(e.session_id)
+
+        if (e.event_type === 'shop_view') { shopViews++; bySource[src].shop_views++ }
+        else if (e.event_type === 'product_view') {
+            productViews++; bySource[src].product_views++
+            if (e.product_id) {
+                if (!productMap[e.product_id]) productMap[e.product_id] = { views: 0, checkouts: 0 }
+                productMap[e.product_id].views++
+            }
+        } else if (e.event_type === 'checkout_start') {
+            checkoutStarts++; bySource[src].checkout_starts++
+            if (e.product_id) {
+                if (!productMap[e.product_id]) productMap[e.product_id] = { views: 0, checkouts: 0 }
+                productMap[e.product_id].checkouts++
+            }
+        }
+    }
+
+    const sourceBreakdown = Object.entries(bySource)
+        .map(([source, v]) => ({ source, visitors: v.sessions.size, shop_views: v.shop_views, product_views: v.product_views, checkout_starts: v.checkout_starts }))
+        .sort((a, b) => b.visitors - a.visitors)
+
+    const topProducts = Object.entries(productMap)
+        .sort((a, b) => (b[1].views + b[1].checkouts * 3) - (a[1].views + a[1].checkouts * 3))
+        .slice(0, 10)
+        .map(([product_id, v]) => ({ product_id, ...v }))
+
+    // ── Orders ────────────────────────────────────────────────────────────────
+    let oq = db.from('orders').select('id, status, customer_city, created_at').neq('order_type', 'subscription')
+    if (from) oq = oq.gte('created_at', from)
+    const { data: orders } = await oq
+
+    const ordersTotal = orders?.length ?? 0
+    const confirmedStatuses = ['confirmed', 'shipped', 'delivered', 'picked_up']
+    const ordersConfirmed = orders?.filter(o => confirmedStatuses.includes(o.status)).length ?? 0
+
+    const cityMap: Record<string, number> = {}
+    const ordersByDate: Record<string, number> = {}
+    for (const o of (orders ?? [])) {
+        if (o.customer_city?.trim()) cityMap[o.customer_city.trim()] = (cityMap[o.customer_city.trim()] || 0) + 1
+        const date = (o.created_at as string).slice(0, 10)
+        ordersByDate[date] = (ordersByDate[date] || 0) + 1
+    }
+    const topCities = Object.entries(cityMap).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([city, count]) => ({ city, orders: count }))
+
+    const dailyTrend = Object.entries(byDate)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, sess]) => ({ date, visitors: sess.size, orders: ordersByDate[date] || 0 }))
+
+    // ── New users ─────────────────────────────────────────────────────────────
+    let uq = db.from('profiles').select('*', { count: 'exact', head: true })
+    if (from) uq = uq.gte('created_at', from)
+    const { count: newUsers } = await uq
+
+    return {
+        uniqueVisitors: sessions.size,
+        shopViews,
+        productViews,
+        checkoutStarts,
+        ordersTotal,
+        ordersConfirmed,
+        newUsers: newUsers ?? 0,
+        conversionRate: sessions.size > 0 ? +((ordersTotal / sessions.size) * 100).toFixed(1) : 0,
+        sourceBreakdown,
+        topCities,
+        dailyTrend,
+        topProducts,
+    }
+}

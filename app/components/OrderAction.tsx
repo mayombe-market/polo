@@ -124,6 +124,23 @@ export default function OrderAction({
             setProfileGateOpen(true)
             return
         }
+        void (async () => {
+            const [{ captureAnalyticsContext }, { trackEvent }] = await Promise.all([
+                import('@/lib/analytics'),
+                import('@/app/actions/analytics'),
+            ])
+            const ctx = captureAnalyticsContext()
+            void trackEvent({
+                shop_id: shop?.id || product?.seller_id,
+                product_id: product?.id ?? null,
+                event_type: 'checkout_start',
+                session_id: ctx.session_id,
+                source: ctx.source,
+                utm_source: ctx.utm_source,
+                utm_medium: ctx.utm_medium,
+                utm_campaign: ctx.utm_campaign,
+            })
+        })()
         setDeliveryMode(null)
         setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)

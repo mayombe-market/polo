@@ -33,7 +33,7 @@ async function getAnonSupabase() {
 export async function trackEvent(params: {
     shop_id: string
     product_id?: string | null
-    event_type: 'shop_view' | 'product_view'
+    event_type: 'shop_view' | 'product_view' | 'checkout_start'
     session_id: string
     source: TrafficSource
     utm_source?: string | null

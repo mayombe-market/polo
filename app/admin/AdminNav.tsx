@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, CreditCard, Zap, Hotel, Star, UsersRound, AlertTriangle } from 'lucide-react'
+import { LayoutDashboard, Package, ShoppingBag, Truck, ShieldCheck, Users, Megaphone, CreditCard, Zap, Hotel, Star, UsersRound, AlertTriangle, BarChart3 } from 'lucide-react'
 import { useRealtime } from '@/hooks/useRealtime'
 
 const supabase = getSupabaseBrowserClient()
@@ -12,6 +12,7 @@ const supabase = getSupabaseBrowserClient()
 
 const links = [
     { href: '/admin',               label: 'Dashboard',    icon: LayoutDashboard, badgeKey: null },
+    { href: '/admin/analytics',     label: 'Analytics',    icon: BarChart3,        badgeKey: null },
     { href: '/admin/activity',      label: 'Activité',     icon: Zap,             badgeKey: 'activity' as const },
     { href: '/admin/orders',        label: 'Commandes',    icon: Package,         badgeKey: 'orders' as const },
     { href: '/admin/products',      label: 'Produits',     icon: ShoppingBag,     badgeKey: null },

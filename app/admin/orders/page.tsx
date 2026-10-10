@@ -13,7 +13,6 @@ import {
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
-import { generateInvoice } from '@/lib/generateInvoice'
 import {
     adminConfirmPayment,
     adminReleaseFunds,
@@ -1021,7 +1020,7 @@ export default function AdminOrders() {
                                         {order.status !== 'pending' && (
                                             <button
                                                 type="button"
-                                                onClick={() => generateInvoice(order)}
+                                                onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
                                                 disabled={!canAct}
                                                 title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
                                                 className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all disabled:opacity-40 disabled:pointer-events-none"

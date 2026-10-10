@@ -5,7 +5,6 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { generateInvoice } from '@/lib/generateInvoice'
 import { useRealtime } from '@/hooks/useRealtime'
 import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
 
@@ -278,7 +277,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                             </div>
                                         )}
                                         <button
-                                            onClick={() => generateInvoice(order)}
+                                            onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
                                             className="flex-1 sm:flex-none bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 px-5 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all"
                                         >
                                             <Download size={14} /> Reçu PDF

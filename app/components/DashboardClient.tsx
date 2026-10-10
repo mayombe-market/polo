@@ -30,7 +30,6 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { generateInvoice } from '@/lib/generateInvoice'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan } from '@/app/actions/orders'
 import { acceptCodOrder, rejectCodOrder, collectCodCash } from '@/app/actions/cod'
 import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
@@ -2108,7 +2107,7 @@ function OrdersPage({
                                             </div>
                                         )}
                                         <button
-                                            onClick={() => generateInvoice(order)}
+                                            onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
                                             className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400 hover:text-orange-500 transition-colors"
                                             title="Télécharger le reçu PDF"
                                         >

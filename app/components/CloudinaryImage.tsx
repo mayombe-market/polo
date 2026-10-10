@@ -4,7 +4,6 @@ import type { ImgHTMLAttributes, SyntheticEvent } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { diagError } from '@/lib/diagnostics'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
-import { debugImageSrc } from '@/lib/debugImageSrc'
 import {
     withCloudinaryAutoFormat,
     withCloudinaryCatalogThumb,
@@ -79,10 +78,6 @@ export default function CloudinaryImage({
     }, [resolvedSrc, delivery])
     const effectiveSrc =
         retry === 0 ? baseSrc : `${baseSrc}${baseSrc.includes('?') ? '&' : '?'}_retry=${retry}`
-
-    useEffect(() => {
-        debugImageSrc('CloudinaryImage', effectiveSrc)
-    }, [effectiveSrc])
 
     const handleError = useCallback(
         (e: SyntheticEvent<HTMLImageElement, Event>) => {

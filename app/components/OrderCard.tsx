@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { Clock, CheckCircle2, Truck, Package, Download, AlertTriangle, Phone, ChevronDown, Loader2 } from 'lucide-react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { generateInvoice } from '@/lib/generateInvoice'
 import { getAdminPaymentNumber } from '@/lib/adminPaymentConfig'
 import { buyerUpdatePendingTransactionId } from '@/app/actions/orders'
 import { toast } from 'sonner'
@@ -117,7 +116,7 @@ export function OrderCard({ order }: { order: any }) {
                     </div>
                     {order.status !== 'pending' && (
                         <button
-                            onClick={() => generateInvoice(order)}
+                            onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
                             className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-orange-500 transition-colors text-[9px] font-black uppercase"
                         >
                             <Download size={12} /> Reçu PDF

@@ -15,7 +15,6 @@
  */
 
 import Link from 'next/link'
-import { debugImageSrc } from '@/lib/debugImageSrc'
 import { withCloudinaryCatalogThumb } from '@/lib/cloudinaryImageUrl'
 import { catalogImageUrl } from '@/lib/heroImageUrl'
 import { memo, useCallback, useEffect, useMemo, useState } from 'react'
@@ -164,8 +163,6 @@ function ProductCardInner({
     useEffect(() => { setImgBroken(false) }, [displayUrl])
     const onImgError = useCallback(() => { setImgBroken(true) }, [])
     const imgSrc = imgBroken ? PLACEHOLDER_IMG : displayUrl
-
-    useEffect(() => { debugImageSrc('ProductCard', imgSrc) }, [imgSrc])
 
     const displayName = product.name?.trim() || 'Produit'
     const categoryLabel = product.category?.trim() || 'Collection'

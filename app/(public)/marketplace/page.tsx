@@ -19,6 +19,10 @@ export default async function MarketplacePage() {
   ])
   const excludedIds = [...new Set([...expiredIds, ...suspendedIds])]
 
+  const now = new Date()
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+
+  // Toutes les requêtes en un seul round-trip (produits + compteurs estimatifs).
   const [
     { data: ads },
     heroCampRes,
@@ -30,12 +34,14 @@ export default async function MarketplacePage() {
     { data: promoProducts },
     { data: trendProducts },
     { data: homeReviews },
+    productsCountRes,
+    vendorsCountRes,
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     supabase.from('vendor_ad_campaigns').select('id, title, description, image_url, link_url, display_order').eq('placement', 'hero').order('display_order', { ascending: true }),
     supabase.from('vendor_ad_campaigns').select('id, title, description, image_url, link_url, display_order').eq('placement', 'tile').order('display_order', { ascending: true }),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gte('created_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()).order('views_count', { ascending: false }).limit(5),
+      supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gte('created_at', sevenDaysAgo).order('views_count', { ascending: false }).limit(5),
       excludedIds
     ),
     supabase.from('category').select('id, name, img, sub_category (id, name)'),
@@ -48,7 +54,7 @@ export default async function MarketplacePage() {
       excludedIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gt('promo_percentage', 0).gt('promo_end_date', new Date().toISOString()).order('created_at', { ascending: false }).limit(8),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gt('promo_percentage', 0).gt('promo_end_date', now.toISOString()).order('created_at', { ascending: false }).limit(8),
       excludedIds
     ),
     excludeExpiredSellers(
@@ -56,12 +62,11 @@ export default async function MarketplacePage() {
       excludedIds
     ),
     supabase.from('reviews').select('id, rating, content, user_name, created_at, products:product_id(name, img, category)').gte('rating', 4).not('content', 'is', null).order('created_at', { ascending: false }).limit(8),
+    // Compteurs estimatifs (pg_stats, ~1 ms vs ~80 ms COUNT exact) — suffisants pour affichage.
+    supabase.from('products').select('*', { count: 'estimated', head: true }),
+    supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'vendor'),
   ])
 
-  const [productsCountRes, vendorsCountRes] = await Promise.all([
-    supabase.from('products').select('*', { count: 'exact', head: true }),
-    supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('role', 'vendor'),
-  ])
   const totalProducts = productsCountRes.count ?? 0
   const totalVendors = vendorsCountRes.count ?? 0
 

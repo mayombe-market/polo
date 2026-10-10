@@ -5,12 +5,13 @@ import Link from 'next/link'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Users, Loader2, CheckCircle, Clock, XCircle, Search, X,
-    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2, Trash2, UserMinus
+    ShoppingBag, MapPin, Calendar, ExternalLink, Shield, FileDown, Settings2, Trash2, UserMinus,
+    Ban, RotateCcw
 } from 'lucide-react'
 import { exportCSV, csvFilename } from '@/lib/exportCSV'
 import { withTimeout } from '@/lib/supabase-utils'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
-import { adminDeleteVendor, adminDemoteVendor } from '@/app/actions/admin'
+import { adminDeleteVendor, adminDemoteVendor, suspendVendor, reactivateVendor } from '@/app/actions/admin'
 
 const supabase = getSupabaseBrowserClient()
 
@@ -169,13 +170,17 @@ export default function AdminVendorsPage() {
     const [demotingVendor, setDemotingVendor] = useState<any | null>(null)
     const [demoteLoading, setDemoteLoading] = useState(false)
     const [demoteError, setDemoteError] = useState('')
+    const [suspendingVendor, setSuspendingVendor] = useState<any | null>(null)
+    const [suspendReason, setSuspendReason] = useState('')
+    const [suspendLoading, setSuspendLoading] = useState(false)
+    const [suspendError, setSuspendError] = useState('')
 
     useEffect(() => {
         const fetchVendors = async () => {
             try {
                 const { data } = await withTimeout(supabase
                     .from('profiles')
-                    .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, vendor_type, vendor_pages, verification_status, avatar_url, created_at')
+                    .select('id, first_name, last_name, shop_name, store_name, email, phone, city, role, subscription_plan, vendor_type, vendor_pages, verification_status, avatar_url, created_at, is_suspended, suspended_at, suspension_reason')
                     .eq('role', 'vendor')
                     .order('created_at', { ascending: false }))
 
@@ -403,6 +408,11 @@ export default function AdminVendorsPage() {
                                         <p className="text-sm font-bold dark:text-white truncate">
                                             {vendor.first_name} {vendor.last_name}
                                         </p>
+                                        {vendor.is_suspended && (
+                                            <span className="flex items-center gap-0.5 px-2 py-0.5 text-[9px] font-bold rounded-full bg-orange-100 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400">
+                                                <Ban size={9} /> Suspendu
+                                            </span>
+                                        )}
                                         {getVerifBadge(vendor.verification_status)}
                                         {getPlanBadge(vendor.subscription_plan || 'free')}
                                         <VendorTypeBadge vendorType={vendor.vendor_type} />
@@ -454,6 +464,27 @@ export default function AdminVendorsPage() {
                                     >
                                         <UserMinus size={16} />
                                     </button>
+                                    {vendor.is_suspended ? (
+                                        <button
+                                            onClick={async () => {
+                                                if (!confirm(`Réactiver ${vendor.shop_name || vendor.first_name} ?`)) return
+                                                const res = await reactivateVendor(vendor.id)
+                                                if ('success' in res) setVendors(prev => prev.map(v => v.id === vendor.id ? { ...v, is_suspended: false, suspended_at: null, suspension_reason: null } : v))
+                                            }}
+                                            className="p-2.5 rounded-xl bg-green-100 dark:bg-green-900/20 text-green-600 dark:text-green-400 hover:bg-green-200 transition-colors"
+                                            title="Réactiver ce vendeur"
+                                        >
+                                            <RotateCcw size={16} />
+                                        </button>
+                                    ) : (
+                                        <button
+                                            onClick={() => { setSuspendingVendor(vendor); setSuspendReason(''); setSuspendError('') }}
+                                            className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-orange-100 hover:text-orange-600 dark:hover:bg-orange-900/20 dark:hover:text-orange-400 transition-colors"
+                                            title="Suspendre ce vendeur"
+                                        >
+                                            <Ban size={16} />
+                                        </button>
+                                    )}
                                     <button
                                         onClick={() => { setDeletingVendor(vendor); setDeleteError('') }}
                                         className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-500 hover:bg-red-100 hover:text-red-500 dark:hover:bg-red-900/20 dark:hover:text-red-400 transition-colors"
@@ -611,6 +642,66 @@ export default function AdminVendorsPage() {
                             >
                                 {deleteLoading ? <Loader2 size={16} className="animate-spin" /> : <Trash2 size={16} />}
                                 {deleteLoading ? 'Suppression…' : 'Supprimer définitivement'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* ─── Modale suspension ─── */}
+            {suspendingVendor && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSuspendingVendor(null)}>
+                    <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 w-full max-w-sm shadow-2xl border border-slate-100 dark:border-slate-800" onClick={e => e.stopPropagation()}>
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-xl bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
+                                <Ban size={20} className="text-orange-600 dark:text-orange-400" />
+                            </div>
+                            <div>
+                                <h2 className="text-sm font-black dark:text-white">Suspendre ce vendeur</h2>
+                                <p className="text-[11px] text-slate-400">{suspendingVendor.shop_name || `${suspendingVendor.first_name} ${suspendingVendor.last_name}`}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                            Ses produits seront masqués des listings publics. Il pourra être réactivé à tout moment.
+                        </p>
+                        <textarea
+                            value={suspendReason}
+                            onChange={e => setSuspendReason(e.target.value)}
+                            placeholder="Motif de suspension (obligatoire)…"
+                            rows={3}
+                            className="w-full rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 px-3 py-2 text-sm text-slate-800 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-300 mb-3 resize-none"
+                        />
+                        {suspendError && <p className="text-xs text-red-500 mb-2">{suspendError}</p>}
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setSuspendingVendor(null)}
+                                disabled={suspendLoading}
+                                className="flex-1 py-3 rounded-xl border border-slate-200 dark:border-slate-700 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                            >
+                                Annuler
+                            </button>
+                            <button
+                                onClick={async () => {
+                                    if (!suspendReason.trim()) { setSuspendError('Le motif est obligatoire'); return }
+                                    setSuspendLoading(true)
+                                    setSuspendError('')
+                                    const res = await suspendVendor(suspendingVendor.id, suspendReason)
+                                    setSuspendLoading(false)
+                                    if ('error' in res) {
+                                        setSuspendError(res.error)
+                                    } else {
+                                        setVendors(prev => prev.map(v => v.id === suspendingVendor.id
+                                            ? { ...v, is_suspended: true, suspended_at: new Date().toISOString(), suspension_reason: suspendReason }
+                                            : v
+                                        ))
+                                        setSuspendingVendor(null)
+                                    }
+                                }}
+                                disabled={suspendLoading}
+                                className="flex-1 py-3 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-colors flex items-center justify-center gap-2 disabled:opacity-60"
+                            >
+                                {suspendLoading ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+                                {suspendLoading ? 'Suspension…' : 'Suspendre'}
                             </button>
                         </div>
                     </div>

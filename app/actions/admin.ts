@@ -104,6 +104,50 @@ export async function adminDemoteVendor(vendorId: string): Promise<{ success: tr
     return { success: true }
 }
 
+// ─── Suspension vendeurs ────────────────────────────────
+export async function suspendVendor(
+    vendorId: string,
+    reason: string
+): Promise<{ success: true } | { error: string }> {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
+    if (!vendorId) return { error: 'ID vendeur manquant' }
+    if (!reason?.trim()) return { error: 'Motif de suspension requis' }
+
+    const { error } = await svc()
+        .from('profiles')
+        .update({
+            is_suspended: true,
+            suspended_at: new Date().toISOString(),
+            suspension_reason: reason.trim(),
+        })
+        .eq('id', vendorId)
+        .eq('role', 'vendor')
+
+    if (error) return { error: error.message }
+    return { success: true }
+}
+
+export async function reactivateVendor(
+    vendorId: string
+): Promise<{ success: true } | { error: string }> {
+    const auth = await requireAdmin()
+    if ('error' in auth) return { error: auth.error }
+    if (!vendorId) return { error: 'ID vendeur manquant' }
+
+    const { error } = await svc()
+        .from('profiles')
+        .update({
+            is_suspended: false,
+            suspended_at: null,
+            suspension_reason: null,
+        })
+        .eq('id', vendorId)
+
+    if (error) return { error: error.message }
+    return { success: true }
+}
+
 // ─── Reviews ────────────────────────────────────────────
 export async function adminDeleteReview(reviewId: string) {
     const auth = await requireAdmin()

@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { FEATURES } from '@/lib/featureFlags'
 import { createClient } from '@supabase/supabase-js'
-import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import PatisserieClient from './PatisserieClient'
 
 export const revalidate = 60
@@ -60,7 +60,8 @@ export default async function PatisseriePage() {
         process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     )
 
-    const expiredIds = await getExpiredSellerIds(supabase)
+    const [expiredIds, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
+    const excludedIds = [...new Set([...expiredIds, ...suspendedIds])]
 
     // Tous les produits pâtisserie (limite haute pour couvrir toutes les boutiques)
     const { data: products } = await excludeExpiredSellers(
@@ -72,7 +73,7 @@ export default async function PatisseriePage() {
             .eq('category', 'Pâtisserie & Traiteur')
             .order('views_count', { ascending: false })
             .limit(120),
-        expiredIds
+        excludedIds
     )
 
     // Vendeurs uniques

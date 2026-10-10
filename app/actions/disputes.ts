@@ -3,6 +3,7 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { createNotification } from './notifications'
 
 function svc() {
     return createClient(
@@ -105,6 +106,19 @@ export async function createDispute({
         .single()
 
     if (error) return { error: error.message }
+
+    if (order.seller_id) {
+        const items = order.items as any[]
+        const productNames = items?.map((i: any) => i.name).join(', ') || 'votre produit'
+        createNotification(
+            order.seller_id,
+            'dispute_opened',
+            '⚠️ Litige ouvert sur votre commande',
+            `${productNames} · Motif : ${motif}`,
+            '/vendor/dashboard'
+        ).catch(() => {})
+    }
+
     return { success: true, dispute: data }
 }
 

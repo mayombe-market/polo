@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
-import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
@@ -21,10 +21,11 @@ export default async function SubCategoryPage({ params }: { params: { id: string
         .eq('id', id)
         .single()
 
-    const expiredIds = await getExpiredSellerIds(supabase)
+    const [expiredIds, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
+    const excludedIds = [...new Set([...expiredIds, ...suspendedIds])]
     const { data: products, error } = await excludeExpiredSellers(
         supabase.from('products').select('*').eq('sub_category_uuid', id).order('created_at', { ascending: false }).limit(100),
-        expiredIds
+        excludedIds
     )
 
     return (

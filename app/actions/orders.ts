@@ -940,21 +940,22 @@ export async function createOrder(input: {
         })
         .eq('id', user.id)
 
-    // ── Push immédiat pour cash + airtel_money (patisserie / restaurant) ──────
-    // Pour ces méthodes la commande est ferme (livraison cash) ou le paiement
-    // est déjà fait (Airtel) : le vendeur doit être alerté tout de suite.
-    // Pour mobile_money (MTN MoMo) on attend la confirmation (évite faux positifs).
-    if (input.payment_method === 'cash' || input.payment_method === 'airtel_money') {
-        const sellerIds = [...new Set(input.items.map(i => i.seller_id).filter(Boolean))] as string[]
-        if (sellerIds.length > 0) {
-            const productNames = input.items.map(i => i.name).join(', ')
-            const methodLabel = input.payment_method === 'cash' ? '💵 Paiement à la livraison' : '📲 Airtel Money'
-            sendPushToUsers(
-                sellerIds,
-                '🛍️ Nouvelle commande !',
-                `${productNames} · ${methodLabel}`,
-                '/vendor/dashboard'
-            ).catch(() => {})
+    // ── Notification + push aux vendeurs à la création de commande ──────────────
+    const orderSellerIds = [...new Set(input.items.map(i => i.seller_id).filter(Boolean))] as string[]
+    if (orderSellerIds.length > 0) {
+        const productNames = input.items.map(i => i.name).join(', ')
+        const methodLabel = input.payment_method === 'cash'
+            ? '💵 Paiement à la livraison'
+            : input.payment_method === 'airtel_money'
+                ? '📲 Airtel Money'
+                : '📱 MTN MoMo — paiement en attente'
+        // Push immédiat pour cash et Airtel (commande ferme) ; in-app pour MTN (à confirmer)
+        if (input.payment_method === 'cash' || input.payment_method === 'airtel_money') {
+            sendPushToUsers(orderSellerIds, '🛍️ Nouvelle commande !', `${productNames} · ${methodLabel}`, '/vendor/dashboard').catch(() => {})
+        }
+        // In-app notification pour tous les modes (y compris MTN)
+        for (const sid of orderSellerIds) {
+            createNotification(sid, 'new_order', '🛍️ Nouvelle commande', `${productNames} · ${methodLabel}`, '/vendor/dashboard').catch(() => {})
         }
     }
 

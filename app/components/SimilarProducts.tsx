@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react'
 import ProductCard from './ProductCard'
-import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 
 const SimilarProducts = ({ productId, subcategory, category }: {
@@ -19,7 +19,8 @@ const SimilarProducts = ({ productId, subcategory, category }: {
 
         const fetchSimilar = async () => {
             try {
-                const expiredIds = await getExpiredSellerIds(supabase)
+                const [expiredRaw, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
+                const expiredIds = [...new Set([...expiredRaw, ...suspendedIds])]
 
                 // 1. Essayer par sous-catégorie
                 if (subcategory) {

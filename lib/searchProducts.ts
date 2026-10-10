@@ -1,6 +1,6 @@
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
-import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 
 export const searchProducts = async (query: string, filters: any, page: number = 1) => {
@@ -55,8 +55,8 @@ export const searchProducts = async (query: string, filters: any, page: number =
     }
 
     // 4. EXCLURE LES VENDEURS EXPIRÉS
-    const expiredIds = await getExpiredSellerIds(supabase)
-    request = excludeExpiredSellers(request, expiredIds)
+    const [expiredIds, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
+    request = excludeExpiredSellers(request, [...new Set([...expiredIds, ...suspendedIds])])
 
     // 5. APPLICATION DE LA TRANCHE (PAGINATION)
     request = request.range(from, to)

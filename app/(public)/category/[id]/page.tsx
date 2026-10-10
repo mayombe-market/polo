@@ -6,7 +6,7 @@ import CloudinaryImage from '@/app/components/CloudinaryImage'
 import ImmobilierCategoryClient from '@/app/components/category/ImmobilierCategoryClient'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
-import { getExpiredSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
+import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
 
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
@@ -90,7 +90,8 @@ export default async function CategoryPage(props: any) {
         category = catData;
 
         if (category) {
-            const expiredIds = await getExpiredSellerIds(supabase)
+            const [expiredIds, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
+            const expiredIds_merged = [...new Set([...expiredIds, ...suspendedIds])]
             const isImmobilier = (category.name || '').trim().toLowerCase() === 'immobilier'
 
             // Sous-catégories DB (peut être vide après cleanup).
@@ -126,7 +127,7 @@ export default async function CategoryPage(props: any) {
                 ? immoSubs.filter((s) => !s.id.startsWith('canonical:')).map((s) => s.id)
                 : []
 
-            let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds);
+            let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds_merged);
 
             if (isImmobilier) {
                 // IMMOBILIER : PostgREST ne gère pas bien une clause OR qui
@@ -140,7 +141,7 @@ export default async function CategoryPage(props: any) {
                     immoSubUuids.length > 0 ? `,sub_category_uuid.in.(${immoSubUuids.join(',')})` : ''
                 }`
                 const fetches = [
-                    excludeExpiredSellers(supabase.from('products').select('*'), expiredIds)
+                    excludeExpiredSellers(supabase.from('products').select('*'), expiredIds_merged)
                         .or(baseCatOr)
                         .order('created_at', { ascending: false })
                         .limit(100),
@@ -150,7 +151,7 @@ export default async function CategoryPage(props: any) {
                         const orClause = isCanonical
                             ? `subcategory.ilike.%${safeSub}%`
                             : `subcategory.ilike.%${safeSub}%,sub_category_uuid.eq.${sub.id}`
-                        return excludeExpiredSellers(supabase.from('products').select('*'), expiredIds)
+                        return excludeExpiredSellers(supabase.from('products').select('*'), expiredIds_merged)
                             .or(orClause)
                             .order('created_at', { ascending: false })
                             .limit(100)
@@ -230,7 +231,7 @@ export default async function CategoryPage(props: any) {
                             supabase
                                 .from('products')
                                 .select('*', { count: 'exact', head: true }),
-                            expiredIds,
+                            expiredIds_merged,
                         ).or(orClause)
                         immoSubCounts[sub.name] = count || 0
                     }),

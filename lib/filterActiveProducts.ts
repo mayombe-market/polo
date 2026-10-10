@@ -2,6 +2,18 @@ import { SupabaseClient } from '@supabase/supabase-js'
 import { GRACE_PERIOD_DAYS } from './subscription'
 
 /**
+ * Récupère les IDs des vendeurs suspendus par l'admin.
+ */
+export async function getSuspendedSellerIds(supabase: SupabaseClient): Promise<string[]> {
+    const { data } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('is_suspended', true)
+
+    return (data || []).map(s => s.id)
+}
+
+/**
  * Récupère les IDs des vendeurs dont l'abonnement est expiré au-delà de la période de grâce.
  * Utilisé pour filtrer les produits sur les pages publiques.
  *

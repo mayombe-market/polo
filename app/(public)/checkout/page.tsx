@@ -324,7 +324,6 @@ export default function CheckoutPage() {
                 if (profile) {
                     const p = profile as { full_name?: string | null; phone?: string | null; whatsapp_number?: string | null; city?: string | null; district?: string | null; landmark?: string | null }
                     const displayCity = profileCityToCheckoutDisplay(p.city) || ''
-                    setNeedsCity(!displayCity)
                     reset({
                         ...CHECKOUT_DEFAULTS,
                         full_name: p.full_name || '',
@@ -335,14 +334,12 @@ export default function CheckoutPage() {
                         payment_method: 'mobile_money',
                     })
                 } else {
-                    setNeedsCity(true)
                     reset({ ...CHECKOUT_DEFAULTS })
                 }
                 setUserEmail(user.email || '')
                 setIsLoggedIn(true)
             } else if (FEATURES.guestCheckout) {
                 setIsGuestMode(true)
-                setNeedsCity(true)
             }
             setLoadingProfile(false)
         }
@@ -351,8 +348,6 @@ export default function CheckoutPage() {
 
     const onSubmit = async (formData: CheckoutType) => {
         if (cart.length === 0) return alert("Votre panier est vide")
-
-        if (needsCity) return
 
         if (sellerIds.length > 0 && !sellerCitiesReady) {
             alert('Chargement des informations vendeurs… Réessayez dans une seconde.')
@@ -1580,7 +1575,6 @@ export default function CheckoutPage() {
                             type="submit"
                             disabled={
                                 loading ||
-                                needsCity ||
                                 cart.length === 0 ||
                                 (sellerIds.length > 0 && (!sellerCitiesReady || vendorPaymentMethods.loading)) ||
                                 (isPatisserieOrder && !buyerGps) ||

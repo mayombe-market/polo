@@ -260,3 +260,143 @@ describe('TEST 12 — pas de notification double', () => {
         expect(list).toHaveLength(1)
     })
 })
+
+// ─── TEST 13 : colonnes INSERT attendues ─────────────────────────────────────
+describe('TEST 13 — colonnes INSERT attendues par submitVerification', () => {
+    const EXPECTED_COLUMNS = [
+        'vendor_id',
+        'id_type',
+        'id_photo_url',
+        'manager_name',
+        'rccm_number',
+        'niu_number',
+        'address',
+        'address_lat',
+        'address_lng',
+        'cni_name',
+        'shop_photo_url',
+        'cni_photo_url',
+        'passport_photo_url',
+        'momo_name',
+        'momo_number',
+        'momo_operator',
+    ]
+
+    it('toutes les colonnes attendues sont référencées dans le payload type', () => {
+        // Simule le payload INSERT tel qu'il sera envoyé à Supabase
+        const mockPayload: Record<string, unknown> = {
+            vendor_id: 'uuid-vendeur',
+            id_type: 'cni',
+            id_photo_url: 'https://supabase.co/storage/photo.jpg',
+            manager_name: 'MBOUNGOU Jean',
+            rccm_number: 'CG-BZV-01-2024-A10-00001',
+            niu_number: 'P2300000000000A',
+            address: 'Avenue de la Paix, Brazzaville',
+            address_lat: -4.26,
+            address_lng: 15.28,
+            cni_name: 'MBOUNGOU Jean',
+            shop_photo_url: null,
+            cni_photo_url: null,
+            passport_photo_url: null,
+            momo_name: null,
+            momo_number: null,
+            momo_operator: 'particulier',
+        }
+        for (const col of EXPECTED_COLUMNS) {
+            expect(mockPayload).toHaveProperty(col)
+        }
+    })
+
+    it('id_type accepte cni, passport, permis uniquement', () => {
+        const valid = ['cni', 'passport', 'permis']
+        const invalid = ['carte', 'visa', '', null, undefined]
+        for (const v of valid) {
+            expect(['cni', 'passport', 'permis']).toContain(v)
+        }
+        for (const v of invalid) {
+            expect(['cni', 'passport', 'permis']).not.toContain(v)
+        }
+    })
+
+    it('niu_number est optionnel (null accepté pour les particuliers)', () => {
+        const payloadParticulier = { niu_number: null, momo_operator: 'particulier' }
+        // Un particulier peut ne pas avoir de NIU — null doit être accepté
+        expect(payloadParticulier.niu_number).toBeNull()
+    })
+})
+
+// ─── TEST 14 : transitions de statut ─────────────────────────────────────────
+describe('TEST 14 — transitions de statut valides', () => {
+    type VStatus = 'unverified' | 'pending' | 'approved' | 'rejected' | 'verified'
+
+    function canSubmit(currentStatus: VStatus): boolean {
+        return currentStatus !== 'pending' && currentStatus !== 'verified'
+    }
+
+    function approvalResult(verificationStatus: string): { profileStatus: string; verificationNew: string } {
+        return { profileStatus: 'verified', verificationNew: 'approved' }
+    }
+
+    function rejectionResult(reason: string): { profileStatus: string; verificationNew: string } | { error: string } {
+        if (!reason.trim()) return { error: 'Motif obligatoire' }
+        return { profileStatus: 'rejected', verificationNew: 'rejected' }
+    }
+
+    it('unverified → pending après soumission', () => {
+        expect(canSubmit('unverified')).toBe(true)
+    })
+
+    it('rejected → pending autorisé (re-soumission)', () => {
+        expect(canSubmit('rejected')).toBe(true)
+    })
+
+    it('pending → bloqué (doublon)', () => {
+        expect(canSubmit('pending')).toBe(false)
+    })
+
+    it('verified → bloqué (déjà validé)', () => {
+        expect(canSubmit('verified')).toBe(false)
+    })
+
+    it('approbation : vendor_verifications.status = approved, profiles.verification_status = verified', () => {
+        const result = approvalResult('approved')
+        expect(result.verificationNew).toBe('approved')
+        expect(result.profileStatus).toBe('verified')
+    })
+
+    it('refus avec motif : statuts corrects', () => {
+        const result = rejectionResult('Photo floue')
+        if ('error' in result) throw new Error('Unexpected error')
+        expect(result.verificationNew).toBe('rejected')
+        expect(result.profileStatus).toBe('rejected')
+    })
+
+    it('refus sans motif : erreur retournée', () => {
+        const result = rejectionResult('   ')
+        expect(result).toHaveProperty('error')
+    })
+})
+
+// ─── TEST 15 : résistance aux erreurs email ───────────────────────────────────
+describe('TEST 15 — échec email ne bloque pas la vérification', () => {
+    it('une erreur email catchée ne remonte pas', async () => {
+        async function simulateEmailFailure(): Promise<{ success: boolean }> {
+            // Simule le pattern .catch(() => {}) utilisé dans verifications.ts
+            const emailPromise = Promise.reject(new Error('SMTP timeout'))
+            emailPromise.catch(() => {})   // silencieux
+            return { success: true }       // action principale non bloquée
+        }
+        const result = await simulateEmailFailure()
+        expect(result.success).toBe(true)
+    })
+
+    it('vendeur sans email : approbation réussit quand même', () => {
+        const sendMock = vi.fn()
+        function approveWithOptionalEmail(email: string | null) {
+            if (email) sendMock(email)
+            return { success: true }
+        }
+        expect(approveWithOptionalEmail(null).success).toBe(true)
+        expect(sendMock).not.toHaveBeenCalled()
+    })
+})

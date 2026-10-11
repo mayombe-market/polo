@@ -19,8 +19,10 @@ import {
     adminRejectOrder,
     adminCancelSubscription,
     adminDeleteOrder,
+    adminArchiveOrder,
     adminSetBuyerPaymentNotice,
 } from '@/app/actions/orders'
+import { FEATURES } from '@/lib/featureFlags'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -345,22 +347,22 @@ export default function AdminOrders() {
     }
 
     // Annuler un abonnement vendeur
-    const deleteOrderFromDb = async (orderId: string, label: string) => {
+    const archiveOrderFromDb = async (orderId: string, label: string) => {
         if (!confirm(
-            `Supprimer définitivement la commande ${label} ?\n\n` +
-            'La ligne sera retirée de la base de données (irréversible). Les notes liées seront aussi supprimées.'
+            `Archiver la commande ${label} ?\n\n` +
+            'La commande sera masquée de cette vue mais conservée dans la base de données (réversible). Les données ne sont pas supprimées.'
         )) return
         setUpdating(orderId)
         try {
-            const result = await adminDeleteOrder(orderId)
+            const result = await adminArchiveOrder(orderId)
             if (result.error) {
                 toast.error(result.error)
                 return
             }
             setOrders(prev => prev.filter(o => o.id !== orderId))
-            toast.success('Commande supprimée de la base')
+            toast.success('Commande archivée (données préservées)')
         } catch (err: any) {
-            toast.error('Erreur : ' + (err?.message || 'Impossible de supprimer'))
+            toast.error('Erreur : ' + (err?.message || 'Impossible d\'archiver'))
         } finally {
             setUpdating(null)
         }
@@ -497,7 +499,7 @@ export default function AdminOrders() {
                     {[
                         { label: 'Commandes', val: productOrders.length, icon: <Package size={18} />, color: 'text-slate-600' },
                         { label: 'CA Total', val: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: <DollarSign size={18} />, color: 'text-green-600' },
-                        { label: 'Commissions', val: `${totalCommissions.toLocaleString('fr-FR')} F`, icon: <Wallet size={18} />, color: 'text-orange-600' },
+                        ...(FEATURES.commissions ? [{ label: 'Commissions', val: `${totalCommissions.toLocaleString('fr-FR')} F`, icon: <Wallet size={18} />, color: 'text-orange-600' }] : []),
                         { label: 'Versements en attente', val: pendingPayouts, icon: <Clock size={18} />, color: 'text-amber-600' },
                     ].map((stat, i) => (
                         <div key={i} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800">
@@ -585,7 +587,7 @@ export default function AdminOrders() {
                         { id: 'shipped', label: 'Colis prêts' },
                         { id: 'picked_up', label: 'Récupérées' },
                         { id: 'delivered', label: 'Livrées' },
-                        { id: 'subscriptions', label: '🔷 Abonnements' },
+                        ...(FEATURES.subscriptions ? [{ id: 'subscriptions', label: '🔷 Abonnements' }] : []),
                     ].map((f) => {
                         const count = f.id === 'all'
                             ? productOrders.length
@@ -786,12 +788,14 @@ export default function AdminOrders() {
                                                                 <span className="font-black text-slate-400">{(order.delivery_fee || 0).toLocaleString('fr-FR')} F</span>
                                                             </div>
                                                         )}
+                                                        {FEATURES.commissions && (
                                                         <div className="flex justify-between text-[10px] font-bold">
                                                             <span className="text-orange-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%)</span>
                                                             <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
                                                         </div>
-                                                        <div className="flex justify-between text-[10px] font-bold border-t border-orange-200 dark:border-orange-800 pt-2">
-                                                            <span className="text-slate-600">Part vendeur ({Math.round((1 - (order.commission_rate || 0.10)) * 100)}%)</span>
+                                                        )}
+                                                        <div className="flex justify-between text-[10px] font-bold border-t border-slate-200 dark:border-slate-700 pt-2">
+                                                            <span className="text-slate-600">Part vendeur</span>
                                                             <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
                                                         </div>
                                                     </div>
@@ -1050,13 +1054,13 @@ export default function AdminOrders() {
 
                                         <button
                                             type="button"
-                                            onClick={() => deleteOrderFromDb(order.id, formatOrderNumber(order))}
+                                            onClick={() => archiveOrderFromDb(order.id, formatOrderNumber(order))}
                                             disabled={updating === order.id || !canAct}
-                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                            className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-900 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all disabled:opacity-50"
+                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : 'Archiver (données préservées)'}
+                                            className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-2 border-slate-200 dark:border-slate-700 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
                                         >
                                             {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                            Supprimer de la BDD
+                                            Archiver
                                         </button>
                                     </div>
                                 </div>

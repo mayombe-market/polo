@@ -51,7 +51,7 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
     const [error, setError] = useState<string | null>(null)
     const userRef = useRef<any>(null)
     const cartRef = useRef<CartItem[]>([])
-    const prevUserIdRef = useRef<string | null>(null)
+    const prevUserIdRef = useRef<string | null | undefined>(undefined)
 
     // Keep refs in sync
     useEffect(() => { userRef.current = user }, [user])

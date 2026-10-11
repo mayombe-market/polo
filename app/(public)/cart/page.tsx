@@ -10,6 +10,8 @@ import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight } from 'lucide-react'
 import AuthModal from '@/app/components/AuthModal'
+import { FEATURES } from '@/lib/featureFlags'
+import { useRouter } from 'next/navigation'
 import StepIndicator from '@/app/components/checkout/StepIndicator'
 import LocationStep from '@/app/components/checkout/LocationStep'
 import DeliveryModeStep from '@/app/components/checkout/DeliveryModeStep'
@@ -47,6 +49,7 @@ type Step =
 export default function CartPage() {
     const { cart, total, itemCount, updateQuantity, removeFromCart, clearCart, loading } = useCart()
     const { profile } = useAuth()
+    const router = useRouter()
 
     // Auth
     const [isAuthOpen, setIsAuthOpen] = useState(false)
@@ -155,6 +158,10 @@ export default function CartPage() {
     const handleCheckout = async () => {
         const u = await checkUser()
         if (!u) {
+            if (FEATURES.guestCheckout) {
+                router.push('/checkout')
+                return
+            }
             setIsAuthOpen(true)
             return
         }

@@ -599,35 +599,8 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
       })
       .subscribe()
 
-    // MTN polling : vérifier le statut toutes les 5s
-    let pollInterval: ReturnType<typeof setInterval> | null = null
-    if (method === 'mobile_money' && referenceId) {
-      let localPollCount = 0
-      pollInterval = setInterval(async () => {
-        localPollCount++
-        if (localPollCount > 60) { // 5 minutes
-          clearInterval(pollInterval!)
-          setStep('timeout')
-          return
-        }
-        try {
-          const res = await fetch(`/api/mtn-momo/status?referenceId=${referenceId}&orderId=${orderId}`)
-          const data = await res.json()
-          if (data.status === 'SUCCESSFUL') {
-            clearInterval(pollInterval!)
-            playSuccess()
-            setStep('success')
-          } else if (data.status === 'FAILED') {
-            clearInterval(pollInterval!)
-            setStep('rejected')
-          }
-        } catch {}
-      }, 5000)
-    }
-
     return () => {
       supabase.removeChannel(channel)
-      if (pollInterval) clearInterval(pollInterval)
     }
   }, [step, orderId, method, referenceId])
 
@@ -651,33 +624,10 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
     }
   }
 
-  const handleMtnRequest = async () => {
-    const cleanPhone = phone.replace(/\D/g, '')
-    if (cleanPhone.length < 6) { setPhoneError('Entrez votre numéro MTN'); return }
-    setPhoneError(''); setServerError(''); setStep('requesting')
-    try {
-      const orderRes = await createSubscriptionOrder({
-        planId: plan.id, planName: plan.name, price, billing,
-        payment_method: 'mobile_money',
-      })
-      if (orderRes.error) { setServerError(orderRes.error); setStep('phone'); return }
-      const newOrderId = orderRes.order.id
-      setOrderId(newOrderId); setOrderData(orderRes.order)
-
-      const payRes = await fetch('/api/mtn-momo/pay', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId: newOrderId, phone: cleanPhone, amount: price }),
-      })
-      const payData = await payRes.json()
-      if (!payRes.ok || payData.error) {
-        setServerError(payData.error || 'Erreur MTN MoMo'); setStep('phone'); return
-      }
-      setReferenceId(payData.referenceId)
-      setStep('waiting')
-    } catch (err: any) {
-      setServerError(err.message || 'Erreur'); setStep('phone')
-    }
+  const handleMtnRequest = () => {
+    // Le flux auto MTN (/api/mtn-momo/pay) est désactivé (retourne 410).
+    // On bascule vers le flux manuel : l'utilisateur envoie lui-même et saisit son ID de transaction.
+    setStep('transfer')
   }
 
   // ── Résumé commande (affiché en haut de chaque étape) ──
@@ -912,7 +862,7 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
         <p style={{ color: "#888", fontSize: 13, margin: "0 0 24px", lineHeight: 1.6 }}>
           Le paiement n&apos;a pas été confirmé à temps.<br />Réessayez ou contactez le support.
         </p>
-        <button onClick={() => { setStep('phone'); setReferenceId(''); setOrderId(''); setOrderData(null) }} style={{
+        <button onClick={() => { setStep('transfer'); setReferenceId(''); setOrderId(''); setOrderData(null) }} style={{
           width: "100%", padding: "16px 0", borderRadius: 16, border: "none",
           background: plan.gradient, color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer",
         }}>Réessayer</button>

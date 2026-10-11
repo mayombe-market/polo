@@ -104,9 +104,66 @@ USING (
 */
 
 
+-- ─── S5 : Protéger les colonnes sensibles de la table profiles ─────────────
+-- Problème : un utilisateur authentifié pourrait modifier son propre `role`,
+-- `verification_status` ou `is_suspended` via la politique UPDATE existante.
+-- La politique RLS ne peut pas restreindre à la colonne; on utilise un trigger.
+--
+-- AVANT d'appliquer : vérifier que la politique UPDATE existante est bien :
+--   USING (id = auth.uid())
+-- Si elle est absente ou trop permissive, la créer/corriger :
+--
+--   DROP POLICY IF EXISTS "profiles_update_own" ON public.profiles;
+--   CREATE POLICY "profiles_update_own" ON public.profiles
+--       FOR UPDATE
+--       TO authenticated
+--       USING (id = auth.uid())
+--       WITH CHECK (id = auth.uid());
+
+CREATE OR REPLACE FUNCTION public.protect_profiles_sensitive_columns()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    caller_role TEXT;
+BEGIN
+    -- Détecter une tentative de modification des colonnes sensibles
+    IF (NEW.role IS DISTINCT FROM OLD.role)
+        OR (NEW.verification_status IS DISTINCT FROM OLD.verification_status)
+        OR (NEW.is_suspended IS DISTINCT FROM OLD.is_suspended)
+    THEN
+        -- Autoriser uniquement les admins
+        SELECT role INTO caller_role
+        FROM public.profiles
+        WHERE id = auth.uid();
+
+        IF COALESCE(caller_role, '') <> 'admin' THEN
+            RAISE EXCEPTION 'Modification refusée : role, verification_status et is_suspended sont réservés aux admins.';
+        END IF;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+-- Attacher le trigger à la table profiles
+DROP TRIGGER IF EXISTS trg_protect_profiles_sensitive ON public.profiles;
+CREATE TRIGGER trg_protect_profiles_sensitive
+    BEFORE UPDATE ON public.profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION public.protect_profiles_sensitive_columns();
+
+COMMENT ON FUNCTION public.protect_profiles_sensitive_columns() IS
+    'Empêche tout utilisateur non-admin de modifier role, verification_status ou is_suspended.';
+
+
 -- ─── Vérification post-migration ────────────────────────────────────────────
 -- Tester après application :
 -- 1. Un utilisateur non-admin ne peut pas appeler admin_confirm_order → doit
 --    lever "Accès refusé : rôle admin requis"
 -- 2. Un utilisateur anon ne peut pas lire les disputes → 0 lignes retournées
 -- 3. Le bucket vendor-verifications est private → URL directes retournent 403
+-- 4. Un utilisateur tente UPDATE profiles SET role='admin' → doit lever
+--    "Modification refusée : role, verification_status et is_suspended sont réservés aux admins."

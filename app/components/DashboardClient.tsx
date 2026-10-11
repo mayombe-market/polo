@@ -155,11 +155,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
 
     // ═══ Système d'abonnement & limites ═══
     const currentPlan = profile?.subscription_plan || (isImmo ? 'immo_free' : isHotel ? 'hotel_free' : 'free')
-    const maxProducts = isImmo
-        ? getImmoMaxListings(currentPlan)
-        : isHotel
-            ? getHotelMaxRooms(currentPlan)
-            : getPlanMaxProducts(currentPlan)
+    const maxProducts = !FEATURES.subscriptions
+        ? -1
+        : isImmo
+            ? getImmoMaxListings(currentPlan)
+            : isHotel
+                ? getHotelMaxRooms(currentPlan)
+                : getPlanMaxProducts(currentPlan)
     const currentProductCount = products?.length || productCount || 0
     const isAtLimit = maxProducts !== -1 && currentProductCount >= maxProducts
     const isApproachingLimit = maxProducts !== -1 && currentProductCount >= maxProducts * 0.7

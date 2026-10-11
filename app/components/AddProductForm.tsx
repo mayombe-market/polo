@@ -125,7 +125,6 @@ function validateProductStep(s: number, ctx: ProductFormValidationContext): stri
         }
         case 5:
             if (!mainImage) return "L'image principale est obligatoire."
-            if (!gallery[0] || !gallery[1] || !gallery[2]) return "3 miniatures minimum sont obligatoires."
             return null
         default:
             return null
@@ -277,6 +276,30 @@ const CATEGORY_CONFIG: Record<string, CatCfg> = {
         attrs: ['Dimensions — ex: 50×20×20 cm', 'Résistance / norme — ex: M+', 'Quantité par lot / palette', 'Marque et origine'],
         photoTip: 'Photo produit + photo mise en œuvre si disponible',
     },
+}
+
+/** Variantes recommandées par sous-catégorie — surcharge le sizeKindDefault de la catégorie parent */
+const SUBCATEGORY_SIZE_KIND: Record<string, SizeKind> = {
+    // Mode — Vêtements
+    'Vêtements Femme': 'clothing',
+    'Vêtements Homme': 'clothing',
+    'Vêtements enfants': 'clothing',
+    'Vêtements de sport': 'clothing',
+    // Mode — Chaussures
+    'Chaussures': 'shoes',
+    // Bijoux
+    'Bagues & Chevalières': 'ring',
+    // Sans taille pertinente
+    'Smartphones & Tablettes': 'none',
+    'Ordinateurs & Laptops': 'none',
+    'Accessoires Tech': 'none',
+    'Audio & Casques': 'none',
+    'TV & Écrans': 'none',
+    'Consoles & Jeux vidéo': 'none',
+    'Parfums': 'none',
+    'Perruques & Mèches': 'none',
+    'Sacs & Pochettes': 'none',
+    'Cosmétiques & Maquillage': 'none',
 }
 
 const RE_PROPERTY_CONDITIONS = [
@@ -951,6 +974,16 @@ export default function AddProductForm({
         }
     }, [selectedCategory])
 
+    // Ajuste les variantes recommandées quand la sous-catégorie change
+    useEffect(() => {
+        if (!selectedSubcategory) return
+        const override = SUBCATEGORY_SIZE_KIND[selectedSubcategory]
+        if (override !== undefined) {
+            setSizeKind(override)
+            setSizes([])
+        }
+    }, [selectedSubcategory])
+
     const validationCtx: ProductFormValidationContext = {
         name,
         selectedCategory,
@@ -1484,49 +1517,36 @@ export default function AddProductForm({
                             />
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* Catégories */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            {/* Catégorie — select compact */}
                             <div>
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Catégorie</label>
-                                <div className="flex flex-col gap-2">
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Catégorie</label>
+                                <select
+                                    value={selectedCategory}
+                                    onChange={e => { setSelectedCategory(e.target.value); setSelectedSubcategory('') }}
+                                    className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm font-bold border border-transparent focus:border-orange-400 cursor-pointer"
+                                >
+                                    <option value="">— Choisir —</option>
                                     {Object.keys(filteredChoix).map(c => (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            onClick={() => { setSelectedCategory(c); setSelectedSubcategory('') }}
-                                            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all ${selectedCategory === c
-                                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
-                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                                }`}
-                                        >
-                                            {c}
-                                        </button>
+                                        <option key={c} value={c}>{c}</option>
                                     ))}
-                                </div>
+                                </select>
                             </div>
 
-                            {/* Sous-catégories */}
+                            {/* Sous-catégorie — select dépendant */}
                             <div>
-                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3 block">Sous-catégorie</label>
-                                <div className="flex flex-col gap-2">
-                                    {selectedCategory ? filteredChoix[selectedCategory]?.map(sc => (
-                                        <button
-                                            key={sc}
-                                            type="button"
-                                            onClick={() => setSelectedSubcategory(sc)}
-                                            className={`w-full text-left px-4 py-3 rounded-xl text-xs font-bold transition-all ${selectedSubcategory === sc
-                                                ? 'bg-orange-500 text-white shadow-md shadow-orange-500/20'
-                                                : 'bg-slate-50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                                                }`}
-                                        >
-                                            {sc}
-                                        </button>
-                                    )) : (
-                                        <div className="flex items-center justify-center h-full min-h-[120px]">
-                                            <p className="text-[10px] text-slate-300 dark:text-slate-600 font-bold italic text-center">Choisissez une catégorie</p>
-                                        </div>
-                                    )}
-                                </div>
+                                <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Sous-catégorie</label>
+                                <select
+                                    value={selectedSubcategory}
+                                    onChange={e => setSelectedSubcategory(e.target.value)}
+                                    disabled={!selectedCategory}
+                                    className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-orange-400 text-sm font-bold border border-transparent focus:border-orange-400 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">{selectedCategory ? '— Choisir —' : '— Catégorie d\'abord —'}</option>
+                                    {selectedCategory && filteredChoix[selectedCategory]?.map(sc => (
+                                        <option key={sc} value={sc}>{sc}</option>
+                                    ))}
+                                </select>
                             </div>
                         </div>
 
@@ -1635,12 +1655,12 @@ export default function AddProductForm({
                             </div>
                             {!isRealEstate && price && parseInt(price) >= 100 && (
                                 <p className="text-[10px] text-green-600 font-bold mt-2">
-                                    Votre part : {Math.round(parseInt(price) * 0.9).toLocaleString('fr-FR')} FCFA (90%)
+                                    Prix de vente : {parseInt(price).toLocaleString('fr-FR')} FCFA
                                 </p>
                             )}
                             {isRealEstate && parseInt(price, 10) >= 100 && !rePriceOnRequest && (
                                 <p className="text-[10px] text-green-600 font-bold mt-2">
-                                    Votre part : {Math.round(parseInt(price, 10) * 0.9).toLocaleString('fr-FR')} FCFA (90%)
+                                    Prix de vente : {parseInt(price, 10).toLocaleString('fr-FR')} FCFA
                                 </p>
                             )}
                         </div>
@@ -1685,7 +1705,9 @@ export default function AddProductForm({
                             <label className="flex items-center justify-between cursor-pointer">
                                 <div>
                                     <span className="text-sm font-bold text-slate-700 dark:text-slate-200">Gérer le stock</span>
-                                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">Activez pour suivre la quantité disponible</p>
+                                    <p className="text-[10px] text-slate-400 font-bold mt-0.5">
+                                    {hasStock ? 'Suivi automatique — alerte si rupture de stock.' : 'Produit proposé sans limite de quantité.'}
+                                </p>
                                 </div>
                                 <div className={`w-12 h-7 rounded-full transition-colors relative cursor-pointer ${hasStock ? 'bg-green-500' : 'bg-slate-300 dark:bg-slate-600'}`} onClick={() => setHasStock(!hasStock)}>
                                     <div className={`absolute top-0.5 w-6 h-6 bg-white rounded-full shadow transition-transform ${hasStock ? 'translate-x-5' : 'translate-x-0.5'}`} />
@@ -2146,7 +2168,7 @@ export default function AddProductForm({
                     <div className="space-y-6" aria-busy={loading} data-publish-in-progress={loading || undefined}>
                         <div>
                             <h3 className="text-lg font-black uppercase italic dark:text-white mb-1">Photos du produit</h3>
-                            <p className="text-sm text-slate-400">Image principale + 3 miniatures minimum (max 5 Mo / image).</p>
+                            <p className="text-sm text-slate-400">Image principale obligatoire · 3 photos supplémentaires recommandées (max 5 Mo / image).</p>
                             {selectedCategory && CATEGORY_CONFIG[selectedCategory]?.photoTip && (
                                 <p className="text-[11px] font-bold text-blue-600 dark:text-blue-400 mt-1.5">
                                     📷 {CATEGORY_CONFIG[selectedCategory].photoTip}

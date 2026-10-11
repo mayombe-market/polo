@@ -40,10 +40,29 @@ export default function VendorPaymentSettings({ profile }: Props) {
         })
     }, [])
 
+    const hasPaymentMethod = !!(mtn.replace(/\D/g, '').length >= 9 || airtel.replace(/\D/g, '').length >= 9)
+    const needsHolder = hasPaymentMethod && !holder.trim()
+    const hasPickupMode = !!pickupAddress.trim()
+    const hasVendorDelivery = !!(vendorDeliveryFee.trim() && parseInt(vendorDeliveryFee.trim(), 10) > 0)
+
     const handleSave = async () => {
         setLoading(true)
         setError('')
         setSaved(false)
+
+        // Validation conditionnelle : nom titulaire requis si un numéro est saisi
+        if (hasPaymentMethod && !holder.trim()) {
+            setError('Le nom du titulaire est obligatoire si vous configurez un numéro Mobile Money.')
+            setLoading(false)
+            return
+        }
+
+        // Validation : adresse de retrait requise si paiement au retrait activé
+        if (acceptPickupPayment && !pickupAddress.trim()) {
+            setError("L'adresse de retrait est obligatoire si le paiement au retrait est activé.")
+            setLoading(false)
+            return
+        }
 
         const fee = vendorDeliveryFee.trim() ? parseInt(vendorDeliveryFee.trim(), 10) : null
         if (vendorDeliveryFee.trim() && (isNaN(fee!) || fee! < 0 || fee! > 50000)) {
@@ -112,6 +131,7 @@ export default function VendorPaymentSettings({ profile }: Props) {
                 <label className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mb-2">
                     <User size={11} />
                     Nom du titulaire du compte
+                    {hasPaymentMethod && <span className="text-red-500 ml-0.5">*</span>}
                 </label>
                 <input
                     type="text"
@@ -119,9 +139,13 @@ export default function VendorPaymentSettings({ profile }: Props) {
                     onChange={e => setHolder(e.target.value)}
                     placeholder="Ex: Jean Michel MOUYABI"
                     maxLength={80}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                    className={`w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400/40 ${needsHolder ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}
                 />
-                <p className="text-[10px] text-slate-400 mt-1">Doit correspondre exactement au nom enregistré chez votre opérateur.</p>
+                <p className="text-[10px] text-slate-400 mt-1">
+                    {hasPaymentMethod
+                        ? <span className="text-red-400">Obligatoire — doit correspondre exactement au nom enregistré chez votre opérateur.</span>
+                        : 'Doit correspondre exactement au nom enregistré chez votre opérateur.'}
+                </p>
             </div>
 
             {/* MTN MoMo */}
@@ -200,6 +224,7 @@ export default function VendorPaymentSettings({ profile }: Props) {
                 <div>
                     <label className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 mb-2">
                         <MapPin size={11} /> Adresse de retrait en boutique
+                        {acceptPickupPayment && <span className="text-red-500 ml-0.5">*</span>}
                     </label>
                     <input
                         type="text"
@@ -207,9 +232,13 @@ export default function VendorPaymentSettings({ profile }: Props) {
                         onChange={e => setPickupAddress(e.target.value)}
                         placeholder="Ex: Boutique Chez Jean, Rue de la Paix, Moukondo, Brazzaville"
                         maxLength={200}
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400/40"
+                        className={`w-full px-4 py-3 rounded-xl border bg-white dark:bg-slate-800 text-sm font-medium text-slate-800 dark:text-white placeholder-slate-300 dark:placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-amber-400/40 ${acceptPickupPayment && !pickupAddress.trim() ? 'border-red-300 dark:border-red-700' : 'border-slate-200 dark:border-slate-700'}`}
                     />
-                    <p className="text-[10px] text-slate-400 mt-1">Laissez vide si vous ne proposez pas le retrait en boutique.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">
+                        {acceptPickupPayment
+                            ? <span className="text-red-400">Obligatoire — requise si le paiement au retrait est activé.</span>
+                            : 'Laissez vide si vous ne proposez pas le retrait en boutique.'}
+                    </p>
                 </div>
             </div>
 

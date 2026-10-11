@@ -51,6 +51,7 @@ export default function CompleteProfilePage() {
     const [error, setError] = useState('')
     const [user, setUser] = useState<any>(null)
     const [sessionFailed, setSessionFailed] = useState(false)
+    const [isUpgradingToVendor, setIsUpgradingToVendor] = useState(false)
 
     // ═══ Étape abonnement ═══
     const [profileStep, setProfileStep] = useState<'form' | 'subscription' | 'checkout'>('form')
@@ -113,6 +114,11 @@ export default function CompleteProfilePage() {
                     const profile = result && 'data' in result ? result.data : null
 
                     if (profile?.first_name) {
+                        // Acheteur connecté qui veut devenir vendeur → rester sur la page
+                        if (isVendorPath && profile.role === 'buyer') {
+                            setIsUpgradingToVendor(true)
+                            return
+                        }
                         const dest =
                             profile.role === 'vendor'
                                 ? '/vendor/dashboard'
@@ -316,6 +322,173 @@ export default function CompleteProfilePage() {
             .from('profiles')
             .update({ subscription_plan: planId, updated_at: new Date().toISOString() })
             .eq('id', user.id)
+    }
+
+    // ═══ Upgrade acheteur → vendeur ═══
+    const handleUpgradeSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setError('')
+        if (!shopName.trim()) {
+            setError('Veuillez renseigner le nom de votre boutique.')
+            return
+        }
+        if (!acceptVendorTerms) {
+            setError('Veuillez accepter les conditions d\'utilisation vendeur.')
+            return
+        }
+        setLoading(true)
+        try {
+            const now = new Date().toISOString()
+            const { error: dbError } = await supabase
+                .from('profiles')
+                .update({
+                    role: 'vendor',
+                    shop_name: shopName.trim(),
+                    vendor_type: vendorType,
+                    subscription_plan: 'gratuit',
+                    verification_status: 'none',
+                    vendor_terms_accepted_at: now,
+                    updated_at: now,
+                })
+                .eq('id', authUser!.id)
+            if (dbError) throw new Error(dbError.message)
+            router.push('/vendor/dashboard')
+        } catch (err: any) {
+            setError(String(err?.message || 'Erreur lors de la conversion du compte.'))
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    if (isUpgradingToVendor) {
+        return (
+            <div style={{
+                minHeight: '100vh',
+                background: 'linear-gradient(180deg, #08080E, #0D0D14, #08080E)',
+                fontFamily: SYSTEM_FONT_STACK,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                padding: '24px 16px',
+            }}>
+                <div style={{ width: '100%', maxWidth: 480 }}>
+                    {/* Header */}
+                    <div style={{ textAlign: 'center', marginBottom: 32 }}>
+                        <div style={{
+                            width: 72, height: 72, borderRadius: 24, margin: '0 auto 20px',
+                            background: 'linear-gradient(135deg, #E8A838, #D4782F)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 34, boxShadow: '0 8px 32px rgba(232,168,56,0.3)',
+                        }}>🏪</div>
+                        <h1 style={{ color: '#F0ECE2', fontSize: 24, fontWeight: 800, margin: '0 0 8px' }}>
+                            Ouvrir ma boutique
+                        </h1>
+                        <p style={{ color: '#888', fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+                            Votre compte acheteur sera converti en compte vendeur.
+                            Vos commandes et historique sont conservés.
+                        </p>
+                    </div>
+
+                    {/* Formulaire */}
+                    <form onSubmit={handleUpgradeSubmit}>
+                        <div style={{
+                            background: 'rgba(255,255,255,0.03)',
+                            border: '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 20, padding: '24px 20px',
+                            display: 'flex', flexDirection: 'column', gap: 18,
+                        }}>
+                            {/* Nom de la boutique */}
+                            <div>
+                                <label style={{ color: '#C0BBA8', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, display: 'block', marginBottom: 8 }}>
+                                    NOM DE LA BOUTIQUE *
+                                </label>
+                                <input
+                                    type="text"
+                                    value={shopName}
+                                    onChange={e => setShopName(e.target.value)}
+                                    placeholder="Ex : Boutique Mode Congo"
+                                    maxLength={60}
+                                    required
+                                    style={{
+                                        width: '100%', padding: '14px 16px', borderRadius: 12,
+                                        background: 'rgba(255,255,255,0.05)',
+                                        border: '1.5px solid rgba(255,255,255,0.1)',
+                                        color: '#F0ECE2', fontSize: 15, outline: 'none',
+                                        boxSizing: 'border-box',
+                                    }}
+                                />
+                            </div>
+
+                            {/* Type de boutique */}
+                            {ACTIVE_VENDOR_TYPES.length > 1 && (
+                                <div>
+                                    <label style={{ color: '#C0BBA8', fontSize: 12, fontWeight: 700, letterSpacing: 0.5, display: 'block', marginBottom: 8 }}>
+                                        TYPE DE BOUTIQUE
+                                    </label>
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                                        {ACTIVE_VENDOR_TYPES.map(t => (
+                                            <button
+                                                key={t.id}
+                                                type="button"
+                                                onClick={() => setVendorType(t.id)}
+                                                style={{
+                                                    padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+                                                    background: vendorType === t.id ? 'rgba(232,168,56,0.15)' : 'rgba(255,255,255,0.04)',
+                                                    border: vendorType === t.id ? '1.5px solid rgba(232,168,56,0.5)' : '1.5px solid rgba(255,255,255,0.08)',
+                                                    color: vendorType === t.id ? '#E8A838' : '#888',
+                                                    fontSize: 13, fontWeight: 600,
+                                                }}
+                                            >
+                                                {t.icon} {t.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* CGV vendeur */}
+                            <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+                                <input
+                                    type="checkbox"
+                                    checked={acceptVendorTerms}
+                                    onChange={e => setAcceptVendorTerms(e.target.checked)}
+                                    style={{ marginTop: 2, flexShrink: 0, accentColor: '#E8A838' }}
+                                />
+                                <span style={{ color: '#AAA', fontSize: 13, lineHeight: 1.5 }}>
+                                    J'accepte les{' '}
+                                    <a href={LEGAL_SIGNUP.conditionsVendeur} target="_blank" rel="noopener noreferrer" style={{ color: '#E8A838', textDecoration: 'underline' }}>
+                                        conditions vendeur
+                                    </a>
+                                    {' '}de Mayombe Market.
+                                </span>
+                            </label>
+
+                            {error && (
+                                <p style={{ color: '#F87171', fontSize: 13, margin: 0, padding: '10px 14px', background: 'rgba(248,113,113,0.08)', borderRadius: 10 }}>
+                                    {error}
+                                </p>
+                            )}
+
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                style={{
+                                    padding: '16px', borderRadius: 14, border: 'none',
+                                    background: loading ? 'rgba(232,168,56,0.4)' : 'linear-gradient(135deg, #E8A838, #D4782F)',
+                                    color: '#fff', fontSize: 15, fontWeight: 700,
+                                    cursor: loading ? 'not-allowed' : 'pointer',
+                                    boxShadow: loading ? 'none' : '0 6px 20px rgba(232,168,56,0.25)',
+                                }}
+                            >
+                                {loading ? 'Activation…' : 'Activer mon compte vendeur →'}
+                            </button>
+                        </div>
+                    </form>
+
+                    <p style={{ color: '#555', fontSize: 12, textAlign: 'center', marginTop: 16 }}>
+                        Inscription gratuite · Aucun engagement · Publiez vos premiers produits dès aujourd'hui
+                    </p>
+                </div>
+            </div>
+        )
     }
 
     if (!user) {

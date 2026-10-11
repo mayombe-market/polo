@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import {
     ShieldCheck, Package, MapPin, Phone, Loader2,
     Filter, Wallet, DollarSign, Clock, Ban, Download, Truck, Search, X, FileDown, Trash2,
-    AlertTriangle, RefreshCw, Banknote
+    AlertTriangle, RefreshCw, Banknote, Archive, RotateCcw
 } from 'lucide-react'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { formatAdminDateTime } from '@/lib/formatDateTime'
@@ -19,8 +19,11 @@ import {
     adminRejectOrder,
     adminCancelSubscription,
     adminDeleteOrder,
+    adminArchiveOrder,
+    adminRestoreOrder,
     adminSetBuyerPaymentNotice,
 } from '@/app/actions/orders'
+import { FEATURES } from '@/lib/featureFlags'
 import { assignLogistician, getAvailableLogisticians } from '@/app/actions/deliveries'
 import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
@@ -42,6 +45,13 @@ export default function AdminOrders() {
     const [adminScope, setAdminScope] = useState<AdminZoneScope>('all')
     /** Ville du vendeur par user_id (abonnements) ou seller_id (commandes produit). */
     const [vendorCityMap, setVendorCityMap] = useState<Record<string, string | null>>({})
+
+    // Onglet principal : commandes actives ou archives
+    const [activeMainTab, setActiveMainTab] = useState<'orders' | 'archives'>('orders')
+    const [archivedOrders, setArchivedOrders] = useState<any[]>([])
+    const [archivesLoading, setArchivesLoading] = useState(false)
+    const [archivesLoaded, setArchivesLoaded] = useState(false)
+    const [archivesSearchQuery, setArchivesSearchQuery] = useState('')
 
     const supabase = getSupabaseBrowserClient()
 
@@ -96,9 +106,11 @@ export default function AdminOrders() {
                     .maybeSingle()
                 setAdminScope(getAdminScopeFromProfileCity(adminProfile?.city))
 
+                // Commandes actives uniquement (is_archived = false ou colonne absente)
                 const { data, error } = await withTimeout(supabase
                     .from('orders')
                     .select('*')
+                    .or('is_archived.eq.false,is_archived.is.null')
                     .order('created_at', { ascending: false })
                     .limit(500))
 
@@ -152,6 +164,31 @@ export default function AdminOrders() {
             cancelled = true
         }
     }, [orders, supabase])
+
+    /** Charge les commandes archivées (lazy — appelé lors du clic sur l'onglet Archives). */
+    const fetchArchivedOrders = useCallback(async () => {
+        setArchivesLoading(true)
+        try {
+            const { data, error } = await withTimeout(supabase
+                .from('orders')
+                .select('*')
+                .eq('is_archived', true)
+                .order('archived_at', { ascending: false })
+                .limit(1000))
+            if (error) console.error('Erreur chargement archives:', error)
+            setArchivedOrders(data || [])
+            setArchivesLoaded(true)
+        } catch (err) {
+            console.error('Erreur archives:', err)
+        } finally {
+            setArchivesLoading(false)
+        }
+    }, [supabase])
+
+    const handleSwitchToArchives = () => {
+        setActiveMainTab('archives')
+        if (!archivesLoaded) fetchArchivedOrders()
+    }
 
     /** Résout la zone d'une commande à partir de la ville du vendeur. */
     const resolveOrderZone = useCallback(
@@ -344,23 +381,45 @@ export default function AdminOrders() {
         }
     }
 
-    // Annuler un abonnement vendeur
-    const deleteOrderFromDb = async (orderId: string, label: string) => {
+    // Archiver une commande (soft delete — données préservées)
+    const archiveOrderFromDb = async (orderId: string, label: string) => {
         if (!confirm(
-            `Supprimer définitivement la commande ${label} ?\n\n` +
-            'La ligne sera retirée de la base de données (irréversible). Les notes liées seront aussi supprimées.'
+            `Archiver la commande ${label} ?\n\n` +
+            'La commande sera masquée de cette vue mais conservée dans la base de données (réversible). Les données ne sont pas supprimées.'
         )) return
         setUpdating(orderId)
         try {
-            const result = await adminDeleteOrder(orderId)
+            const result = await adminArchiveOrder(orderId)
             if (result.error) {
                 toast.error(result.error)
                 return
             }
             setOrders(prev => prev.filter(o => o.id !== orderId))
-            toast.success('Commande supprimée de la base')
+            toast.success('Commande archivée (données préservées)')
         } catch (err: any) {
-            toast.error('Erreur : ' + (err?.message || 'Impossible de supprimer'))
+            toast.error('Erreur : ' + (err?.message || 'Impossible d\'archiver'))
+        } finally {
+            setUpdating(null)
+        }
+    }
+
+    // Restaurer une commande archivée
+    const restoreFromArchive = async (orderId: string, label: string) => {
+        if (!confirm(
+            `Restaurer la commande ${label} ?\n\n` +
+            'La commande redeviendra visible dans les commandes actives. Les paiements, produits et statuts ne sont pas modifiés.'
+        )) return
+        setUpdating(orderId)
+        try {
+            const result = await adminRestoreOrder(orderId)
+            if (result.error) {
+                toast.error(result.error)
+                return
+            }
+            setArchivedOrders(prev => prev.filter(o => o.id !== orderId))
+            toast.success('Commande restaurée — visible dans les commandes actives')
+        } catch (err: any) {
+            toast.error('Erreur : ' + (err?.message || 'Impossible de restaurer'))
         } finally {
             setUpdating(null)
         }
@@ -404,17 +463,17 @@ export default function AdminOrders() {
         }
     }
 
-    // Séparer commandes produit et abonnements
+    // Séparer commandes produit et abonnements (toutes actives — archived exclues par la requête)
     const productOrders = orders.filter(o => o.order_type !== 'subscription')
     const subscriptionOrders = orders.filter(o => o.order_type === 'subscription')
 
-    // Statistiques (commandes produit uniquement)
+    // Statistiques sur les commandes actives uniquement
     const confirmedOrders = productOrders.filter(o => o.status !== 'pending')
     const totalRevenue = confirmedOrders.reduce((sum, o) => sum + (o.total_amount || 0), 0)
     const totalCommissions = confirmedOrders.reduce((sum, o) => sum + (o.commission_amount || Math.round((o.total_amount || 0) * 0.10)), 0)
     const pendingPayouts = productOrders.filter(o => o.status === 'delivered' && o.payout_status === 'pending').length
 
-    // Filtrage + recherche
+    // Filtrage + recherche (commandes actives)
     const filteredOrders = (() => {
         let base: any[]
         if (activeFilter === 'subscriptions') base = subscriptionOrders
@@ -448,6 +507,21 @@ export default function AdminOrders() {
         }
         return base
     })()
+
+    // Filtrage archives
+    const filteredArchives = archivesSearchQuery.trim()
+        ? archivedOrders.filter(order => {
+            const q = archivesSearchQuery.trim().toLowerCase()
+            const itemNames = (order.items || []).map((i: any) => i.name || '').join(' ').toLowerCase()
+            return (
+                (order.customer_name || '').toLowerCase().includes(q) ||
+                (order.id || '').toLowerCase().includes(q) ||
+                (order.tracking_number || '').toLowerCase().includes(q) ||
+                formatOrderNumber(order).toLowerCase().includes(q) ||
+                itemNames.includes(q)
+            )
+        })
+        : archivedOrders
 
     const handleExportCSV = () => {
         exportCSV(filteredOrders, [
@@ -492,12 +566,12 @@ export default function AdminOrders() {
             </div>
 
             <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-                {/* STATS */}
+                {/* STATS (commandes actives uniquement) */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     {[
-                        { label: 'Commandes', val: productOrders.length, icon: <Package size={18} />, color: 'text-slate-600' },
+                        { label: 'Commandes actives', val: productOrders.length, icon: <Package size={18} />, color: 'text-slate-600' },
                         { label: 'CA Total', val: `${totalRevenue.toLocaleString('fr-FR')} F`, icon: <DollarSign size={18} />, color: 'text-green-600' },
-                        { label: 'Commissions', val: `${totalCommissions.toLocaleString('fr-FR')} F`, icon: <Wallet size={18} />, color: 'text-orange-600' },
+                        ...(FEATURES.commissions ? [{ label: 'Commissions', val: `${totalCommissions.toLocaleString('fr-FR')} F`, icon: <Wallet size={18} />, color: 'text-orange-600' }] : []),
                         { label: 'Versements en attente', val: pendingPayouts, icon: <Clock size={18} />, color: 'text-amber-600' },
                     ].map((stat, i) => (
                         <div key={i} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] border border-slate-100 dark:border-slate-800">
@@ -508,568 +582,750 @@ export default function AdminOrders() {
                     ))}
                 </div>
 
-                {/* RECHERCHE + EXPORT */}
-                <div className="flex items-center gap-3">
-                    <div className="relative flex-1">
-                        <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                        <input
-                            type="text"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            placeholder="Rechercher par nom, téléphone, numéro de commande..."
-                            className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 placeholder:text-slate-400 placeholder:font-normal"
-                        />
-                        {searchQuery && (
-                            <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                                <X size={16} />
-                            </button>
-                        )}
-                    </div>
+                {/* ONGLETS PRINCIPAUX : Commandes / Archives */}
+                <div className="flex items-center gap-3 border-b border-slate-200 dark:border-slate-800 pb-0">
                     <button
-                        onClick={handleExportCSV}
-                        disabled={filteredOrders.length === 0}
-                        className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-green-500 text-white text-[10px] font-black uppercase italic hover:bg-green-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                        onClick={() => setActiveMainTab('orders')}
+                        className={`flex items-center gap-2 px-5 py-3 text-[10px] font-black uppercase italic border-b-2 transition-all -mb-px ${
+                            activeMainTab === 'orders'
+                                ? 'border-orange-500 text-orange-500'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
                     >
-                        <FileDown size={14} /> CSV
+                        <Package size={13} /> Commandes actives ({productOrders.length})
+                    </button>
+                    <button
+                        onClick={handleSwitchToArchives}
+                        className={`flex items-center gap-2 px-5 py-3 text-[10px] font-black uppercase italic border-b-2 transition-all -mb-px ${
+                            activeMainTab === 'archives'
+                                ? 'border-slate-500 text-slate-600 dark:text-slate-300'
+                                : 'border-transparent text-slate-400 hover:text-slate-600'
+                        }`}
+                    >
+                        <Archive size={13} /> Archives {archivesLoaded ? `(${archivedOrders.length})` : ''}
                     </button>
                 </div>
 
-                {/* FILTRE VILLE + DATE */}
-                <div className="flex items-center gap-4 overflow-x-auto pb-1 no-scrollbar flex-wrap">
-                    {/* Ville */}
-                    <div className="flex items-center gap-2">
-                        <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Ville :</span>
-                        <select
-                            value={cityFilter}
-                            onChange={(e) => setCityFilter(e.target.value)}
-                            className="px-4 py-2 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/30 cursor-pointer"
-                        >
-                            <option value="all">Toutes les villes</option>
-                            <option value="Brazzaville">Brazzaville</option>
-                            <option value="Pointe-Noire">Pointe-Noire</option>
-                        </select>
-                    </div>
+                {/* ======================================================= */}
+                {/* VUE COMMANDES ACTIVES                                     */}
+                {/* ======================================================= */}
+                {activeMainTab === 'orders' && (
+                    <>
+                        {/* RECHERCHE + EXPORT */}
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    placeholder="Rechercher par nom, téléphone, numéro de commande..."
+                                    className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 placeholder:text-slate-400 placeholder:font-normal"
+                                />
+                                {searchQuery && (
+                                    <button onClick={() => setSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                        <X size={16} />
+                                    </button>
+                                )}
+                            </div>
+                            <button
+                                onClick={handleExportCSV}
+                                disabled={filteredOrders.length === 0}
+                                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-green-500 text-white text-[10px] font-black uppercase italic hover:bg-green-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                            >
+                                <FileDown size={14} /> CSV
+                            </button>
+                        </div>
 
-                    <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden sm:block" />
-
-                    {/* Date */}
-                    <div className="flex items-center gap-2">
-                    <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-1">Période :</span>
-                    {[
-                        { id: 'all', label: 'Tout' },
-                        { id: 'today', label: "Aujourd'hui" },
-                        { id: '7days', label: '7 jours' },
-                        { id: '30days', label: '30 jours' },
-                    ].map((f) => (
-                        <button
-                            key={f.id}
-                            onClick={() => setDateFilter(f.id)}
-                            className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all border ${
-                                dateFilter === f.id
-                                    ? 'bg-slate-800 dark:bg-white border-slate-800 dark:border-white text-white dark:text-slate-900'
-                                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
-                            }`}
-                        >
-                            {f.label}
-                        </button>
-                    ))}
-                    </div>
-                </div>
-
-                {/* FILTRES */}
-                <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
-                    {[
-                        { id: 'all', label: 'Toutes' },
-                        { id: 'pending', label: 'En attente' },
-                        { id: 'confirmed', label: 'En préparation' },
-                        { id: 'shipped', label: 'Colis prêts' },
-                        { id: 'picked_up', label: 'Récupérées' },
-                        { id: 'delivered', label: 'Livrées' },
-                        { id: 'subscriptions', label: '🔷 Abonnements' },
-                    ].map((f) => {
-                        const count = f.id === 'all'
-                            ? productOrders.length
-                            : f.id === 'subscriptions'
-                            ? subscriptionOrders.length
-                            : productOrders.filter(o => o.status === f.id).length
-                        return (
-                        <button
-                            key={f.id}
-                            onClick={() => setActiveFilter(f.id)}
-                            className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic whitespace-nowrap transition-all border ${activeFilter === f.id
-                                ? f.id === 'subscriptions'
-                                    ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105'
-                                    : 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20 scale-105'
-                                : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
-                                }`}
-                        >
-                            {f.label} ({count})
-                        </button>
-                        )
-                    })}
-                </div>
-
-                {/* LISTE DES COMMANDES */}
-                <div className="space-y-4">
-                    {filteredOrders.length > 0 ? (
-                        filteredOrders.map((order) => {
-                            const statusInfo = getStatusDetails(order.status)
-                            const payBadge = getPaymentBadge(order.payment_method)
-                            const commission = order.commission_amount || Math.round((order.total_amount || 0) * 0.10)
-                            const vendorPayout = order.vendor_payout || Math.round((order.total_amount || 0) * 0.90)
-                            const isSubscription = order.order_type === 'subscription'
-                            const canAct = canActOnOrder(order)
-
-                            return (
-                                <div
-                                    key={order.id}
-                                    className={`rounded-[2.5rem] p-6 md:p-8 transition-all hover:shadow-md ${orderZoneStyle(order)}`}
+                        {/* FILTRE VILLE + DATE */}
+                        <div className="flex items-center gap-4 overflow-x-auto pb-1 no-scrollbar flex-wrap">
+                            {/* Ville */}
+                            <div className="flex items-center gap-2">
+                                <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Ville :</span>
+                                <select
+                                    value={cityFilter}
+                                    onChange={(e) => setCityFilter(e.target.value)}
+                                    className="px-4 py-2 rounded-xl text-[10px] font-bold border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-orange-500/30 cursor-pointer"
                                 >
-                                    {/* EN-TÊTE */}
-                                    <div className="flex justify-between items-start mb-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 rounded-2xl bg-white/80 dark:bg-slate-800/80 flex items-center justify-center text-slate-400">
-                                                <Package size={18} />
-                                            </div>
-                                            <div>
-                                                <p className="text-[10px] font-black uppercase text-slate-400 leading-none">{formatOrderNumber(order)}</p>
-                                                <p className="text-[10px] font-bold text-slate-400 mt-1">{formatAdminDateTime(order.created_at)}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex flex-col items-end gap-1.5">
-                                            {!canAct && (
-                                                <span
-                                                    className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
-                                                    title="Actions réservées à l'admin de cette ville"
-                                                >
-                                                    Lecture seule
-                                                </span>
-                                            )}
-                                            {isSubscription && (
-                                                <span className="px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                                                    🔷 Abonnement {order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : ''}
-                                                </span>
-                                            )}
-                                            <span className={`px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest ${statusInfo.style}`}>
-                                                {statusInfo.label}
-                                            </span>
-                                            <span className={`px-3 py-1 text-[8px] font-black uppercase italic rounded-full ${payBadge.style}`}>
-                                                {payBadge.label}
-                                            </span>
-                                            {order.tracking_number && (
-                                                <span className="flex items-center gap-1.5 px-3 py-1 text-[8px] font-black font-mono uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
-                                                    <Truck size={10} /> {order.tracking_number}
-                                                </span>
-                                            )}
-                                            {!isSubscription && (order.delivery_mode === 'express' ? (
-                                                <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 animate-pulse tracking-widest">
-                                                    ⚡ EXPRESS 3-6H · {(order.delivery_fee || 2000).toLocaleString('fr-FR')} F
-                                                </span>
-                                            ) : order.delivery_mode ? (
-                                                <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 tracking-widest">
-                                                    📦 Standard 6-48H · {(order.delivery_fee || 1000).toLocaleString('fr-FR')} F
-                                                </span>
-                                            ) : null)}
-                                            {order.payout_status === 'paid' && (
-                                                <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-green-100 text-green-700">
-                                                    Fonds libérés
-                                                </span>
-                                            )}
-                                            {order.status === 'delivered' && order.payout_status === 'pending' && (
-                                                <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-amber-100 text-amber-700 animate-pulse">
-                                                    Fonds bloqués
-                                                </span>
-                                            )}
-                                        </div>
-                                    </div>
+                                    <option value="all">Toutes les villes</option>
+                                    <option value="Brazzaville">Brazzaville</option>
+                                    <option value="Pointe-Noire">Pointe-Noire</option>
+                                </select>
+                            </div>
 
-                                    {/* CONTENU */}
-                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
-                                        {/* Articles */}
-                                        <div className="space-y-3">
-                                            <p className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em]">Articles</p>
-                                            {order.items?.map((item: any, idx: number) => (
-                                                <div key={idx} className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
-                                                    <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
-                                                    <div className="flex-1 min-w-0">
-                                                        <h3 className="text-xs font-black uppercase italic leading-tight">{item.name}</h3>
-                                                        {(item.selectedSize || item.selectedColor) && (
-                                                            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
-                                                                {[item.selectedSize && `Taille : ${item.selectedSize}`, item.selectedColor && `Couleur : ${item.selectedColor}`]
-                                                                    .filter(Boolean)
-                                                                    .join(' · ')}
-                                                            </p>
-                                                        )}
-                                                        <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F × {item.quantity}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
+                            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 hidden sm:block" />
 
-                                        {/* Client + Finances */}
-                                        <div className="space-y-4">
-                                            <div className="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800">
-                                                <p className="text-[8px] font-black uppercase text-slate-400 mb-3 tracking-[0.2em]">Contact Client</p>
-                                                <p className="font-black uppercase italic text-sm mb-1">{order.customer_name}</p>
-                                                <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
-                                                    <MapPin size={12} className="text-orange-500" /> {order.city}, {order.district}
-                                                </p>
-                                                {order.phone && (
-                                                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 mt-1">
-                                                        <Phone size={12} className="text-orange-500" /> {order.phone}
-                                                    </p>
-                                                )}
-                                                {/* Localisation de livraison */}
-                                                {order.delivery_location_type === 'manual' && (order.delivery_sector || order.delivery_bus_stop || order.delivery_landmark) && (
-                                                    <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 space-y-1">
-                                                        <p className="text-[8px] font-black uppercase text-orange-500 tracking-[0.15em] mb-2">📍 Adresse de livraison</p>
-                                                        {order.delivery_sector && (
-                                                            <p className="text-[10px] font-bold text-slate-500">Secteur : <span className="text-slate-700 dark:text-slate-300">{order.delivery_sector}</span></p>
-                                                        )}
-                                                        {order.delivery_bus_stop && (
-                                                            <p className="text-[10px] font-bold text-slate-500">Arrêt bus : <span className="text-slate-700 dark:text-slate-300">{order.delivery_bus_stop}</span></p>
-                                                        )}
-                                                        {order.delivery_landmark && (
-                                                            <p className="text-[10px] font-bold text-slate-500">Repère : <span className="text-slate-700 dark:text-slate-300">{order.delivery_landmark}</span></p>
-                                                        )}
-                                                    </div>
-                                                )}
-                                                {order.delivery_location_type === 'gps' && order.delivery_latitude && order.delivery_longitude && (
-                                                    <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700">
-                                                        <p className="text-[8px] font-black uppercase text-blue-500 tracking-[0.15em] mb-2">📡 Position GPS</p>
-                                                        {order.delivery_accuracy && (
-                                                            <p className="text-[10px] font-bold text-slate-400 mb-1.5">Précision ±{Math.round(order.delivery_accuracy)} m</p>
-                                                        )}
-                                                        <a
-                                                            href={`https://www.google.com/maps?q=${order.delivery_latitude},${order.delivery_longitude}`}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="inline-flex items-center gap-1.5 text-[10px] font-bold text-blue-500 hover:text-blue-600 no-underline"
-                                                        >
-                                                            <MapPin size={11} /> Ouvrir dans Google Maps
-                                                        </a>
-                                                    </div>
-                                                )}
-                                            </div>
+                            {/* Date */}
+                            <div className="flex items-center gap-2">
+                            <span className="text-[9px] font-black uppercase text-slate-400 tracking-widest mr-1">Période :</span>
+                            {[
+                                { id: 'all', label: 'Tout' },
+                                { id: 'today', label: "Aujourd'hui" },
+                                { id: '7days', label: '7 jours' },
+                                { id: '30days', label: '30 jours' },
+                            ].map((f) => (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setDateFilter(f.id)}
+                                    className={`px-4 py-2 rounded-xl text-[10px] font-bold whitespace-nowrap transition-all border ${
+                                        dateFilter === f.id
+                                            ? 'bg-slate-800 dark:bg-white border-slate-800 dark:border-white text-white dark:text-slate-900'
+                                            : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 hover:border-slate-300'
+                                    }`}
+                                >
+                                    {f.label}
+                                </button>
+                            ))}
+                            </div>
+                        </div>
 
-                                            {/* Répartition financière */}
-                                            {isSubscription ? (
-                                                <div className="bg-blue-50/50 dark:bg-blue-500/5 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/20">
-                                                    <p className="text-[8px] font-black uppercase text-blue-500 mb-3 tracking-[0.2em]">Abonnement vendeur</p>
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-[10px] font-bold">
-                                                            <span className="text-slate-500">Plan</span>
-                                                            <span className="font-black text-blue-600">{order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : 'N/A'}</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-[10px] font-bold border-t border-blue-200 dark:border-blue-800 pt-2">
-                                                            <span className="text-slate-600">Montant abonnement</span>
-                                                            <span className="font-black text-blue-600">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
-                                                        </div>
-                                                    </div>
-                                                    {order.status === 'confirmed' && (
-                                                        <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
-                                                            <p className="text-[10px] font-black text-green-600">✓ Plan activé automatiquement</p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div className="bg-orange-50/50 dark:bg-orange-500/5 p-5 rounded-[2rem] border border-orange-100 dark:border-orange-900/20">
-                                                    <p className="text-[8px] font-black uppercase text-orange-500 mb-3 tracking-[0.2em]">Répartition</p>
-                                                    <div className="space-y-2">
-                                                        <div className="flex justify-between text-[10px] font-bold">
-                                                            <span className="text-slate-500">Total commande</span>
-                                                            <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
-                                                        </div>
-                                                        {order.delivery_fee > 0 && (
-                                                            <div className="flex justify-between text-[10px] font-bold">
-                                                                <span className="text-slate-500">↳ dont livraison {order.delivery_mode === 'express' ? '⚡' : '📦'}</span>
-                                                                <span className="font-black text-slate-400">{(order.delivery_fee || 0).toLocaleString('fr-FR')} F</span>
-                                                            </div>
-                                                        )}
-                                                        <div className="flex justify-between text-[10px] font-bold">
-                                                            <span className="text-orange-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%)</span>
-                                                            <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
-                                                        </div>
-                                                        <div className="flex justify-between text-[10px] font-bold border-t border-orange-200 dark:border-orange-800 pt-2">
-                                                            <span className="text-slate-600">Part vendeur ({Math.round((1 - (order.commission_rate || 0.10)) * 100)}%)</span>
-                                                            <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
+                        {/* FILTRES STATUT */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
+                            {[
+                                { id: 'all', label: 'Toutes' },
+                                { id: 'pending', label: 'En attente' },
+                                { id: 'confirmed', label: 'En préparation' },
+                                { id: 'shipped', label: 'Colis prêts' },
+                                { id: 'picked_up', label: 'Récupérées' },
+                                { id: 'delivered', label: 'Livrées' },
+                                ...(FEATURES.subscriptions ? [{ id: 'subscriptions', label: '🔷 Abonnements' }] : []),
+                            ].map((f) => {
+                                const count = f.id === 'all'
+                                    ? productOrders.length
+                                    : f.id === 'subscriptions'
+                                    ? subscriptionOrders.length
+                                    : productOrders.filter(o => o.status === f.id).length
+                                return (
+                                <button
+                                    key={f.id}
+                                    onClick={() => setActiveFilter(f.id)}
+                                    className={`px-5 py-2.5 rounded-2xl text-[10px] font-black uppercase italic whitespace-nowrap transition-all border ${activeFilter === f.id
+                                        ? f.id === 'subscriptions'
+                                            ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-500/20 scale-105'
+                                            : 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-500/20 scale-105'
+                                        : 'bg-white dark:bg-slate-900 border-slate-100 dark:border-slate-800 text-slate-500'
+                                        }`}
+                                >
+                                    {f.label} ({count})
+                                </button>
+                                )
+                            })}
+                        </div>
 
-                                    {/* VÉRIFICATION PAIEMENT */}
-                                    {order.status === 'pending' && (
-                                        order.mtn_reference_id ? (
-                                            /* MTN MoMo — paiement auto-vérifié via API */
-                                            <div className="mb-6 bg-green-50/60 dark:bg-green-500/5 p-5 rounded-[2rem] border border-green-200 dark:border-green-800/30">
-                                                <p className="text-[8px] font-black uppercase text-green-600 mb-3 tracking-[0.2em]">📡 MTN MoMo — Vérification automatique</p>
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 mt-0.5">
-                                                        <ShieldCheck size={14} className="text-green-600" />
+                        {/* LISTE DES COMMANDES ACTIVES */}
+                        <div className="space-y-4">
+                            {filteredOrders.length > 0 ? (
+                                filteredOrders.map((order) => {
+                                    const statusInfo = getStatusDetails(order.status)
+                                    const payBadge = getPaymentBadge(order.payment_method)
+                                    const commission = order.commission_amount || Math.round((order.total_amount || 0) * 0.10)
+                                    const vendorPayout = order.vendor_payout || Math.round((order.total_amount || 0) * 0.90)
+                                    const isSubscription = order.order_type === 'subscription'
+                                    const canAct = canActOnOrder(order)
+
+                                    return (
+                                        <div
+                                            key={order.id}
+                                            className={`rounded-[2.5rem] p-6 md:p-8 transition-all hover:shadow-md ${orderZoneStyle(order)}`}
+                                        >
+                                            {/* EN-TÊTE */}
+                                            <div className="flex justify-between items-start mb-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-white/80 dark:bg-slate-800/80 flex items-center justify-center text-slate-400">
+                                                        <Package size={18} />
                                                     </div>
                                                     <div>
-                                                        <p className="text-[11px] font-black text-green-700 dark:text-green-400">Paiement vérifié directement via l&apos;API MTN MoMo</p>
-                                                        <p className="text-[10px] font-bold text-slate-500 mt-1">Aucune action manuelle requise — la confirmation est automatique.</p>
-                                                        <p className="text-[9px] font-mono text-slate-400 mt-2">Réf : {order.mtn_reference_id}</p>
-                                                        {order.mtn_transaction_id && (
-                                                            <p className="text-[9px] font-mono text-green-600 mt-0.5">TX : {order.mtn_transaction_id}</p>
-                                                        )}
+                                                        <p className="text-[10px] font-black uppercase text-slate-400 leading-none">{formatOrderNumber(order)}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 mt-1">{formatAdminDateTime(order.created_at)}</p>
                                                     </div>
                                                 </div>
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    {!canAct && (
+                                                        <span
+                                                            className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200"
+                                                            title="Actions réservées à l'admin de cette ville"
+                                                        >
+                                                            Lecture seule
+                                                        </span>
+                                                    )}
+                                                    {isSubscription && (
+                                                        <span className="px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
+                                                            🔷 Abonnement {order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : ''}
+                                                        </span>
+                                                    )}
+                                                    <span className={`px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest ${statusInfo.style}`}>
+                                                        {statusInfo.label}
+                                                    </span>
+                                                    <span className={`px-3 py-1 text-[8px] font-black uppercase italic rounded-full ${payBadge.style}`}>
+                                                        {payBadge.label}
+                                                    </span>
+                                                    {order.tracking_number && (
+                                                        <span className="flex items-center gap-1.5 px-3 py-1 text-[8px] font-black font-mono uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                            <Truck size={10} /> {order.tracking_number}
+                                                        </span>
+                                                    )}
+                                                    {!isSubscription && (order.delivery_mode === 'express' ? (
+                                                        <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400 animate-pulse tracking-widest">
+                                                            ⚡ EXPRESS 3-6H · {(order.delivery_fee || 2000).toLocaleString('fr-FR')} F
+                                                        </span>
+                                                    ) : order.delivery_mode ? (
+                                                        <span className="px-3 py-1 text-[9px] font-black uppercase italic rounded-full bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400 tracking-widest">
+                                                            📦 Standard 6-48H · {(order.delivery_fee || 1000).toLocaleString('fr-FR')} F
+                                                        </span>
+                                                    ) : null)}
+                                                    {order.payout_status === 'paid' && (
+                                                        <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-green-100 text-green-700">
+                                                            Fonds libérés
+                                                        </span>
+                                                    )}
+                                                    {order.status === 'delivered' && order.payout_status === 'pending' && (
+                                                        <span className="px-3 py-1 text-[8px] font-black uppercase italic rounded-full bg-amber-100 text-amber-700 animate-pulse">
+                                                            Fonds bloqués
+                                                        </span>
+                                                    )}
+                                                </div>
                                             </div>
-                                        ) : order.transaction_id ? (
-                                            /* Paiement manuel — saisie ID transaction */
-                                            <div className="mb-6 bg-amber-50/50 dark:bg-amber-500/5 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-800/30">
-                                                <p className="text-[8px] font-black uppercase text-amber-600 mb-3 tracking-[0.2em]">🔐 Vérification Transaction</p>
-                                                <div className="mb-3">
-                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">ID saisi par le client</p>
-                                                    <p className="text-base font-black font-mono tracking-wider text-amber-600">
-                                                        {order.transaction_id.replace(/(\d{3})(?=\d)/g, '$1 ')}
-                                                    </p>
+
+                                            {/* CONTENU */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-6">
+                                                {/* Articles */}
+                                                <div className="space-y-3">
+                                                    <p className="text-[8px] font-black uppercase text-slate-400 tracking-[0.2em]">Articles</p>
+                                                    {order.items?.map((item: any, idx: number) => (
+                                                        <div key={idx} className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl">
+                                                            <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name || ''} width={48} height={48} className="w-12 h-12 object-cover rounded-xl" />
+                                                            <div className="flex-1 min-w-0">
+                                                                <h3 className="text-xs font-black uppercase italic leading-tight">{item.name}</h3>
+                                                                {(item.selectedSize || item.selectedColor) && (
+                                                                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">
+                                                                        {[item.selectedSize && `Taille : ${item.selectedSize}`, item.selectedColor && `Couleur : ${item.selectedColor}`]
+                                                                            .filter(Boolean)
+                                                                            .join(' · ')}
+                                                                    </p>
+                                                                )}
+                                                                <p className="text-[10px] font-bold text-green-600 mt-1">{item.price?.toLocaleString('fr-FR')} F × {item.quantity}</p>
+                                                            </div>
+                                                        </div>
+                                                    ))}
                                                 </div>
-                                                <div className="mb-3">
-                                                    <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Entrez l&apos;ID reçu par SMS</p>
-                                                    <input
-                                                        type="text"
-                                                        inputMode="numeric"
-                                                        maxLength={13}
-                                                        value={adminInputs[order.id] || ''}
-                                                        onChange={e => {
-                                                            const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
-                                                            setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
-                                                        }}
-                                                        placeholder="ID du SMS (10 chiffres)"
-                                                        disabled={!canAct}
-                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                        className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
-                                                    />
-                                                </div>
-                                                {adminInputs[order.id]?.length === 10 && (
-                                                    <div className="mt-2">
-                                                        {adminInputs[order.id] === order.transaction_id ? (
-                                                            <p className="text-green-600 text-[10px] font-black uppercase">✓ Les ID correspondent — vous pouvez valider</p>
-                                                        ) : (
-                                                            <p className="text-red-500 text-[10px] font-black uppercase">✗ Les ID ne correspondent PAS — vérifiez le numéro</p>
+
+                                                {/* Client + Finances */}
+                                                <div className="space-y-4">
+                                                    <div className="bg-slate-50/50 dark:bg-slate-800/30 p-5 rounded-[2rem] border border-dashed border-slate-200 dark:border-slate-800">
+                                                        <p className="text-[8px] font-black uppercase text-slate-400 mb-3 tracking-[0.2em]">Contact Client</p>
+                                                        <p className="font-black uppercase italic text-sm mb-1">{order.customer_name}</p>
+                                                        <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                                                            <MapPin size={12} className="text-orange-500" /> {order.city}, {order.district}
+                                                        </p>
+                                                        {order.phone && (
+                                                            <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 mt-1">
+                                                                <Phone size={12} className="text-orange-500" /> {order.phone}
+                                                            </p>
+                                                        )}
+                                                        {/* Localisation de livraison */}
+                                                        {order.delivery_location_type === 'manual' && (order.delivery_sector || order.delivery_bus_stop || order.delivery_landmark) && (
+                                                            <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 space-y-1">
+                                                                <p className="text-[8px] font-black uppercase text-orange-500 tracking-[0.15em] mb-2">📍 Adresse de livraison</p>
+                                                                {order.delivery_sector && (
+                                                                    <p className="text-[10px] font-bold text-slate-500">Secteur : <span className="text-slate-700 dark:text-slate-300">{order.delivery_sector}</span></p>
+                                                                )}
+                                                                {order.delivery_bus_stop && (
+                                                                    <p className="text-[10px] font-bold text-slate-500">Arrêt bus : <span className="text-slate-700 dark:text-slate-300">{order.delivery_bus_stop}</span></p>
+                                                                )}
+                                                                {order.delivery_landmark && (
+                                                                    <p className="text-[10px] font-bold text-slate-500">Repère : <span className="text-slate-700 dark:text-slate-300">{order.delivery_landmark}</span></p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                        {order.delivery_location_type === 'gps' && order.delivery_latitude && order.delivery_longitude && (
+                                                            <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700">
+                                                                <p className="text-[8px] font-black uppercase text-blue-500 tracking-[0.15em] mb-2">📡 Position GPS</p>
+                                                                {order.delivery_accuracy && (
+                                                                    <p className="text-[10px] font-bold text-slate-400 mb-1.5">Précision ±{Math.round(order.delivery_accuracy)} m</p>
+                                                                )}
+                                                                <a
+                                                                    href={`https://www.google.com/maps?q=${order.delivery_latitude},${order.delivery_longitude}`}
+                                                                    target="_blank"
+                                                                    rel="noopener noreferrer"
+                                                                    className="inline-flex items-center gap-1.5 text-[10px] font-bold text-blue-500 hover:text-blue-600 no-underline"
+                                                                >
+                                                                    <MapPin size={11} /> Ouvrir dans Google Maps
+                                                                </a>
+                                                            </div>
                                                         )}
                                                     </div>
-                                                )}
-                                            </div>
-                                        ) : null
-                                    )}
 
-                                    {/* ASSIGNATION LOGISTICIEN */}
-                                    {(order.status === 'confirmed' || order.status === 'shipped' || order.status === 'picked_up') && !isSubscription && (
-                                        <div className="mb-6 bg-violet-50/50 dark:bg-violet-500/5 p-5 rounded-[2rem] border border-violet-200 dark:border-violet-800/30">
-                                            <p className="text-[8px] font-black uppercase text-violet-600 mb-3 tracking-[0.2em]">🏍️ Livreur assigné</p>
-
-                                            {/* Vendeur pas encore prêt */}
-                                            {order.status === 'confirmed' && !order.logistician_id && (
-                                                <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                                                    <AlertTriangle size={14} className="shrink-0" />
-                                                    <p className="text-[11px] font-bold">En attente du vendeur — le colis n&apos;est pas encore prêt.</p>
+                                                    {/* Répartition financière */}
+                                                    {isSubscription ? (
+                                                        <div className="bg-blue-50/50 dark:bg-blue-500/5 p-5 rounded-[2rem] border border-blue-100 dark:border-blue-900/20">
+                                                            <p className="text-[8px] font-black uppercase text-blue-500 mb-3 tracking-[0.2em]">Abonnement vendeur</p>
+                                                            <div className="space-y-2">
+                                                                <div className="flex justify-between text-[10px] font-bold">
+                                                                    <span className="text-slate-500">Plan</span>
+                                                                    <span className="font-black text-blue-600">{order.subscription_plan_id ? order.subscription_plan_id.charAt(0).toUpperCase() + order.subscription_plan_id.slice(1) : 'N/A'}</span>
+                                                                </div>
+                                                                <div className="flex justify-between text-[10px] font-bold border-t border-blue-200 dark:border-blue-800 pt-2">
+                                                                    <span className="text-slate-600">Montant abonnement</span>
+                                                                    <span className="font-black text-blue-600">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                                                </div>
+                                                            </div>
+                                                            {order.status === 'confirmed' && (
+                                                                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-800">
+                                                                    <p className="text-[10px] font-black text-green-600">✓ Plan activé automatiquement</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="bg-orange-50/50 dark:bg-orange-500/5 p-5 rounded-[2rem] border border-orange-100 dark:border-orange-900/20">
+                                                            <p className="text-[8px] font-black uppercase text-orange-500 mb-3 tracking-[0.2em]">Répartition</p>
+                                                            <div className="space-y-2">
+                                                                <div className="flex justify-between text-[10px] font-bold">
+                                                                    <span className="text-slate-500">Total commande</span>
+                                                                    <span className="font-black">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                                                </div>
+                                                                {order.delivery_fee > 0 && (
+                                                                    <div className="flex justify-between text-[10px] font-bold">
+                                                                        <span className="text-slate-500">↳ dont livraison {order.delivery_mode === 'express' ? '⚡' : '📦'}</span>
+                                                                        <span className="font-black text-slate-400">{(order.delivery_fee || 0).toLocaleString('fr-FR')} F</span>
+                                                                    </div>
+                                                                )}
+                                                                {FEATURES.commissions && (
+                                                                <div className="flex justify-between text-[10px] font-bold">
+                                                                    <span className="text-orange-500">Commission ({Math.round((order.commission_rate || 0.10) * 100)}%)</span>
+                                                                    <span className="font-black text-orange-500">{commission.toLocaleString('fr-FR')} F</span>
+                                                                </div>
+                                                                )}
+                                                                <div className="flex justify-between text-[10px] font-bold border-t border-slate-200 dark:border-slate-700 pt-2">
+                                                                    <span className="text-slate-600">Part vendeur</span>
+                                                                    <span className="font-black">{vendorPayout.toLocaleString('fr-FR')} F</span>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
                                                 </div>
+                                            </div>
+
+                                            {/* VÉRIFICATION PAIEMENT */}
+                                            {order.status === 'pending' && (
+                                                order.mtn_reference_id ? (
+                                                    /* MTN MoMo — paiement auto-vérifié via API */
+                                                    <div className="mb-6 bg-green-50/60 dark:bg-green-500/5 p-5 rounded-[2rem] border border-green-200 dark:border-green-800/30">
+                                                        <p className="text-[8px] font-black uppercase text-green-600 mb-3 tracking-[0.2em]">📡 MTN MoMo — Vérification automatique</p>
+                                                        <div className="flex items-start gap-3">
+                                                            <div className="w-8 h-8 rounded-xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                                                                <ShieldCheck size={14} className="text-green-600" />
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-[11px] font-black text-green-700 dark:text-green-400">Paiement vérifié directement via l&apos;API MTN MoMo</p>
+                                                                <p className="text-[10px] font-bold text-slate-500 mt-1">Aucune action manuelle requise — la confirmation est automatique.</p>
+                                                                <p className="text-[9px] font-mono text-slate-400 mt-2">Réf : {order.mtn_reference_id}</p>
+                                                                {order.mtn_transaction_id && (
+                                                                    <p className="text-[9px] font-mono text-green-600 mt-0.5">TX : {order.mtn_transaction_id}</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ) : order.transaction_id ? (
+                                                    /* Paiement manuel — saisie ID transaction */
+                                                    <div className="mb-6 bg-amber-50/50 dark:bg-amber-500/5 p-5 rounded-[2rem] border border-amber-200 dark:border-amber-800/30">
+                                                        <p className="text-[8px] font-black uppercase text-amber-600 mb-3 tracking-[0.2em]">🔐 Vérification Transaction</p>
+                                                        <div className="mb-3">
+                                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">ID saisi par le client</p>
+                                                            <p className="text-base font-black font-mono tracking-wider text-amber-600">
+                                                                {order.transaction_id.replace(/(\d{3})(?=\d)/g, '$1 ')}
+                                                            </p>
+                                                        </div>
+                                                        <div className="mb-3">
+                                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1">Entrez l&apos;ID reçu par SMS</p>
+                                                            <input
+                                                                type="text"
+                                                                inputMode="numeric"
+                                                                maxLength={13}
+                                                                value={adminInputs[order.id] || ''}
+                                                                onChange={e => {
+                                                                    const clean = e.target.value.replace(/\D/g, '').slice(0, 10)
+                                                                    setAdminInputs(prev => ({ ...prev, [order.id]: clean }))
+                                                                }}
+                                                                placeholder="ID du SMS (10 chiffres)"
+                                                                disabled={!canAct}
+                                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 font-mono text-sm tracking-wider outline-none focus:border-amber-500/40 transition-colors placeholder:text-slate-300 dark:placeholder:text-slate-600 disabled:opacity-40"
+                                                            />
+                                                        </div>
+                                                        {adminInputs[order.id]?.length === 10 && (
+                                                            <div className="mt-2">
+                                                                {adminInputs[order.id] === order.transaction_id ? (
+                                                                    <p className="text-green-600 text-[10px] font-black uppercase">✓ Les ID correspondent — vous pouvez valider</p>
+                                                                ) : (
+                                                                    <p className="text-red-500 text-[10px] font-black uppercase">✗ Les ID ne correspondent PAS — vérifiez le numéro</p>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : null
                                             )}
 
-                                            {order.logistician_id ? (
-                                                <div className="flex items-center gap-3">
-                                                    <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
-                                                        <Truck size={14} className="text-violet-600" />
-                                                    </div>
-                                                    <span className="text-sm font-black text-violet-700 dark:text-violet-400">
-                                                        {logisticians.find(l => l.id === order.logistician_id)?.full_name || 'Livreur assigné'}
-                                                    </span>
-                                                </div>
-                                            ) : order.status === 'shipped' && (
-                                                <div>
-                                                    {logisticians.length > 0 ? (
-                                                        <select
-                                                            onChange={(e) => {
-                                                                if (e.target.value) handleAssignLogistician(order.id, e.target.value)
-                                                            }}
-                                                            disabled={assigningOrder === order.id || !canAct}
-                                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                            className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors disabled:opacity-40"
-                                                            defaultValue=""
-                                                        >
-                                                            <option value="" disabled>Choisir un livreur...</option>
-                                                            {logisticians.map(l => (
-                                                                <option key={l.id} value={l.id}>{l.full_name} — {l.phone}</option>
-                                                            ))}
-                                                        </select>
-                                                    ) : (
-                                                        <p className="text-[10px] text-slate-400">Aucun livreur disponible. Ajoutez-en dans Admin → Logisticiens.</p>
+                                            {/* ASSIGNATION LOGISTICIEN */}
+                                            {(order.status === 'confirmed' || order.status === 'shipped' || order.status === 'picked_up') && !isSubscription && (
+                                                <div className="mb-6 bg-violet-50/50 dark:bg-violet-500/5 p-5 rounded-[2rem] border border-violet-200 dark:border-violet-800/30">
+                                                    <p className="text-[8px] font-black uppercase text-violet-600 mb-3 tracking-[0.2em]">🏍️ Livreur assigné</p>
+
+                                                    {/* Vendeur pas encore prêt */}
+                                                    {order.status === 'confirmed' && !order.logistician_id && (
+                                                        <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                                            <AlertTriangle size={14} className="shrink-0" />
+                                                            <p className="text-[11px] font-bold">En attente du vendeur — le colis n&apos;est pas encore prêt.</p>
+                                                        </div>
+                                                    )}
+
+                                                    {order.logistician_id ? (
+                                                        <div className="flex items-center gap-3">
+                                                            <div className="w-8 h-8 rounded-xl bg-violet-100 dark:bg-violet-900/30 flex items-center justify-center">
+                                                                <Truck size={14} className="text-violet-600" />
+                                                            </div>
+                                                            <span className="text-sm font-black text-violet-700 dark:text-violet-400">
+                                                                {logisticians.find(l => l.id === order.logistician_id)?.full_name || 'Livreur assigné'}
+                                                            </span>
+                                                        </div>
+                                                    ) : order.status === 'shipped' && (
+                                                        <div>
+                                                            {logisticians.length > 0 ? (
+                                                                <select
+                                                                    onChange={(e) => {
+                                                                        if (e.target.value) handleAssignLogistician(order.id, e.target.value)
+                                                                    }}
+                                                                    disabled={assigningOrder === order.id || !canAct}
+                                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                    className="w-full py-3 px-4 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-bold outline-none focus:border-violet-500/40 transition-colors disabled:opacity-40"
+                                                                    defaultValue=""
+                                                                >
+                                                                    <option value="" disabled>Choisir un livreur...</option>
+                                                                    {logisticians.map(l => (
+                                                                        <option key={l.id} value={l.id}>{l.full_name} — {l.phone}</option>
+                                                                    ))}
+                                                                </select>
+                                                            ) : (
+                                                                <p className="text-[10px] text-slate-400">Aucun livreur disponible. Ajoutez-en dans Admin → Logisticiens.</p>
+                                                            )}
+                                                        </div>
                                                     )}
                                                 </div>
                                             )}
+
+                                            {/* ACTIONS ADMIN */}
+                                            <div className="flex flex-col gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                                {/* VERROU 1 : Confirmer / rejeter */}
+                                                {order.status === 'pending' && (
+                                                    <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+                                                        <button
+                                                            onClick={() => confirmPayment(order.id)}
+                                                            disabled={updating === order.id || !canAct}
+                                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                            className="flex-1 min-w-[140px] bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
+                                                        >
+                                                            {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
+                                                            Confirmer le paiement
+                                                        </button>
+                                                        <button
+                                                            onClick={() => rejectOrder(order.id)}
+                                                            disabled={updating === order.id || !canAct}
+                                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                            className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50 shrink-0"
+                                                        >
+                                                            <Ban size={14} /> Rejeter
+                                                        </button>
+                                                    </div>
+                                                )}
+
+                                                {/* Messages acheteur in-app (pas d'e-mail / SMS) */}
+                                                {order.status === 'pending' && (
+                                                    <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
+                                                        <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">
+                                                            Message client — carte sur l&apos;espace acheteur
+                                                        </p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => sendBuyerNotice(order.id, 'invalid_code')}
+                                                                disabled={updating === order.id || !canAct}
+                                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase hover:bg-amber-200/80 dark:hover:bg-amber-900/50 disabled:opacity-50 transition-colors"
+                                                            >
+                                                                <AlertTriangle size={12} /> Code invalide
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => sendBuyerNotice(order.id, 'partial_payment')}
+                                                                disabled={updating === order.id || !canAct}
+                                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/25 text-orange-900 dark:text-orange-100 text-[9px] font-black uppercase hover:bg-orange-200/70 dark:hover:bg-orange-900/40 disabled:opacity-50 transition-colors"
+                                                            >
+                                                                <Banknote size={12} /> Paiement incomplet
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => sendBuyerNotice(order.id, 'no_payment')}
+                                                                disabled={updating === order.id || !canAct}
+                                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-[9px] font-black uppercase hover:bg-red-200/60 dark:hover:bg-red-950/60 disabled:opacity-50 transition-colors"
+                                                            >
+                                                                <Ban size={12} /> Aucun paiement
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => sendBuyerNotice(order.id, 'resend_code')}
+                                                                disabled={updating === order.id || !canAct}
+                                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                                className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 text-[9px] font-black uppercase hover:bg-violet-200/70 dark:hover:bg-violet-900/45 disabled:opacity-50 transition-colors"
+                                                            >
+                                                                <RefreshCw size={12} /> Renvoi du code
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+
+                                                {/* VERROU 2 : Libérer les fonds */}
+                                                {order.status === 'delivered' && order.payout_status === 'pending' && (
+                                                    canReleaseFunds(order) ? (
+                                                        <button
+                                                            onClick={() => releaseFunds(order.id)}
+                                                            disabled={updating === order.id || !canAct}
+                                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                            className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
+                                                        >
+                                                            {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
+                                                            Libérer les fonds ({vendorPayout.toLocaleString('fr-FR')} F)
+                                                        </button>
+                                                    ) : (
+                                                        <div className="flex-1 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 px-6 py-4 rounded-2xl flex items-center justify-center gap-3">
+                                                            <Clock size={14} className="text-amber-600" />
+                                                            <span className="text-[10px] font-black uppercase italic text-amber-700 dark:text-amber-400">
+                                                                Libérable dans {hoursUntilRelease(order)}h
+                                                            </span>
+                                                        </div>
+                                                    )
+                                                )}
+
+                                                {/* Annuler abonnement */}
+                                                {isSubscription && order.status === 'confirmed' && (
+                                                    <button
+                                                        onClick={() => cancelSubscription(order.id)}
+                                                        disabled={updating === order.id || !canAct}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                        className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
+                                                    >
+                                                        {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
+                                                        Annuler l&apos;abonnement
+                                                    </button>
+                                                )}
+
+                                                {/* Reçu PDF */}
+                                                {order.status !== 'pending' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
+                                                        disabled={!canAct}
+                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
+                                                        className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all disabled:opacity-40 disabled:pointer-events-none"
+                                                    >
+                                                        <Download size={14} /> Reçu PDF
+                                                    </button>
+                                                )}
+
+                                                {/* Contacter le client */}
+                                                {order.phone && (
+                                                    canAct ? (
+                                                        <a
+                                                            href={`tel:${order.phone}`}
+                                                            className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95"
+                                                        >
+                                                            <Phone size={14} /> Appeler
+                                                        </a>
+                                                    ) : (
+                                                        <span
+                                                            title="Actions réservées à l'admin de cette ville"
+                                                            className="bg-slate-100 dark:bg-slate-800 text-slate-400 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
+                                                        >
+                                                            <Phone size={14} /> Appeler
+                                                        </span>
+                                                    )
+                                                )}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => archiveOrderFromDb(order.id, formatOrderNumber(order))}
+                                                    disabled={updating === order.id || !canAct}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : 'Archiver (données préservées)'}
+                                                    className="bg-slate-50 dark:bg-slate-800/50 text-slate-500 dark:text-slate-400 border-2 border-slate-200 dark:border-slate-700 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all disabled:opacity-50"
+                                                >
+                                                    {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
+                                                    Archiver
+                                                </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )}
-
-                                    {/* ACTIONS ADMIN */}
-                                    <div className="flex flex-col gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
-                                        {/* VERROU 1 : Confirmer / rejeter */}
-                                        {order.status === 'pending' && (
-                                            <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-                                                <button
-                                                    onClick={() => confirmPayment(order.id)}
-                                                    disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                    className="flex-1 min-w-[140px] bg-blue-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-600/20 disabled:opacity-50"
-                                                >
-                                                    {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <ShieldCheck size={14} />}
-                                                    Confirmer le paiement
-                                                </button>
-                                                <button
-                                                    onClick={() => rejectOrder(order.id)}
-                                                    disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                    className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50 shrink-0"
-                                                >
-                                                    <Ban size={14} /> Rejeter
-                                                </button>
-                                            </div>
-                                        )}
-
-                                        {/* Messages acheteur in-app (pas d'e-mail / SMS) */}
-                                        {order.status === 'pending' && (
-                                            <div className="rounded-2xl border border-dashed border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/40 p-4">
-                                                <p className="text-[9px] font-black uppercase text-slate-500 tracking-widest mb-3">
-                                                    Message client — carte sur l&apos;espace acheteur
-                                                </p>
-                                                <div className="flex flex-wrap gap-2">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => sendBuyerNotice(order.id, 'invalid_code')}
-                                                        disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-amber-100 dark:bg-amber-900/30 text-amber-900 dark:text-amber-100 text-[9px] font-black uppercase hover:bg-amber-200/80 dark:hover:bg-amber-900/50 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        <AlertTriangle size={12} /> Code invalide
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => sendBuyerNotice(order.id, 'partial_payment')}
-                                                        disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-orange-100 dark:bg-orange-900/25 text-orange-900 dark:text-orange-100 text-[9px] font-black uppercase hover:bg-orange-200/70 dark:hover:bg-orange-900/40 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        <Banknote size={12} /> Paiement incomplet
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => sendBuyerNotice(order.id, 'no_payment')}
-                                                        disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-red-100 dark:bg-red-950/40 text-red-800 dark:text-red-200 text-[9px] font-black uppercase hover:bg-red-200/60 dark:hover:bg-red-950/60 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        <Ban size={12} /> Aucun paiement
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => sendBuyerNotice(order.id, 'resend_code')}
-                                                        disabled={updating === order.id || !canAct}
-                                                        title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-2.5 rounded-xl bg-violet-100 dark:bg-violet-900/30 text-violet-900 dark:text-violet-100 text-[9px] font-black uppercase hover:bg-violet-200/70 dark:hover:bg-violet-900/45 disabled:opacity-50 transition-colors"
-                                                    >
-                                                        <RefreshCw size={12} /> Renvoi du code
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
-
-                                        {/* VERROU 2 : Libérer les fonds */}
-                                        {order.status === 'delivered' && order.payout_status === 'pending' && (
-                                            canReleaseFunds(order) ? (
-                                                <button
-                                                    onClick={() => releaseFunds(order.id)}
-                                                    disabled={updating === order.id || !canAct}
-                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                    className="flex-1 bg-green-600 text-white px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-green-700 transition-all shadow-lg shadow-green-600/20 disabled:opacity-50"
-                                                >
-                                                    {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Wallet size={14} />}
-                                                    Libérer les fonds ({vendorPayout.toLocaleString('fr-FR')} F)
-                                                </button>
-                                            ) : (
-                                                <div className="flex-1 bg-amber-50 dark:bg-amber-900/20 border-2 border-amber-200 dark:border-amber-800 px-6 py-4 rounded-2xl flex items-center justify-center gap-3">
-                                                    <Clock size={14} className="text-amber-600" />
-                                                    <span className="text-[10px] font-black uppercase italic text-amber-700 dark:text-amber-400">
-                                                        Libérable dans {hoursUntilRelease(order)}h
-                                                    </span>
-                                                </div>
-                                            )
-                                        )}
-
-                                        {/* Annuler abonnement */}
-                                        {isSubscription && order.status === 'confirmed' && (
-                                            <button
-                                                onClick={() => cancelSubscription(order.id)}
-                                                disabled={updating === order.id || !canAct}
-                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                className="px-5 py-4 rounded-2xl border-2 border-red-200 dark:border-red-800 text-red-500 font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-50 dark:hover:bg-red-500/5 transition-all disabled:opacity-50"
-                                            >
-                                                {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Ban size={14} />}
-                                                Annuler l'abonnement
-                                            </button>
-                                        )}
-
-                                        {/* Reçu PDF */}
-                                        {order.status !== 'pending' && (
-                                            <button
-                                                type="button"
-                                                onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}
-                                                disabled={!canAct}
-                                                title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                                className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:text-orange-500 transition-all disabled:opacity-40 disabled:pointer-events-none"
-                                            >
-                                                <Download size={14} /> Reçu PDF
-                                            </button>
-                                        )}
-
-                                        {/* Contacter le client */}
-                                        {order.phone && (
-                                            canAct ? (
-                                                <a
-                                                    href={`tel:${order.phone}`}
-                                                    className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 transition-transform active:scale-95"
-                                                >
-                                                    <Phone size={14} /> Appeler
-                                                </a>
-                                            ) : (
-                                                <span
-                                                    title="Actions réservées à l'admin de cette ville"
-                                                    className="bg-slate-100 dark:bg-slate-800 text-slate-400 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 cursor-not-allowed opacity-50"
-                                                >
-                                                    <Phone size={14} /> Appeler
-                                                </span>
-                                            )
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={() => deleteOrderFromDb(order.id, formatOrderNumber(order))}
-                                            disabled={updating === order.id || !canAct}
-                                            title={!canAct ? "Actions réservées à l'admin de cette ville" : undefined}
-                                            className="bg-red-50 dark:bg-red-950/30 text-red-600 dark:text-red-400 border-2 border-red-200 dark:border-red-900 px-6 py-4 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 dark:hover:bg-red-950/50 transition-all disabled:opacity-50"
-                                        >
-                                            {updating === order.id ? <Loader2 size={14} className="animate-spin" /> : <Trash2 size={14} />}
-                                            Supprimer de la BDD
-                                        </button>
-                                    </div>
+                                    )
+                                })
+                            ) : (
+                                <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800">
+                                    <Filter className="mx-auto text-slate-200 mb-4" size={48} />
+                                    <p className="text-xs font-black uppercase italic text-slate-400">Aucune commande dans cette catégorie</p>
                                 </div>
-                                </div>
-                            )
-                        })
-                    ) : (
-                        <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800">
-                            <Filter className="mx-auto text-slate-200 mb-4" size={48} />
-                            <p className="text-xs font-black uppercase italic text-slate-400">Aucune commande dans cette catégorie</p>
+                            )}
                         </div>
-                    )}
-                </div>
+                    </>
+                )}
+
+                {/* ======================================================= */}
+                {/* VUE ARCHIVES                                              */}
+                {/* ======================================================= */}
+                {activeMainTab === 'archives' && (
+                    <>
+                        {/* Barre de recherche archives */}
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    type="text"
+                                    value={archivesSearchQuery}
+                                    onChange={(e) => setArchivesSearchQuery(e.target.value)}
+                                    placeholder="Rechercher par réf, client, article..."
+                                    className="w-full pl-11 pr-10 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-slate-500/30 placeholder:text-slate-400 placeholder:font-normal"
+                                />
+                                {archivesSearchQuery && (
+                                    <button onClick={() => setArchivesSearchQuery('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+                                        <X size={16} />
+                                    </button>
+                                )}
+                            </div>
+                            <button
+                                onClick={fetchArchivedOrders}
+                                disabled={archivesLoading}
+                                className="flex items-center gap-2 px-5 py-3 rounded-2xl bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[10px] font-black uppercase italic hover:bg-slate-300 dark:hover:bg-slate-600 transition-all disabled:opacity-40 whitespace-nowrap"
+                            >
+                                <RefreshCw size={14} className={archivesLoading ? 'animate-spin' : ''} /> Rafraîchir
+                            </button>
+                        </div>
+
+                        {archivesLoading ? (
+                            <div className="py-16 flex justify-center">
+                                <Loader2 className="animate-spin text-slate-400" size={32} />
+                            </div>
+                        ) : filteredArchives.length > 0 ? (
+                            <div className="space-y-4">
+                                {filteredArchives.map((order) => {
+                                    const statusInfo = getStatusDetails(order.status)
+                                    const payBadge = getPaymentBadge(order.payment_method)
+                                    const canAct = canActOnOrder(order)
+
+                                    return (
+                                        <div
+                                            key={order.id}
+                                            className="rounded-[2.5rem] p-6 md:p-8 border-2 border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/60 opacity-80 hover:opacity-100 transition-all"
+                                        >
+                                            {/* EN-TÊTE */}
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-10 h-10 rounded-2xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                                                        <Archive size={16} />
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[10px] font-black uppercase text-slate-500 leading-none">{formatOrderNumber(order)}</p>
+                                                        <p className="text-[10px] font-bold text-slate-400 mt-1">
+                                                            Créée : {formatAdminDateTime(order.created_at)}
+                                                        </p>
+                                                        {order.archived_at && (
+                                                            <p className="text-[9px] font-bold text-slate-400 mt-0.5">
+                                                                Archivée : {formatAdminDateTime(order.archived_at)}
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="flex flex-col items-end gap-1.5">
+                                                    <span className="px-3 py-1 text-[8px] font-black uppercase rounded-full bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-400">
+                                                        Archivée
+                                                    </span>
+                                                    <span className={`px-4 py-1.5 text-[9px] font-black uppercase italic rounded-full tracking-widest ${statusInfo.style}`}>
+                                                        {statusInfo.label}
+                                                    </span>
+                                                    <span className={`px-3 py-1 text-[8px] font-black uppercase italic rounded-full ${payBadge.style}`}>
+                                                        {payBadge.label}
+                                                    </span>
+                                                    {order.tracking_number && (
+                                                        <span className="flex items-center gap-1.5 px-3 py-1 text-[8px] font-black font-mono uppercase rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400">
+                                                            <Truck size={10} /> {order.tracking_number}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* CLIENT + ARTICLES (résumé compact) */}
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                                <div>
+                                                    <p className="text-[8px] font-black uppercase text-slate-400 mb-2 tracking-[0.2em]">Client</p>
+                                                    <p className="font-black uppercase italic text-sm">{order.customer_name}</p>
+                                                    <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
+                                                        <MapPin size={10} className="text-slate-400" /> {order.city}, {order.district}
+                                                    </p>
+                                                    {order.phone && (
+                                                        <p className="text-[10px] font-bold text-slate-500 flex items-center gap-1 mt-0.5">
+                                                            <Phone size={10} className="text-slate-400" /> {order.phone}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div>
+                                                    <p className="text-[8px] font-black uppercase text-slate-400 mb-2 tracking-[0.2em]">Articles</p>
+                                                    {(order.items || []).slice(0, 3).map((item: any, idx: number) => (
+                                                        <p key={idx} className="text-[10px] font-bold text-slate-600 dark:text-slate-300">
+                                                            {item.name} × {item.quantity} — {(item.price || 0).toLocaleString('fr-FR')} F
+                                                        </p>
+                                                    ))}
+                                                    {(order.items || []).length > 3 && (
+                                                        <p className="text-[9px] text-slate-400 mt-0.5">+{order.items.length - 3} autre(s)</p>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* RÉSUMÉ FINANCIER */}
+                                            <div className="flex items-center justify-between p-4 rounded-2xl bg-white dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 mb-4">
+                                                <span className="text-[10px] font-black uppercase text-slate-500">Total commande</span>
+                                                <span className="font-black text-slate-700 dark:text-slate-200">{(order.total_amount || 0).toLocaleString('fr-FR')} F</span>
+                                            </div>
+
+                                            {/* ACTION : Restaurer */}
+                                            <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
+                                                {!canAct && (
+                                                    <p className="text-[9px] font-bold text-slate-400 mb-2">Hors zone — restauration non autorisée</p>
+                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => restoreFromArchive(order.id, formatOrderNumber(order))}
+                                                    disabled={updating === order.id || !canAct}
+                                                    title={!canAct ? "Actions réservées à l'admin de cette ville" : 'Restaurer dans les commandes actives'}
+                                                    className="flex items-center gap-2 px-6 py-3 rounded-2xl bg-white dark:bg-slate-800 border-2 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-300 font-black uppercase italic text-[10px] hover:border-orange-400 hover:text-orange-500 transition-all disabled:opacity-40"
+                                                >
+                                                    {updating === order.id ? <Loader2 size={13} className="animate-spin" /> : <RotateCcw size={13} />}
+                                                    Restaurer
+                                                </button>
+                                            </div>
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        ) : (
+                            <div className="py-20 text-center bg-white dark:bg-slate-900 rounded-[3rem] border border-slate-100 dark:border-slate-800">
+                                <Archive className="mx-auto text-slate-200 mb-4" size={48} />
+                                <p className="text-xs font-black uppercase italic text-slate-400">
+                                    {archivesLoaded
+                                        ? archivesSearchQuery ? 'Aucune archive correspondant à la recherche' : 'Aucune commande archivée'
+                                        : 'Chargement des archives...'}
+                                </p>
+                            </div>
+                        )}
+                    </>
+                )}
             </div>
         </div>
     )

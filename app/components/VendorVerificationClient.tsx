@@ -177,6 +177,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
     const [gpsLoading, setGpsLoading]       = useState(false)
     const [gpsConfirmOpen, setGpsConfirmOpen] = useState(false)
     const [submitting, setSubmitting]       = useState(false)
+    const [uploadProgress, setUploadProgress] = useState('')
 
     const currentIdOption = ID_OPTIONS.find(o => o.id === idType)!
     const isEntreprise = vendorProfileType === 'entreprise'
@@ -202,27 +203,61 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         setIdPhotoBackPreview(URL.createObjectURL(valid))
     }
 
-    const uploadImage = async (file: File, basePath: string): Promise<string | null> => {
+    const uploadImage = async (file: File, basePath: string, label: string): Promise<string | null> => {
         const ext = extFromFile(file)
         const path = `${basePath}.${ext}`
         const contentType = contentTypeForFile(file, ext)
-        const { error } = await supabase.storage.from(BUCKET).upload(path, file, { contentType, upsert: true })
-        if (error) {
-            toast.error(
-                error.message.includes('Bucket not found')
-                    ? 'Bucket Storage « vendor-verifications » manquant.'
-                    : `Upload : ${error.message}`
-            )
+
+        setUploadProgress(`Envoi ${label}…`)
+
+        // Timeout 45 s via Promise.race — évite le blocage définitif sur réseau lent.
+        // La Supabase SDK ne supporte pas AbortController nativement dans tous les cas,
+        // donc on utilise une course de promesses pour garantir la sortie.
+        const TIMEOUT_MS = 45_000
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), TIMEOUT_MS)
+        )
+
+        let uploadError: string | null = null
+        try {
+            const uploadPromise = supabase.storage
+                .from(BUCKET)
+                .upload(path, file, { contentType, upsert: true })
+
+            const { error } = await Promise.race([uploadPromise, timeoutPromise])
+            if (error) {
+                uploadError = error.message.includes('Bucket not found')
+                    ? 'Bucket Storage « vendor-verifications » manquant en production. Contactez l\'administrateur.'
+                    : `Erreur d'envoi : ${error.message}`
+            }
+        } catch (err: any) {
+            if (err?.message === 'UPLOAD_TIMEOUT') {
+                uploadError = 'Délai dépassé (45 s — réseau lent). Réessayez avec une connexion Wi-Fi ou une image plus légère.'
+            } else {
+                uploadError = err?.message || 'Erreur réseau lors de l\'envoi de la photo.'
+            }
+        } finally {
+            setUploadProgress('')
+        }
+
+        if (uploadError) {
+            toast.error(uploadError)
             return null
         }
-        const { data: signedData, error: signError } = await supabase.storage
-            .from(BUCKET)
-            .createSignedUrl(path, 60 * 60 * 24 * 90)
-        if (signError || !signedData?.signedUrl) {
-            toast.error('Impossible de générer l\'URL sécurisée. Réessayez.')
-            return null
+
+        setUploadProgress('Sécurisation de l\'URL…')
+        try {
+            const { data: signedData, error: signError } = await supabase.storage
+                .from(BUCKET)
+                .createSignedUrl(path, 60 * 60 * 24 * 90)
+            if (signError || !signedData?.signedUrl) {
+                toast.error('Impossible de sécuriser la photo. Réessayez.')
+                return null
+            }
+            return signedData.signedUrl
+        } finally {
+            setUploadProgress('')
         }
-        return signedData.signedUrl
     }
 
     const captureGps = () => {
@@ -257,17 +292,19 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         if (isEntreprise && !niuNumber.trim()) { toast.error('Le NIU est obligatoire pour une entreprise'); return }
 
         setSubmitting(true)
+        setUploadProgress('Préparation…')
         try {
             const timestamp = Date.now()
-            const idPhotoUrl = await uploadImage(idPhoto, `verifications/${user.id}/${timestamp}-id-front`)
+            const idPhotoUrl = await uploadImage(idPhoto, `verifications/${user.id}/${timestamp}-id-front`, 'photo recto')
             if (!idPhotoUrl) return
 
             let idPhotoBackUrl: string | undefined
             if (idPhotoBack) {
-                const url = await uploadImage(idPhotoBack, `verifications/${user.id}/${timestamp}-id-back`)
+                const url = await uploadImage(idPhotoBack, `verifications/${user.id}/${timestamp}-id-back`, 'photo verso')
                 if (!url) return
                 idPhotoBackUrl = url
             }
+            setUploadProgress('Envoi de la demande…')
 
             const result = await submitVerification({
                 vendorProfileType,
@@ -285,9 +322,10 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             if (result.error) { toast.error(result.error) }
             else { toast.success('Demande de vérification envoyée !'); router.refresh() }
         } catch {
-            toast.error('Une erreur est survenue')
+            toast.error('Une erreur est survenue. Vérifiez votre connexion et réessayez.')
         } finally {
             setSubmitting(false)
+            setUploadProgress('')
         }
     }
 
@@ -678,11 +716,28 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                     )}
 
                     {addressLat !== null && addressLng !== null && (
-                        <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30">
-                            <MapPin size={13} className="text-green-500 flex-shrink-0" />
-                            <p className="text-[11px] font-bold text-green-600 dark:text-green-400">
-                                Position capturée — {addressLat.toFixed(5)}, {addressLng.toFixed(5)}
-                            </p>
+                        <div className="mt-2 space-y-1.5">
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30">
+                                <MapPin size={13} className="text-green-500 flex-shrink-0" />
+                                <p className="text-[11px] font-bold text-green-600 dark:text-green-400 flex-1">
+                                    Position capturée — {addressLat.toFixed(5)}, {addressLng.toFixed(5)}
+                                </p>
+                                <a
+                                    href={`https://www.google.com/maps?q=${addressLat},${addressLng}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-[9px] font-black uppercase text-blue-500 hover:text-blue-700 underline whitespace-nowrap"
+                                >
+                                    Vérifier sur Maps
+                                </a>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setAddressLat(null); setAddressLng(null) }}
+                                className="text-[9px] font-bold text-slate-400 hover:text-red-500 transition-colors w-full text-center"
+                            >
+                                ✕ Effacer la position GPS
+                            </button>
                         </div>
                     )}
                 </div>
@@ -699,12 +754,17 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                     {submitting ? (
                         <span className="flex items-center justify-center gap-2">
                             <Loader2 size={16} className="animate-spin" />
-                            Envoi en cours...
+                            {uploadProgress || 'Envoi en cours…'}
                         </span>
                     ) : (
                         'Soumettre ma vérification'
                     )}
                 </button>
+                {submitting && (
+                    <p className="text-[9px] text-slate-400 text-center mt-1">
+                        Ne fermez pas cette page. Sur réseau mobile, l'envoi peut prendre jusqu'à 45 secondes.
+                    </p>
+                )}
 
                 <p className="text-[10px] text-slate-400 text-center">
                     Vos informations sont confidentielles et uniquement utilisées pour vérifier votre identité.

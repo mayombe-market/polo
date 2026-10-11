@@ -712,6 +712,86 @@ export async function adminDeleteOrder(orderId: string) {
     return { success: true }
 }
 
+/** Archive une commande (soft delete) — préserve les données, masque de la vue admin normale. */
+export async function adminArchiveOrder(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zoneArch = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zoneArch.error) return { error: zoneArch.error }
+
+    const { data: existing } = await supabase
+        .from('orders')
+        .select('id, status')
+        .eq('id', orderId)
+        .maybeSingle()
+
+    if (!existing) return { error: 'Commande introuvable' }
+
+    // Soft delete : marquer is_archived + horodatage — aucune suppression physique
+    const { error } = await supabase
+        .from('orders')
+        .update({ is_archived: true, archived_at: new Date().toISOString() })
+        .eq('id', orderId)
+
+    if (error) {
+        // Colonne manquante → migration SQL requise
+        if (error.message.includes('is_archived') || error.code === '42703') {
+            return { error: 'Migration SQL requise : appliquez supabase-migration-archivage.sql dans Supabase avant d\'utiliser l\'archivage.' }
+        }
+        return { error: error.message }
+    }
+
+    return { success: true }
+}
+
+/** Restaure une commande archivée — remet is_archived=false et archived_at=null uniquement. */
+export async function adminRestoreOrder(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zone = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zone.error) return { error: zone.error }
+
+    const { data: existing } = await supabase
+        .from('orders')
+        .select('id, is_archived')
+        .eq('id', orderId)
+        .maybeSingle()
+
+    if (!existing) return { error: 'Commande introuvable' }
+    if (!existing.is_archived) return { error: 'Cette commande n\'est pas archivée' }
+
+    const { error } = await supabase
+        .from('orders')
+        .update({ is_archived: false, archived_at: null })
+        .eq('id', orderId)
+
+    if (error) return { error: error.message }
+
+    return { success: true }
+}
+
 // Créer une commande (appelé côté client via server action)
 export async function createOrder(input: {
     items: Array<{

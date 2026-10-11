@@ -1013,7 +1013,7 @@ export default function CheckoutPage() {
 
                     <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
                         {/* ═══ INFORMATIONS DE LIVRAISON ═══ */}
-                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-4">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-4 sm:p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-4">
                             <div className="flex items-center justify-between mb-4">
                                 <div className="flex items-center gap-3 text-orange-500 font-black uppercase text-xs italic">
                                     <MapPin size={18} /> Informations de livraison
@@ -1120,13 +1120,13 @@ export default function CheckoutPage() {
                                 </div>
                                 {errors.phone
                                     ? <p className="text-red-500 text-[10px] font-black uppercase ml-2">{errors.phone.message}</p>
-                                    : <p className="text-slate-400 text-[9px] font-bold ml-2">Numéro MTN Congo — format : 06 XXX XX XX</p>
+                                    : <p className="text-slate-400 text-[9px] font-bold ml-2">Numéro de contact — MTN (06) ou Airtel (05)</p>
                                 }
                             </div>
                         </div>
 
                         {/* ═══ MODE DE LIVRAISON ═══ */}
-                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-4 sm:p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
                                 <Truck size={18} /> Livraison
                             </div>
@@ -1304,7 +1304,7 @@ export default function CheckoutPage() {
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-1">
                                                     <Clock size={12} className="text-slate-400" />
-                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">3H — 6H · Livreur dédié</p>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">3H — 6H indicatif · Livreur dédié</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1338,7 +1338,7 @@ export default function CheckoutPage() {
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-1">
                                                     <Clock size={12} className="text-slate-400" />
-                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">6H — 48H · Livraison groupée</p>
+                                                    <p className="text-[10px] font-bold text-slate-500 uppercase">6H — 48H indicatif · Livraison groupée</p>
                                                 </div>
                                             </div>
                                         </div>
@@ -1398,7 +1398,7 @@ export default function CheckoutPage() {
                         </div>
 
                         {/* ═══ MÉTHODE DE PAIEMENT ═══ */}
-                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
+                        <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-4 sm:p-8 rounded-[2.5rem] shadow-lg shadow-black/[0.06] border border-stone-200/80 dark:border-stone-800/60 space-y-3">
                             <div className="flex items-center gap-3 mb-6 text-orange-500 font-black uppercase text-xs italic">
                                 <CreditCard size={18} /> Méthode de paiement
                             </div>
@@ -1582,7 +1582,7 @@ export default function CheckoutPage() {
                                 loading ||
                                 needsCity ||
                                 cart.length === 0 ||
-                                (sellerIds.length > 0 && !sellerCitiesReady) ||
+                                (sellerIds.length > 0 && (!sellerCitiesReady || vendorPaymentMethods.loading)) ||
                                 (isPatisserieOrder && !buyerGps) ||
                                 (!isPatisserieOrder && needsInterUrbanDelivery &&
                                     (!interUrbanPreAlertAccepted || !interUrbanAccepted))
@@ -1596,7 +1596,7 @@ export default function CheckoutPage() {
 
                 {/* COLONNE DROITE : RÉCAPITULATIF */}
                 <div className="lg:sticky lg:top-12 h-fit">
-                    <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-10 rounded-[3.5rem] shadow-xl shadow-black/[0.08] border border-stone-200/80 dark:border-stone-800/60">
+                    <div className="bg-white/95 dark:bg-stone-900/95 backdrop-blur-sm p-5 sm:p-10 rounded-[3.5rem] shadow-xl shadow-black/[0.08] border border-stone-200/80 dark:border-stone-800/60">
                         <h2 className="font-black uppercase text-xs italic mb-8 flex items-center gap-3 tracking-widest text-slate-400">
                             <Truck size={16} /> Résumé du panier
                         </h2>

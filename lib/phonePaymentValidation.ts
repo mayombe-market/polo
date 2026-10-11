@@ -26,34 +26,43 @@ export function parseStrict10Digits(input: string | undefined | null): string | 
     return d.length === 10 ? d : null
 }
 
-/** Valide un numéro MTN Congo : 06XXXXXXX (local) ou 24206XXXXXXX (international). */
-export function isValidMtnCongo(input: string): boolean {
+/** Valide un numéro Congo : MTN 06XXXXXXX ou Airtel 05XXXXXXX (local 9 chiffres, ou international +242). */
+export function isValidCongolaisNumber(input: string): boolean {
     const d = digitsOnly(input)
-    if (d.length === 9) return d.startsWith('06')
-    if (d.length === 12) return d.startsWith('24206')
+    if (d.length === 9) return d.startsWith('06') || d.startsWith('05')
+    if (d.length === 12) return d.startsWith('24206') || d.startsWith('24205')
     return false
 }
 
-export function getMtnCongoError(input: string): string | null {
+/** @deprecated Utiliser isValidCongolaisNumber */
+export function isValidMtnCongo(input: string): boolean {
+    return isValidCongolaisNumber(input)
+}
+
+export function getCongolaisNumberError(input: string): string | null {
     const d = digitsOnly(input)
     if (!d) return null
     if (d.startsWith('243')) return 'Indicatif invalide — Congo (Brazzaville) utilise +242, pas +243'
-    if (d.startsWith('05') || (d.length === 12 && d.startsWith('24205'))) return 'Numéro Airtel non accepté — utilisez un numéro MTN (commence par 06)'
-    if (d.startsWith('0') && !d.startsWith('06')) return 'Préfixe invalide — les numéros MTN Congo commencent par 06'
+    if (d.startsWith('0') && !d.startsWith('05') && !d.startsWith('06')) return 'Préfixe invalide — numéros Congo : MTN (06) ou Airtel (05)'
     return null
 }
 
-/** Zod : téléphone saisi (espaces tolérés) → numéro MTN Congo valide. */
+/** @deprecated Utiliser getCongolaisNumberError */
+export function getMtnCongoError(input: string): string | null {
+    return getCongolaisNumberError(input)
+}
+
+/** Zod : numéro de contact congolais (espaces tolérés) → MTN (06) ou Airtel (05). */
 export const zodPhone10Digits = z
     .string()
     .superRefine((s, ctx) => {
-        const hint = getMtnCongoError(s)
+        const hint = getCongolaisNumberError(s)
         if (hint) {
             ctx.addIssue({ code: z.ZodIssueCode.custom, message: hint })
             return
         }
-        if (!isValidMtnCongo(s)) {
-            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Format attendu : 06 XXX XX XX (numéro MTN Congo)' })
+        if (!isValidCongolaisNumber(s)) {
+            ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Format attendu : 06 XXX XX XX (MTN) ou 05 XXX XX XX (Airtel)' })
         }
     })
     .transform((s) => digitsOnly(s))

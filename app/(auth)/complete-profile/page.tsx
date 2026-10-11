@@ -14,6 +14,16 @@ import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 import { LEGAL_SIGNUP } from '@/lib/legal/termsRoutes'
 import { FEATURES } from '@/lib/featureFlags'
 
+// Types de vendeur disponibles — masquer les modules non activés sans supprimer le code
+const VENDOR_TYPES = [
+    { id: 'marketplace' as const, label: 'Marketplace', icon: '🛍️', desc: 'Mode, beauté, high-tech, électronique…', enabled: true },
+    { id: 'immobilier' as const, label: 'Immobilier', icon: '🏠', desc: 'Maisons, terrains, bureaux…', enabled: FEATURES.immobilier },
+    { id: 'patisserie' as const, label: 'Pâtisserie', icon: '🎂', desc: 'Gâteaux, viennoiseries…', enabled: FEATURES.patisserie },
+    { id: 'restaurant' as const, label: 'Restaurant', icon: '🍽️', desc: 'Plats, grillades, fast-food…', enabled: FEATURES.restaurant },
+    { id: 'hotel' as const, label: 'Hôtellerie', icon: '🏨', desc: 'Chambres, hôtels…', enabled: FEATURES.hotel },
+]
+const ACTIVE_VENDOR_TYPES = VENDOR_TYPES.filter(t => t.enabled)
+
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
     { code: 'GA', name: 'Gabon', flag: '🇬🇦', dial: '+241', maxDigits: 8, placeholder: 'XX XX XX XX', enabled: false },
@@ -30,7 +40,6 @@ export default function CompleteProfilePage() {
     const isVendorPath = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('role') === 'vendor'
     const [role, setRole] = useState<'buyer' | 'vendor'>(isVendorPath ? 'vendor' : 'buyer')
     const [shopName, setShopName] = useState('')
-    const [vendorConfirmed, setVendorConfirmed] = useState(false)
     const [city, setCity] = useState('')
     /** CGU générales — toujours requises */
     const [acceptGeneralTerms, setAcceptGeneralTerms] = useState(false)
@@ -54,12 +63,11 @@ export default function CompleteProfilePage() {
     const [vendorType, setVendorType] = useState<'marketplace' | 'immobilier' | 'hotel' | 'patisserie' | 'restaurant'>(() => {
         if (typeof window !== 'undefined') {
             const p = new URLSearchParams(window.location.search)
-            if (p.get('type') === 'immobilier') return 'immobilier'
-            if (p.get('type') === 'hotel') return 'hotel'
-            if (p.get('type') === 'patisserie') return 'patisserie'
-            if (p.get('type') === 'restaurant') return 'restaurant'
+            const type = p.get('type')
+            const found = ACTIVE_VENDOR_TYPES.find(vt => vt.id === type)
+            if (found) return found.id
         }
-        return 'marketplace'
+        return ACTIVE_VENDOR_TYPES[0]?.id ?? 'marketplace'
     })
 
     const router = useRouter()
@@ -192,8 +200,8 @@ export default function CompleteProfilePage() {
             return
         }
 
-        if (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) {
-            setError('Veuillez remplir le nom de votre boutique et confirmer votre statut de vendeur.')
+        if (role === 'vendor' && !shopName.trim()) {
+            setError('Veuillez renseigner le nom de votre boutique.')
             setLoading(false)
             return
         }
@@ -702,7 +710,7 @@ export default function CompleteProfilePage() {
                             <div className="grid md:grid-cols-2 gap-4">
                                 <button
                                     type="button"
-                                    onClick={() => { setRole('buyer'); setVendorConfirmed(false); setShopName(''); setAcceptVendorTerms(false) }}
+                                    onClick={() => { setRole('buyer'); setShopName(''); setAcceptVendorTerms(false) }}
                                     className={`p-6 border-2 rounded-2xl transition-all text-left ${role === 'buyer' ? 'border-green-500 bg-green-50 dark:bg-green-900/20' : 'border-gray-200 dark:border-slate-700 hover:border-gray-300'}`}
                                 >
                                     <div className="text-3xl mb-3">🛍️</div>
@@ -737,85 +745,32 @@ export default function CompleteProfilePage() {
                                 </div>
                             </div>
 
-                            {/* TYPE DE VENDEUR */}
-                            <div>
-                                <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">
-                                    Que souhaitez-vous vendre ? *
-                                </label>
-
-                                {/* Rangée 1 : Marketplace + Immobilier */}
-                                <div className="grid grid-cols-2 gap-3 mb-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setVendorType('marketplace')}
-                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                                            vendorType === 'marketplace'
-                                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
-                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-blue-400 bg-white dark:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="text-2xl mb-1">🛍️</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Marketplace</p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Mode, beauté, high-tech…</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setVendorType('immobilier')}
-                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                                            vendorType === 'immobilier'
-                                                ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
-                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-blue-400 bg-white dark:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="text-2xl mb-1">🏠</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Immobilier</p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Maisons, terrains, bureaux…</p>
-                                    </button>
+                            {/* TYPE DE VENDEUR — sélecteur affiché seulement si plusieurs types actifs */}
+                            {ACTIVE_VENDOR_TYPES.length > 1 && (
+                                <div>
+                                    <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-3">
+                                        Que souhaitez-vous vendre ? *
+                                    </label>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                        {ACTIVE_VENDOR_TYPES.map((vt) => (
+                                            <button
+                                                key={vt.id}
+                                                type="button"
+                                                onClick={() => setVendorType(vt.id)}
+                                                className={`p-4 border-2 rounded-xl text-left transition-all ${
+                                                    vendorType === vt.id
+                                                        ? 'border-blue-500 bg-blue-100 dark:bg-blue-900/30'
+                                                        : 'border-blue-200 dark:border-blue-800/30 hover:border-blue-400 bg-white dark:bg-slate-800'
+                                                }`}
+                                            >
+                                                <div className="text-2xl mb-1">{vt.icon}</div>
+                                                <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">{vt.label}</p>
+                                                <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{vt.desc}</p>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-
-                                {/* Rangée 2 : Pâtisserie + Restaurant + Hôtellerie */}
-                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                                    <button
-                                        type="button"
-                                        onClick={() => setVendorType('patisserie')}
-                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                                            vendorType === 'patisserie'
-                                                ? 'border-rose-500 bg-rose-50 dark:bg-rose-900/20'
-                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-rose-400 bg-white dark:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="text-2xl mb-1">🎂</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Pâtisserie</p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Gâteaux, viennoiseries…</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setVendorType('restaurant')}
-                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                                            vendorType === 'restaurant'
-                                                ? 'border-orange-500 bg-orange-50 dark:bg-orange-900/20'
-                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-orange-400 bg-white dark:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="text-2xl mb-1">🍽️</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Restaurant</p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Plats, grillades, fast-food…</p>
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setVendorType('hotel')}
-                                        className={`p-4 border-2 rounded-xl text-left transition-all ${
-                                            vendorType === 'hotel'
-                                                ? 'border-amber-500 bg-amber-50 dark:bg-amber-900/20'
-                                                : 'border-blue-200 dark:border-blue-800/30 hover:border-amber-400 bg-white dark:bg-slate-800'
-                                        }`}
-                                    >
-                                        <div className="text-2xl mb-1">🏨</div>
-                                        <p className="font-bold text-blue-900 dark:text-blue-200 text-sm">Hôtellerie</p>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">Chambres, hôtels…</p>
-                                    </button>
-                                </div>
-                            </div>
+                            )}
 
                             <div>
                                 <label className="block text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
@@ -841,17 +796,6 @@ export default function CompleteProfilePage() {
                                 />
                             </div>
 
-                            <label className="flex items-center gap-3 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={vendorConfirmed}
-                                    onChange={(e) => setVendorConfirmed(e.target.checked)}
-                                    className="w-5 h-5 accent-blue-500 rounded"
-                                />
-                                <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
-                                    Je confirme vouloir être vendeur
-                                </span>
-                            </label>
                         </div>
                     )}
 
@@ -946,7 +890,7 @@ export default function CompleteProfilePage() {
                             (role === 'buyer' && !acceptClientTerms) ||
                             (role === 'vendor' && !acceptVendorTerms) ||
                             !city.trim() ||
-                            (role === 'vendor' && (!vendorConfirmed || !shopName.trim())) ||
+                            (role === 'vendor' && !shopName.trim()) ||
                             !isPhoneValid
                         }
                         className="w-full bg-gradient-to-r from-green-600 to-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -957,7 +901,9 @@ export default function CompleteProfilePage() {
                                 Enregistrement...
                             </span>
                         ) : role === 'vendor' ? (
-                            'Continuer — Choisir mon abonnement'
+                            FEATURES.subscriptions
+                                ? 'Continuer — Choisir mon abonnement'
+                                : 'Créer ma boutique gratuitement'
                         ) : (
                             'Valider mon profil'
                         )}

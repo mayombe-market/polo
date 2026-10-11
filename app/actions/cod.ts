@@ -171,8 +171,8 @@ export async function rejectCodOrder(orderId: string): Promise<{ success: true }
 
     if (rejectErr) return { error: rejectErr.message }
 
-    // Restaurer le stock (fire-and-forget)
-    void svc().rpc('restore_order_stock', { p_order_id: orderId })
+    // Restaurer le stock
+    await svc().rpc('restore_order_stock', { p_order_id: orderId })
 
     // Notifier l'acheteur
     if (order.user_id) {

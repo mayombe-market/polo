@@ -253,7 +253,7 @@ export default function CompleteProfilePage() {
                 ...(role === 'vendor' ? {
                     shop_name: shopName.trim(),
                     subscription_plan: vendorType === 'immobilier' ? 'immo_free' : vendorType === 'hotel' ? 'hotel_free' : 'gratuit',
-                    verification_status: 'pending',
+                    verification_status: 'none',
                     vendor_type: vendorType,
                 } : {}),
                 terms_accepted_at: now,

@@ -80,6 +80,13 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
         return { error: 'Panier invalide.' }
     }
 
+    for (const item of input.items) {
+        const qty = Number(item.quantity)
+        if (!Number.isInteger(qty) || qty < 1) {
+            return { error: 'Quantité invalide dans le panier.' }
+        }
+    }
+
     const VALID_PAYMENT_METHODS = ['mobile_money', 'airtel_money', 'cash']
     if (!VALID_PAYMENT_METHODS.includes(input.payment_method)) {
         return { error: 'Méthode de paiement invalide.' }

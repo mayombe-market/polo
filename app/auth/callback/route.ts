@@ -3,6 +3,14 @@ import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import type { NextRequest } from 'next/server'
 
+// Accepts only relative same-origin paths: must start with / but not // or contain ://
+function safePath(next: string | null, fallback: string): string {
+    if (!next) return fallback
+    const p = next.trim()
+    if (p.startsWith('/') && !p.startsWith('//') && !p.includes('://')) return p
+    return fallback
+}
+
 export async function GET(request: NextRequest) {
     const requestUrl = new URL(request.url)
     const code       = requestUrl.searchParams.get('code')
@@ -69,7 +77,7 @@ export async function GET(request: NextRequest) {
                 } catch { /* JWT non parseable — pas bloquant */ }
             }
 
-            redirectTo = isRecovery ? '/reset-password' : (next || '/complete-profile')
+            redirectTo = isRecovery ? '/reset-password' : safePath(next, '/complete-profile')
         }
     }
 
@@ -84,7 +92,7 @@ export async function GET(request: NextRequest) {
                 access_token:  data.session.access_token,
                 refresh_token: data.session.refresh_token,
             }
-            redirectTo = type === 'recovery' ? '/reset-password' : (next || '/complete-profile')
+            redirectTo = type === 'recovery' ? '/reset-password' : safePath(next, '/complete-profile')
             isRecovery = type === 'recovery'
         } else if (error) {
             // Token expiré → renvoyer vers forgot-password plutôt que homepage

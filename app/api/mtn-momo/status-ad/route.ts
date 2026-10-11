@@ -12,13 +12,26 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'referenceId et campaignId requis' }, { status: 400 })
         }
 
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        )
+
+        // Vérifier que le referenceId correspond bien à cette campagne (évite la manipulation cross-campagne)
+        const { data: campaign } = await supabase
+            .from('vendor_ad_campaigns')
+            .select('id, mtn_reference_id, status')
+            .eq('id', campaignId)
+            .single()
+
+        if (!campaign) return NextResponse.json({ error: 'Campagne introuvable' }, { status: 404 })
+        if (campaign.mtn_reference_id !== referenceId) {
+            return NextResponse.json({ error: 'referenceId ne correspond pas à cette campagne.' }, { status: 400 })
+        }
+
         const { status, reason } = await getPaymentStatus(referenceId)
 
         if (status === 'SUCCESSFUL') {
-            const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.SUPABASE_SERVICE_ROLE_KEY!
-            )
             await supabase
                 .from('vendor_ad_campaigns')
                 .update({
@@ -30,10 +43,6 @@ export async function GET(req: NextRequest) {
                 .eq('id', campaignId)
                 .eq('status', 'pending_payment')
         } else if (status === 'FAILED') {
-            const supabase = createClient(
-                process.env.NEXT_PUBLIC_SUPABASE_URL!,
-                process.env.SUPABASE_SERVICE_ROLE_KEY!
-            )
             await supabase
                 .from('vendor_ad_campaigns')
                 .update({ status: 'rejected', updated_at: new Date().toISOString() })

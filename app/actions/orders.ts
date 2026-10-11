@@ -60,14 +60,15 @@ export async function getVendorOrders() {
         .from('orders')
         .select('*')
         .neq('order_type', 'subscription')
-        .neq('status', 'pending')
         .order('created_at', { ascending: false })
         .limit(200)
 
     // Filtrage côté SERVEUR — le client ne reçoit que ses commandes produit (pas les abonnements)
+    // Les commandes COD (payment_method='cash') sont visibles même au statut 'pending' car
+    // elles ne nécessitent pas de confirmation admin — le vendeur doit les voir dès la création.
     const vendorOrders = (allOrders || []).filter(order =>
-        order.status !== 'pending' &&
         order.order_type !== 'subscription' &&
+        (order.status !== 'pending' || order.payment_method === 'cash') &&
         order.items?.some((item: any) => item.seller_id === user.id)
     )
 
@@ -848,6 +849,13 @@ export async function createOrder(input: {
         return { error: 'Panier invalide.' }
     }
 
+    for (const item of input.items) {
+        const qty = Number(item.quantity)
+        if (!Number.isInteger(qty) || qty < 1) {
+            return { error: 'Quantité invalide dans le panier.' }
+        }
+    }
+
     // ═══ VALIDATION SERVEUR DES PRIX ═══
     const productIds = input.items.map(item => item.id)
     const { data: dbProducts, error: productsError } = await supabase
@@ -1530,33 +1538,36 @@ export async function createProduct(input: {
         }
 
         // ═══ Vérification de la limite d'annonces/produits selon le plan ═══
-        const plan = profile?.subscription_plan || 'gratuit'
-        const isImmoPlan = plan.startsWith('immo_')
-        const isHotelPlan = plan.startsWith('hotel_')
-        const maxProducts = getPlanMaxProducts(plan)
-        const freePlans = ['gratuit', 'free', 'immo_free', 'hotel_free']
+        // Ignorée quand les abonnements sont désactivés — pas d'upgrade possible, pas de limite.
+        if (FEATURES.subscriptions) {
+            const plan = profile?.subscription_plan || 'gratuit'
+            const isImmoPlan = plan.startsWith('immo_')
+            const isHotelPlan = plan.startsWith('hotel_')
+            const maxProducts = getPlanMaxProducts(plan)
+            const freePlans = ['gratuit', 'free', 'immo_free', 'hotel_free']
 
-        if (!freePlans.includes(plan) && isSubscriptionExpiredPastGrace(profile)) {
-            const label = isImmoPlan ? 'annonces immobilières' : isHotelPlan ? 'chambres' : 'produits'
-            return { error: `Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des ${label}.` }
-        }
+            if (!freePlans.includes(plan) && isSubscriptionExpiredPastGrace(profile)) {
+                const label = isImmoPlan ? 'annonces immobilières' : isHotelPlan ? 'chambres' : 'produits'
+                return { error: `Votre abonnement a expiré. Renouvelez votre plan pour continuer à publier des ${label}.` }
+            }
 
-        if (maxProducts !== -1) {
-            const { count } = await supabase
-                .from('products')
-                .select('*', { count: 'exact', head: true })
-                .eq('seller_id', user.id)
+            if (maxProducts !== -1) {
+                const { count } = await supabase
+                    .from('products')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('seller_id', user.id)
 
-            if ((count || 0) >= maxProducts) {
-                const planDisplayNames: Record<string, string> = {
-                    'free': 'Gratuit', 'gratuit': 'Gratuit',
-                    'immo_free': 'Particulier', 'immo_agent': 'Agent', 'immo_agence': 'Agence',
-                    'hotel_free': 'Indépendant', 'hotel_pro': 'Hôtel Pro', 'hotel_chain': 'Chaîne',
-                    'starter': 'Starter', 'pro': 'Pro', 'premium': 'Premium',
+                if ((count || 0) >= maxProducts) {
+                    const planDisplayNames: Record<string, string> = {
+                        'free': 'Gratuit', 'gratuit': 'Gratuit',
+                        'immo_free': 'Particulier', 'immo_agent': 'Agent', 'immo_agence': 'Agence',
+                        'hotel_free': 'Indépendant', 'hotel_pro': 'Hôtel Pro', 'hotel_chain': 'Chaîne',
+                        'starter': 'Starter', 'pro': 'Pro', 'premium': 'Premium',
+                    }
+                    const planName = planDisplayNames[plan] ?? plan
+                    const label = isImmoPlan ? 'annonces' : isHotelPlan ? 'chambres' : 'produits'
+                    return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} ${label}. Passez au niveau supérieur pour continuer à publier.` }
                 }
-                const planName = planDisplayNames[plan] ?? plan
-                const label = isImmoPlan ? 'annonces' : isHotelPlan ? 'chambres' : 'produits'
-                return { error: `Limite atteinte ! Votre plan ${planName} est limité à ${maxProducts} ${label}. Passez au niveau supérieur pour continuer à publier.` }
             }
         }
 

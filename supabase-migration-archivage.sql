@@ -2,55 +2,94 @@
 -- Migration : archivage sécurisé des commandes
 -- Remplace la suppression physique par un soft-delete réversible.
 --
--- À APPLIQUER MANUELLEMENT dans Supabase SQL Editor.
--- Tester sur staging avant production.
--- Date d'application : à renseigner
+-- Prérequis : supabase-rls-policies.sql doit avoir été appliqué
+-- (il crée la policy "Admin modifie commandes" déjà présente).
+--
+-- RÉEXÉCUTABLE SANS ERREUR (toutes les instructions sont idempotentes).
+-- À appliquer manuellement dans Supabase SQL Editor.
 -- ============================================================
 
--- 1. Ajouter les colonnes d'archivage sur la table orders
-ALTER TABLE orders
-    ADD COLUMN IF NOT EXISTS is_archived   BOOLEAN     DEFAULT FALSE NOT NULL,
-    ADD COLUMN IF NOT EXISTS archived_at   TIMESTAMPTZ DEFAULT NULL;
+-- ── 1. Colonnes d'archivage ─────────────────────────────────────────────────
+-- IF NOT EXISTS : sûr à réexécuter
+ALTER TABLE public.orders
+    ADD COLUMN IF NOT EXISTS is_archived  BOOLEAN     NOT NULL DEFAULT FALSE,
+    ADD COLUMN IF NOT EXISTS archived_at  TIMESTAMPTZ          DEFAULT NULL;
 
--- 2. Index pour filtrer les commandes non archivées efficacement
-CREATE INDEX IF NOT EXISTS idx_orders_not_archived
-    ON orders (is_archived)
-    WHERE is_archived = FALSE;
+-- ── 2. Index partiel pour les requêtes courantes (commandes actives) ─────────
+-- Les dashboards filtrent sur is_archived = FALSE — cet index accélère ces requêtes.
+CREATE INDEX IF NOT EXISTS idx_orders_is_archived
+    ON public.orders (is_archived);
 
--- 3. Mettre à jour la RLS policy admin pour autoriser le soft-delete
--- (L'admin peut UPDATE is_archived, mais pas DELETE)
+-- ── 3. Commentaires de documentation ────────────────────────────────────────
+COMMENT ON COLUMN public.orders.is_archived IS
+    'TRUE = commande archivée (masquée des vues admin). Les données sont préservées. Réversible.';
+COMMENT ON COLUMN public.orders.archived_at IS
+    'Horodatage de l''archivage. NULL si la commande n''est pas archivée.';
+
+-- ── 4. Vérification de la policy RLS existante ──────────────────────────────
+-- La policy "Admin modifie commandes" (FOR UPDATE, rôle admin) couvre déjà
+-- les nouvelles colonnes is_archived et archived_at : aucune policy supplémentaire
+-- n'est nécessaire ni souhaitée.
+--
+-- Ce bloc vérifie que la policy requise est bien en place.
+-- Si elle est absente, l'exécution s'arrête avec un message explicite.
 DO $$
 BEGIN
-    -- Vérifier si une policy "admin_update_orders" existe déjà
     IF NOT EXISTS (
-        SELECT 1 FROM pg_policies
-        WHERE tablename = 'orders' AND policyname = 'admin_can_archive_orders'
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename  = 'orders'
+          AND policyname = 'Admin modifie commandes'
     ) THEN
-        EXECUTE $$
-            CREATE POLICY admin_can_archive_orders ON orders
-                FOR UPDATE
-                TO authenticated
-                USING (
-                    EXISTS (
-                        SELECT 1 FROM profiles
-                        WHERE profiles.id = auth.uid()
-                        AND profiles.role = 'admin'
-                    )
-                )
-                WITH CHECK (
-                    EXISTS (
-                        SELECT 1 FROM profiles
-                        WHERE profiles.id = auth.uid()
-                        AND profiles.role = 'admin'
-                    )
-                );
-        $$;
+        RAISE EXCEPTION
+            'Prérequis manquant : la policy RLS "Admin modifie commandes" est absente. '
+            'Appliquez supabase-rls-policies.sql avant de relancer cette migration.';
+    END IF;
+
+    -- Vérifier aussi que les vendeurs n'ont pas de policy UPDATE sur orders
+    -- (protection contre une régression future)
+    IF EXISTS (
+        SELECT 1
+        FROM pg_policies
+        WHERE schemaname = 'public'
+          AND tablename  = 'orders'
+          AND cmd        = 'UPDATE'
+          AND policyname NOT IN ('Admin modifie commandes', 'Admin peut tout modifier')
+    ) THEN
+        RAISE WARNING
+            'Attention : une policy UPDATE inattendue existe sur public.orders (%). '
+            'Vérifiez qu''elle n''autorise pas les vendeurs à modifier is_archived.',
+            (SELECT string_agg(policyname, ', ')
+             FROM pg_policies
+             WHERE schemaname = 'public'
+               AND tablename  = 'orders'
+               AND cmd        = 'UPDATE'
+               AND policyname NOT IN ('Admin modifie commandes', 'Admin peut tout modifier'));
     END IF;
 END;
 $$;
 
--- 4. Vérification : les commandes archivées restent dans la table
--- Pour voir les commandes archivées :
--- SELECT * FROM orders WHERE is_archived = TRUE ORDER BY archived_at DESC;
--- Pour restaurer une commande archivée :
--- UPDATE orders SET is_archived = FALSE, archived_at = NULL WHERE id = 'UUID';
+-- ── 5. Récapitulatif des accès (lecture seule, documentation) ───────────────
+-- Qui peut archiver une commande ?
+--   → Uniquement les utilisateurs avec role = 'admin' dans profiles
+--   → Via la policy existante "Admin modifie commandes"
+-- Qui NE PEUT PAS archiver ?
+--   → Les vendeurs (policy SELECT uniquement)
+--   → Les acheteurs (policy SELECT sur leurs propres commandes uniquement)
+--   → Les utilisateurs non connectés (RLS bloque)
+
+-- ── 6. Requêtes utiles (commentées — ne s'exécutent pas) ────────────────────
+-- Voir les commandes archivées :
+--   SELECT id, tracking_number, customer_name, archived_at
+--   FROM public.orders
+--   WHERE is_archived = TRUE
+--   ORDER BY archived_at DESC;
+--
+-- Restaurer une commande archivée (admin uniquement) :
+--   UPDATE public.orders
+--   SET is_archived = FALSE, archived_at = NULL
+--   WHERE id = 'VOTRE-UUID-ICI';
+--
+-- Compter les commandes archivées :
+--   SELECT COUNT(*) FROM public.orders WHERE is_archived = TRUE;

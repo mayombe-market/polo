@@ -132,7 +132,7 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
     }
 
     // ── Validation serveur des prix ──────────────────────────────────────
-    const productIds = input.items.map(i => i.id)
+    const productIds = [...new Set(input.items.map(i => i.id))]
     const { data: dbProducts, error: productsError } = await supabase
         .from('products')
         .select('id, price, seller_id, name, has_stock, stock_quantity')
@@ -204,20 +204,6 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
         }
     }
 
-    // ── Décrémentation atomique du stock ────────────────────────────────
-    for (const item of validatedItems) {
-        const dbProduct = productMap.get(item.id)!
-        if (dbProduct.has_stock) {
-            const { data: success, error: rpcError } = await supabase.rpc('decrement_stock', {
-                p_product_id: item.id,
-                p_quantity: item.quantity,
-            })
-            if (rpcError || !success) {
-                return { error: `Stock insuffisant pour "${dbProduct.name}". Un autre acheteur a été plus rapide.` }
-            }
-        }
-    }
-
     // ── vendor_payments JSONB ───────────────────────────────────────────
     const vendorPaymentsMap: Record<string, object> = {}
     if (input.vendor_payment_info && Object.keys(input.vendor_payment_info).length > 0) {
@@ -276,6 +262,22 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
 
     if (insertError || !order) {
         return { error: insertError?.message || 'Impossible de créer la commande. Réessayez.' }
+    }
+
+    // ── Décrémentation atomique du stock — APRÈS insertion de la commande ──
+    // Si le stock échoue, on supprime la commande pour ne pas laisser de fantôme.
+    for (const item of validatedItems) {
+        const dbProduct = productMap.get(item.id)!
+        if (dbProduct.has_stock) {
+            const { data: success, error: rpcError } = await supabase.rpc('decrement_stock', {
+                p_product_id: item.id,
+                p_quantity: item.quantity,
+            })
+            if (rpcError || !success) {
+                await supabase.from('orders').delete().eq('id', order.id)
+                return { error: `Stock insuffisant pour "${dbProduct.name}". Un autre acheteur a été plus rapide.` }
+            }
+        }
     }
 
     return { order: { id: order.id, guest_token: order.guest_token!, status: order.status, total_amount: order.total_amount } }

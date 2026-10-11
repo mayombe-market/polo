@@ -857,7 +857,7 @@ export async function createOrder(input: {
     }
 
     // ═══ VALIDATION SERVEUR DES PRIX ═══
-    const productIds = input.items.map(item => item.id)
+    const productIds = [...new Set(input.items.map(item => item.id))]
     const { data: dbProducts, error: productsError } = await supabase
         .from('products')
         .select('id, price, seller_id, name, has_stock, stock_quantity')
@@ -965,21 +965,6 @@ export async function createOrder(input: {
     const vendorPayout = itemsTotal - totalCommission
     const avgCommissionRate = FEATURES.commissions && itemsTotal > 0 ? totalCommission / itemsTotal : 0
 
-    // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK (via RPC SECURITY DEFINER) ═══
-    for (const item of validatedItems) {
-        const dbProduct = productMap.get(item.id)!
-        if (dbProduct.has_stock) {
-            const { data: success, error: rpcError } = await supabase.rpc('decrement_stock', {
-                p_product_id: item.id,
-                p_quantity: item.quantity,
-            })
-
-            if (rpcError || !success) {
-                return { error: `Stock insuffisant pour "${dbProduct.name}". Un autre acheteur a été plus rapide.` }
-            }
-        }
-    }
-
     // ═══ VENDOR_PAYMENTS JSONB (tunnel paiement direct) ═══
     const vendorPaymentsMap: Record<string, object> = {}
     if (input.vendor_payment_info && Object.keys(input.vendor_payment_info).length > 0) {
@@ -1054,6 +1039,22 @@ export async function createOrder(input: {
 
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }
+
+    // ═══ DÉCRÉMENTATION ATOMIQUE DU STOCK — APRÈS insertion de la commande ═══
+    // Si le stock échoue ici, on supprime la commande pour éviter un ordre sans stock.
+    for (const item of validatedItems) {
+        const dbProduct = productMap.get(item.id)!
+        if (dbProduct.has_stock) {
+            const { data: success, error: rpcError } = await supabase.rpc('decrement_stock', {
+                p_product_id: item.id,
+                p_quantity: item.quantity,
+            })
+            if (rpcError || !success) {
+                await supabase.from('orders').delete().eq('id', order.id)
+                return { error: `Stock insuffisant pour "${dbProduct.name}". Un autre acheteur a été plus rapide.` }
+            }
+        }
+    }
 
     // ═══ COD : générer le code de livraison (synchrone pour l'afficher au client) ═══
     if (input.payment_method === 'cash') {

@@ -1,14 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
+import { cookies } from 'next/headers'
+import { NextRequest, NextResponse } from 'next/server'
 import { requestToPay } from '@/lib/mtnMomo'
 import { randomUUID } from 'crypto'
 
 export async function POST(req: NextRequest) {
     try {
-        const { campaignId, phone, amount } = await req.json()
+        // Vérifier la session — seul le vendeur propriétaire peut initier le paiement
+        const cookieStore = await cookies()
+        const supabaseAuth = createServerClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+            { cookies: { getAll: () => cookieStore.getAll(), setAll: () => {} } }
+        )
+        const { data: { user } } = await supabaseAuth.auth.getUser()
+        if (!user) {
+            return NextResponse.json({ error: 'Authentification requise.' }, { status: 401 })
+        }
 
-        if (!campaignId || !phone || !amount) {
-            return NextResponse.json({ error: 'campaignId, phone et amount requis' }, { status: 400 })
+        const { campaignId, phone } = await req.json()
+
+        if (!campaignId || !phone) {
+            return NextResponse.json({ error: 'campaignId et phone requis' }, { status: 400 })
         }
 
         const supabase = createClient(
@@ -18,14 +32,21 @@ export async function POST(req: NextRequest) {
 
         const { data: campaign } = await supabase
             .from('vendor_ad_campaigns')
-            .select('id, status, price_fcfa')
+            .select('id, status, price_fcfa, user_id')
             .eq('id', campaignId)
             .single()
 
         if (!campaign) return NextResponse.json({ error: 'Campagne introuvable' }, { status: 404 })
+        // Vérifier que la campagne appartient à l'utilisateur connecté
+        if (campaign.user_id !== user.id) {
+            return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 })
+        }
         if (campaign.status !== 'pending_payment') {
             return NextResponse.json({ error: 'Statut incompatible' }, { status: 400 })
         }
+
+        // Le montant provient de la BDD, pas du corps de la requête
+        const amount = campaign.price_fcfa
 
         let cleanPhone: string
         if (process.env.MTN_MOMO_ENVIRONMENT === 'sandbox') {

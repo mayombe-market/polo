@@ -171,10 +171,12 @@ function PasswordField({
 interface AuthModalProps {
     isOpen: boolean
     onClose: () => void
+    initialMode?: 'login' | 'signup'
+    nextPath?: string
 }
 
-function AuthModal({ isOpen, onClose }: AuthModalProps) {
-    const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login')
+function AuthModal({ isOpen, onClose, initialMode = 'login', nextPath }: AuthModalProps) {
+    const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode)
     const [email, setEmail] = useState('')
     const [password, setPassword] = useState('')
     const [loading, setLoading] = useState(false)
@@ -272,7 +274,8 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
 
             } else {
                 // INSCRIPTION
-                const redirectUrl = `${window.location.origin}/auth/callback`
+                const callbackNext = nextPath || '/complete-profile'
+                const redirectUrl = `${window.location.origin}/auth/callback?next=${encodeURIComponent(callbackNext)}`
                 const { data, error } = await withTimeout(supabase.auth.signUp({
                     email,
                     password,
@@ -317,8 +320,10 @@ function AuthModal({ isOpen, onClose }: AuthModalProps) {
             window.location.href = '/logistician/dashboard'
         } else if (role === 'comptable') {
             window.location.href = '/comptable'
+        } else if (nextPath) {
+            // Acheteur existant ou nouvel utilisateur — suivre le chemin demandé
+            window.location.href = nextPath
         } else {
-            // Fermer le modal et rester sur la page actuelle au lieu de rediriger vers /
             onClose()
         }
     }

@@ -150,8 +150,15 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             )
             return null
         }
-        const { data } = supabase.storage.from(BUCKET).getPublicUrl(path)
-        return data.publicUrl
+        // Bucket privé → URL signée (90 jours, suffisant pour review admin)
+        const { data: signedData, error: signError } = await supabase.storage
+            .from(BUCKET)
+            .createSignedUrl(path, 60 * 60 * 24 * 90)
+        if (signError || !signedData?.signedUrl) {
+            toast.error('Impossible de générer l\'URL sécurisée. Réessayez.')
+            return null
+        }
+        return signedData.signedUrl
     }
 
     const captureGps = () => {

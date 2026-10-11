@@ -1,4 +1,5 @@
 import { SupabaseClient } from '@supabase/supabase-js'
+import { FEATURES } from './featureFlags'
 import { GRACE_PERIOD_DAYS } from './subscription'
 
 /**
@@ -21,6 +22,8 @@ export async function getSuspendedSellerIds(supabase: SupabaseClient): Promise<s
  * et dont end_date + 3 jours est dans le passé.
  */
 export async function getExpiredSellerIds(supabase: SupabaseClient): Promise<string[]> {
+    if (!FEATURES.subscriptions) return []
+
     const graceDeadline = new Date(
         Date.now() - GRACE_PERIOD_DAYS * 24 * 60 * 60 * 1000
     ).toISOString()

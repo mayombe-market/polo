@@ -755,6 +755,43 @@ export async function adminArchiveOrder(orderId: string) {
     return { success: true }
 }
 
+/** Restaure une commande archivée — remet is_archived=false et archived_at=null uniquement. */
+export async function adminRestoreOrder(orderId: string) {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single()
+
+    if (profile?.role !== 'admin') return { error: 'Non autorisé' }
+
+    const zone = await assertAdminCanActOnOrder(supabase, user.id, orderId)
+    if (zone.error) return { error: zone.error }
+
+    const { data: existing } = await supabase
+        .from('orders')
+        .select('id, is_archived')
+        .eq('id', orderId)
+        .maybeSingle()
+
+    if (!existing) return { error: 'Commande introuvable' }
+    if (!existing.is_archived) return { error: 'Cette commande n\'est pas archivée' }
+
+    const { error } = await supabase
+        .from('orders')
+        .update({ is_archived: false, archived_at: null })
+        .eq('id', orderId)
+
+    if (error) return { error: error.message }
+
+    return { success: true }
+}
+
 // Créer une commande (appelé côté client via server action)
 export async function createOrder(input: {
     items: Array<{

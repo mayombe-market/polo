@@ -31,11 +31,13 @@ async function getSupabase() {
 
 /** Soumettre une demande de vérification vendeur */
 export async function submitVerification(input: {
-    rccmNumber: string
+    vendorProfileType?: 'particulier' | 'entreprise'
+    rccmNumber?: string
     idType: 'cni' | 'passport' | 'permis'
     idPhotoUrl: string
+    idPhotoBackUrl?: string
     managerName: string
-    niuNumber: string
+    niuNumber?: string
     address: string
     addressLat?: number
     addressLng?: number
@@ -71,19 +73,21 @@ export async function submitVerification(input: {
             id_type: payload.idType,
             id_photo_url: payload.idPhotoUrl,
             manager_name: payload.managerName,
-            rccm_number: payload.rccmNumber,
-            niu_number: payload.niuNumber,
+            rccm_number: payload.rccmNumber || null,
+            niu_number: payload.niuNumber || null,
             address: payload.address,
             address_lat: payload.addressLat ?? null,
             address_lng: payload.addressLng ?? null,
             // Legacy fields — nullable via migration v2
             cni_name: payload.managerName,
             shop_photo_url: null,
-            cni_photo_url: null,
+            // cni_photo_url réutilisé pour stocker le verso (recto/verso CNI ou permis)
+            cni_photo_url: payload.idPhotoBackUrl ?? null,
             passport_photo_url: null,
             momo_name: null,
             momo_number: null,
-            momo_operator: null,
+            // momo_operator réutilisé temporairement pour stocker le type de profil vendeur
+            momo_operator: payload.vendorProfileType ?? 'entreprise',
         })
 
     if (insertError) return { error: insertError.message }

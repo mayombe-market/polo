@@ -34,6 +34,13 @@ export const FEATURES = {
     // ── Google Sign-In ─────────────────────────────────────────────────────────
     /** Connexion / inscription via Google OAuth (config Supabase Dashboard requise) */
     googleSignIn: false,
+
+    // ── Produits en brouillon ──────────────────────────────────────────────────
+    /**
+     * Autoriser les vendeurs non vérifiés à sauvegarder des brouillons.
+     * Nécessite la migration supabase-migration-product-drafts.sql (is_draft column).
+     */
+    draftProducts: false,
 } as const
 
 export type FeatureFlag = keyof typeof FEATURES

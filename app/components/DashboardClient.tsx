@@ -902,19 +902,34 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <div className="p-4 md:p-8 max-w-4xl mx-auto">
                         {/* Gate vérification */}
                         {profile?.verification_status !== 'verified' ? (
-                            <div className="text-center py-16 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30">
-                                <div className="text-6xl mb-4">🔒</div>
-                                <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">Vérification requise</h2>
-                                <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto">
-                                    Votre compte doit être vérifié avant de pouvoir publier des produits.
-                                    Soumettez vos documents pour activer la publication.
-                                </p>
-                                <a
-                                    href="/vendor/verification"
-                                    className="inline-block bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-amber-500/20 no-underline"
-                                >
-                                    🛡️ Vérifier mon compte
-                                </a>
+                            <div className="text-center py-14 bg-white dark:bg-slate-900 rounded-3xl border-2 border-dashed border-amber-200 dark:border-amber-800/30 px-6">
+                                <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900/20 flex items-center justify-center">
+                                    <Shield size={28} className="text-amber-500" />
+                                </div>
+                                <h2 className="text-xl font-black uppercase italic text-amber-500 mb-2">
+                                    {profile?.verification_status === 'pending' ? 'Vérification en cours' : 'Vérification requise'}
+                                </h2>
+                                {profile?.verification_status === 'pending' ? (
+                                    <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto leading-relaxed">
+                                        Votre dossier est en cours d&apos;examen (24 à 48 h). Dès que votre compte sera approuvé, vous pourrez publier vos produits. En attendant, configurez votre boutique.
+                                    </p>
+                                ) : profile?.verification_status === 'rejected' ? (
+                                    <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto leading-relaxed">
+                                        Votre précédente demande a été refusée. Soumettez un nouveau dossier corrigé pour activer la publication.
+                                    </p>
+                                ) : (
+                                    <p className="text-sm text-slate-500 mb-6 max-w-md mx-auto leading-relaxed">
+                                        Pour publier des produits, vous devez d&apos;abord vérifier votre identité. C&apos;est gratuit et prend 24 à 48 h.
+                                    </p>
+                                )}
+                                {profile?.verification_status !== 'pending' && (
+                                    <a
+                                        href="/vendor/verification"
+                                        className="inline-block bg-gradient-to-r from-amber-500 to-orange-500 text-white px-8 py-4 rounded-2xl font-black uppercase text-sm hover:shadow-xl transition-all shadow-lg shadow-amber-500/20 no-underline"
+                                    >
+                                        Vérifier mon compte
+                                    </a>
+                                )}
                             </div>
                         ) : (<>
                         {/* Barre de limite de produits */}
@@ -2339,9 +2354,11 @@ function WalletPage({ orders, currentVendorId }: { orders: any[]; currentVendorI
     const pendingOrders = orders.filter(o => o.status === 'delivered' && o.payout_status === 'pending')
     const inProgressOrders = orders.filter(o => ['confirmed', 'shipped'].includes(o.status))
 
-    const totalEarned = paidOrders.reduce((acc, o) => acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
-    const pendingAmount = pendingOrders.reduce((acc, o) => acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
-    const inProgressAmount = inProgressOrders.reduce((acc, o) => acc + (o.vendor_payout || Math.round((o.total_amount || 0) * 0.9)), 0)
+    // Quand les commissions sont désactivées, le vendeur reçoit 100% du montant.
+    const vendorShare = (o: any) => o.vendor_payout || (FEATURES.commissions ? Math.round((o.total_amount || 0) * 0.9) : (o.total_amount || 0))
+    const totalEarned = paidOrders.reduce((acc, o) => acc + vendorShare(o), 0)
+    const pendingAmount = pendingOrders.reduce((acc, o) => acc + vendorShare(o), 0)
+    const inProgressAmount = inProgressOrders.reduce((acc, o) => acc + vendorShare(o), 0)
 
     // Transaction history (all orders sorted by date)
     const allTransactions = [...orders]

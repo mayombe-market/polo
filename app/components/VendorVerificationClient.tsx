@@ -7,6 +7,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import {
     Shield, Upload, CreditCard, CheckCircle, Clock,
     XCircle, ArrowLeft, Loader2, BookOpen, MapPin, Navigation,
+    Building2, User,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { submitVerification } from '@/app/actions/verifications'
@@ -85,11 +86,13 @@ function SectionLabel({
     label,
     why,
     howUsed,
+    optional,
 }: {
     icon: React.ElementType
     label: string
     why: string
     howUsed: string
+    optional?: boolean
 }) {
     return (
         <div className="flex items-center gap-2 mb-2">
@@ -97,6 +100,11 @@ function SectionLabel({
             <span className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wide">
                 {label}
             </span>
+            {optional && (
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-700 px-2 py-0.5 rounded-full">
+                    optionnel
+                </span>
+            )}
             <InfoTooltip why={why} howUsed={howUsed} />
         </div>
     )
@@ -104,10 +112,48 @@ function SectionLabel({
 
 // ── Options de pièce d'identité ────────────────────────────────────────────
 const ID_OPTIONS = [
-    { id: 'cni' as const,      label: 'CNI',       sub: 'Carte Nationale' },
-    { id: 'passport' as const, label: 'Passeport', sub: 'Pour étrangers'  },
-    { id: 'permis' as const,   label: 'Permis',    sub: 'Permis de conduire' },
+    { id: 'cni' as const,      label: 'CNI',       sub: 'Carte Nationale',      hasVerso: true  },
+    { id: 'passport' as const, label: 'Passeport', sub: 'Pour étrangers',        hasVerso: false },
+    { id: 'permis' as const,   label: 'Permis',    sub: 'Permis de conduire',   hasVerso: true  },
 ]
+
+// ── Zone d'upload photo ────────────────────────────────────────────────────
+function PhotoUploadZone({
+    id,
+    preview,
+    label,
+    onSelect,
+}: {
+    id: string
+    preview: string | null
+    label: string
+    onSelect: (file: File) => void
+}) {
+    return (
+        <div>
+            <div
+                className={`relative w-full aspect-video rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer transition-colors ${
+                    preview
+                        ? 'border-green-300 dark:border-green-700'
+                        : 'border-slate-200 dark:border-slate-700 hover:border-orange-300 dark:hover:border-orange-700'
+                }`}
+                onClick={() => document.getElementById(id)?.click()}
+            >
+                {preview ? (
+                    <img src={preview} alt={label} className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+                        <Upload size={28} className="mb-2" />
+                        <p className="text-xs font-bold text-center px-4">{label}</p>
+                        <p className="text-[10px]">JPG, PNG — max 5 Mo</p>
+                    </div>
+                )}
+            </div>
+            <input id={id} type="file" accept="image/*" className="hidden"
+                onChange={(e) => e.target.files?.[0] && onSelect(e.target.files[0])} />
+        </div>
+    )
+}
 
 // ── Composant principal ────────────────────────────────────────────────────
 export default function VendorVerificationClient({ user, profile, existingVerification }: Props) {
@@ -116,10 +162,13 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
     const status = profile?.verification_status || 'unverified'
 
     // ── State ──────────────────────────────────────────────────────────────
+    const [vendorProfileType, setVendorProfileType] = useState<'particulier' | 'entreprise'>('particulier')
     const [rccmNumber, setRccmNumber]       = useState('')
     const [idType, setIdType]               = useState<'cni' | 'passport' | 'permis'>('cni')
     const [idPhoto, setIdPhoto]             = useState<File | null>(null)
     const [idPhotoPreview, setIdPhotoPreview] = useState<string | null>(null)
+    const [idPhotoBack, setIdPhotoBack]     = useState<File | null>(null)
+    const [idPhotoBackPreview, setIdPhotoBackPreview] = useState<string | null>(null)
     const [managerName, setManagerName]     = useState('')
     const [niuNumber, setNiuNumber]         = useState('')
     const [address, setAddress]             = useState('')
@@ -129,12 +178,28 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
     const [gpsConfirmOpen, setGpsConfirmOpen] = useState(false)
     const [submitting, setSubmitting]       = useState(false)
 
+    const currentIdOption = ID_OPTIONS.find(o => o.id === idType)!
+    const isEntreprise = vendorProfileType === 'entreprise'
+
     // ── Handlers ───────────────────────────────────────────────────────────
-    const handleFileSelect = (file: File) => {
-        if (file.size > 5 * 1024 * 1024) { toast.error('La photo ne doit pas dépasser 5 Mo'); return }
-        if (!file.type.startsWith('image/')) { toast.error('Seules les images sont acceptées'); return }
-        setIdPhoto(file)
-        setIdPhotoPreview(URL.createObjectURL(file))
+    const validateAndSetPhoto = (file: File): File | null => {
+        if (file.size > 5 * 1024 * 1024) { toast.error('La photo ne doit pas dépasser 5 Mo'); return null }
+        if (!file.type.startsWith('image/')) { toast.error('Seules les images sont acceptées'); return null }
+        return file
+    }
+
+    const handleFrontSelect = (file: File) => {
+        const valid = validateAndSetPhoto(file)
+        if (!valid) return
+        setIdPhoto(valid)
+        setIdPhotoPreview(URL.createObjectURL(valid))
+    }
+
+    const handleBackSelect = (file: File) => {
+        const valid = validateAndSetPhoto(file)
+        if (!valid) return
+        setIdPhotoBack(valid)
+        setIdPhotoBackPreview(URL.createObjectURL(valid))
     }
 
     const uploadImage = async (file: File, basePath: string): Promise<string | null> => {
@@ -150,7 +215,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             )
             return null
         }
-        // Bucket privé → URL signée (90 jours, suffisant pour review admin)
         const { data: signedData, error: signError } = await supabase.storage
             .from(BUCKET)
             .createSignedUrl(path, 60 * 60 * 24 * 90)
@@ -185,27 +249,37 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
     }
 
     const handleSubmit = async () => {
-        if (!rccmNumber.trim()) { toast.error('Le numéro RCCM est obligatoire'); return }
-        if (!idPhoto) { toast.error("La photo de la pièce d'identité est obligatoire"); return }
-        if (!managerName.trim()) { toast.error('Le nom du gérant est obligatoire'); return }
-        if (!niuNumber.trim()) { toast.error('Le NIU est obligatoire'); return }
+        if (!idPhoto) { toast.error("La photo recto de la pièce d'identité est obligatoire"); return }
+        if (currentIdOption.hasVerso && !idPhotoBack) { toast.error(`Le verso de votre ${currentIdOption.label} est obligatoire`); return }
+        if (!managerName.trim()) { toast.error('Le nom complet est obligatoire'); return }
         if (!address.trim()) { toast.error("L'adresse est obligatoire"); return }
+        if (isEntreprise && !rccmNumber.trim()) { toast.error('Le RCCM est obligatoire pour une entreprise'); return }
+        if (isEntreprise && !niuNumber.trim()) { toast.error('Le NIU est obligatoire pour une entreprise'); return }
 
         setSubmitting(true)
         try {
             const timestamp = Date.now()
-            const idPhotoUrl = await uploadImage(idPhoto, `verifications/${user.id}/${timestamp}-id`)
+            const idPhotoUrl = await uploadImage(idPhoto, `verifications/${user.id}/${timestamp}-id-front`)
             if (!idPhotoUrl) return
 
+            let idPhotoBackUrl: string | undefined
+            if (idPhotoBack) {
+                const url = await uploadImage(idPhotoBack, `verifications/${user.id}/${timestamp}-id-back`)
+                if (!url) return
+                idPhotoBackUrl = url
+            }
+
             const result = await submitVerification({
-                rccmNumber: rccmNumber.trim(),
+                vendorProfileType,
+                rccmNumber: rccmNumber.trim() || undefined,
                 idType,
                 idPhotoUrl,
+                idPhotoBackUrl,
                 managerName: managerName.trim(),
-                niuNumber: niuNumber.trim(),
+                niuNumber: niuNumber.trim() || undefined,
                 address: address.trim(),
-                addressLat:  addressLat  ?? undefined,
-                addressLng:  addressLng  ?? undefined,
+                addressLat: addressLat ?? undefined,
+                addressLng: addressLng ?? undefined,
             })
 
             if (result.error) { toast.error(result.error) }
@@ -216,6 +290,15 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             setSubmitting(false)
         }
     }
+
+    const isSubmitDisabled =
+        submitting ||
+        !idPhoto ||
+        (currentIdOption.hasVerso && !idPhotoBack) ||
+        !managerName.trim() ||
+        !address.trim() ||
+        (isEntreprise && !rccmNumber.trim()) ||
+        (isEntreprise && !niuNumber.trim())
 
     // ── Écran : déjà vérifié ───────────────────────────────────────────────
     if (status === 'verified') {
@@ -248,11 +331,10 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-2xl p-5 text-left mb-6">
                         <h3 className="text-xs font-bold uppercase text-slate-400 mb-3">Votre soumission</h3>
 
-                        {/* Photo pièce d'identité */}
                         {existingVerification.id_photo_url && (
                             <div className="mb-3">
                                 <p className="text-[10px] font-bold text-slate-400 mb-1">
-                                    Pièce d&apos;identité ({existingVerification.id_type?.toUpperCase()})
+                                    Pièce d&apos;identité recto ({existingVerification.id_type?.toUpperCase()})
                                 </p>
                                 <div className="relative w-full aspect-video rounded-xl overflow-hidden">
                                     <img
@@ -266,12 +348,29 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                             </div>
                         )}
 
+                        {existingVerification.cni_photo_url && (
+                            <div className="mb-3">
+                                <p className="text-[10px] font-bold text-slate-400 mb-1">
+                                    Pièce d&apos;identité verso
+                                </p>
+                                <div className="relative w-full aspect-video rounded-xl overflow-hidden">
+                                    <img
+                                        src={existingVerification.cni_photo_url}
+                                        alt="Verso pièce d'identité"
+                                        className="absolute inset-0 h-full w-full object-cover"
+                                        loading="lazy"
+                                        decoding="async"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="space-y-1 text-xs">
                             {existingVerification.rccm_number && (
                                 <p><span className="text-slate-400">RCCM :</span> <span className="font-bold dark:text-white font-mono">{existingVerification.rccm_number}</span></p>
                             )}
                             {existingVerification.manager_name && (
-                                <p><span className="text-slate-400">Gérant :</span> <span className="font-bold dark:text-white">{existingVerification.manager_name}</span></p>
+                                <p><span className="text-slate-400">Identité :</span> <span className="font-bold dark:text-white">{existingVerification.manager_name}</span></p>
                             )}
                             {existingVerification.niu_number && (
                                 <p><span className="text-slate-400">NIU :</span> <span className="font-bold dark:text-white font-mono">{existingVerification.niu_number}</span></p>
@@ -327,34 +426,90 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
             <div className="space-y-6">
 
                 {/* ══════════════════════════════════════════════════
-                    1. RCCM
+                    0. TYPE DE PROFIL : Particulier ou Entreprise
                 ══════════════════════════════════════════════════ */}
                 <div>
-                    <SectionLabel
-                        icon={BookOpen}
-                        label="RCCM"
-                        why="Le RCCM (Registre du Commerce et du Crédit Mobilier) atteste que votre activité est officiellement enregistrée au Congo. C'est le document clé pour les commerçants formels."
-                        howUsed="Ce numéro est vérifié par notre équipe pour confirmer que votre établissement est légalement constitué. Il n'est jamais affiché publiquement."
-                    />
-                    <input
-                        type="text"
-                        value={rccmNumber}
-                        onChange={(e) => setRccmNumber(e.target.value.toUpperCase())}
-                        placeholder="Ex : BRAZ-2024-B12-00123"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 font-mono tracking-wide"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1.5">
-                        Registre du Commerce et du Crédit Mobilier (Congo)
+                    <p className="text-xs font-black uppercase text-slate-500 dark:text-slate-400 tracking-wide mb-3">
+                        Je suis un(e)
                     </p>
+                    <div className="grid grid-cols-2 gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setVendorProfileType('particulier')}
+                            className={`flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all ${
+                                vendorProfileType === 'particulier'
+                                    ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/10'
+                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                            }`}
+                        >
+                            <User size={22} className={vendorProfileType === 'particulier' ? 'text-orange-500' : 'text-slate-400'} />
+                            <div>
+                                <p className={`text-sm font-black ${vendorProfileType === 'particulier' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                    Particulier
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 text-center leading-tight">
+                                    Revendeur, artisan, indépendant
+                                </p>
+                            </div>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setVendorProfileType('entreprise')}
+                            className={`flex flex-col items-center gap-2 py-4 px-3 rounded-2xl border-2 transition-all ${
+                                vendorProfileType === 'entreprise'
+                                    ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/10'
+                                    : 'border-slate-200 dark:border-slate-700 hover:border-slate-300'
+                            }`}
+                        >
+                            <Building2 size={22} className={vendorProfileType === 'entreprise' ? 'text-orange-500' : 'text-slate-400'} />
+                            <div>
+                                <p className={`text-sm font-black ${vendorProfileType === 'entreprise' ? 'text-orange-600 dark:text-orange-400' : 'text-slate-600 dark:text-slate-300'}`}>
+                                    Entreprise
+                                </p>
+                                <p className="text-[10px] text-slate-400 mt-0.5 text-center leading-tight">
+                                    ETS, SARL, SA, association
+                                </p>
+                            </div>
+                        </button>
+                    </div>
+                    {vendorProfileType === 'particulier' && (
+                        <p className="mt-2 text-[10px] text-slate-400 leading-relaxed bg-slate-50 dark:bg-slate-800/50 rounded-xl px-3 py-2">
+                            Les particuliers n&apos;ont pas besoin de RCCM ni de NIU pour s&apos;inscrire. Pour certaines activités réglementées (import-export, alimentaire…), une immatriculation peut être requise ultérieurement.
+                        </p>
+                    )}
                 </div>
 
                 {/* ══════════════════════════════════════════════════
-                    2. PIÈCE D'IDENTITÉ DU GÉRANT
+                    1. RCCM (entreprises uniquement)
+                ══════════════════════════════════════════════════ */}
+                {isEntreprise && (
+                    <div>
+                        <SectionLabel
+                            icon={BookOpen}
+                            label="RCCM"
+                            why="Le RCCM (Registre du Commerce et du Crédit Mobilier) atteste que votre activité est officiellement enregistrée au Congo. C'est le document clé pour les commerçants formels."
+                            howUsed="Ce numéro est vérifié par notre équipe pour confirmer que votre établissement est légalement constitué. Il n'est jamais affiché publiquement."
+                        />
+                        <input
+                            type="text"
+                            value={rccmNumber}
+                            onChange={(e) => setRccmNumber(e.target.value.toUpperCase())}
+                            placeholder="Ex : BRAZ-2024-B12-00123"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 font-mono tracking-wide"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1.5">
+                            Registre du Commerce et du Crédit Mobilier (Congo)
+                        </p>
+                    </div>
+                )}
+
+                {/* ══════════════════════════════════════════════════
+                    2. PIÈCE D'IDENTITÉ
                 ══════════════════════════════════════════════════ */}
                 <div>
                     <SectionLabel
                         icon={CreditCard}
-                        label="Pièce d'identité du gérant"
+                        label="Pièce d'identité"
                         why="Nous vérifions que la personne qui gère ce compte est réelle et identifiable. Cela protège les acheteurs et garantit la fiabilité de la plateforme."
                         howUsed="Vos documents sont stockés de façon chiffrée dans notre espace sécurisé. Ils ne sont jamais partagés avec des tiers ni utilisés à d'autres fins que la vérification."
                     />
@@ -365,7 +520,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                             <button
                                 key={opt.id}
                                 type="button"
-                                onClick={() => setIdType(opt.id)}
+                                onClick={() => { setIdType(opt.id); setIdPhotoBack(null); setIdPhotoBackPreview(null) }}
                                 className={`flex-1 py-2.5 px-2 rounded-xl border-2 transition-all text-left ${
                                     idType === opt.id
                                         ? 'border-orange-400 bg-orange-50 dark:bg-orange-900/10'
@@ -380,36 +535,44 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         ))}
                     </div>
 
-                    {/* Zone upload photo */}
-                    <div
-                        className={`relative w-full aspect-video rounded-2xl border-2 border-dashed overflow-hidden cursor-pointer transition-colors ${
-                            idPhotoPreview
-                                ? 'border-green-300 dark:border-green-700'
-                                : 'border-slate-200 dark:border-slate-700 hover:border-orange-300 dark:hover:border-orange-700'
-                        }`}
-                        onClick={() => document.getElementById('id-photo-input')?.click()}
-                    >
-                        {idPhotoPreview ? (
-                            <img src={idPhotoPreview} alt="Pièce d'identité" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
-                        ) : (
-                            <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-                                <Upload size={28} className="mb-2" />
-                                <p className="text-xs font-bold">
-                                    {idType === 'cni'      ? 'Photo recto de votre CNI'
-                                    : idType === 'passport' ? 'Page principale du passeport'
-                                    :                        'Recto de votre permis de conduire'}
-                                </p>
-                                <p className="text-[10px]">JPG, PNG — max 5 Mo</p>
-                            </div>
-                        )}
-                    </div>
-                    <input id="id-photo-input" type="file" accept="image/*" className="hidden"
-                        onChange={(e) => e.target.files?.[0] && handleFileSelect(e.target.files[0])} />
+                    {/* Recto */}
+                    <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                        {currentIdOption.hasVerso ? 'Recto' : 'Photo principale'}
+                    </p>
+                    <PhotoUploadZone
+                        id="id-photo-front"
+                        preview={idPhotoPreview}
+                        label={
+                            idType === 'cni'      ? 'Face avant de votre CNI'
+                            : idType === 'passport' ? 'Page principale du passeport'
+                            :                        'Face avant de votre permis'
+                        }
+                        onSelect={handleFrontSelect}
+                    />
 
-                    {/* Nom du gérant */}
-                    <div className="mt-3">
+                    {/* Verso (CNI et permis seulement) */}
+                    {currentIdOption.hasVerso && (
+                        <div className="mt-4">
+                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                                Verso <span className="text-orange-500 ml-1">obligatoire</span>
+                            </p>
+                            <PhotoUploadZone
+                                id="id-photo-back"
+                                preview={idPhotoBackPreview}
+                                label={
+                                    idType === 'cni'
+                                        ? 'Face arrière de votre CNI'
+                                        : 'Face arrière de votre permis'
+                                }
+                                onSelect={handleBackSelect}
+                            />
+                        </div>
+                    )}
+
+                    {/* Nom */}
+                    <div className="mt-4">
                         <label className="text-[10px] font-bold uppercase text-slate-400 mb-1.5 block">
-                            Nom complet du gérant (tel qu&apos;il figure sur la pièce)
+                            {isEntreprise ? 'Nom complet du représentant légal' : 'Votre nom complet'} <span className="text-slate-300">(tel qu&apos;il figure sur la pièce)</span>
                         </label>
                         <input
                             type="text"
@@ -422,26 +585,28 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                 </div>
 
                 {/* ══════════════════════════════════════════════════
-                    3. NIU
+                    3. NIU (entreprises uniquement)
                 ══════════════════════════════════════════════════ */}
-                <div>
-                    <SectionLabel
-                        icon={BookOpen}
-                        label="NIU"
-                        why="Le NIU (Numéro d'Identification Unique) est votre identifiant fiscal auprès des autorités congolaises. Il prouve que votre activité est déclarée."
-                        howUsed="Ce numéro est vérifié par notre équipe pour valider la légalité de votre établissement. Il vous permet d'obtenir le badge « Entreprise vérifiée » sur votre profil."
-                    />
-                    <input
-                        type="text"
-                        value={niuNumber}
-                        onChange={(e) => setNiuNumber(e.target.value.toUpperCase())}
-                        placeholder="Ex : M2024-XXXXX"
-                        className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 font-mono"
-                    />
-                    <p className="text-[10px] text-slate-400 mt-1.5">
-                        Numéro d&apos;Identification Unique (fiscal)
-                    </p>
-                </div>
+                {isEntreprise && (
+                    <div>
+                        <SectionLabel
+                            icon={BookOpen}
+                            label="NIU"
+                            why="Le NIU (Numéro d'Identification Unique) est votre identifiant fiscal auprès des autorités congolaises. Il prouve que votre activité est déclarée."
+                            howUsed="Ce numéro est vérifié par notre équipe pour valider la légalité de votre établissement. Il vous permet d'obtenir le badge « Entreprise vérifiée » sur votre profil."
+                        />
+                        <input
+                            type="text"
+                            value={niuNumber}
+                            onChange={(e) => setNiuNumber(e.target.value.toUpperCase())}
+                            placeholder="Ex : M2024-XXXXX"
+                            className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-bold dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 font-mono"
+                        />
+                        <p className="text-[10px] text-slate-400 mt-1.5">
+                            Numéro d&apos;Identification Unique (fiscal)
+                        </p>
+                    </div>
+                )}
 
                 {/* ══════════════════════════════════════════════════
                     4. ADRESSE
@@ -449,12 +614,13 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                 <div>
                     <SectionLabel
                         icon={MapPin}
-                        label="Adresse de l'établissement"
-                        why="L'adresse de votre boutique permet à nos équipes de vérifier l'existence physique de votre établissement et aux acheteurs de vous localiser."
+                        label={isEntreprise ? "Adresse de l'établissement" : "Votre adresse"}
+                        why={isEntreprise
+                            ? "L'adresse de votre boutique permet à nos équipes de vérifier l'existence physique de votre établissement et aux acheteurs de vous localiser."
+                            : "Votre adresse permet à nos équipes de vous localiser et d'assurer la livraison dans votre zone."}
                         howUsed="L'adresse est visible sur votre profil public. Les coordonnées GPS (si fournies) sont utilisées uniquement pour la vérification interne."
                     />
 
-                    {/* Champ de saisie manuelle */}
                     <textarea
                         value={address}
                         onChange={(e) => setAddress(e.target.value)}
@@ -463,7 +629,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         className="w-full px-4 py-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-500/30 resize-none"
                     />
 
-                    {/* Bouton GPS */}
                     {!gpsConfirmOpen && (
                         <button
                             type="button"
@@ -485,7 +650,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         </button>
                     )}
 
-                    {/* Confirmation GPS */}
                     {gpsConfirmOpen && (
                         <div className="mt-2 p-4 rounded-2xl bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30">
                             <p className="text-xs font-bold text-blue-700 dark:text-blue-300 mb-1">
@@ -513,7 +677,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                         </div>
                     )}
 
-                    {/* Indicator coordonnées capturées */}
                     {addressLat !== null && addressLng !== null && (
                         <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-xl bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30">
                             <MapPin size={13} className="text-green-500 flex-shrink-0" />
@@ -529,14 +692,7 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
                 ══════════════════════════════════════════════════ */}
                 <button
                     onClick={handleSubmit}
-                    disabled={
-                        submitting ||
-                        !rccmNumber.trim() ||
-                        !idPhoto ||
-                        !managerName.trim() ||
-                        !niuNumber.trim() ||
-                        !address.trim()
-                    }
+                    disabled={isSubmitDisabled}
                     className="w-full py-4 rounded-2xl text-sm font-black uppercase text-white transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                     style={{ background: 'linear-gradient(135deg, #E8A838, #D4341C)' }}
                 >

@@ -178,7 +178,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
     const [gpsConfirmOpen, setGpsConfirmOpen] = useState(false)
     const [submitting, setSubmitting]       = useState(false)
     const [uploadProgress, setUploadProgress] = useState('')
-    const uploadAbortRef = useRef<AbortController | null>(null)
 
     const currentIdOption = ID_OPTIONS.find(o => o.id === idType)!
     const isEntreprise = vendorProfileType === 'entreprise'
@@ -211,29 +210,33 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
 
         setUploadProgress(`Envoi ${label}…`)
 
-        // Timeout 45 secondes : évite le blocage définitif sur réseau lent
-        const abort = new AbortController()
-        uploadAbortRef.current = abort
-        const timeout = setTimeout(() => abort.abort(), 45_000)
+        // Timeout 45 s via Promise.race — évite le blocage définitif sur réseau lent.
+        // La Supabase SDK ne supporte pas AbortController nativement dans tous les cas,
+        // donc on utilise une course de promesses pour garantir la sortie.
+        const TIMEOUT_MS = 45_000
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(() => reject(new Error('UPLOAD_TIMEOUT')), TIMEOUT_MS)
+        )
 
         let uploadError: string | null = null
         try {
-            const { error } = await supabase.storage
+            const uploadPromise = supabase.storage
                 .from(BUCKET)
                 .upload(path, file, { contentType, upsert: true })
+
+            const { error } = await Promise.race([uploadPromise, timeoutPromise])
             if (error) {
                 uploadError = error.message.includes('Bucket not found')
                     ? 'Bucket Storage « vendor-verifications » manquant en production. Contactez l\'administrateur.'
                     : `Erreur d'envoi : ${error.message}`
             }
         } catch (err: any) {
-            if (err?.name === 'AbortError' || abort.signal.aborted) {
-                uploadError = 'Délai dépassé (réseau lent). Réessayez avec une connexion Wi-Fi.'
+            if (err?.message === 'UPLOAD_TIMEOUT') {
+                uploadError = 'Délai dépassé (45 s — réseau lent). Réessayez avec une connexion Wi-Fi ou une image plus légère.'
             } else {
                 uploadError = err?.message || 'Erreur réseau lors de l\'envoi de la photo.'
             }
         } finally {
-            clearTimeout(timeout)
             setUploadProgress('')
         }
 
@@ -323,7 +326,6 @@ export default function VendorVerificationClient({ user, profile, existingVerifi
         } finally {
             setSubmitting(false)
             setUploadProgress('')
-            uploadAbortRef.current = null
         }
     }
 

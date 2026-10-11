@@ -116,6 +116,8 @@ export async function submitVerification(input: {
         .select('id, email')
         .eq('role', 'admin')
 
+    const notifiedEmails = new Set<string>()
+
     if (admins) {
         for (const admin of admins) {
             createNotification(
@@ -127,15 +129,28 @@ export async function submitVerification(input: {
             ).catch(() => {})
 
             if (admin.email) {
+                notifiedEmails.add(admin.email.toLowerCase())
                 sendAdminNewVerificationEmail(
                     admin.email,
                     vendorName,
                     shopName,
                     vendorType,
                     vendorCity
-                ).catch(() => {})
+                ).catch((err) => console.error('[verif] email admin:', err))
             }
         }
+    }
+
+    // Adresse de notification configurable via variable d'environnement
+    const envAdminEmail = process.env.ADMIN_NOTIFICATION_EMAIL
+    if (envAdminEmail && !notifiedEmails.has(envAdminEmail.toLowerCase())) {
+        sendAdminNewVerificationEmail(
+            envAdminEmail,
+            vendorName,
+            shopName,
+            vendorType,
+            vendorCity
+        ).catch((err) => console.error('[verif] email admin (env):', err))
     }
 
     return { success: true }
@@ -183,7 +198,7 @@ export async function adminGetPendingVerifications() {
             )
         `)
         .eq('status', 'pending')
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
 
     return { verifications: data || [] }
 }

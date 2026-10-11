@@ -204,49 +204,62 @@ export default function AdminVerificationsPage() {
                                         </div>
                                     </div>
 
-                                    {/* Photos */}
-                                    <div className={`grid gap-3 ${v.shop_photo_url ? 'grid-cols-2' : 'grid-cols-1'}`}>
-                                        {/* Photo boutique (ancien format) */}
-                                        {v.shop_photo_url && (
-                                            <div>
-                                                <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Photo boutique</p>
-                                                <div
-                                                    className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
-                                                    onClick={() => setZoomImage(v.shop_photo_url)}
-                                                >
-                                                    <img src={v.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                                    {/* Photos — recto + verso */}
+                                    {(() => {
+                                        const typeLabel = v.id_type === 'passport' ? 'Passeport' : v.id_type === 'permis' ? 'Permis' : 'CNI'
+                                        const rectoUrl = v.id_photo_url || (v.id_type === 'passport' ? v.passport_photo_url : null) || v.cni_photo_url
+                                        // verso : stocké dans cni_photo_url quand recto = id_photo_url
+                                        const versoUrl = v.id_photo_url ? v.cni_photo_url : null
+                                        const photoCols = (rectoUrl && versoUrl) ? 'grid-cols-2' : 'grid-cols-1'
+                                        return (
+                                            <div className={`grid gap-3 ${photoCols}`}>
+                                                {/* Recto */}
+                                                <div>
+                                                    <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                                                        {typeLabel} — Recto
+                                                    </p>
+                                                    {rectoUrl ? (
+                                                        <div
+                                                            className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                            onClick={() => setZoomImage(rectoUrl)}
+                                                        >
+                                                            <img src={rectoUrl} alt="Recto" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                                                            <div className="absolute bottom-1 right-1"><Eye size={12} className="text-white/80" /></div>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="w-full aspect-video rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 text-xs">Non fournie</div>
+                                                    )}
                                                 </div>
+                                                {/* Verso (CNI / permis) */}
+                                                {versoUrl && (
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
+                                                            {typeLabel} — Verso
+                                                        </p>
+                                                        <div
+                                                            className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                            onClick={() => setZoomImage(versoUrl)}
+                                                        >
+                                                            <img src={versoUrl} alt="Verso" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                                                            <div className="absolute bottom-1 right-1"><Eye size={12} className="text-white/80" /></div>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {/* Photo boutique (ancien format uniquement) */}
+                                                {v.shop_photo_url && (
+                                                    <div>
+                                                        <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">Photo boutique</p>
+                                                        <div
+                                                            className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
+                                                            onClick={() => setZoomImage(v.shop_photo_url)}
+                                                        >
+                                                            <img src={v.shop_photo_url} alt="Boutique" className="absolute inset-0 h-full w-full object-cover" loading="lazy" decoding="async" />
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                        )}
-                                        {/* Photo pièce d'identité — nouveau champ unifié ou anciens champs */}
-                                        <div>
-                                            <p className="text-[10px] font-bold uppercase text-slate-400 mb-1.5">
-                                                Pièce d&apos;identité ({v.id_type === 'passport' ? 'Passeport' : v.id_type === 'permis' ? 'Permis' : 'CNI'})
-                                            </p>
-                                            {(() => {
-                                                const photoUrl = v.id_photo_url
-                                                    || (v.id_type === 'passport' ? v.passport_photo_url : v.cni_photo_url)
-                                                return photoUrl ? (
-                                                    <div
-                                                        className="relative w-full aspect-video rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 cursor-pointer hover:opacity-90 transition-opacity"
-                                                        onClick={() => setZoomImage(photoUrl)}
-                                                    >
-                                                        <img
-                                                            src={photoUrl}
-                                                            alt="Pièce d'identité"
-                                                            className="absolute inset-0 h-full w-full object-cover"
-                                                            loading="lazy"
-                                                            decoding="async"
-                                                        />
-                                                    </div>
-                                                ) : (
-                                                    <div className="w-full aspect-video rounded-xl border border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center text-slate-400 text-xs">
-                                                        Non fournie
-                                                    </div>
-                                                )
-                                            })()}
-                                        </div>
-                                    </div>
+                                        )
+                                    })()}
 
                                     {/* Dossier vendeur */}
                                     <div className="bg-slate-50 dark:bg-slate-800/50 rounded-xl p-4 space-y-3">
@@ -291,16 +304,25 @@ export default function AdminVerificationsPage() {
                                             </div>
                                         )}
 
-                                        {/* Mobile Money (ancien format) */}
+                                        {/* Type de vendeur (particulier / entreprise) ou ancien Mobile Money */}
                                         {v.momo_operator && (
                                             <div className="pt-3 border-t border-slate-200 dark:border-slate-700">
-                                                <p className="text-[10px] text-slate-400">Mobile Money</p>
-                                                <p className="text-sm font-bold dark:text-white">
-                                                    {v.momo_operator === 'MTN' ? '🟡' : '🔴'} {v.momo_operator} — +242 {v.momo_number}
-                                                </p>
-                                                {v.momo_name && (
-                                                    <p className="text-xs text-slate-400 mt-0.5">{v.momo_name}</p>
-                                                )}
+                                                {(v.momo_operator === 'particulier' || v.momo_operator === 'entreprise') ? (
+                                                    <>
+                                                        <p className="text-[10px] text-slate-400">Type de vendeur</p>
+                                                        <p className="text-sm font-bold dark:text-white capitalize">
+                                                            {v.momo_operator === 'entreprise' ? '🏢 Entreprise' : '👤 Particulier'}
+                                                        </p>
+                                                    </>
+                                                ) : (v.momo_operator === 'MTN' || v.momo_operator === 'Airtel') && v.momo_number ? (
+                                                    <>
+                                                        <p className="text-[10px] text-slate-400">Mobile Money (ancien format)</p>
+                                                        <p className="text-sm font-bold dark:text-white">
+                                                            {v.momo_operator === 'MTN' ? '🟡' : '🔴'} {v.momo_operator} — +242 {v.momo_number}
+                                                        </p>
+                                                        {v.momo_name && <p className="text-xs text-slate-400 mt-0.5">{v.momo_name}</p>}
+                                                    </>
+                                                ) : null}
                                             </div>
                                         )}
                                     </div>

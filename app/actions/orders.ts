@@ -18,6 +18,7 @@ import {
 } from '@/lib/buyerPaymentNotice'
 import { assertAdminCanActOnOrder, assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 import { sendPushToUsers } from '@/app/actions/push'
+import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -188,17 +189,6 @@ export async function updateOrderStatus(orderId: string, newStatus: string) {
     }
 
     return { success: true }
-}
-
-// Générer un numéro de suivi unique
-function generateTrackingNumber(): string {
-    const prefix = 'MM'
-    const date = new Date()
-    const yy = String(date.getFullYear()).slice(2)
-    const mm = String(date.getMonth() + 1).padStart(2, '0')
-    const dd = String(date.getDate()).padStart(2, '0')
-    const rand = Math.random().toString(36).substring(2, 8).toUpperCase()
-    return `${prefix}${yy}${mm}${dd}${rand}`
 }
 
 // Actions admin : confirmer paiement (avec vérification optionnelle du transaction_id)

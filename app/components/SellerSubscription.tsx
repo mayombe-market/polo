@@ -1181,7 +1181,7 @@ export function SubscriptionCheckout({ plan, billing, onBack, onComplete }: {
         {METHODS.map(m => (
           <button
             key={m.id}
-            onClick={() => { setMethod(m.id); setStep(m.id === 'mobile_money' ? 'phone' : 'transfer') }}
+            onClick={() => { setMethod(m.id); setStep('transfer') }}
             style={{
               display: "flex", alignItems: "center", gap: 14,
               padding: "18px 20px", borderRadius: 16,

@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/useAuth'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { PricingSection, SubscriptionCheckout } from '@/app/components/SellerSubscription'
+import AuthModal from '@/app/components/AuthModal'
 import { ImmoPricingSection } from '@/app/components/ImmoSubscription'
 import { HotelPricingSection } from '@/app/components/HotelSubscription'
 import { DELIVERY_CITY_LIST } from '@/lib/deliveryZones'
 import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 import { LEGAL_SIGNUP } from '@/lib/legal/termsRoutes'
+import { FEATURES } from '@/lib/featureFlags'
 
 const COUNTRIES = [
     { code: 'CG', name: 'Congo-Brazzaville', flag: '🇨🇬', dial: '+242', maxDigits: 9, placeholder: 'XX XXX XXXX', enabled: true },
@@ -278,10 +280,14 @@ export default function CompleteProfilePage() {
                 throw new Error(`Erreur ${res.status}: ${errBody}`)
             }
 
-            // Si vendeur → passer à l'étape abonnement
+            // Si vendeur → étape abonnement (si activé) ou dashboard directement
             if (role === 'vendor') {
                 setLoading(false)
-                setProfileStep('subscription')
+                if (FEATURES.subscriptions) {
+                    setProfileStep('subscription')
+                } else {
+                    router.push('/vendor/dashboard')
+                }
                 return
             }
 
@@ -305,24 +311,29 @@ export default function CompleteProfilePage() {
     }
 
     if (!user) {
+        const vendorNext = isVendorPath ? '/complete-profile?role=vendor' : '/complete-profile'
         return (
             <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-blue-50 dark:from-slate-900 dark:to-slate-800">
                 {sessionFailed ? (
-                    <div className="text-center p-8 max-w-md">
-                        <div className="text-5xl mb-4">🔒</div>
-                        <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
-                            Session introuvable
-                        </h2>
-                        <p className="text-gray-500 dark:text-gray-400 mb-6">
-                            Votre session a expiré ou n&apos;a pas pu être établie. Veuillez vous reconnecter.
-                        </p>
-                        <button
-                            onClick={() => router.push('/')}
-                            className="bg-green-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-green-700 transition-all"
-                        >
-                            Retour à l&apos;accueil
-                        </button>
-                    </div>
+                    <>
+                        {/* Affiche directement le modal d'auth pour ne pas bloquer le parcours */}
+                        <AuthModal
+                            isOpen={true}
+                            onClose={() => router.push('/devenir-vendeur')}
+                            initialMode={isVendorPath ? 'signup' : 'login'}
+                            nextPath={vendorNext}
+                        />
+                        {/* Fond visible si le modal est fermé */}
+                        <div className="text-center p-8 max-w-md">
+                            <div className="text-5xl mb-4">🏪</div>
+                            <h2 className="text-xl font-bold text-gray-800 dark:text-white mb-2">
+                                Créez votre boutique
+                            </h2>
+                            <p className="text-gray-500 dark:text-gray-400 mb-6">
+                                Connectez-vous ou créez un compte pour continuer.
+                            </p>
+                        </div>
+                    </>
                 ) : (
                     <div className="text-center">
                         <div className="animate-spin rounded-full h-12 w-12 border-4 border-green-500 border-t-transparent mx-auto mb-4"></div>

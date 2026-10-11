@@ -25,7 +25,8 @@ export default function CitySelectModal({ open, onSelected }: Props) {
         setError(null)
         try {
             const res = await updateProfile({ city })
-            if (!res.success) throw new Error(res.error)
+            // Pour les invités, "Non connecté" n'est pas bloquant — la ville est utilisée localement
+            if (!res.success && res.error !== 'Non connecté') throw new Error(res.error)
             onSelected(city)
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : 'Erreur, réessaie'

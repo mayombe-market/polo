@@ -29,7 +29,7 @@ export const FEATURES = {
 
     // ── Checkout invité ────────────────────────────────────────────────────────
     /** Commander sans compte (migration supabase-migration-guest-checkout.sql requise) */
-    guestCheckout: false,
+    guestCheckout: true,
 
     // ── Google Sign-In ─────────────────────────────────────────────────────────
     /** Connexion / inscription via Google OAuth (config Supabase Dashboard requise) */

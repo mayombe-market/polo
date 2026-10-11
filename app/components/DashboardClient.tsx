@@ -26,7 +26,8 @@ import {
     ArrowUpRight, Clock, MapPin, Loader2, Filter,
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
-    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote
+    Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote,
+    MoreHorizontal, Building2
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -68,24 +69,23 @@ const PatisserieProductForm = dynamic(() => import('./PatisserieProductForm').th
     ssr: false
 })
 
-type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews'
+const ShareLinksPanel = dynamic(() => import('./ShareLinksPanel'), { ssr: false })
 
-const getMenuItems = (verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
-    const items: { id: Page; label: string; icon: any }[] = [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
-        { id: 'products', label: isHotelVendor ? 'Chambres' : 'Produits', icon: Package },
-        { id: 'add', label: isHotelVendor ? 'Ajouter chambre' : 'Ajouter', icon: Plus },
-        { id: 'orders', label: 'Commandes', icon: ShoppingCart },
-        { id: 'negotiations', label: 'Négociations', icon: MessageSquare },
+type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews' | 'verification' | 'messagerie'
+
+const getMenuItems = (_verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
+    return [
+        { id: 'dashboard',    label: 'Tableau de bord',              icon: LayoutDashboard },
+        { id: 'products',     label: isHotelVendor ? 'Chambres' : 'Produits', icon: Package },
+        { id: 'orders',       label: 'Commandes',                    icon: ShoppingCart },
+        { id: 'messagerie',   label: 'Messagerie',                   icon: MessageCircle },
         ...(isHotelVendor ? [{ id: 'hotel_reviews' as Page, label: 'Avis clients', icon: Star }] : []),
-        { id: 'messages', label: 'Messages', icon: MessageCircle },
-        { id: 'notifs', label: 'Notifications', icon: Bell },
-        { id: 'stats', label: 'Statistiques', icon: BarChart3 },
-        { id: 'wallet', label: 'Portefeuille', icon: Wallet },
-        { id: 'shop', label: 'Boutique', icon: Store },
-        { id: 'settings', label: 'Paramètres', icon: Settings },
+        { id: 'shop',         label: 'Ma boutique',                  icon: Store },
+        { id: 'stats',        label: 'Statistiques',                 icon: BarChart3 },
+        { id: 'wallet',       label: 'Paiements',                    icon: Banknote },
+        { id: 'verification', label: 'Vérification',                 icon: Shield },
+        { id: 'settings',     label: 'Paramètres',                   icon: Settings },
     ]
-    return items
 }
 
 export default function DashboardClient({ products: initialProducts, profile, user, productCount }: any) {
@@ -105,6 +105,7 @@ export default function DashboardClient({ products: initialProducts, profile, us
     const [negotiationsLoading, setNegotiationsLoading] = useState(true)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifs, setUnreadNotifs] = useState(0)
+    const [showMoreMenu, setShowMoreMenu] = useState(false)
 
     // ─── Alarme vendeur : boucle jusqu'à arrêt manuel ────────────────────────
     const [alarmOrders, setAlarmOrders] = useState<{ id: string; customer_name: string; label: string }[]>([])
@@ -626,13 +627,10 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     {menuItems.map(item => {
                         const Icon = item.icon
                         const isActive = activePage === item.id
-                        const badge = item.id === 'negotiations' && pendingNegotiationsCount > 0
-                            ? pendingNegotiationsCount
-                            : item.id === 'messages' && unreadMessages > 0
-                                ? unreadMessages
-                                : item.id === 'notifs' && unreadNotifs > 0
-                                    ? unreadNotifs
-                                    : null
+                        const msgBadgeCount = unreadMessages + pendingNegotiationsCount
+                        const badge = item.id === 'messagerie' && msgBadgeCount > 0
+                            ? msgBadgeCount
+                            : null
                         return (
                             <button
                                 key={item.id}
@@ -652,35 +650,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             </button>
                         )
                     })}
-                    <Link
-                        href="/vendor/ad-campaigns"
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative text-slate-500 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white"
-                    >
-                        <Megaphone size={20} />
-                        {sidebarOpen && <span>Campagnes pub</span>}
-                    </Link>
-                    {profile?.verification_status !== 'verified' && (
-                        <Link
-                            href="/vendor/verification"
-                            className={`w-full flex items-center gap-3 px-4 py-3 rounded-2xl text-sm font-bold transition-all relative ${
-                                profile?.verification_status === 'pending'
-                                    ? 'text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20'
-                                    : 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20'
-                            }`}
-                        >
-                            <Shield size={20} />
-                            {sidebarOpen && (
-                                <span className="flex-1 flex items-center justify-between gap-2">
-                                    Vérification
-                                    {profile?.verification_status !== 'pending' && (
-                                        <span className="text-[9px] font-black uppercase bg-amber-100 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded-full">
-                                            Requis
-                                        </span>
-                                    )}
-                                </span>
-                            )}
-                        </Link>
-                    )}
                 </nav>
 
                 {showVendorPlanCta && (
@@ -717,49 +686,78 @@ export default function DashboardClient({ products: initialProducts, profile, us
             </aside>
 
             {/* ===== MOBILE BOTTOM NAV ===== */}
-            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 z-50 flex overflow-x-auto no-scrollbar gap-1 py-2 px-2 safe-area-bottom">
-                {menuItems.map(item => {
+            {/* Backdrop "Plus" */}
+            {showMoreMenu && (
+                <div
+                    className="md:hidden fixed inset-0 z-40"
+                    onClick={() => setShowMoreMenu(false)}
+                />
+            )}
+            {/* Drawer "Plus" */}
+            {showMoreMenu && (
+                <div className="md:hidden fixed bottom-14 inset-x-0 z-50 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 grid grid-cols-3 gap-1 p-3 shadow-xl">
+                    {([
+                        { id: 'shop' as Page,         label: 'Ma boutique',  icon: Store },
+                        { id: 'stats' as Page,        label: 'Statistiques', icon: BarChart3 },
+                        { id: 'wallet' as Page,       label: 'Paiements',    icon: Banknote },
+                        { id: 'verification' as Page, label: 'Vérification', icon: Shield },
+                        { id: 'settings' as Page,     label: 'Paramètres',   icon: Settings },
+                    ] as const).map(item => {
+                        const Icon = item.icon
+                        const isActive = activePage === item.id
+                        return (
+                            <button
+                                key={item.id}
+                                onClick={() => { setActivePage(item.id); setShowMoreMenu(false) }}
+                                className={`flex flex-col items-center gap-1.5 py-3 rounded-2xl transition-all ${
+                                    isActive ? 'bg-orange-50 dark:bg-orange-500/10 text-orange-500' : 'hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-500'
+                                }`}
+                            >
+                                <Icon size={20} />
+                                <span className="text-[9px] font-black uppercase">{item.label}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
+            {/* 5 items fixes */}
+            <div className="md:hidden fixed bottom-0 inset-x-0 bg-white dark:bg-slate-900 border-t border-slate-100 dark:border-slate-800 z-50 flex safe-area-bottom">
+                {([
+                    { id: 'dashboard' as Page,  label: 'Accueil',   icon: LayoutDashboard },
+                    { id: 'products' as Page,   label: 'Produits',  icon: Package },
+                    { id: 'orders' as Page,     label: 'Commandes', icon: ShoppingCart },
+                    { id: 'messagerie' as Page, label: 'Messages',  icon: MessageCircle },
+                ] as const).map(item => {
                     const Icon = item.icon
                     const isActive = activePage === item.id
-                    const badge = item.id === 'messages' && unreadMessages > 0
-                        ? unreadMessages
-                        : item.id === 'notifs' && unreadNotifs > 0
-                        ? unreadNotifs
-                        : null
+                    const msgBadge = item.id === 'messagerie' ? (unreadMessages + pendingNegotiationsCount) : 0
                     return (
                         <button
                             key={item.id}
-                            onClick={() => setActivePage(item.id)}
-                            className={`relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 ${isActive ? 'text-orange-500 bg-orange-50 dark:bg-orange-500/10' : 'text-slate-400'}`}
+                            onClick={() => { setActivePage(item.id); setShowMoreMenu(false) }}
+                            className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 transition-all ${
+                                isActive ? 'text-orange-500' : 'text-slate-400'
+                            }`}
                         >
                             <Icon size={18} />
-                            <span className="text-[7px] font-black uppercase whitespace-nowrap">{item.label}</span>
-                            {badge && (
-                                <span className="absolute -top-1 -right-0.5 bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
-                                    {badge > 9 ? '9+' : badge}
+                            <span className="text-[7px] font-black uppercase">{item.label}</span>
+                            {msgBadge > 0 && (
+                                <span className="absolute top-1 right-[22%] bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                                    {msgBadge > 9 ? '9+' : msgBadge}
                                 </span>
                             )}
                         </button>
                     )
                 })}
-                <Link
-                    href="/vendor/ad-campaigns"
-                    className="relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 text-slate-400 hover:text-orange-500"
+                <button
+                    onClick={() => setShowMoreMenu(v => !v)}
+                    className={`relative flex-1 flex flex-col items-center gap-0.5 py-2 transition-all ${
+                        showMoreMenu ? 'text-orange-500' : 'text-slate-400'
+                    }`}
                 >
-                    <Megaphone size={18} />
-                    <span className="text-[7px] font-black uppercase whitespace-nowrap">Pubs</span>
-                </Link>
-                {profile?.verification_status !== 'verified' && (
-                    <Link
-                        href="/vendor/verification"
-                        className={`relative flex flex-col items-center gap-0.5 min-w-[56px] px-2 py-1.5 rounded-xl transition-all flex-shrink-0 ${
-                            profile?.verification_status === 'pending' ? 'text-blue-500' : 'text-amber-500'
-                        }`}
-                    >
-                        <Shield size={18} />
-                        <span className="text-[7px] font-black uppercase whitespace-nowrap">Vérif</span>
-                    </Link>
-                )}
+                    <MoreHorizontal size={18} />
+                    <span className="text-[7px] font-black uppercase">Plus</span>
+                </button>
             </div>
 
             {/* ===== MAIN CONTENT ===== */}
@@ -1076,23 +1074,70 @@ export default function DashboardClient({ products: initialProducts, profile, us
                     <MessagesPanel userId={user?.id} />
                 )}
 
+                {activePage === 'messagerie' && (
+                    <MessagerieTabsPage
+                        userId={user?.id}
+                        negotiations={negotiations}
+                        negotiationsLoading={negotiationsLoading}
+                        negotiationsError={negotiationsError}
+                        pendingNegotiationsCount={pendingNegotiationsCount}
+                        unreadMessages={unreadMessages}
+                        onRetryNegotiations={refetchSellerDashboard}
+                        onRespond={async (negotiationId: string, response: 'accepte' | 'refuse') => {
+                            const result = await respondToNegotiation({ negotiationId, response })
+                            if (result.error) {
+                                toast.error(result.error)
+                            } else {
+                                setNegotiations(prev => prev.map(n => n.id === negotiationId ? { ...n, status: response } : n))
+                                toast.success(response === 'accepte' ? 'Offre acceptée !' : 'Offre refusée')
+                            }
+                        }}
+                    />
+                )}
+
+                {activePage === 'verification' && (
+                    <VerificationInlinePage
+                        verificationStatus={profile?.verification_status}
+                        rejectionReason={profile?.rejection_reason}
+                        userId={user?.id}
+                    />
+                )}
+
                 {activePage === 'notifs' && (
                     <VendorNotificationsPage userId={user?.id} onUnreadChange={setUnreadNotifs} />
                 )}
 
                 {activePage === 'shop' && (
-                    <div className="p-4 md:p-8">
-                        <div className="max-w-lg mx-auto text-center py-20">
-                            <Store size={48} className="mx-auto text-slate-200 dark:text-slate-600 mb-4" />
-                            <h2 className="text-xl font-black uppercase italic dark:text-white mb-2">Ma Boutique</h2>
-                            <p className="text-sm text-slate-400 mb-6">Voir votre profil public tel que vos clients le voient.</p>
+                    <div className="p-4 md:p-8 max-w-2xl mx-auto">
+                        <div className="mb-8">
+                            <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Ma Boutique</h2>
+                            <p className="text-sm text-slate-400 font-bold mt-1">Votre vitrine publique et liens de partage</p>
+                        </div>
+                        {/* Voir la boutique */}
+                        <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800 mb-6">
+                            <div className="flex items-center gap-3 mb-4">
+                                <div className="w-10 h-10 bg-orange-100 dark:bg-orange-500/10 rounded-2xl flex items-center justify-center">
+                                    <Store size={18} className="text-orange-500" />
+                                </div>
+                                <div>
+                                    <p className="font-black dark:text-white text-sm">{profile?.shop_name || profile?.full_name || 'Ma boutique'}</p>
+                                    <p className="text-xs text-slate-400">{profile?.shop_description ? profile.shop_description.slice(0, 60) + '…' : 'Aucune description'}</p>
+                                </div>
+                            </div>
                             <Link
                                 href={`/seller/${user?.id}`}
-                                className="inline-flex items-center gap-2 bg-orange-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs hover:bg-orange-600 transition-all"
+                                target="_blank"
+                                className="inline-flex items-center gap-2 bg-orange-500 text-white px-5 py-2.5 rounded-2xl font-black uppercase text-xs hover:bg-orange-600 transition-all"
                             >
-                                <ArrowUpRight size={16} /> Voir ma boutique
+                                <ArrowUpRight size={14} /> Voir ma boutique
                             </Link>
                         </div>
+                        {/* Partage */}
+                        <ShareLinksPanel
+                            sellerId={user?.id}
+                            shopSlug={profile?.shop_slug}
+                            shopName={profile?.shop_name || profile?.full_name}
+                        />
                     </div>
                 )}
 
@@ -1951,6 +1996,7 @@ function OrdersPage({
                 <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
                     {[
                         { id: 'all', label: 'Toutes' },
+                        { id: 'pending_payment', label: 'Nouvelles' },
                         { id: 'confirmed', label: 'Confirmées' },
                         { id: 'shipped', label: 'Expédiées' },
                         { id: 'delivered', label: 'Livrées' }
@@ -3646,6 +3692,161 @@ function HotelReviewsPage({ hotelId, products, profile }: { hotelId: string; pro
                             })}
                         </div>
                     )}
+                </div>
+            )}
+        </div>
+    )
+}
+
+// =====================================================================
+// MESSAGERIE PAGE — Messages + Négociations en onglets
+// =====================================================================
+function MessagerieTabsPage({ userId, negotiations, negotiationsLoading, negotiationsError, pendingNegotiationsCount, unreadMessages, onRetryNegotiations, onRespond }: {
+    userId?: string
+    negotiations: any[]
+    negotiationsLoading: boolean
+    negotiationsError: string | null
+    pendingNegotiationsCount: number
+    unreadMessages: number
+    onRetryNegotiations: () => void
+    onRespond: (id: string, resp: 'accepte' | 'refuse') => Promise<void>
+}) {
+    const [activeTab, setActiveTab] = useState<'messages' | 'negotiations'>('messages')
+    return (
+        <div className="flex flex-col h-full">
+            {/* Onglets */}
+            <div className="flex gap-1 p-4 pb-0 border-b border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-900">
+                <button
+                    onClick={() => setActiveTab('messages')}
+                    className={`relative flex items-center gap-2 px-5 py-2.5 rounded-t-2xl text-[10px] font-black uppercase transition-all ${
+                        activeTab === 'messages'
+                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                            : 'text-slate-400 hover:text-orange-500'
+                    }`}
+                >
+                    <MessageCircle size={13} /> Messages
+                    {unreadMessages > 0 && (
+                        <span className="bg-red-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                            {unreadMessages > 9 ? '9+' : unreadMessages}
+                        </span>
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('negotiations')}
+                    className={`relative flex items-center gap-2 px-5 py-2.5 rounded-t-2xl text-[10px] font-black uppercase transition-all ${
+                        activeTab === 'negotiations'
+                            ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20'
+                            : 'text-slate-400 hover:text-orange-500'
+                    }`}
+                >
+                    <Tag size={13} /> Négociations
+                    {pendingNegotiationsCount > 0 && (
+                        <span className="bg-amber-500 text-white text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                            {pendingNegotiationsCount > 9 ? '9+' : pendingNegotiationsCount}
+                        </span>
+                    )}
+                </button>
+            </div>
+            <div className="flex-1 overflow-y-auto">
+                {activeTab === 'messages' && userId && <MessagesPanel userId={userId} />}
+                {activeTab === 'negotiations' && (
+                    <NegotiationsPage
+                        negotiations={negotiations}
+                        negotiationsLoading={negotiationsLoading}
+                        negotiationsError={negotiationsError}
+                        onRetryNegotiations={onRetryNegotiations}
+                        onRespond={onRespond}
+                    />
+                )}
+            </div>
+        </div>
+    )
+}
+
+// =====================================================================
+// VERIFICATION INLINE PAGE
+// =====================================================================
+function VerificationInlinePage({ verificationStatus, rejectionReason, userId }: {
+    verificationStatus?: string | null
+    rejectionReason?: string | null
+    userId?: string
+}) {
+    return (
+        <div className="p-4 md:p-8 max-w-2xl mx-auto">
+            <div className="mb-8">
+                <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Vérification</h2>
+                <p className="text-sm text-slate-400 font-bold mt-1">Statut de votre dossier vendeur</p>
+            </div>
+
+            {verificationStatus === 'verified' && (
+                <div className="bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800/30 rounded-3xl p-6 flex items-start gap-4">
+                    <div className="w-12 h-12 bg-green-100 dark:bg-green-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                        <Shield size={22} className="text-green-500" />
+                    </div>
+                    <div>
+                        <p className="font-black text-green-700 dark:text-green-400 mb-1">Compte vérifié ✓</p>
+                        <p className="text-sm text-green-600 dark:text-green-500/80">
+                            Votre identité a été vérifiée. Vous pouvez publier vos produits et accéder à toutes les fonctionnalités vendeur.
+                        </p>
+                    </div>
+                </div>
+            )}
+
+            {verificationStatus === 'pending' && (
+                <div className="bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800/30 rounded-3xl p-6 flex items-start gap-4">
+                    <div className="w-12 h-12 bg-blue-100 dark:bg-blue-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                        <Clock size={22} className="text-blue-500" />
+                    </div>
+                    <div>
+                        <p className="font-black text-blue-700 dark:text-blue-400 mb-1">Dossier en cours d&apos;examen</p>
+                        <p className="text-sm text-blue-600 dark:text-blue-500/80 mb-4">
+                            Notre équipe examine votre dossier. Vous recevrez une réponse sous 24 à 48 h. En attendant, vous pouvez configurer votre boutique et préparer vos produits.
+                        </p>
+                        <Link href="/vendor/dashboard?page=settings" className="text-xs font-black text-blue-600 dark:text-blue-400 underline">
+                            Configurer ma boutique
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {verificationStatus === 'rejected' && (
+                <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800/30 rounded-3xl p-6 flex items-start gap-4">
+                    <div className="w-12 h-12 bg-red-100 dark:bg-red-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                        <XIcon size={22} className="text-red-500" />
+                    </div>
+                    <div>
+                        <p className="font-black text-red-700 dark:text-red-400 mb-1">Vérification refusée</p>
+                        {rejectionReason && (
+                            <p className="text-sm text-red-500 mb-3">Motif : {rejectionReason}</p>
+                        )}
+                        <p className="text-xs text-red-400 mb-4">Corrigez les points indiqués et soumettez à nouveau votre dossier.</p>
+                        <Link
+                            href="/vendor/verification"
+                            className="inline-flex items-center gap-2 bg-red-500 text-white px-5 py-2.5 rounded-2xl font-black uppercase text-xs hover:bg-red-600 transition-all"
+                        >
+                            <Shield size={13} /> Soumettre à nouveau
+                        </Link>
+                    </div>
+                </div>
+            )}
+
+            {(!verificationStatus || verificationStatus === 'unverified') && (
+                <div className="bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-3xl p-6 flex items-start gap-4">
+                    <div className="w-12 h-12 bg-amber-100 dark:bg-amber-500/20 rounded-2xl flex items-center justify-center flex-shrink-0">
+                        <Shield size={22} className="text-amber-500" />
+                    </div>
+                    <div>
+                        <p className="font-black text-amber-700 dark:text-amber-400 mb-1">Compte non vérifié</p>
+                        <p className="text-sm text-amber-600 dark:text-amber-500/80 mb-4">
+                            Vérifiez votre compte pour publier vos produits. La vérification est gratuite et prend 24 à 48 h.
+                        </p>
+                        <Link
+                            href="/vendor/verification"
+                            className="inline-flex items-center gap-2 bg-amber-500 text-white px-5 py-2.5 rounded-2xl font-black uppercase text-xs hover:bg-amber-600 transition-all"
+                        >
+                            <Shield size={13} /> Vérifier mon compte
+                        </Link>
+                    </div>
                 </div>
             )}
         </div>

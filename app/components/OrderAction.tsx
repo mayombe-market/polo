@@ -14,7 +14,7 @@ interface OrderActionProps {
     /** false si couleur/taille requises mais non choisies */
     variantsComplete?: boolean
     onVariantsInvalid?: () => void
-    /** @deprecated non utilisé depuis l'unification du checkout */
+    /** Quantité choisie sur la fiche produit (défaut 1) */
     quantity?: number
     /** Variantes sélectionnées (couleur / taille) */
     selectedVariant?: { size: string; color: string }
@@ -26,6 +26,7 @@ export default function OrderAction({
     user,
     variantsComplete = true,
     onVariantsInvalid,
+    quantity: quantityProp = 1,
     selectedVariant,
 }: OrderActionProps) {
     const [isAuthOpen, setIsAuthOpen] = useState(false)
@@ -43,6 +44,8 @@ export default function OrderAction({
             return
         }
 
+        const qty = Math.max(1, Math.min(99, Math.floor(Number(quantityProp)) || 1))
+
         await addToCart({
             id: `${product.id}`,
             product_id: product.id,
@@ -53,7 +56,7 @@ export default function OrderAction({
             shop_type: shop?.vendor_type || null,
             ...(selectedVariant?.color ? { selectedColor: selectedVariant.color } : {}),
             ...(selectedVariant?.size ? { selectedSize: selectedVariant.size } : {}),
-        })
+        }, qty)
 
         void (async () => {
             const [{ captureAnalyticsContext }, { trackEvent }] = await Promise.all([

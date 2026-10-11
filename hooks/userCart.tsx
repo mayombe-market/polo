@@ -31,7 +31,7 @@ interface CartContextType {
     cart: CartItem[]
     loading: boolean
     error: string | null
-    addToCart: (product: Omit<CartItem, 'quantity'>) => Promise<boolean>
+    addToCart: (product: Omit<CartItem, 'quantity'>, quantity?: number) => Promise<boolean>
     removeFromCart: (itemId: string) => Promise<void>
     updateQuantity: (itemId: string, quantity: number) => Promise<void>
     clearCart: () => Promise<void>
@@ -209,18 +209,19 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
         }
     }, [])
 
-    const addToCart = useCallback(async (product: Omit<CartItem, 'quantity'>) => {
+    const addToCart = useCallback(async (product: Omit<CartItem, 'quantity'>, quantity = 1) => {
+        const qty = Math.max(1, Math.min(99, quantity))
         const current = cartRef.current
         const existingItem = current.find(item => item.id === product.id)
         let newCart: CartItem[]
         if (existingItem) {
             newCart = current.map(item =>
                 item.id === product.id
-                    ? { ...item, quantity: item.quantity + 1 }
+                    ? { ...item, quantity: item.quantity + qty }
                     : item
             )
         } else {
-            newCart = [...current, { ...product, quantity: 1 }]
+            newCart = [...current, { ...product, quantity: qty }]
         }
         await saveCart(newCart)
         return true

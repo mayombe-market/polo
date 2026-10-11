@@ -39,7 +39,7 @@ export default function LegalVendorTermsPage() {
                 {
                     id: 'section-4',
                     number: 4,
-                    title: 'Commissions et paiements',
+                    title: 'Paiements — vente directe au vendeur',
                     paragraphs: [LOREM, LOREM_2],
                 },
                 {

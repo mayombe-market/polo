@@ -6,9 +6,10 @@ import { useCart } from '@/hooks/userCart'
 import { safeGetUser } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { getVendorPaymentNumbers } from '@/app/actions/vendorPayment'
 import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
-import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight } from 'lucide-react'
+import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight, Loader2 } from 'lucide-react'
 import AuthModal from '@/app/components/AuthModal'
 import { FEATURES } from '@/lib/featureFlags'
 import { useRouter } from 'next/navigation'
@@ -39,8 +40,7 @@ type Step =
     | 'location'
     | 'delivery_mode'
     | 'payment_method'
-    | 'transfer_info'
-    | 'enter_id'
+    | 'vendor_pay'
     | 'waiting'
     | 'cash_form'
     | 'confirmed'
@@ -69,6 +69,9 @@ export default function CartPage() {
     const [saving, setSaving] = useState(false)
     const [orderError, setOrderError] = useState('')
     const [profileGateOpen, setProfileGateOpen] = useState(false)
+    const [vendorTxCodes, setVendorTxCodes] = useState<Record<string, string>>({})
+    const [vendorSenderPhones, setVendorSenderPhones] = useState<Record<string, string>>({})
+    const [vendorPayConfirmChecked, setVendorPayConfirmChecked] = useState(false)
     const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
     const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
@@ -90,6 +93,20 @@ export default function CartPage() {
     const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
     /** False tant que les villes vendeurs du panier n’ont pas été chargées (évite un faux « inter-ville »). */
     const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
+    /** Numéros Mobile Money des vendeurs du panier (paiement direct). */
+    const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null; shop_name: string | null }>>({})
+
+    useEffect(() => {
+        if (sellerIds.length === 0) { setVendorNumbers({}); return }
+        getVendorPaymentNumbers(sellerIds).then(data => {
+            const simplified: Record<string, { mtn: string | null; airtel: string | null; holder: string | null; shop_name: string | null }> = {}
+            for (const sid of sellerIds) {
+                const v = data[sid]
+                simplified[sid] = { mtn: v?.mtn ?? null, airtel: v?.airtel ?? null, holder: v?.holder ?? null, shop_name: v?.shop_name ?? null }
+            }
+            setVendorNumbers(simplified)
+        }).catch(() => {})
+    }, [sellerIds])
 
     useEffect(() => {
         if (sellerIds.length === 0) {
@@ -192,6 +209,9 @@ export default function CartPage() {
         setOrderData(null)
         setInterUrbanPreAlertOpen(false)
         setInterUrbanWarningOpen(false)
+        setVendorTxCodes({})
+        setVendorSenderPhones({})
+        setVendorPayConfirmChecked(false)
     }
 
     const handleLocationConfirm = async (selectedCity: string, selectedDistrict: string) => {
@@ -234,8 +254,53 @@ export default function CartPage() {
         if (method === 'cash') {
             setStep('cash_form')
         } else {
-            setStep('transfer_info')
+            setVendorTxCodes({})
+            setVendorSenderPhones({})
+            setVendorPayConfirmChecked(false)
+            setOrderError('')
+            setStep('vendor_pay')
         }
+    }
+
+    const handleVendorPaySubmit = async () => {
+        if (!deliveryMode) { setOrderError('Choisissez un mode de livraison.'); return }
+        for (const sid of sellerIds) {
+            const vn = vendorNumbers[sid]
+            const number = paymentMethod === 'airtel_money' ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
+            if (!number) { setOrderError(`Un vendeur n'a pas configuré son numéro ${paymentMethod === 'airtel_money' ? 'Airtel' : 'MTN'}. Choisissez un autre mode de paiement.`); return }
+            if ((vendorTxCodes[sid] || '').replace(/\D/g, '').length !== 10) { setOrderError('Saisissez le code de transaction pour tous les vendeurs (10 chiffres chacun).'); return }
+            if ((vendorSenderPhones[sid] || '').replace(/\D/g, '').length !== 9) { setOrderError('Saisissez le numéro expéditeur pour tous les vendeurs (9 chiffres).'); return }
+        }
+        if (!vendorPayConfirmChecked) { setOrderError('Cochez la case de confirmation.'); return }
+
+        setSaving(true); setOrderError('')
+        try {
+            const fee = deliveryMode === 'inter_urban' ? DELIVERY_FEE_INTER_URBAN : DELIVERY_FEES[deliveryMode]
+            const amount = total + fee
+            const items = cart.map(item => ({
+                id: item.product_id, name: item.name, price: item.price,
+                quantity: item.quantity, img: item.img || '', seller_id: item.seller_id || '',
+            }))
+            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string; sender_phone: string }> = {}
+            for (const sid of sellerIds) {
+                const vn = vendorNumbers[sid]
+                vendorPaymentInfo[sid] = {
+                    method: paymentMethod,
+                    vendor_number: paymentMethod === 'airtel_money' ? (vn?.airtel ?? null) : (vn?.mtn ?? null),
+                    holder_name: vn?.holder ?? null,
+                    transaction_id: (vendorTxCodes[sid] || '').replace(/\D/g, ''),
+                    sender_phone: (vendorSenderPhones[sid] || '').replace(/\D/g, ''),
+                }
+            }
+            const result = await createOrderAction({ items, city, district, payment_method: paymentMethod, total_amount: amount, delivery_mode: deliveryMode, delivery_fee: fee, vendor_payment_info: vendorPaymentInfo })
+            if (result.error) {
+                if ((result as { code?: string }).code === 'profile_incomplete') setProfileGateOpen(true)
+                setOrderError(result.error); return
+            }
+            setOrderId(result.order.id); setOrderData(result.order); setStep('waiting')
+        } catch (err: any) {
+            setOrderError(err?.message || 'Impossible de créer la commande. Réessayez.')
+        } finally { setSaving(false) }
     }
 
     const handleTransactionIdSubmit = async (id: string) => {
@@ -587,24 +652,114 @@ export default function CartPage() {
                                 }}
                             />
                         )}
-                        {step === 'transfer_info' && (
-                            <TransferInfoStep
-                                method={paymentMethod}
-                                total={grandTotal}
-                                onConfirm={() => setStep('enter_id')}
-                                onBack={() => setStep('payment_method')}
-                                sellerCity={paymentSellerCity}
-                                ambiguousSellerCities={ambiguousPaymentCities}
-                            />
-                        )}
-                        {step === 'enter_id' && (
-                            <EnterTransactionIdStep
-                                onSubmit={handleTransactionIdSubmit}
-                                onBack={() => { setOrderError(''); setStep('transfer_info') }}
-                                loading={saving}
-                                serverError={orderError}
-                            />
-                        )}
+                        {step === 'vendor_pay' && (() => {
+                            const isAirtel = paymentMethod === 'airtel_money'
+                            const formatTx = (v: string) => v.replace(/\D/g, '').slice(0, 10).replace(/(\d{3})(?=\d)/g, '$1 ')
+                            const vendorItemsAmount = (sid: string) =>
+                                cart.filter(i => i.seller_id === sid).reduce((s, i) => s + i.price * (i.quantity || 1), 0)
+                            const numbersLoaded = sellerIds.length === 0 || sellerIds.every(sid => sid in vendorNumbers)
+                            const allTxOk = sellerIds.every(sid => (vendorTxCodes[sid] || '').replace(/\D/g, '').length === 10)
+                            const allPhoneOk = sellerIds.every(sid => (vendorSenderPhones[sid] || '').replace(/\D/g, '').length === 9)
+                            const anyMissing = sellerIds.some(sid => { const vn = vendorNumbers[sid]; return !(isAirtel ? vn?.airtel : vn?.mtn) })
+                            const canSubmit = numbersLoaded && !anyMissing && allTxOk && allPhoneOk && vendorPayConfirmChecked && !saving
+                            return (
+                                <div className="space-y-4 animate-fadeIn">
+                                    <div className="text-center">
+                                        <div className="text-4xl mb-2">{isAirtel ? '📲' : '📱'}</div>
+                                        <h2 className="font-black uppercase italic text-lg tracking-tight">{isAirtel ? 'Airtel Money' : 'MTN Mobile Money'}</h2>
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                                            {sellerIds.length > 1 ? `${sellerIds.length} vendeurs · paiements directs` : 'Paiement direct au vendeur'}
+                                        </p>
+                                    </div>
+
+                                    {!numbersLoaded && (
+                                        <div className="flex items-center justify-center gap-2 py-4 text-slate-400 text-sm">
+                                            <Loader2 size={16} className="animate-spin" /> Chargement des numéros…
+                                        </div>
+                                    )}
+
+                                    {numbersLoaded && sellerIds.map((sid, idx) => {
+                                        const vn = vendorNumbers[sid]
+                                        const number = isAirtel ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
+                                        const vendorCode = vendorTxCodes[sid] || ''
+                                        const vendorDigits = vendorCode.replace(/\D/g, '')
+                                        const senderPhoneVal = vendorSenderPhones[sid] || ''
+                                        const vendorAmount = vendorItemsAmount(sid)
+                                        if (!number) {
+                                            return (
+                                                <div key={sid} className="rounded-2xl border border-red-200 dark:border-red-800/30 p-4 bg-red-50 dark:bg-red-900/10">
+                                                    <p className="text-xs font-black text-red-700 dark:text-red-400">{vn?.shop_name || `Vendeur ${idx + 1}`}</p>
+                                                    <p className="text-[10px] text-red-500 mt-1">Ce vendeur n'a pas configuré son numéro {isAirtel ? 'Airtel Money' : 'MTN MoMo'}. Choisissez un autre mode de paiement.</p>
+                                                </div>
+                                            )
+                                        }
+                                        return (
+                                            <div key={sid} className="rounded-2xl border border-slate-200 dark:border-slate-700 overflow-hidden">
+                                                <div className="bg-slate-50 dark:bg-slate-800/60 px-4 py-2.5 flex items-center justify-between">
+                                                    <span className="text-[10px] font-black uppercase text-slate-500">{vn?.shop_name || `Vendeur ${idx + 1}`}</span>
+                                                    <span className="text-xs font-black text-orange-500">{vendorAmount.toLocaleString('fr-FR')} FCFA</span>
+                                                </div>
+                                                <div className="p-4 space-y-3">
+                                                    <div className={`rounded-xl p-4 text-center border ${isAirtel ? 'bg-red-50 dark:bg-red-400/5 border-red-200/60' : 'bg-yellow-50 dark:bg-yellow-400/5 border-yellow-300/40'}`}>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-1">Numéro de transfert</p>
+                                                        <p className={`text-2xl font-black font-mono tracking-wider ${isAirtel ? 'text-red-600' : 'text-yellow-600'}`}>{number}</p>
+                                                        {vn?.holder && <p className="text-xs text-slate-500 mt-1">{vn.holder}</p>}
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Code de transaction SMS</p>
+                                                        <div className={`rounded-xl p-1 border-2 transition-colors ${vendorDigits.length === 10 ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
+                                                            <input
+                                                                type="text" inputMode="numeric"
+                                                                value={formatTx(vendorCode)}
+                                                                onChange={e => setVendorTxCodes(prev => ({ ...prev, [sid]: e.target.value }))}
+                                                                placeholder="000 000 000 0" maxLength={13}
+                                                                className="w-full py-3 px-4 bg-transparent text-lg font-mono tracking-[3px] text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                            />
+                                                        </div>
+                                                        <p className={`text-[10px] font-black text-right mt-0.5 ${vendorDigits.length === 10 ? 'text-green-500' : 'text-slate-400'}`}>{vendorDigits.length}/10</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Numéro expéditeur <span className="text-red-500">*</span></p>
+                                                        <input
+                                                            type="tel" inputMode="numeric"
+                                                            value={senderPhoneVal}
+                                                            onChange={e => setVendorSenderPhones(prev => ({ ...prev, [sid]: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
+                                                            placeholder="06 XXX XX XX" maxLength={9}
+                                                            className="w-full py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm font-mono tracking-widest text-center outline-none focus:border-orange-500/40 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )
+                                    })}
+
+                                    <div className="bg-orange-50 dark:bg-orange-500/5 border border-orange-200 dark:border-orange-500/20 rounded-xl p-4 flex gap-3">
+                                        <span className="flex-shrink-0 text-base">⚠️</span>
+                                        <p className="text-[10px] font-bold text-orange-700 dark:text-orange-300 leading-relaxed">
+                                            Effectuez le virement <strong>avant</strong> de déclarer. Vous recevrez un code de transaction à <strong>10 chiffres</strong> par SMS.
+                                        </p>
+                                    </div>
+
+                                    <label className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-orange-400/40 transition-colors">
+                                        <input type="checkbox" checked={vendorPayConfirmChecked} onChange={e => setVendorPayConfirmChecked(e.target.checked)} className="mt-0.5 w-4 h-4 rounded accent-orange-500 flex-shrink-0 cursor-pointer" />
+                                        <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
+                                            J&apos;ai effectué le(s) virement(s) et je confirme que les informations saisies sont exactes.
+                                        </span>
+                                    </label>
+
+                                    {orderError && <p className="text-red-500 text-[10px] font-bold text-center">⚠ {orderError}</p>}
+
+                                    <button onClick={handleVendorPaySubmit} disabled={!canSubmit}
+                                        className={`w-full py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${canSubmit ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
+                                    >
+                                        {saving ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Déclarer mon paiement'}
+                                    </button>
+                                    <button onClick={() => { setOrderError(''); setStep('payment_method') }} className="w-full py-3 rounded-xl text-sm font-bold text-slate-400 hover:text-slate-600 transition-colors">
+                                        ← Retour
+                                    </button>
+                                </div>
+                            )
+                        })()}
                         {step === 'waiting' && orderId && (
                             <WaitingValidationStep
                                 orderId={orderId}

@@ -755,6 +755,7 @@ export async function createOrder(input: {
         vendor_number: string | null
         holder_name: string | null
         transaction_id: string
+        sender_phone: string
     }>
 }) {
     const supabase = await getSupabase()
@@ -980,6 +981,7 @@ export async function createOrder(input: {
                 vendor_number: vpi.vendor_number || null,
                 holder_name: vpi.holder_name || null,
                 transaction_id: digitsOnly(vpi.transaction_id || ''),
+                sender_phone: digitsOnly(vpi.sender_phone || ''),
                 vendor_confirmed: false,
                 vendor_confirmed_at: null,
                 disputed: false,

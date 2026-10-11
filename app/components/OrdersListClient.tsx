@@ -242,9 +242,9 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
 
                                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between pt-6 border-t dark:border-slate-700">
                                     <div className="text-center sm:text-left w-full sm:w-auto">
-                                        <p className="text-[8px] font-black uppercase text-slate-400 leading-none">Votre part (90%)</p>
+                                        <p className="text-[8px] font-black uppercase text-slate-400 leading-none">Votre part</p>
                                         <p className="font-black italic text-2xl tracking-tighter text-slate-900 dark:text-white">
-                                            {(order.vendor_payout || Math.round((order.total_amount || 0) * 0.9))?.toLocaleString('fr-FR')} <small className="text-[10px] tracking-normal">FCFA</small>
+                                            {(order.vendor_payout || order.total_amount || 0)?.toLocaleString('fr-FR')} <small className="text-[10px] tracking-normal">FCFA</small>
                                         </p>
                                         {order.payout_status === 'paid' && (
                                             <span className="text-[8px] font-black uppercase text-green-600 bg-green-100 px-2 py-0.5 rounded-full">Versé</span>

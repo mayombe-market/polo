@@ -116,8 +116,8 @@ export default function BecomeVendorCta({ variant, onNavigate }: BecomeVendorCta
                         </p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 font-bold mt-0.5 leading-snug">
                             {isVendor
-                                ? 'Passez à un plan payant : plus de produits et moins de commission.'
-                                : 'Ouvrez votre boutique, touchez tout le Congo — frais réduits avec les plans Pro.'}
+                                ? 'Publiez plus de produits et touchez plus de clients avec un plan Pro.'
+                                : 'Ouvrez votre boutique et touchez tout le Congo — inscription gratuite.'}
                         </p>
                     </div>
                 </div>

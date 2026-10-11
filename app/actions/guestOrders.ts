@@ -38,7 +38,7 @@ export type GuestOrderInput = {
         vendor_number: string | null
         holder_name: string | null
         transaction_id: string
-        sender_phone?: string
+        sender_phone: string
     }>
     idempotency_key?: string
     utm_source?: string | null
@@ -220,7 +220,7 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
                 vendor_number: vpi.vendor_number || null,
                 holder_name: vpi.holder_name || null,
                 transaction_id: digitsOnly(vpi.transaction_id || ''),
-                sender_phone: vpi.sender_phone ? digitsOnly(vpi.sender_phone) : null,
+                sender_phone: digitsOnly(vpi.sender_phone || ''),
                 vendor_confirmed: false,
                 vendor_confirmed_at: null,
                 disputed: false,

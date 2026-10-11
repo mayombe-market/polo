@@ -591,7 +591,7 @@ export default function CheckoutPage() {
             const paymentMethod = savedFormData.payment_method as 'mobile_money' | 'airtel_money'
 
             // Build vendor_payment_info for direct vendor payment tracking
-            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string; sender_phone?: string }> = {}
+            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string; sender_phone: string }> = {}
             for (const sid of sellerIds) {
                 const vn = vendorNumbers[sid]
                 const number = paymentMethod === 'airtel_money' ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
@@ -607,7 +607,7 @@ export default function CheckoutPage() {
                         vendor_number: number,
                         holder_name: vn?.holder ?? null,
                         transaction_id: txForVendor,
-                        ...(phoneForVendor ? { sender_phone: phoneForVendor } : {}),
+                        sender_phone: phoneForVendor,
                     }
                 }
             }
@@ -745,8 +745,10 @@ export default function CheckoutPage() {
         const txDigits = txCode.replace(/\D/g, '')
         const formatPhone = (v: string) => v.replace(/\D/g, '').slice(0, 9)
         const isComplete = !hasBlockingMissing && confirmChecked && (isMultiVendor
-            ? sellerIds.every(sid => (vendorTxCodes[sid] || '').replace(/\D/g, '').length === 10)
-            : txDigits.length === 10)
+            ? sellerIds.every(sid =>
+                (vendorTxCodes[sid] || '').replace(/\D/g, '').length === 10 &&
+                (vendorSenderPhones[sid] || '').replace(/\D/g, '').length === 9)
+            : txDigits.length === 10 && senderPhone.replace(/\D/g, '').length === 9)
 
         return (
             <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] flex items-start justify-center px-4 py-8 overflow-y-auto">
@@ -884,7 +886,7 @@ export default function CheckoutPage() {
                                                     className="w-full py-3 px-5 bg-transparent text-base font-mono tracking-widest text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
                                                 />
                                             </div>
-                                            <p className="text-[9px] text-slate-400 text-center mt-1">Optionnel — MTN (06) ou Airtel (05)</p>
+                                            <p className="text-[9px] text-slate-400 text-center mt-1">Requis — MTN (06) ou Airtel (05)</p>
                                         </div>
                                     </>
                                 )

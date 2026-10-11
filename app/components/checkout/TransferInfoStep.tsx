@@ -28,10 +28,14 @@ interface TransferInfoStepProps {
     total: number
     onConfirm: () => void
     onBack: () => void
-    /** Ville du vendeur (`profiles.city`) — détermine quel numéro admin afficher. */
+    /** Ville du vendeur (`profiles.city`) — détermine quel numéro admin afficher (fallback). */
     sellerCity?: string | null
     /** Ex. panier avec vendeurs dans plusieurs villes : numéro fallback + message. */
     ambiguousSellerCities?: boolean
+    /** Numéro Mobile Money du vendeur — si renseigné, prioritaire sur le numéro admin. */
+    vendorNumber?: string | null
+    /** Nom du titulaire du compte vendeur. */
+    holderName?: string | null
 }
 
 export default function TransferInfoStep({
@@ -41,11 +45,14 @@ export default function TransferInfoStep({
     onBack,
     sellerCity,
     ambiguousSellerCities = false,
+    vendorNumber,
+    holderName,
 }: TransferInfoStepProps) {
     const meta = PAYMENT_META[method]
     if (!meta) return null
 
-    const displayNumber = getAdminPaymentNumber(sellerCity, meta.paymentKey)
+    const isDirectVendor = !!vendorNumber
+    const displayNumber = isDirectVendor ? vendorNumber! : getAdminPaymentNumber(sellerCity, meta.paymentKey)
     const cityLabel =
         !ambiguousSellerCities && normalizeToServiceCityCode(sellerCity)
             ? profileCityToCheckoutDisplay(sellerCity)
@@ -59,9 +66,14 @@ export default function TransferInfoStep({
                 <p className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest mt-1">
                     Envoyez le montant exact au numéro ci-dessous
                 </p>
-                {cityLabel && !ambiguousSellerCities && (
+                {!isDirectVendor && cityLabel && !ambiguousSellerCities && (
                     <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-2">
                         Compte plateforme — zone <span className="text-orange-500">{cityLabel}</span> (ville du vendeur)
+                    </p>
+                )}
+                {isDirectVendor && (
+                    <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-2">
+                        Paiement direct au vendeur
                     </p>
                 )}
             </div>
@@ -84,6 +96,9 @@ export default function TransferInfoStep({
                 <p className={`text-3xl font-black font-mono tracking-wider ${meta.colorClass.split(' ')[0]}`}>
                     {displayNumber}
                 </p>
+                {isDirectVendor && holderName && (
+                    <p className="text-xs font-bold text-slate-500 mt-2">{holderName}</p>
+                )}
             </div>
 
             {/* Montant */}

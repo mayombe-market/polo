@@ -6,6 +6,7 @@ import { useCart } from '@/hooks/userCart'
 import { safeGetUser } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
+import { getVendorPaymentNumbers } from '@/app/actions/vendorPayment'
 import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { Trash2, Plus, Minus, ArrowLeft, ShoppingBag, ArrowRight } from 'lucide-react'
@@ -90,6 +91,20 @@ export default function CartPage() {
     const [sellerCities, setSellerCities] = useState<Record<string, string | null>>({})
     /** False tant que les villes vendeurs du panier n’ont pas été chargées (évite un faux « inter-ville »). */
     const [sellerCitiesReady, setSellerCitiesReady] = useState(true)
+    /** Numéros Mobile Money des vendeurs du panier (paiement direct). */
+    const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null }>>({})
+
+    useEffect(() => {
+        if (sellerIds.length === 0) { setVendorNumbers({}); return }
+        getVendorPaymentNumbers(sellerIds).then(data => {
+            const simplified: Record<string, { mtn: string | null; airtel: string | null; holder: string | null }> = {}
+            for (const sid of sellerIds) {
+                const v = data[sid]
+                simplified[sid] = { mtn: v?.mtn ?? null, airtel: v?.airtel ?? null, holder: v?.holder ?? null }
+            }
+            setVendorNumbers(simplified)
+        }).catch(() => {})
+    }, [sellerIds])
 
     useEffect(() => {
         if (sellerIds.length === 0) {
@@ -587,16 +602,26 @@ export default function CartPage() {
                                 }}
                             />
                         )}
-                        {step === 'transfer_info' && (
-                            <TransferInfoStep
-                                method={paymentMethod}
-                                total={grandTotal}
-                                onConfirm={() => setStep('enter_id')}
-                                onBack={() => setStep('payment_method')}
-                                sellerCity={paymentSellerCity}
-                                ambiguousSellerCities={ambiguousPaymentCities}
-                            />
-                        )}
+                        {step === 'transfer_info' && (() => {
+                            const isSingleVendor = sellerIds.length === 1
+                            const singleVendorId = isSingleVendor ? sellerIds[0] : null
+                            const vn = singleVendorId ? vendorNumbers[singleVendorId] : null
+                            const singleVendorNumber = vn
+                                ? (paymentMethod === 'airtel_money' ? vn.airtel : vn.mtn)
+                                : null
+                            return (
+                                <TransferInfoStep
+                                    method={paymentMethod}
+                                    total={grandTotal}
+                                    onConfirm={() => setStep('enter_id')}
+                                    onBack={() => setStep('payment_method')}
+                                    sellerCity={paymentSellerCity}
+                                    ambiguousSellerCities={ambiguousPaymentCities}
+                                    vendorNumber={singleVendorNumber}
+                                    holderName={vn?.holder ?? null}
+                                />
+                            )
+                        })()}
                         {step === 'enter_id' && (
                             <EnterTransactionIdStep
                                 onSubmit={handleTransactionIdSubmit}

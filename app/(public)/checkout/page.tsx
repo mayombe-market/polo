@@ -90,6 +90,9 @@ export default function CheckoutPage() {
     const [sellerCoords, setSellerCoords] = useState<Record<string, { lat: number; lng: number } | null>>({})
     const [vendorNumbers, setVendorNumbers] = useState<Record<string, { mtn: string | null; airtel: string | null; holder: string | null; whatsapp: string | null; shop_name: string | null; vendor_delivery_fee: number | null; vendor_pickup_address: string | null; accept_cod: boolean }>>({})
     const [vendorTxCodes, setVendorTxCodes] = useState<Record<string, string>>({})
+    const [senderPhone, setSenderPhone] = useState('')
+    const [vendorSenderPhones, setVendorSenderPhones] = useState<Record<string, string>>({})
+    const [confirmChecked, setConfirmChecked] = useState(false)
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
     const { getOrCreate: getIdempotencyKey, clear: clearIdempotencyKey } = useIdempotencyKey()
@@ -380,6 +383,9 @@ export default function CheckoutPage() {
             setTxCode('')
             setTxError('')
             setVendorTxCodes({})
+            setSenderPhone('')
+            setVendorSenderPhones({})
+            setConfirmChecked(false)
             setManualPayStep(true)
             return
         }
@@ -585,19 +591,23 @@ export default function CheckoutPage() {
             const paymentMethod = savedFormData.payment_method as 'mobile_money' | 'airtel_money'
 
             // Build vendor_payment_info for direct vendor payment tracking
-            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string }> = {}
+            const vendorPaymentInfo: Record<string, { method: string; vendor_number: string | null; holder_name: string | null; transaction_id: string; sender_phone?: string }> = {}
             for (const sid of sellerIds) {
                 const vn = vendorNumbers[sid]
                 const number = paymentMethod === 'airtel_money' ? (vn?.airtel ?? null) : (vn?.mtn ?? null)
                 const txForVendor = isMultiVendorTx
                     ? (vendorTxCodes[sid] || '').replace(/\D/g, '')
                     : singleDigits
+                const phoneForVendor = isMultiVendorTx
+                    ? (vendorSenderPhones[sid] || '').replace(/\D/g, '')
+                    : senderPhone.replace(/\D/g, '')
                 if (txForVendor) {
                     vendorPaymentInfo[sid] = {
                         method: paymentMethod,
                         vendor_number: number,
                         holder_name: vn?.holder ?? null,
                         transaction_id: txForVendor,
+                        ...(phoneForVendor ? { sender_phone: phoneForVendor } : {}),
                     }
                 }
             }
@@ -733,7 +743,8 @@ export default function CheckoutPage() {
         }
 
         const txDigits = txCode.replace(/\D/g, '')
-        const isComplete = !hasBlockingMissing && (isMultiVendor
+        const formatPhone = (v: string) => v.replace(/\D/g, '').slice(0, 9)
+        const isComplete = !hasBlockingMissing && confirmChecked && (isMultiVendor
             ? sellerIds.every(sid => (vendorTxCodes[sid] || '').replace(/\D/g, '').length === 10)
             : txDigits.length === 10)
 
@@ -839,7 +850,7 @@ export default function CheckoutPage() {
                                         </div>
 
                                         <div>
-                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Code de transaction (SMS)</p>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Code de transaction reçu par SMS</p>
                                             <div className={`rounded-2xl p-1 border-2 transition-colors ${txError ? 'border-red-500/60' : txDigits.length === 10 ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
                                                 <input
                                                     type="text"
@@ -859,6 +870,21 @@ export default function CheckoutPage() {
                                                 }
                                                 <span className={`text-[10px] font-black ${txDigits.length === 10 ? 'text-green-500' : 'text-slate-400'}`}>{txDigits.length}/10</span>
                                             </div>
+                                        </div>
+                                        <div>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Numéro ayant effectué le transfert</p>
+                                            <div className="rounded-2xl p-1 border-2 border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40 transition-colors">
+                                                <input
+                                                    type="tel"
+                                                    inputMode="numeric"
+                                                    value={senderPhone}
+                                                    onChange={e => setSenderPhone(e.target.value.replace(/\D/g, '').slice(0, 9))}
+                                                    placeholder="06 XXX XX XX"
+                                                    maxLength={9}
+                                                    className="w-full py-3 px-5 bg-transparent text-base font-mono tracking-widest text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                />
+                                            </div>
+                                            <p className="text-[9px] text-slate-400 text-center mt-1">Optionnel — MTN (06) ou Airtel (05)</p>
                                         </div>
                                     </>
                                 )
@@ -895,7 +921,7 @@ export default function CheckoutPage() {
                                                         {vn?.holder && <p className="text-xs text-slate-500 mt-0.5">{vn.holder}</p>}
                                                     </div>
                                                     <div>
-                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Code de transaction</p>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Code de transaction (SMS)</p>
                                                         <div className={`rounded-xl p-1 border-2 transition-colors ${vendorDigits.length === 10 ? 'border-green-500/40' : 'border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40'}`}>
                                                             <input
                                                                 type="text"
@@ -912,6 +938,18 @@ export default function CheckoutPage() {
                                                         </div>
                                                         <p className={`text-[10px] font-black text-right mt-1 px-1 ${vendorDigits.length === 10 ? 'text-green-500' : 'text-slate-400'}`}>{vendorDigits.length}/10</p>
                                                     </div>
+                                                    <div>
+                                                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-1.5 text-center">Numéro expéditeur</p>
+                                                        <input
+                                                            type="tel"
+                                                            inputMode="numeric"
+                                                            value={vendorSenderPhones[sid] || ''}
+                                                            onChange={e => setVendorSenderPhones(prev => ({ ...prev, [sid]: e.target.value.replace(/\D/g, '').slice(0, 9) }))}
+                                                            placeholder="06 XXX XX XX"
+                                                            maxLength={9}
+                                                            className="w-full py-2 px-4 rounded-xl border border-slate-200 dark:border-slate-700 bg-transparent text-sm font-mono tracking-widest text-center outline-none focus:border-orange-500/40 placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                         )
@@ -920,12 +958,25 @@ export default function CheckoutPage() {
                                 </div>
                             )}
 
+                            {/* Checkbox confirmation */}
+                            <label className="flex items-start gap-3 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 cursor-pointer hover:border-orange-400/40 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={confirmChecked}
+                                    onChange={e => setConfirmChecked(e.target.checked)}
+                                    className="mt-0.5 w-4 h-4 rounded accent-orange-500 flex-shrink-0 cursor-pointer"
+                                />
+                                <span className="text-[11px] font-bold text-slate-600 dark:text-slate-300 leading-relaxed">
+                                    J&apos;ai effectué le virement et je confirme que les informations saisies sont exactes. Je comprends que le vendeur vérifiera le paiement sur son compte Mobile Money avant de traiter ma commande.
+                                </span>
+                            </label>
+
                             <button
                                 onClick={handleTxSubmit}
                                 disabled={!isComplete || txLoading}
                                 className={`w-full py-4 rounded-2xl font-black uppercase italic text-sm transition-all ${isComplete && !txLoading ? 'bg-orange-500 text-white shadow-lg shadow-orange-500/20 active:scale-[0.98]' : 'bg-slate-200 dark:bg-slate-700 text-slate-400 cursor-not-allowed'}`}
                             >
-                                {txLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Valider le paiement'}
+                                {txLoading ? <span className="flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Envoi…</span> : 'Déclarer mon paiement'}
                             </button>
                         </>
                     )}

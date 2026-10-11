@@ -1138,6 +1138,14 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             shopSlug={profile?.shop_slug}
                             shopName={profile?.shop_name || profile?.full_name}
                         />
+                        {/* Moyens de paiement */}
+                        <div className="mt-8">
+                            <div className="flex items-center gap-2 mb-4">
+                                <Banknote size={16} className="text-orange-500" />
+                                <h3 className="font-black uppercase text-sm dark:text-white">Moyens de paiement</h3>
+                            </div>
+                            <VendorPaymentSettings profile={profile} />
+                        </div>
                     </div>
                 )}
 

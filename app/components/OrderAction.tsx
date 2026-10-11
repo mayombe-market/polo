@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import { createPortal } from 'react-dom'
+import { useRouter } from 'next/navigation'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { DELIVERY_FEES, DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import {
@@ -12,6 +13,8 @@ import {
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { ArrowRight } from 'lucide-react'
+import { FEATURES } from '@/lib/featureFlags'
+import { useCart } from '@/hooks/userCart'
 import AuthModal from './AuthModal'
 import CompleteProfileGateModal from './CompleteProfileGateModal'
 import StepIndicator from './checkout/StepIndicator'
@@ -76,6 +79,9 @@ export default function OrderAction({
     const [interUrbanPreAlertOpen, setInterUrbanPreAlertOpen] = useState(false)
     const [interUrbanWarningOpen, setInterUrbanWarningOpen] = useState(false)
 
+    const router = useRouter()
+    const { addToCart } = useCart()
+
     const deliveryFee =
         deliveryMode === 'inter_urban'
             ? DELIVERY_FEE_INTER_URBAN
@@ -101,6 +107,23 @@ export default function OrderAction({
             return
         }
         if (!user) {
+            if (FEATURES.guestCheckout) {
+                // Invité : ajouter au panier et rediriger vers /checkout
+                const added = await addToCart({
+                    id: `${product.id}`,
+                    product_id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    img: product.images?.[0] || product.img || '',
+                    seller_id: product.seller_id,
+                    shop_type: shop?.vendor_type || null,
+                    ...(selectedVariant?.color ? { color: selectedVariant.color } : {}),
+                    ...(selectedVariant?.size ? { size: selectedVariant.size } : {}),
+                })
+                void added
+                router.push('/checkout')
+                return
+            }
             setIsAuthOpen(true)
             return
         }

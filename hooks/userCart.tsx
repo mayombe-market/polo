@@ -224,6 +224,28 @@ export function CartProvider({ children }: { children: ReactNode }): React.JSX.E
             newCart = [...current, { ...product, quantity: qty }]
         }
         await saveCart(newCart)
+
+        void (async () => {
+            try {
+                const [{ trackBehaviorEvent }, { captureAnalyticsContext }] = await Promise.all([
+                    import('@/app/actions/behaviorAnalytics'),
+                    import('@/lib/analytics'),
+                ])
+                const ctx = captureAnalyticsContext()
+                const device = /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+                void trackBehaviorEvent({
+                    session_id: ctx.session_id,
+                    event_type: 'add_to_cart',
+                    user_type: userRef.current ? 'connected' : 'anonymous',
+                    user_id: userRef.current?.id ?? null,
+                    shop_id: product.seller_id ?? null,
+                    product_id: product.product_id ?? null,
+                    source: ctx.source,
+                    metadata: { product_name: product.name, quantity: qty, device },
+                })
+            } catch {}
+        })()
+
         return true
     }, [saveCart])
 

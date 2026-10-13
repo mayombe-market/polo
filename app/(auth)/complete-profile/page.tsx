@@ -13,6 +13,8 @@ import { translateAuthErrorMessage } from '@/lib/authErrorMessages'
 import { SYSTEM_FONT_STACK } from '@/lib/systemFontStack'
 import { LEGAL_SIGNUP } from '@/lib/legal/termsRoutes'
 import { FEATURES } from '@/lib/featureFlags'
+import { trackBehaviorEvent } from '@/app/actions/behaviorAnalytics'
+import { captureAnalyticsContext } from '@/lib/analytics'
 
 // Types de vendeur disponibles — masquer les modules non activés sans supprimer le code
 const VENDOR_TYPES = [
@@ -117,6 +119,12 @@ export default function CompleteProfilePage() {
                         // Acheteur connecté qui veut devenir vendeur → rester sur la page
                         if (isVendorPath && profile.role === 'buyer') {
                             setIsUpgradingToVendor(true)
+                            void (async () => {
+                                try {
+                                    const ctx = captureAnalyticsContext()
+                                    void trackBehaviorEvent({ session_id: ctx.session_id, event_type: 'vendor_signup_started', user_type: 'connected', source: ctx.source })
+                                } catch {}
+                            })()
                             return
                         }
                         const dest =
@@ -297,6 +305,12 @@ export default function CompleteProfilePage() {
             // Si vendeur → étape abonnement (si activé) ou dashboard directement
             if (role === 'vendor') {
                 setLoading(false)
+                void (async () => {
+                    try {
+                        const ctx = captureAnalyticsContext()
+                        void trackBehaviorEvent({ session_id: ctx.session_id, event_type: 'vendor_signup_completed', user_type: 'connected', source: ctx.source, metadata: { via: 'signup' } })
+                    } catch {}
+                })()
                 if (FEATURES.subscriptions) {
                     setProfileStep('subscription')
                 } else {
@@ -352,6 +366,12 @@ export default function CompleteProfilePage() {
                 })
                 .eq('id', authUser!.id)
             if (dbError) throw new Error(dbError.message)
+            void (async () => {
+                try {
+                    const ctx = captureAnalyticsContext()
+                    void trackBehaviorEvent({ session_id: ctx.session_id, event_type: 'vendor_signup_completed', user_type: 'connected', source: ctx.source, metadata: { via: 'upgrade' } })
+                } catch {}
+            })()
             router.push('/vendor/dashboard')
         } catch (err: any) {
             setError(String(err?.message || 'Erreur lors de la conversion du compte.'))

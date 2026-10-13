@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { adminGetPlatformAnalytics, type PlatformAnalytics } from '@/app/actions/admin'
+import { adminGetBehaviorAnalytics, type BehaviorAnalytics } from '@/app/actions/behaviorAnalytics'
 import { SOURCE_LABELS, SOURCE_COLORS, type TrafficSource } from '@/lib/analytics'
-import { Loader2, Users, Eye, ShoppingCart, TrendingUp, MapPin, Globe, RefreshCw, Package, UserPlus } from 'lucide-react'
+import { Loader2, Users, Eye, ShoppingCart, TrendingUp, MapPin, Globe, RefreshCw, Package, UserPlus, AlertTriangle, Store, CheckCheck, Smartphone, Monitor, MousePointerClick, MessageCircle } from 'lucide-react'
 
 type Period = '1d' | '7d' | '30d' | 'all'
 
@@ -12,6 +13,45 @@ const PERIOD_LABELS: Record<Period, string> = {
     '7d': '7 jours',
     '30d': '30 jours',
     'all': 'Tout',
+}
+
+const PM_LABELS: Record<string, string> = {
+    mobile_money: 'MTN MoMo',
+    airtel_money: 'Airtel Money',
+    cod: 'Cash livraison',
+    cash: 'Cash livraison',
+}
+
+const USER_TYPE_LABELS: Record<string, string> = {
+    connected: 'Connectés',
+    guest: 'Invités',
+    anonymous: 'Anonymes',
+}
+
+function BehaviorFunnel({ data }: { data: BehaviorAnalytics }) {
+    const steps = [
+        { label: 'Ajout panier', count: data.funnelCounts.add_to_cart, color: '#8B5CF6' },
+        { label: 'Checkout ouvert', count: data.funnelCounts.checkout_started, color: '#F97316' },
+        { label: 'Déclaration paiement', count: data.funnelCounts.payment_declaration_submitted, color: '#EAB308' },
+        { label: 'Commande créée', count: data.funnelCounts.order_created, color: '#22C55E' },
+    ]
+    const hasAny = steps.some(s => s.count > 0)
+    if (!hasAny) return <p className="text-center text-slate-400 text-sm py-4">Aucune donnée — migration <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 rounded">behavior_events</code> requise</p>
+    return (
+        <div className="flex gap-3">
+            {steps.map((s, i) => {
+                const prev = i > 0 ? steps[i - 1].count : null
+                const pct = prev && prev > 0 ? Math.round((s.count / prev) * 100) : null
+                return (
+                    <div key={s.label} className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4 text-center">
+                        <p className="text-2xl font-black italic tracking-tighter" style={{ color: s.color }}>{s.count.toLocaleString('fr-FR')}</p>
+                        <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1 leading-tight">{s.label}</p>
+                        {pct !== null && <p className="text-[9px] font-bold mt-2 text-slate-400">{pct}% du précédent</p>}
+                    </div>
+                )
+            })}
+        </div>
+    )
 }
 
 function pct(part: number, total: number) {
@@ -92,18 +132,28 @@ function TrendChart({ data }: { data: Array<{ date: string; visitors: number; or
 export default function AdminAnalyticsPage() {
     const [period, setPeriod] = useState<Period>('7d')
     const [data, setData] = useState<PlatformAnalytics | null>(null)
+    const [behavior, setBehavior] = useState<BehaviorAnalytics | null>(null)
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
 
     const load = useCallback(async (p: Period) => {
         setLoading(true)
         setError(false)
-        const res = await adminGetPlatformAnalytics(p)
+        let from: string | null = null
+        if (p === '1d') from = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        else if (p === '7d') from = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        else if (p === '30d') from = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+
+        const [res, beh] = await Promise.all([
+            adminGetPlatformAnalytics(p),
+            adminGetBehaviorAnalytics(from),
+        ])
         if ('error' in res) {
             setError(true)
         } else {
             setData(res)
         }
+        setBehavior(beh)
         setLoading(false)
     }, [])
 
@@ -341,9 +391,173 @@ export default function AdminAnalyticsPage() {
                             </div>
                         </div>
 
+                        {/* ── Section comportement avancé ── */}
+                        {behavior && (
+                            <>
+                                {/* Entonnoir comportemental */}
+                                <div>
+                                    <h2 className="text-xs font-black uppercase italic tracking-widest text-slate-400 mb-3">Entonnoir comportemental détaillé</h2>
+                                    <BehaviorFunnel data={behavior} />
+                                </div>
+
+                                {/* KPIs comportementaux */}
+                                {(behavior.funnelCounts.add_to_cart > 0 || behavior.vendorSignupStarted > 0 || behavior.whatsappClicks > 0) && (
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+                                            <MousePointerClick size={14} className="text-purple-500 mb-2" />
+                                            <p className="text-2xl font-black italic text-purple-500">{behavior.funnelCounts.add_to_cart.toLocaleString('fr-FR')}</p>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Ajouts panier</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+                                            <Store size={14} className="text-blue-500 mb-2" />
+                                            <p className="text-2xl font-black italic text-blue-500">{behavior.vendorSignupCompleted.toLocaleString('fr-FR')}</p>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Inscriptions vendeur</p>
+                                            {behavior.vendorSignupStarted > 0 && <p className="text-[9px] text-slate-400 mt-0.5">{behavior.vendorSignupStarted} commencées</p>}
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+                                            <MessageCircle size={14} className="text-green-500 mb-2" />
+                                            <p className="text-2xl font-black italic text-green-500">{behavior.whatsappClicks.toLocaleString('fr-FR')}</p>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Clics WhatsApp</p>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-4">
+                                            <AlertTriangle size={14} className="text-red-500 mb-2" />
+                                            <p className="text-2xl font-black italic text-red-500">{behavior.ordersFailedCount.toLocaleString('fr-FR')}</p>
+                                            <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mt-1">Commandes échouées</p>
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Moyen de paiement + Appareils + Types utilisateurs */}
+                                {(behavior.paymentMethodBreakdown.length > 0 || behavior.deviceBreakdown.length > 0 || behavior.userTypeBreakdown.length > 0) && (
+                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                                        {/* Moyens de paiement */}
+                                        {behavior.paymentMethodBreakdown.length > 0 && (
+                                            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                                                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-sm font-black uppercase italic tracking-wider dark:text-white">Moyens de paiement</h3>
+                                                </div>
+                                                <div className="px-5 py-3 space-y-3">
+                                                    {behavior.paymentMethodBreakdown.map(b => {
+                                                        const max = behavior.paymentMethodBreakdown[0]?.count ?? 1
+                                                        return (
+                                                            <div key={b.method}>
+                                                                <div className="flex justify-between mb-1">
+                                                                    <span className="text-xs font-bold dark:text-white">{PM_LABELS[b.method] ?? b.method}</span>
+                                                                    <span className="text-xs font-black text-orange-500">{b.count}</span>
+                                                                </div>
+                                                                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                                    <div className="h-full bg-orange-400 rounded-full" style={{ width: `${(b.count / max) * 100}%` }} />
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Appareils */}
+                                        {behavior.deviceBreakdown.length > 0 && (
+                                            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                                                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-sm font-black uppercase italic tracking-wider dark:text-white">Appareils</h3>
+                                                </div>
+                                                <div className="px-5 py-4 space-y-4">
+                                                    {behavior.deviceBreakdown.map(d => {
+                                                        const max = behavior.deviceBreakdown[0]?.count ?? 1
+                                                        return (
+                                                            <div key={d.device} className="flex items-center gap-3">
+                                                                {d.device === 'mobile' ? <Smartphone size={14} className="text-blue-500 flex-shrink-0" /> : <Monitor size={14} className="text-slate-500 flex-shrink-0" />}
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex justify-between mb-1">
+                                                                        <span className="text-xs font-bold dark:text-white capitalize">{d.device}</span>
+                                                                        <span className="text-xs font-black text-orange-500">{d.count}</span>
+                                                                    </div>
+                                                                    <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                                        <div className="h-full bg-blue-400 rounded-full" style={{ width: `${(d.count / max) * 100}%` }} />
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {/* Types utilisateurs */}
+                                        {behavior.userTypeBreakdown.length > 0 && (
+                                            <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
+                                                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                                                    <h3 className="text-sm font-black uppercase italic tracking-wider dark:text-white">Connectés vs Invités</h3>
+                                                </div>
+                                                <div className="px-5 py-4 space-y-4">
+                                                    {behavior.userTypeBreakdown.map(u => {
+                                                        const max = behavior.userTypeBreakdown[0]?.count ?? 1
+                                                        const colors: Record<string, string> = { connected: '#22C55E', guest: '#F97316', anonymous: '#94A3B8' }
+                                                        return (
+                                                            <div key={u.type}>
+                                                                <div className="flex justify-between mb-1">
+                                                                    <span className="text-xs font-bold dark:text-white">{USER_TYPE_LABELS[u.type] ?? u.type}</span>
+                                                                    <span className="text-xs font-black" style={{ color: colors[u.type] ?? '#94A3B8' }}>{u.count}</span>
+                                                                </div>
+                                                                <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                                                    <div className="h-full rounded-full" style={{ width: `${(u.count / max) * 100}%`, background: colors[u.type] ?? '#94A3B8' }} />
+                                                                </div>
+                                                            </div>
+                                                        )
+                                                    })}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Principales erreurs */}
+                                {behavior.topErrors.length > 0 && (
+                                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-red-100 dark:border-red-900/30 overflow-hidden">
+                                        <div className="flex items-center gap-2 px-5 py-4 border-b border-red-100 dark:border-red-900/30">
+                                            <AlertTriangle size={15} className="text-red-500" />
+                                            <h2 className="text-sm font-black uppercase italic tracking-wider text-red-600 dark:text-red-400">Principales erreurs</h2>
+                                        </div>
+                                        <div className="divide-y divide-slate-50 dark:divide-slate-800/60">
+                                            {behavior.topErrors.map((e, i) => (
+                                                <div key={i} className="px-5 py-3 flex items-center gap-4">
+                                                    <span className="w-5 h-5 rounded-full bg-red-100 dark:bg-red-900/40 flex items-center justify-center text-[9px] font-black text-red-500 flex-shrink-0">{i + 1}</span>
+                                                    <span className="flex-1 text-xs text-slate-600 dark:text-slate-300 font-mono truncate">{e.message}</span>
+                                                    <span className="text-xs font-black text-red-500 flex-shrink-0">{e.count}×</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* Vérifications vendeur */}
+                                {behavior.vendorVerificationSubmitted > 0 && (
+                                    <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-5">
+                                        <div className="flex items-center gap-6 flex-wrap">
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Vérifications soumises</p>
+                                                <p className="text-3xl font-black italic text-blue-500">{behavior.vendorVerificationSubmitted}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Inscriptions démarrées</p>
+                                                <p className="text-3xl font-black italic text-slate-500">{behavior.vendorSignupStarted}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Inscriptions finalisées</p>
+                                                <p className="text-3xl font-black italic text-green-500">{behavior.vendorSignupCompleted}</p>
+                                                {behavior.vendorSignupStarted > 0 && (
+                                                    <p className="text-[10px] text-slate-400 mt-0.5">{Math.round((behavior.vendorSignupCompleted / behavior.vendorSignupStarted) * 100)}% taux de complétion</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        )}
+
                         {/* Note de bas de page */}
                         <p className="text-[10px] text-slate-400 text-center pb-4">
-                            Les données de trafic sont basées sur les sessions anonymes. Les clics "Acheter" sont trackés à partir du bouton Commander.
+                            Les données de trafic sont basées sur les sessions anonymes. Les clics "Acheter" sont trackés à partir du bouton Commander. La section « Entonnoir comportemental » nécessite l'application de la migration <code className="text-[9px] bg-slate-100 dark:bg-slate-800 px-1 rounded">supabase-migration-behavior-events.sql</code>.
                         </p>
                     </>
                 ) : null}

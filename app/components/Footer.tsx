@@ -7,6 +7,19 @@ import { BadgeCheck, Smartphone, Tag, Banknote, Mail, MapPin, Heart } from 'luci
 
 const WA_HREF = 'https://wa.me/242068954321'
 
+function trackWa() {
+    void (async () => {
+        try {
+            const [{ trackBehaviorEvent }, { captureAnalyticsContext }] = await Promise.all([
+                import('@/app/actions/behaviorAnalytics'),
+                import('@/lib/analytics'),
+            ])
+            const ctx = captureAnalyticsContext()
+            void trackBehaviorEvent({ session_id: ctx.session_id, event_type: 'whatsapp_contact_clicked', source: ctx.source, metadata: { location: 'footer' } })
+        } catch {}
+    })()
+}
+
 function WhatsAppIcon({ size = 14, color = 'currentColor' }: { size?: number; color?: string }) {
     return (
         <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
@@ -105,6 +118,7 @@ export default function Footer() {
                                 href={WA_HREF}
                                 target="_blank"
                                 rel="noopener noreferrer"
+                                onClick={trackWa}
                                 style={{ color: '#25D366', fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
                             >
                                 <WhatsAppIcon size={12} color="#25D366" /> WhatsApp : +242 06 895 43 21

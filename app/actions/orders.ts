@@ -56,21 +56,19 @@ export async function getVendorOrders() {
         return { orders: [], vendorId: null }
     }
 
+    // Filtrage poussé côté DB via containment JSONB (items @> [{"seller_id":"..."}])
+    // Les commandes COD (payment_method='cash') sont visibles même au statut 'pending' car
+    // elles ne nécessitent pas de confirmation admin — le vendeur doit les voir dès la création.
     const { data: allOrders } = await supabase
         .from('orders')
         .select('*')
         .neq('order_type', 'subscription')
+        .or('status.neq.pending,payment_method.eq.cash')
+        .filter('items', 'cs', JSON.stringify([{ seller_id: user.id }]))
         .order('created_at', { ascending: false })
         .limit(200)
 
-    // Filtrage côté SERVEUR — le client ne reçoit que ses commandes produit (pas les abonnements)
-    // Les commandes COD (payment_method='cash') sont visibles même au statut 'pending' car
-    // elles ne nécessitent pas de confirmation admin — le vendeur doit les voir dès la création.
-    const vendorOrders = (allOrders || []).filter(order =>
-        order.order_type !== 'subscription' &&
-        (order.status !== 'pending' || order.payment_method === 'cash') &&
-        order.items?.some((item: any) => item.seller_id === user.id)
-    )
+    const vendorOrders = allOrders || []
 
     // Nettoyer les données sensibles : retirer les items des autres vendeurs
     const cleanOrders = vendorOrders.map(order => ({

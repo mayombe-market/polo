@@ -37,6 +37,8 @@ export default async function VendorProfilePage() {
         .eq('id', user.id)
         .single()
 
+    if (profile?.role !== 'vendor' && profile?.role !== 'admin') redirect('/')
+
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-slate-900 py-12 px-4">
             <div className="max-w-2xl mx-auto">

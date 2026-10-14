@@ -37,6 +37,8 @@ export default async function VendorVerificationPage() {
         .eq('id', user.id)
         .single()
 
+    if (profile?.role !== 'vendor' && profile?.role !== 'admin') redirect('/')
+
     // Récupérer la dernière vérification (si existe)
     const { data: verification } = await supabase
         .from('vendor_verifications')

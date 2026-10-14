@@ -9,17 +9,21 @@ function isVisibleToVendor(order: {
 }, vendorId: string): boolean {
     return (
         order.order_type !== 'subscription' &&
-        (order.status !== 'pending' || order.payment_method === 'cash') &&
         order.items.some(item => item.seller_id === vendorId)
     )
 }
 
-describe('getVendorOrders — visibilité (4.2 COD)', () => {
+describe('getVendorOrders — visibilité', () => {
     const vendorId = 'vendor-123'
 
-    it('masque les commandes MTN en attente de paiement', () => {
+    it('affiche les commandes MTN en attente de paiement', () => {
         const order = { status: 'pending', payment_method: 'mobile_money', order_type: 'product', items: [{ seller_id: vendorId }] }
-        expect(isVisibleToVendor(order, vendorId)).toBe(false)
+        expect(isVisibleToVendor(order, vendorId)).toBe(true)
+    })
+
+    it('affiche les commandes Airtel en attente', () => {
+        const order = { status: 'pending', payment_method: 'airtel_money', order_type: 'product', items: [{ seller_id: vendorId }] }
+        expect(isVisibleToVendor(order, vendorId)).toBe(true)
     })
 
     it('affiche les commandes COD pending (cash)', () => {

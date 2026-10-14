@@ -31,7 +31,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
-import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan } from '@/app/actions/orders'
+import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan, updateProduct } from '@/app/actions/orders'
 import { acceptCodOrder, rejectCodOrder, collectCodCash } from '@/app/actions/cod'
 import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
 import { isPromoActive } from '@/lib/promo'
@@ -70,6 +70,108 @@ const PatisserieProductForm = dynamic(() => import('./PatisserieProductForm').th
 })
 
 const ShareLinksPanel = dynamic(() => import('./ShareLinksPanel'), { ssr: false })
+
+function MarketplaceEditForm({
+    product,
+    onSuccess,
+    onCancel,
+}: {
+    product: any
+    onSuccess: (updated: any) => void
+    onCancel: () => void
+}) {
+    const [name, setName] = useState(product.name ?? '')
+    const [price, setPrice] = useState(String(product.price ?? ''))
+    const [description, setDescription] = useState(product.description ?? '')
+    const [subcategory, setSubcategory] = useState(product.subcategory ?? '')
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        setSaving(true)
+        setError(null)
+        const result = await updateProduct(product.id, {
+            name,
+            price: Number(price),
+            description,
+            subcategory,
+        })
+        setSaving(false)
+        if ('error' in result) {
+            setError(result.error)
+        } else {
+            onSuccess(result.product)
+        }
+    }
+
+    return (
+        <div className="p-4 md:p-8 max-w-2xl mx-auto">
+            <div className="mb-6">
+                <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Modifier le produit</h2>
+                <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1 truncate">{product.name}</p>
+            </div>
+            <form onSubmit={handleSubmit} className="space-y-5">
+                <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Nom du produit</label>
+                    <input
+                        value={name}
+                        onChange={e => setName(e.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Prix (FCFA)</label>
+                    <input
+                        type="number"
+                        min="1"
+                        value={price}
+                        onChange={e => setPrice(e.target.value)}
+                        required
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Sous-catégorie</label>
+                    <input
+                        value={subcategory}
+                        onChange={e => setSubcategory(e.target.value)}
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400"
+                    />
+                </div>
+                <div>
+                    <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Description</label>
+                    <textarea
+                        value={description}
+                        onChange={e => setDescription(e.target.value)}
+                        rows={4}
+                        className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-white/5 px-4 py-3 text-sm text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-orange-400 resize-none"
+                    />
+                </div>
+                {error && (
+                    <p className="text-sm font-semibold text-red-500">{error}</p>
+                )}
+                <div className="flex gap-3 pt-2">
+                    <button
+                        type="button"
+                        onClick={onCancel}
+                        className="flex-1 rounded-xl border border-slate-200 dark:border-white/10 py-3 text-sm font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors"
+                    >
+                        Annuler
+                    </button>
+                    <button
+                        type="submit"
+                        disabled={saving}
+                        className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-black text-white hover:bg-orange-600 transition-colors disabled:opacity-60"
+                    >
+                        {saving ? 'Enregistrement…' : 'Enregistrer'}
+                    </button>
+                </div>
+            </form>
+        </div>
+    )
+}
 
 type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews' | 'verification' | 'messagerie'
 
@@ -1016,7 +1118,6 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             sellerId={user?.id}
                             initialProduct={editingProduct}
                             onSuccess={(updated) => {
-                                // Mettre à jour le produit dans la liste locale
                                 setProducts((prev: any[]) => prev.map((p: any) => p.id === updated.id ? { ...p, ...updated } : p))
                                 setEditingProduct(null)
                                 setActivePage('products')
@@ -1025,6 +1126,18 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             onCancel={() => { setEditingProduct(null); setActivePage('products') }}
                         />
                     </div>
+                )}
+
+                {activePage === 'edit' && editingProduct && profile?.vendor_type !== 'patisserie' && (
+                    <MarketplaceEditForm
+                        product={editingProduct}
+                        onSuccess={(updated) => {
+                            setProducts((prev: any[]) => prev.map((p: any) => p.id === updated.id ? { ...p, ...updated } : p))
+                            setEditingProduct(null)
+                            setActivePage('products')
+                        }}
+                        onCancel={() => { setEditingProduct(null); setActivePage('products') }}
+                    />
                 )}
 
                 {activePage === 'orders' && (

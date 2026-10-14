@@ -25,6 +25,7 @@ import MessageButton from '../../../components/MessageButton'
 import SimilarProducts from '../../../components/SimilarProducts'
 import { ArrowLeft, Check, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { FEATURES } from '@/lib/featureFlags'
 import { isHotelListing } from '@/lib/hotelListing'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
@@ -145,30 +146,34 @@ export default function ProductDetailPage() {
                 const prod = productOutcome.row
                 setProduct(prod)
 
-                const shopRow = await withRetry(
-                    async () => {
-                        const r = await withTimeout(
-                            supabase
-                                .from('profiles')
-                                .select(
-                                    'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number, city',
-                                )
-                                .eq('id', prod.seller_id)
-                                .maybeSingle(),
-                        )
-                        if (r.error) {
-                            throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
-                        }
-                        return r.data ?? null
-                    },
-                    { label: 'product/[id] profiles.maybeSingle', maxAttempts: 4 },
-                )
+                const sellerId = prod.seller_id
+                let shopRow = null
+                if (sellerId && typeof sellerId === 'string' && sellerId !== 'null' && /^[0-9a-f-]{36}$/i.test(sellerId)) {
+                    shopRow = await withRetry(
+                        async () => {
+                            const r = await withTimeout(
+                                supabase
+                                    .from('profiles')
+                                    .select(
+                                        'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number, city',
+                                    )
+                                    .eq('id', sellerId)
+                                    .maybeSingle(),
+                            )
+                            if (r.error) {
+                                throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
+                            }
+                            return r.data ?? null
+                        },
+                        { label: 'product/[id] profiles.maybeSingle', maxAttempts: 4 },
+                    )
+                }
 
                 if (cancelled) return
 
                 setShop(shopRow)
                 setFollowerCount(shopRow?.followers_count ?? 0)
-                if (shopRow?.subscription_plan && shopRow.subscription_plan !== 'free') {
+                if (FEATURES.subscriptions && shopRow?.subscription_plan && shopRow.subscription_plan !== 'free') {
                     setSellerExpired(isSubscriptionExpiredPastGrace(shopRow))
                 } else {
                     setSellerExpired(false)

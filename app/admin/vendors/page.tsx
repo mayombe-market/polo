@@ -225,7 +225,7 @@ export default function AdminVendorsPage() {
     const filteredVendors = (() => {
         let base = vendors
         if (filter === 'verified') base = base.filter(v => v.verification_status === 'verified')
-        else if (filter === 'unverified') base = base.filter(v => v.verification_status === 'unverified' || !v.verification_status)
+        else if (filter === 'unverified') base = base.filter(v => v.verification_status === 'unverified' || v.verification_status === 'none' || !v.verification_status)
         else if (filter === 'pending') base = base.filter(v => v.verification_status === 'pending')
         else if (filter === 'immobilier')  base = base.filter(v => v.vendor_type === 'immobilier')
         else if (filter === 'hotel')       base = base.filter(v => v.vendor_type === 'hotel')
@@ -257,7 +257,7 @@ export default function AdminVendorsPage() {
             { header: 'Ville', accessor: (v: any) => v.city || '' },
             { header: 'Type', accessor: (v: any) => v.vendor_type || 'marketplace' },
             { header: 'Plan', accessor: (v: any) => v.subscription_plan || 'free' },
-            { header: 'Vérification', accessor: (v: any) => v.verification_status || 'unverified' },
+            { header: 'Vérification', accessor: (v: any) => (v.verification_status === 'none' ? 'unverified' : v.verification_status) || 'unverified' },
             { header: 'Produits', accessor: (v: any) => productCounts[v.id] || 0 },
             { header: 'Date et heure inscription', accessor: (v: any) => formatAdminDateTime(v.created_at) },
         ], csvFilename('vendeurs'))

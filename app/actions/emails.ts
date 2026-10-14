@@ -176,6 +176,11 @@ export async function sendOrderStatusEmail(
             color: '#ef4444',
             message: 'Votre commande a été annulée. Contactez-nous pour plus d\'informations.',
         },
+        cancelled: {
+            label: 'Annulée',
+            color: '#64748b',
+            message: 'Votre commande a été annulée. Le stock a été restauré.',
+        },
     }
 
     const status = statusLabels[newStatus]

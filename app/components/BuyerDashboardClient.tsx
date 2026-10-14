@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { cancelBuyerOrder } from '@/app/actions/orders'
 import { getBuyerNegotiations } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
@@ -575,6 +576,7 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                         }
                         ordersBlockMessage={ordersFetchError || buyerBootstrapMessage}
                         onRetryOrders={refetchBuyerDashboard}
+                        onOrderCancelled={(id) => setOrders(prev => prev.map(o => o.id === id ? { ...o, status: 'cancelled' } : o))}
                     />
                 )}
                 {activePage === 'wishlist' && (
@@ -893,14 +895,17 @@ function BuyerOrders({
     ordersBlockState = 'ready',
     ordersBlockMessage = '',
     onRetryOrders,
+    onOrderCancelled,
 }: {
     orders: any[]
     onConfirmReception: (order: any) => void
     ordersBlockState?: 'loading' | 'ready' | 'error' | 'not_found'
     ordersBlockMessage?: string
     onRetryOrders?: () => void
+    onOrderCancelled?: (orderId: string) => void
 }) {
     const [tab, setTab] = useState('all')
+    const [cancellingId, setCancellingId] = useState<string | null>(null)
 
     const needsConfirmation = orders.filter(o => o.status === 'delivered' && !o.client_confirmed)
 
@@ -916,11 +921,14 @@ function BuyerOrders({
 
     const statusMap: Record<string, { label: string; style: string }> = {
         pending: { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' },
+        pending_cod: { label: 'En attente (livraison)', style: 'bg-yellow-100 text-yellow-700' },
+        pending_payment: { label: 'Paiement en attente', style: 'bg-yellow-100 text-yellow-700' },
         confirmed: { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' },
         shipped: { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' },
         picked_up: { label: 'En livraison 🏍️', style: 'bg-violet-100 text-violet-700' },
         delivered: { label: 'Livrée', style: 'bg-green-100 text-green-700' },
         rejected: { label: 'Rejetée', style: 'bg-red-100 text-red-700' },
+        cancelled: { label: 'Annulée', style: 'bg-slate-100 text-slate-500' },
     }
 
     const steps = [
@@ -1044,6 +1052,31 @@ function BuyerOrders({
                                         </div>
                                     ))}
                                 </div>
+
+                                {/* Bouton annuler la commande */}
+                                {['pending', 'pending_cod', 'pending_payment'].includes(order.status) && (
+                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+                                        <button
+                                            disabled={cancellingId === order.id}
+                                            onClick={async () => {
+                                                if (!confirm('Annuler cette commande ?')) return
+                                                setCancellingId(order.id)
+                                                const res = await cancelBuyerOrder(order.id)
+                                                setCancellingId(null)
+                                                if ('error' in res) {
+                                                    toast.error(res.error)
+                                                } else {
+                                                    toast.success('Commande annulée')
+                                                    onOrderCancelled?.(order.id)
+                                                }
+                                            }}
+                                            className="w-full flex items-center justify-center gap-2 text-[9px] font-black uppercase text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors py-2 rounded-xl cursor-pointer disabled:opacity-50"
+                                        >
+                                            {cancellingId === order.id ? <Loader2 size={10} className="animate-spin" /> : <X size={10} />}
+                                            Annuler la commande
+                                        </button>
+                                    </div>
+                                )}
 
                                 {/* Bouton confirmer réception */}
                                 {order.status === 'delivered' && !order.client_confirmed && (

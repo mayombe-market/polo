@@ -56,21 +56,19 @@ export async function getVendorOrders() {
         return { orders: [], vendorId: null }
     }
 
+    // Filtrage poussé côté DB via containment JSONB (items @> [{"seller_id":"..."}])
+    // Les commandes COD (payment_method='cash') sont visibles même au statut 'pending' car
+    // elles ne nécessitent pas de confirmation admin — le vendeur doit les voir dès la création.
     const { data: allOrders } = await supabase
         .from('orders')
         .select('*')
         .neq('order_type', 'subscription')
+        .or('status.neq.pending,payment_method.eq.cash')
+        .filter('items', 'cs', JSON.stringify([{ seller_id: user.id }]))
         .order('created_at', { ascending: false })
         .limit(200)
 
-    // Filtrage côté SERVEUR — le client ne reçoit que ses commandes produit (pas les abonnements)
-    // Les commandes COD (payment_method='cash') sont visibles même au statut 'pending' car
-    // elles ne nécessitent pas de confirmation admin — le vendeur doit les voir dès la création.
-    const vendorOrders = (allOrders || []).filter(order =>
-        order.order_type !== 'subscription' &&
-        (order.status !== 'pending' || order.payment_method === 'cash') &&
-        order.items?.some((item: any) => item.seller_id === user.id)
-    )
+    const vendorOrders = allOrders || []
 
     // Nettoyer les données sensibles : retirer les items des autres vendeurs
     const cleanOrders = vendorOrders.map(order => ({
@@ -1434,7 +1432,7 @@ export async function getSellerPlanInfo() {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return { plan: 'gratuit', productCount: 0, maxProducts: 5 }
+    if (!user) return { plan: 'gratuit', productCount: 0, maxProducts: FEATURES.subscriptions ? 5 : -1 }
 
     const { data: profile } = await supabase
         .from('profiles')
@@ -1443,7 +1441,7 @@ export async function getSellerPlanInfo() {
         .single()
 
     const plan = profile?.subscription_plan || 'gratuit'
-    const maxProducts = getPlanMaxProducts(plan)
+    const maxProducts = FEATURES.subscriptions ? getPlanMaxProducts(plan) : -1
 
     const { count } = await supabase
         .from('products')
@@ -1813,6 +1811,90 @@ export async function adminCancelSubscription(orderId: string) {
         '/account/dashboard?tab=subscription'
     ).catch(() => {})
 
+    return { success: true }
+}
+
+// Acheteur : annuler sa propre commande (pending MTN/Airtel ou pending_cod avant livraison)
+export async function cancelBuyerOrder(orderId: string): Promise<{ success: true } | { error: string }> {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: order } = await supabase
+        .from('orders')
+        .select('id, user_id, status, items, customer_name, customer_email, delivery_mode')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+    if (order.user_id !== user.id) return { error: 'Non autorisé' }
+
+    const cancellableStatuses = ['pending', 'pending_cod', 'pending_payment']
+    if (!cancellableStatuses.includes(order.status)) {
+        return { error: `Impossible d'annuler une commande en statut "${order.status}". Contactez le support.` }
+    }
+
+    const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('status', order.status) // optimistic lock
+
+    if (updateError) return { error: updateError.message }
+
+    await supabase.rpc('restore_order_stock', { p_order_id: orderId })
+
+    if (order.customer_email) {
+        const prodNames = (order.items || []).map((i: any) => i.name).join(', ')
+        sendOrderStatusEmail(order.customer_email, order.customer_name, orderId, 'cancelled', undefined, order.delivery_mode, prodNames).catch(() => {})
+    }
+
+    revalidatePath('/account/dashboard')
+    return { success: true }
+}
+
+// Vendeur : refuser une commande COD avant livraison
+export async function cancelOrderByVendor(orderId: string): Promise<{ success: true } | { error: string }> {
+    const supabase = await getSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return { error: 'Non connecté' }
+
+    const { data: order } = await supabase
+        .from('orders')
+        .select('id, status, items, user_id, customer_name, customer_email, delivery_mode')
+        .eq('id', orderId)
+        .single()
+
+    if (!order) return { error: 'Commande introuvable' }
+
+    const hasVendorItems = order.items?.some((item: any) => item.seller_id === user.id)
+    if (!hasVendorItems) return { error: 'Non autorisé' }
+
+    if (order.status !== 'pending_cod' && order.status !== 'pending') {
+        return { error: `Impossible de refuser une commande en statut "${order.status}".` }
+    }
+
+    const { error: updateError } = await supabase
+        .from('orders')
+        .update({ status: 'cancelled' })
+        .eq('id', orderId)
+        .eq('status', order.status)
+
+    if (updateError) return { error: updateError.message }
+
+    await supabase.rpc('restore_order_stock', { p_order_id: orderId })
+
+    if (order.customer_email) {
+        const prodNames = (order.items || []).map((i: any) => i.name).join(', ')
+        sendOrderStatusEmail(order.customer_email, order.customer_name, orderId, 'cancelled', undefined, order.delivery_mode, prodNames).catch(() => {})
+    }
+
+    if (order.user_id) {
+        const prodNames = (order.items || []).map((i: any) => i.name).join(', ')
+        createNotification(order.user_id, 'order_rejected', 'Commande refusée par le vendeur', `${prodNames} n'a pas pu être traitée.`, `/account/dashboard?tab=orders`, `${orderId}:cancelled`).catch(() => {})
+    }
+
+    revalidatePath('/vendor/dashboard')
     return { success: true }
 }
 

@@ -2,15 +2,16 @@
 
 import { useState, useRef, useCallback } from 'react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
-import { Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download } from 'lucide-react'
+import { Check, Loader2, Filter, Package, MapPin, Wallet, Truck, Download, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { useRealtime } from '@/hooks/useRealtime'
-import { updateOrderStatus as serverUpdateStatus } from '@/app/actions/orders'
+import { updateOrderStatus as serverUpdateStatus, cancelOrderByVendor } from '@/app/actions/orders'
 
 export default function OrdersListClient({ initialOrders, currentVendorId }: { initialOrders: any[], currentVendorId: string }) {
     const [orders, setOrders] = useState(initialOrders)
     const [updating, setUpdating] = useState<string | null>(null)
+    const [cancelling, setCancelling] = useState<string | null>(null)
     const [activeFilter, setActiveFilter] = useState('all')
     const audioCtxRef = useRef<AudioContext | null>(null)
 
@@ -110,6 +111,8 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
             case 'picked_up': return { label: 'En livraison', style: 'bg-violet-100 text-violet-700' }
             case 'shipped': return { label: 'Expédiée', style: 'bg-purple-100 text-purple-700' }
             case 'confirmed': return { label: 'Confirmée', style: 'bg-blue-100 text-blue-700' }
+            case 'pending_cod': return { label: 'COD — En attente', style: 'bg-amber-100 text-amber-700' }
+            case 'cancelled': return { label: 'Annulée', style: 'bg-slate-100 text-slate-500' }
             default: return { label: 'En attente', style: 'bg-yellow-100 text-yellow-700' }
         }
     }
@@ -149,6 +152,7 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
             <div className="flex items-center gap-2 overflow-x-auto pb-2 no-scrollbar">
                 {[
                     { id: 'all', label: 'Toutes' },
+                    { id: 'pending_cod', label: 'COD à traiter' },
                     { id: 'confirmed', label: 'Confirmées' },
                     { id: 'shipped', label: 'Expédiées' },
                     { id: 'picked_up', label: 'En livraison' },
@@ -260,6 +264,27 @@ export default function OrdersListClient({ initialOrders, currentVendorId }: { i
                                             >
                                                 {updating === order.id ? <Loader2 size={12} className="animate-spin" /> : <Check size={14} />}
                                                 Marquer expédiée
+                                            </button>
+                                        )}
+                                        {order.status === 'pending_cod' && (
+                                            <button
+                                                onClick={async () => {
+                                                    if (!confirm('Refuser cette commande COD et restaurer le stock ?')) return
+                                                    setCancelling(order.id)
+                                                    const res = await cancelOrderByVendor(order.id)
+                                                    setCancelling(null)
+                                                    if ('error' in res) {
+                                                        toast.error(res.error)
+                                                    } else {
+                                                        toast.success('Commande refusée — stock restauré')
+                                                        setOrders(prev => prev.map(o => o.id === order.id ? { ...o, status: 'cancelled' } : o))
+                                                    }
+                                                }}
+                                                disabled={cancelling === order.id}
+                                                className="flex-1 sm:flex-none bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-5 py-3.5 rounded-2xl font-black uppercase italic text-[10px] flex items-center justify-center gap-2 hover:bg-red-100 transition-all disabled:opacity-50"
+                                            >
+                                                {cancelling === order.id ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                                                Refuser
                                             </button>
                                         )}
                                         {order.status === 'shipped' && (

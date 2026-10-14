@@ -44,6 +44,7 @@ import { useParams } from 'next/navigation'
 import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import { withTimeout } from '@/lib/supabase-utils'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { FEATURES } from '@/lib/featureFlags'
 import ProductCard from '@/app/components/ProductCard'
 import SellerProfileHeader from '@/app/components/SellerProfileHeader'
 import SellerTabs from '@/app/components/SellerTabs'
@@ -151,6 +152,7 @@ export default function StorePublicPage() {
                     subscription_end_date?: string | null
                 }
                 const sellerExpired =
+                    FEATURES.subscriptions &&
                     Boolean(subProfile.subscription_plan) &&
                     subProfile.subscription_plan !== 'free' &&
                     isSubscriptionExpiredPastGrace(subProfile)

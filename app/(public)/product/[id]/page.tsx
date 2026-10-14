@@ -25,6 +25,7 @@ import MessageButton from '../../../components/MessageButton'
 import SimilarProducts from '../../../components/SimilarProducts'
 import { ArrowLeft, Check, Heart, Minus, Plus } from 'lucide-react'
 import { isSubscriptionExpiredPastGrace } from '@/lib/subscription'
+import { FEATURES } from '@/lib/featureFlags'
 import { isHotelListing } from '@/lib/hotelListing'
 import { isPromoActive, getPromoPrice, getPromoTimeRemaining } from '@/lib/promo'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
@@ -172,7 +173,7 @@ export default function ProductDetailPage() {
 
                 setShop(shopRow)
                 setFollowerCount(shopRow?.followers_count ?? 0)
-                if (shopRow?.subscription_plan && shopRow.subscription_plan !== 'free') {
+                if (FEATURES.subscriptions && shopRow?.subscription_plan && shopRow.subscription_plan !== 'free') {
                     setSellerExpired(isSubscriptionExpiredPastGrace(shopRow))
                 } else {
                     setSellerExpired(false)

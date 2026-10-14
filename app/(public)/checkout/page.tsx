@@ -45,6 +45,8 @@ import {
 } from '@/app/components/MobileMoneyBranding'
 import { createGuestOrder } from '@/app/actions/guestOrders'
 import type { GuestOrderInput } from '@/app/actions/guestOrders'
+import { trackBehaviorEvent } from '@/app/actions/behaviorAnalytics'
+import { captureAnalyticsContext } from '@/lib/analytics'
 
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371
@@ -313,6 +315,45 @@ export default function CheckoutPage() {
 
     const grandTotal = Math.max(0, totalBeforeLoyalty - loyaltyPointsToUse)
 
+    // ─── Analytics helper ────────────────────────────────────────────────────
+    const analyticsCtxRef = { current: null as ReturnType<typeof captureAnalyticsContext> | null }
+    const getAnalyticsCtx = () => {
+        if (typeof window === 'undefined') return null
+        if (!analyticsCtxRef.current) analyticsCtxRef.current = captureAnalyticsContext()
+        return analyticsCtxRef.current
+    }
+
+    // checkout_started — une seule fois quand le panier est non vide
+    useEffect(() => {
+        if (cart.length === 0) return
+        const ctx = getAnalyticsCtx()
+        if (!ctx) return
+        const device = /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop'
+        void trackBehaviorEvent({
+            session_id: ctx.session_id,
+            event_type: 'checkout_started',
+            user_type: isLoggedIn ? 'connected' : isGuestMode ? 'guest' : 'anonymous',
+            source: ctx.source,
+            metadata: { item_count: cart.length, total, device },
+        })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    // payment_method_selected — quand le moyen de paiement change
+    useEffect(() => {
+        if (!selectedPayment || cart.length === 0) return
+        const ctx = getAnalyticsCtx()
+        if (!ctx) return
+        void trackBehaviorEvent({
+            session_id: ctx.session_id,
+            event_type: 'payment_method_selected',
+            user_type: isLoggedIn ? 'connected' : isGuestMode ? 'guest' : 'anonymous',
+            source: ctx.source,
+            metadata: { method: selectedPayment },
+        })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedPayment])
+
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
         const loadSavedAddress = async () => {
@@ -441,6 +482,8 @@ export default function CheckoutPage() {
                 }
                 const guestResult = await createGuestOrder(guestInput)
                 if ('error' in guestResult) {
+                    const ctx2 = getAnalyticsCtx()
+                    if (ctx2) void trackBehaviorEvent({ session_id: ctx2.session_id, event_type: 'order_creation_failed', user_type: 'guest', source: ctx2.source, metadata: { error: guestResult.error, payment_method: formData.payment_method } })
                     if ((guestResult as any).code === 'feature_disabled') {
                         alert('Le checkout invité est temporairement indisponible.')
                     } else {
@@ -448,6 +491,8 @@ export default function CheckoutPage() {
                     }
                     return
                 }
+                const ctx2 = getAnalyticsCtx()
+                if (ctx2) void trackBehaviorEvent({ session_id: ctx2.session_id, event_type: 'order_created', user_type: 'guest', source: ctx2.source, metadata: { payment_method: formData.payment_method, delivery_mode: formData.delivery_mode, total: totalWithDelivery } })
                 clearIdempotencyKey()
                 clearCart()
                 router.push(`/order/${guestResult.order.guest_token}`)
@@ -494,6 +539,8 @@ export default function CheckoutPage() {
             })
 
             if (result.error) {
+                const ctx3 = getAnalyticsCtx()
+                if (ctx3) void trackBehaviorEvent({ session_id: ctx3.session_id, event_type: 'order_creation_failed', user_type: 'connected', source: ctx3.source, metadata: { error: result.error, payment_method: formData.payment_method } })
                 if ((result as { code?: string }).code === 'profile_incomplete') {
                     setProfileGateOpen(true)
                 } else {
@@ -506,6 +553,9 @@ export default function CheckoutPage() {
                 alert('Erreur inattendue. Réessayez.')
                 return
             }
+
+            const ctx3 = getAnalyticsCtx()
+            if (ctx3) void trackBehaviorEvent({ session_id: ctx3.session_id, event_type: 'order_created', user_type: 'connected', source: ctx3.source, metadata: { payment_method: formData.payment_method, delivery_mode: formData.delivery_mode, total: totalWithDelivery } })
 
             // Envoi de l'email de confirmation
             if (userEmail) {
@@ -559,6 +609,11 @@ export default function CheckoutPage() {
 
         setTxError('')
         setTxLoading(true)
+        // payment_declaration_submitted
+        const ctxTx = getAnalyticsCtx()
+        if (ctxTx && savedFormData) {
+            void trackBehaviorEvent({ session_id: ctxTx.session_id, event_type: 'payment_declaration_submitted', user_type: isGuestMode ? 'guest' : isLoggedIn ? 'connected' : 'anonymous', source: ctxTx.source, metadata: { payment_method: savedFormData.payment_method } })
+        }
         try {
             if (!isGuestMode) {
                 const { user } = await safeGetUser(supabase)
@@ -643,9 +698,13 @@ export default function CheckoutPage() {
                 }
                 const guestResult = await createGuestOrder(guestInput)
                 if ('error' in guestResult) {
+                    const ctxTx2 = getAnalyticsCtx()
+                    if (ctxTx2) void trackBehaviorEvent({ session_id: ctxTx2.session_id, event_type: 'order_creation_failed', user_type: 'guest', source: ctxTx2.source, metadata: { error: guestResult.error, payment_method: paymentMethod } })
                     setTxError(guestResult.error)
                     return
                 }
+                const ctxTx2 = getAnalyticsCtx()
+                if (ctxTx2) void trackBehaviorEvent({ session_id: ctxTx2.session_id, event_type: 'order_created', user_type: 'guest', source: ctxTx2.source, metadata: { payment_method: paymentMethod, delivery_mode: savedFormData.delivery_mode, total: totalWithDelivery } })
                 clearIdempotencyKey()
                 clearCart()
                 router.push(`/order/${guestResult.order.guest_token}`)
@@ -677,6 +736,8 @@ export default function CheckoutPage() {
             })
 
             if (result.error) {
+                const ctxTx3 = getAnalyticsCtx()
+                if (ctxTx3) void trackBehaviorEvent({ session_id: ctxTx3.session_id, event_type: 'order_creation_failed', user_type: 'connected', source: ctxTx3.source, metadata: { error: result.error, payment_method: paymentMethod } })
                 if ((result as { code?: string }).code === 'profile_incomplete') {
                     setProfileGateOpen(true)
                     setManualPayStep(false)
@@ -690,6 +751,9 @@ export default function CheckoutPage() {
                 setTxError('Erreur inattendue. Réessayez.')
                 return
             }
+
+            const ctxTx3 = getAnalyticsCtx()
+            if (ctxTx3) void trackBehaviorEvent({ session_id: ctxTx3.session_id, event_type: 'order_created', user_type: 'connected', source: ctxTx3.source, metadata: { payment_method: paymentMethod, delivery_mode: savedFormData.delivery_mode, total: totalWithDelivery } })
 
             if (userEmail) {
                 sendOrderConfirmationEmail({

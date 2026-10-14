@@ -35,8 +35,18 @@ UPDATE storage.buckets
 SET public = false
 WHERE id = 'vendor-verifications';
 
--- Politique de lecture admin : permet aux admins de créer des signed URLs
--- (nécessaire si on ajoute un endpoint de régénération côté serveur)
+-- Politique vendeur : chaque vendeur peut lire/signer ses propres fichiers KYC
+-- Path structure : verifications/{user_id}/...
+-- Nécessaire car VendorVerificationClient appelle createSignedUrl() côté client (anon key)
+DROP POLICY IF EXISTS "vendor_read_own_verifications" ON storage.objects;
+CREATE POLICY "vendor_read_own_verifications" ON storage.objects
+    FOR SELECT
+    USING (
+        bucket_id = 'vendor-verifications'
+        AND (storage.foldername(name))[2] = auth.uid()::text
+    );
+
+-- Politique admin : peut lire tous les fichiers KYC (pour régénération de signed URL si besoin)
 DROP POLICY IF EXISTS "admin_read_vendor_verifications" ON storage.objects;
 CREATE POLICY "admin_read_vendor_verifications" ON storage.objects
     FOR SELECT

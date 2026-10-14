@@ -3,6 +3,7 @@
 import { assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { trackBehaviorEvent } from './behaviorAnalytics'
 import { createNotification } from '@/app/actions/notifications'
 import { VendorVerificationSubmitSchema } from '@/lib/vendorVerificationSchema'
 import {
@@ -97,6 +98,8 @@ export async function submitVerification(input: {
         .from('profiles')
         .update({ verification_status: 'pending' })
         .eq('id', user.id)
+
+    void trackBehaviorEvent({ session_id: `server-${user.id.slice(0, 8)}`, event_type: 'vendor_verification_submitted', user_type: 'connected', user_id: user.id, shop_id: user.id, metadata: { vendor_profile_type: input.vendorProfileType ?? 'entreprise' } })
 
     // Récupérer le profil vendeur pour l'email admin
     const { data: vendorProfile } = await supabase

@@ -36,6 +36,8 @@ export default async function VendorDashboard() {
     if (!user) redirect('/')
 
     const { data: profile } = await supabase.from('profiles').select('*').eq('id', user.id).single()
+
+    if (profile?.role !== 'vendor' && profile?.role !== 'admin') redirect('/')
     const { data: products, count } = await supabase
         .from('products')
         .select('*', { count: 'exact' })

@@ -41,12 +41,14 @@ CREATE INDEX IF NOT EXISTS behavior_events_shop_id_idx
 -- ─── RLS ──────────────────────────────────────────────────────────────────────
 ALTER TABLE behavior_events ENABLE ROW LEVEL SECURITY;
 
--- INSERT : ouvert à tous (données anonymes, pas de PII)
+-- INSERT : bloqué pour anon/authenticated (service_role bypass RLS nativement)
+-- trackBehaviorEvent() utilise SUPABASE_SERVICE_ROLE_KEY — aucune policy anon nécessaire.
+-- Bloquer ici évite l'injection directe via l'API REST publique avec la clé anon.
 DROP POLICY IF EXISTS "behavior_events_insert_all" ON behavior_events;
-CREATE POLICY "behavior_events_insert_all" ON behavior_events
-    FOR INSERT WITH CHECK (true);
+CREATE POLICY "behavior_events_insert_blocked" ON behavior_events
+    FOR INSERT WITH CHECK (false);
 
--- SELECT : service_role uniquement (admin)
+-- SELECT : admins uniquement
 DROP POLICY IF EXISTS "behavior_events_select_admin" ON behavior_events;
 CREATE POLICY "behavior_events_select_admin" ON behavior_events
     FOR SELECT USING (

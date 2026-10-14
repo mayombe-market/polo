@@ -25,6 +25,15 @@ export type BehaviorEventType =
     | 'whatsapp_contact_clicked'
     | 'form_error'
 
+const VALID_EVENT_TYPES = new Set<BehaviorEventType>([
+    'add_to_cart', 'checkout_started', 'checkout_step_completed', 'checkout_abandoned',
+    'payment_method_selected', 'payment_declaration_submitted', 'order_created',
+    'order_creation_failed', 'vendor_signup_started', 'vendor_signup_completed',
+    'vendor_verification_submitted', 'whatsapp_contact_clicked', 'form_error',
+])
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export interface BehaviorEventParams {
     session_id: string
     event_type: BehaviorEventType
@@ -36,12 +45,16 @@ export interface BehaviorEventParams {
     metadata?: Record<string, unknown>
 }
 
-/**
- * Enregistre un événement comportemental.
- * Silencieux si la table n'existe pas encore (avant migration).
- * Ne bloque jamais le parcours client.
- */
 export async function trackBehaviorEvent(params: BehaviorEventParams): Promise<void> {
+    // Validation côté serveur — server action uniquement (pas d'accès direct DB possible)
+    if (!params.session_id || params.session_id.length > 200) return
+    if (!VALID_EVENT_TYPES.has(params.event_type)) return
+    if (params.user_id && !UUID_RE.test(params.user_id)) return
+    if (params.shop_id && !UUID_RE.test(params.shop_id)) return
+    if (params.product_id && !UUID_RE.test(params.product_id)) return
+    // Limite la taille du payload metadata (évite les insertions surdimensionnées)
+    if (params.metadata && JSON.stringify(params.metadata).length > 2048) return
+
     try {
         const db = svc()
         await db.from('behavior_events').insert({
@@ -55,7 +68,7 @@ export async function trackBehaviorEvent(params: BehaviorEventParams): Promise<v
             metadata: params.metadata ?? null,
         })
     } catch {
-        // Silencieux — la table peut ne pas exister encore (migration en attente)
+        // Silencieux — table absente si migration en attente, ne bloque jamais le parcours
     }
 }
 

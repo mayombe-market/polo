@@ -145,24 +145,28 @@ export default function ProductDetailPage() {
                 const prod = productOutcome.row
                 setProduct(prod)
 
-                const shopRow = await withRetry(
-                    async () => {
-                        const r = await withTimeout(
-                            supabase
-                                .from('profiles')
-                                .select(
-                                    'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number, city',
-                                )
-                                .eq('id', prod.seller_id)
-                                .maybeSingle(),
-                        )
-                        if (r.error) {
-                            throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
-                        }
-                        return r.data ?? null
-                    },
-                    { label: 'product/[id] profiles.maybeSingle', maxAttempts: 4 },
-                )
+                const sellerId = prod.seller_id
+                let shopRow = null
+                if (sellerId && typeof sellerId === 'string' && sellerId !== 'null' && /^[0-9a-f-]{36}$/i.test(sellerId)) {
+                    shopRow = await withRetry(
+                        async () => {
+                            const r = await withTimeout(
+                                supabase
+                                    .from('profiles')
+                                    .select(
+                                        'full_name, avatar_url, followers_count, id, store_name, shop_name, shop_description, subscription_plan, subscription_end_date, verification_status, phone, whatsapp_number, city',
+                                    )
+                                    .eq('id', sellerId)
+                                    .maybeSingle(),
+                            )
+                            if (r.error) {
+                                throw new Error(r.error.message || 'Erreur Supabase (profil vendeur).')
+                            }
+                            return r.data ?? null
+                        },
+                        { label: 'product/[id] profiles.maybeSingle', maxAttempts: 4 },
+                    )
+                }
 
                 if (cancelled) return
 

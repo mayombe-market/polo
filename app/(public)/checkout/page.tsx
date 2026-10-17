@@ -909,7 +909,10 @@ export default function CheckoutPage() {
                                         </div>
                                         <div>
                                             <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 text-center">Numéro ayant effectué le transfert</p>
-                                            <div className="rounded-2xl p-1 border-2 border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40 transition-colors">
+                                            <div className="flex items-stretch rounded-2xl border-2 border-slate-200 dark:border-slate-700 focus-within:border-orange-500/40 transition-colors overflow-hidden">
+                                                <div className="flex items-center px-3 bg-slate-50 dark:bg-slate-800/60 border-r border-slate-200 dark:border-slate-700 select-none flex-shrink-0">
+                                                    <span className="text-sm font-black text-slate-500 dark:text-slate-400">+242</span>
+                                                </div>
                                                 <input
                                                     type="tel"
                                                     inputMode="numeric"
@@ -917,7 +920,7 @@ export default function CheckoutPage() {
                                                     onChange={e => setSenderPhone(e.target.value.replace(/\D/g, '').slice(0, 9))}
                                                     placeholder="06 XXX XX XX"
                                                     maxLength={9}
-                                                    className="w-full py-3 px-5 bg-transparent text-base font-mono tracking-widest text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
+                                                    className="flex-1 py-3 px-4 bg-transparent text-base font-mono tracking-widest text-center outline-none placeholder:text-slate-300 dark:placeholder:text-slate-600"
                                                 />
                                             </div>
                                             <p className="text-[9px] text-slate-400 text-center mt-1">Requis — MTN (06) ou Airtel (05)</p>
@@ -1191,13 +1194,16 @@ export default function CheckoutPage() {
                             {gpsError && <p className="text-red-500 text-[10px] font-bold ml-2">{gpsError}</p>}
 
                             <div className="space-y-1">
-                                <div className="relative">
-                                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                                <div className="flex items-stretch bg-stone-50 dark:bg-stone-800/80 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 focus-within:ring-2 focus-within:ring-orange-500 overflow-hidden">
+                                    <div className="flex items-center gap-2 px-3 border-r border-stone-200 dark:border-stone-700 bg-stone-100/80 dark:bg-stone-700/40 select-none flex-shrink-0">
+                                        <Phone size={15} className="text-slate-400" />
+                                        <span className="text-sm font-black text-slate-600 dark:text-slate-300">+242</span>
+                                    </div>
                                     <input
                                         {...register('phone')}
-                                        placeholder="Ex: 06 XXX XX XX"
+                                        placeholder="06 XXX XX XX"
                                         inputMode="tel"
-                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 pl-12 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none placeholder:text-stone-400 placeholder:font-normal"
+                                        className="flex-1 bg-transparent p-4 font-bold focus:outline-none placeholder:text-stone-400 placeholder:font-normal"
                                     />
                                 </div>
                                 {errors.phone

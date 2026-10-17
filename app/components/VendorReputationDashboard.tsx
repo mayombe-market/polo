@@ -212,11 +212,11 @@ export default function VendorReputationDashboard({ profile, followerCount }: { 
                         {recentReviews.map((review: any, i: number) => (
                             <div key={i} className="flex items-start gap-3 py-2 border-b border-slate-50 dark:border-slate-800 last:border-0">
                                 <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                    {(review.buyer_name || 'A')[0].toUpperCase()}
+                                    {(review.user_name || 'A')[0].toUpperCase()}
                                 </div>
                                 <div className="flex-1 min-w-0">
                                     <div className="flex items-center justify-between gap-2">
-                                        <p className="text-xs font-bold dark:text-white truncate">{review.buyer_name || 'Acheteur anonyme'}</p>
+                                        <p className="text-xs font-bold dark:text-white truncate">{review.user_name || 'Acheteur anonyme'}</p>
                                         <span className="text-xs text-amber-500 flex-shrink-0">{'★'.repeat(Math.round(review.vendor_rating || 0))}</span>
                                     </div>
                                     {review.comment && (

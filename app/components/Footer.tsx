@@ -38,6 +38,8 @@ const COLUMNS = [
     {
         title: 'ACHETEURS',
         links: [
+            { label: 'Acheter en confiance', href: '/acheter-en-confiance', highlight: true },
+            { label: 'Avis sur la plateforme', href: '/avis-mayombe-market' },
             { label: 'Comment commander', href: '/comment-commander' },
             { label: 'Livraison',          href: '/livraison' },
             { label: 'Retours',            href: '/retours' },

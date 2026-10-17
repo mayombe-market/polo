@@ -34,7 +34,6 @@ import { getUnreadCount } from '@/app/actions/messages'
 import { getNotifications, markAsRead, markAllAsRead, getUnreadNotifCount } from '@/app/actions/notifications'
 import { useRealtime } from '@/hooks/useRealtime'
 import MessagesPanel from './MessagesPanel'
-import { getLoyaltyPoints } from '@/app/actions/ratings'
 import TripleRatingModal from '@/app/components/TripleRatingModal'
 import BuyerPaymentNoticeModal from '@/app/components/BuyerPaymentNoticeModal'
 import { isBuyerPaymentNoticeType } from '@/lib/buyerPaymentNotice'
@@ -83,7 +82,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
     const [buyerDataRetryKey, setBuyerDataRetryKey] = useState(0)
     const [negotiations, setNegotiations] = useState<any[]>([])
     const [negotiationsFetchError, setNegotiationsFetchError] = useState<string | null>(null)
-    const [loyaltyPoints, setLoyaltyPoints] = useState(0)
     const [ratingOrder, setRatingOrder] = useState<any | null>(null)
     const [unreadMessages, setUnreadMessages] = useState(0)
     const [unreadNotifs, setUnreadNotifs] = useState(0)
@@ -287,7 +285,7 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
             const data = await withRetry(async () => {
                 const { data: prof, error } = await supabase
                     .from('profiles')
-                    .select('city, district, landmark, loyalty_points')
+                    .select('city, district, landmark')
                     .eq('id', user.id)
                     .single()
                 if (error) throw new Error(error.message)
@@ -295,11 +293,10 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
             }, { label: 'BuyerDashboard profile address', maxAttempts: 4 })
             if (data) {
                 setAddress({ city: data.city || '', district: data.district || '', landmark: data.landmark || '' })
-                setLoyaltyPoints(data.loyalty_points || 0)
             }
         } catch (err) {
-            console.error('Erreur adresse / points:', err)
-            setPartialLoadWarnings((w) => [...w, 'Adresse et points fidélité non synchronisés.'])
+            console.error('Erreur adresse:', err)
+            setPartialLoadWarnings((w) => [...w, 'Adresse non synchronisée.'])
         }
 
         setDataLoading(false)
@@ -553,7 +550,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                         cartCount={itemCount}
                         onNavigate={setActivePage}
                         dataLoading={dataLoading}
-                        loyaltyPoints={loyaltyPoints}
                         onConfirmReception={(order: any) => setRatingOrder(order)}
                         ordersFetchError={ordersFetchError}
                         buyerBootstrapPhase={buyerBootstrapPhase}
@@ -638,12 +634,6 @@ export default function BuyerDashboardClient({ user, profile: initialProfile }: 
                         } catch (e) {
                             console.error(e)
                         }
-                        try {
-                            const pts = await withRetry(() => getLoyaltyPoints(), { label: 'BuyerDashboard post-rating loyalty', maxAttempts: 4 })
-                            setLoyaltyPoints(pts.points || 0)
-                        } catch (e) {
-                            console.error(e)
-                        }
                         /** Met à jour le profil / données serveur affichées ailleurs sans rechargement du document. */
                         router.refresh()
                     }}
@@ -665,7 +655,6 @@ function BuyerHome({
     cartCount,
     onNavigate,
     dataLoading,
-    loyaltyPoints = 0,
     onConfirmReception,
     /** Erreur commandes — doublon visuel acceptable pour l’accueil (résumé). */
     ordersFetchError,
@@ -748,19 +737,6 @@ function BuyerHome({
 
             <BecomeVendorCta variant="dashboard" />
 
-            {/* Ma cagnotte fidélité — lien vers /account/cagnotte */}
-            {process.env.NEXT_PUBLIC_LOYALTY_ENABLED === '1' && (
-                <Link
-                    href="/account/cagnotte"
-                    className="flex items-center gap-4 p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-900/10 dark:to-orange-900/10 rounded-3xl border border-amber-200/50 dark:border-amber-800/30 hover:shadow-md transition-shadow"
-                >
-                    <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center text-2xl flex-shrink-0">🎁</div>
-                    <div className="flex-1 min-w-0">
-                        <p className="text-sm font-black dark:text-white">Ma cagnotte fidélité</p>
-                        <p className="text-[10px] text-slate-400 font-bold">Consulter mon solde et l'historique →</p>
-                    </div>
-                </Link>
-            )}
 
             {/* Orders needing confirmation */}
             {needsConfirmation.length > 0 && (
@@ -769,7 +745,7 @@ function BuyerHome({
                         <div className="w-10 h-10 rounded-2xl bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-xl">📦</div>
                         <div>
                             <p className="text-sm font-black dark:text-white">{needsConfirmation.length} commande{needsConfirmation.length > 1 ? 's' : ''} à confirmer</p>
-                            <p className="text-[10px] text-slate-400 font-bold">Confirmez la réception et gagnez +500 points !</p>
+                            <p className="text-[10px] text-slate-400 font-bold">Confirmez la réception pour finaliser votre commande.</p>
                         </div>
                     </div>
                     <div className="space-y-2">

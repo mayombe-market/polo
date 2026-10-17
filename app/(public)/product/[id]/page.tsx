@@ -14,7 +14,6 @@ import { getSupabaseBrowserClient, withRetry } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import ProductGallery from '../../../components/ProductGallery'
-import LoyaltyEarnBadge from '@/app/components/loyalty/LoyaltyEarnBadge'
 import RealEstateGallery from '@/app/components/RealEstateGallery'
 import { normalizeProductImageUrl } from '@/lib/resolveProductImageUrl'
 import AddToCartButton from '../../../components/AddToCartButton'
@@ -852,7 +851,6 @@ export default function ProductDetailPage() {
                                     Vous économisez {fmt(product.compare_price - effectivePrice)} FCFA
                                 </p>
                             )}
-                            <LoyaltyEarnBadge price={Number(effectivePrice)} className="mt-2" />
                         </div>
                     )}
 

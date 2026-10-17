@@ -168,9 +168,20 @@ export default function AdminActivityPage() {
                                         <div className="flex-1 min-w-0 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 px-4 py-3 group-hover:border-slate-200 dark:group-hover:border-slate-700 transition-colors">
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
-                                                        {item.title}
-                                                    </p>
+                                                    {item.type === 'product' && item.link ? (
+                                                        <a
+                                                            href={item.link}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                            className="text-sm font-bold text-slate-900 dark:text-white truncate block hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                                        >
+                                                            {item.title}
+                                                        </a>
+                                                    ) : (
+                                                        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">
+                                                            {item.title}
+                                                        </p>
+                                                    )}
                                                     <p className="text-[11px] text-slate-400 truncate mt-0.5">
                                                         {item.subtitle}
                                                     </p>

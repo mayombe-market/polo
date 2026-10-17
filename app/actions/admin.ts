@@ -237,7 +237,7 @@ export async function adminGetRecentActivity(limit = 80) {
             .limit(20),
 
         supabase.from('products')
-            .select('id, created_at, name, category, price, seller_id, profiles:seller_id(shop_name)')
+            .select('id, created_at, name, category, subcategory, price, seller_id, profiles:seller_id(shop_name)')
             .gte('created_at', cut)
             .order('created_at', { ascending: false })
             .limit(20),
@@ -293,12 +293,16 @@ export async function adminGetRecentActivity(limit = 80) {
     }
 
     for (const p of products.data || []) {
+        const shopName = (p.profiles as any)?.shop_name || ''
+        const catParts = [p.category, (p as any).subcategory].filter((s: unknown) => typeof s === 'string' && s.trim())
+        const categoryDisplay = catParts.join(' › ')
+        const subtitleParts = [shopName, categoryDisplay, `${(p.price || 0).toLocaleString('fr-FR')} F`].filter(Boolean)
         items.push({
             id: `product-${p.id}`, type: 'product',
             title: `Nouveau produit — ${p.name}`,
-            subtitle: `${(p.profiles as any)?.shop_name || ''} · ${p.category || ''} · ${(p.price || 0).toLocaleString('fr-FR')} F`,
+            subtitle: subtitleParts.join(' · '),
             created_at: p.created_at,
-            link: '/admin/products',
+            link: `/product/${p.id}`,
             badge: p.category || 'Produit', badgeColor: '#6366F1',
         })
     }

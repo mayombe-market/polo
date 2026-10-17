@@ -6,6 +6,7 @@ import ShareButtons from './ShareButtons'
 import StarRating from './StarRating'
 import { Store, MapPin, Calendar, ArrowLeft } from 'lucide-react'
 import VerifiedBadge from './VerifiedBadge'
+import { computeVendorBadges, type VendorBadgeInput } from '@/lib/vendorBadges'
 
 interface SellerProfileHeaderProps {
     profile: any
@@ -26,6 +27,15 @@ export default function SellerProfileHeader({
 }: SellerProfileHeaderProps) {
 
     const storeName = profile?.store_name || profile?.shop_name || profile?.full_name || 'Boutique'
+
+    const badgeInput: VendorBadgeInput = {
+        verification_status: profile?.verification_status,
+        confirmed_sales_count: profile?.confirmed_sales_count,
+        averageRating,
+        reviewCount,
+        created_at: profile?.created_at,
+    }
+    const vendorBadges = computeVendorBadges(badgeInput)
 
     const formatDate = (dateStr: string) => {
         if (!dateStr) return ''
@@ -97,6 +107,23 @@ export default function SellerProfileHeader({
                         </span>
                     )}
                 </div>
+
+                {/* Badges de réputation */}
+                {vendorBadges.length > 0 && (
+                    <div className="flex flex-wrap justify-center gap-2 mt-3">
+                        {vendorBadges.map(badge => (
+                            <span
+                                key={badge.id}
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold border"
+                                style={{ background: badge.bg, color: badge.color, borderColor: badge.color + '40' }}
+                                title={badge.description}
+                            >
+                                <span className="text-sm leading-none">{badge.emoji}</span>
+                                {badge.label}
+                            </span>
+                        ))}
+                    </div>
+                )}
 
                 {/* Slogan boutique (court) */}
                 {profile?.shop_description?.trim() && (

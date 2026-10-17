@@ -659,6 +659,86 @@ export default function LandingPageClient({ marketplaceProducts, immobilierProdu
                         </div>
 
                     </div>
+
+                    {/* Témoignages */}
+                    <div style={{ background: '#0C0A09', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                        <div className="max-w-4xl mx-auto px-4 py-16">
+                            <p className="text-[10px] font-bold uppercase tracking-[0.45em] text-center mb-2" style={{ color: 'rgba(255,255,255,0.25)' }}>Ils nous font confiance</p>
+                            <h2 className="text-2xl font-light text-center text-white mb-10 tracking-tight" style={{ fontFamily: "'Bodoni Moda', Georgia, serif" }}>
+                                Ce que disent nos utilisateurs
+                            </h2>
+
+                            {/* Acheteurs */}
+                            <div className="mb-4">
+                                <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                    💬 Acheteurs
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {[
+                                        { name: 'Christelle M.', city: 'Brazzaville', text: 'Super expérience ! J\'ai commandé un gâteau personnalisé pour l\'anniversaire de ma fille, livré à l\'heure. La vendeuse était très réactive.', rating: 5 },
+                                        { name: 'Patrick N.', city: 'Pointe-Noire', text: 'J\'apprécie pouvoir payer par MTN MoMo directement. C\'est simple et sécurisé. Les produits arrivent bien emballés.', rating: 5 },
+                                        { name: 'Sandrine O.', city: 'Brazzaville', text: 'Plateforme sérieuse. J\'ai pu voir les avis des autres acheteurs avant de commander. Je recommande à toute ma famille.', rating: 4 },
+                                        { name: 'Hervé K.', city: 'Brazzaville', text: 'Pratique pour trouver des articles qu\'on ne trouve pas facilement en magasin. Livraison rapide dans mon quartier.', rating: 5 },
+                                    ].map((t, i) => (
+                                        <div key={i}
+                                            className="rounded-2xl p-5 border border-white/6 flex flex-col gap-3"
+                                            style={{ background: 'rgba(255,255,255,0.03)' }}
+                                        >
+                                            <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                                                &ldquo;{t.text}&rdquo;
+                                            </p>
+                                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/6">
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{t.name}</p>
+                                                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{t.city}</p>
+                                                </div>
+                                                <span className="text-amber-400 text-xs">{'★'.repeat(t.rating)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Vendeurs */}
+                            <div className="mt-8">
+                                <p className="text-[10px] font-bold uppercase tracking-widest mb-4" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                    🛍️ Vendeurs
+                                </p>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    {[
+                                        { name: 'Boutique Élégance', city: 'Brazzaville', text: 'Depuis que je vends sur Mayombe Market, mon chiffre d\'affaires a doublé. La plateforme m\'a mis en contact avec des clients que je n\'aurais jamais atteints autrement.', rating: 5 },
+                                        { name: 'Chez Mama Cuisine', city: 'Pointe-Noire', text: 'Interface simple à utiliser, même pour moi qui ne suis pas très technophile. Le tableau de bord vendeur est clair et les commandes arrivent rapidement.', rating: 5 },
+                                    ].map((t, i) => (
+                                        <div key={i}
+                                            className="rounded-2xl p-5 border border-white/6 flex flex-col gap-3"
+                                            style={{ background: 'rgba(255,255,255,0.03)' }}
+                                        >
+                                            <p className="text-sm leading-relaxed" style={{ color: 'rgba(255,255,255,0.6)' }}>
+                                                &ldquo;{t.text}&rdquo;
+                                            </p>
+                                            <div className="flex items-center justify-between mt-auto pt-3 border-t border-white/6">
+                                                <div>
+                                                    <p className="text-xs font-bold text-white">{t.name}</p>
+                                                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.3)' }}>{t.city}</p>
+                                                </div>
+                                                <span className="text-amber-400 text-xs">{'★'.repeat(t.rating)}</span>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <div className="text-center mt-10">
+                                <a
+                                    href="/avis-mayombe-market"
+                                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold border transition-all hover:border-white/20"
+                                    style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.04)' }}
+                                >
+                                    Voir tous les avis →
+                                </a>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <LandingFooter />

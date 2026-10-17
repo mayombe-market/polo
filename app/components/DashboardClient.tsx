@@ -27,7 +27,7 @@ import {
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
     Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote,
-    MoreHorizontal, Building2
+    MoreHorizontal, Building2, Award
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -58,6 +58,7 @@ import { FEATURES } from '@/lib/featureFlags'
 import VendorPaymentSettings from '@/app/components/VendorPaymentSettings'
 import VendorPaymentConfirmations from '@/app/components/VendorPaymentConfirmations'
 import VendorAnalyticsDashboard from '@/app/components/VendorAnalyticsDashboard'
+import VendorReputationDashboard from '@/app/components/VendorReputationDashboard'
 
 const AddProductForm = dynamic(() => import('./AddProductForm').then(mod => mod.default || mod), {
     loading: () => <div className="p-10 text-center font-bold italic text-green-600">Chargement du formulaire...</div>,
@@ -173,7 +174,7 @@ function MarketplaceEditForm({
     )
 }
 
-type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews' | 'verification' | 'messagerie'
+type Page = 'dashboard' | 'products' | 'add' | 'edit' | 'orders' | 'negotiations' | 'messages' | 'notifs' | 'stats' | 'wallet' | 'shop' | 'settings' | 'hotel_reviews' | 'verification' | 'messagerie' | 'reputation'
 
 const getMenuItems = (_verificationStatus?: string, isHotelVendor?: boolean): { id: Page; label: string; icon: any }[] => {
     return [
@@ -183,6 +184,7 @@ const getMenuItems = (_verificationStatus?: string, isHotelVendor?: boolean): { 
         { id: 'messagerie',   label: 'Messagerie',                   icon: MessageCircle },
         ...(isHotelVendor ? [{ id: 'hotel_reviews' as Page, label: 'Avis clients', icon: Star }] : []),
         { id: 'shop',         label: 'Ma boutique',                  icon: Store },
+        { id: 'reputation',   label: 'Ma réputation',                icon: Award },
         { id: 'stats',        label: 'Statistiques',                 icon: BarChart3 },
         { id: 'wallet',       label: 'Paiements',                    icon: Banknote },
         { id: 'verification', label: 'Vérification',                 icon: Shield },
@@ -1262,6 +1264,13 @@ export default function DashboardClient({ products: initialProducts, profile, us
                             <VendorPaymentSettings profile={profile} />
                         </div>
                     </div>
+                )}
+
+                {activePage === 'reputation' && (
+                    <VendorReputationDashboard
+                        profile={profile}
+                        followerCount={followerCount}
+                    />
                 )}
 
                 {activePage === 'stats' && (

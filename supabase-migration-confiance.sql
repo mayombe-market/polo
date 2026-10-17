@@ -1,0 +1,122 @@
+-- =============================================================================
+-- MIGRATION : CONFIANCE, RÉPUTATION, FIDÉLISATION
+-- Branche : feat/confiance-croissance-marketplace
+-- Statut   : À appliquer manuellement après validation staging
+-- =============================================================================
+-- NE PAS APPLIQUER EN PRODUCTION SANS VALIDATION STAGING PRÉALABLE
+-- =============================================================================
+
+-- -----------------------------------------------------------------------------
+-- SECTION 1 : Photos dans les avis acheteurs (ratings.review_images)
+-- Permet aux acheteurs d'ajouter des photos à leurs avis post-commande.
+-- -----------------------------------------------------------------------------
+-- ALTER TABLE ratings ADD COLUMN IF NOT EXISTS review_images TEXT[] DEFAULT '{}';
+
+-- COMMENTAIRE : Cette colonne permet d'afficher des images dans les avis.
+-- Les images seront stockées comme URLs Cloudinary (même bucket que les produits).
+-- Le composant TripleRatingModal.tsx devra être mis à jour pour uploader.
+-- Impact RLS : aucun (colonne ajoutée à une table déjà sécurisée).
+
+-- -----------------------------------------------------------------------------
+-- SECTION 2 : Signalement d'avis (ratings.flagged)
+-- Permet aux vendeurs de signaler un avis abusif à l'équipe admin.
+-- -----------------------------------------------------------------------------
+-- ALTER TABLE ratings ADD COLUMN IF NOT EXISTS flagged BOOLEAN NOT NULL DEFAULT FALSE;
+-- ALTER TABLE ratings ADD COLUMN IF NOT EXISTS flag_reason TEXT;
+-- ALTER TABLE ratings ADD COLUMN IF NOT EXISTS flagged_at TIMESTAMPTZ;
+-- ALTER TABLE ratings ADD COLUMN IF NOT EXISTS flagged_by UUID REFERENCES auth.users(id);
+
+-- Politique RLS : seul l'admin peut lire flagged=true pour traitement.
+-- CREATE POLICY "vendor_flag_own_review" ON ratings
+--   FOR UPDATE
+--   USING (auth.uid() = seller_id)
+--   WITH CHECK (
+--     flagged IS TRUE
+--     AND flag_reason IS NOT NULL
+--     AND OLD.flagged IS FALSE
+--   );
+
+-- -----------------------------------------------------------------------------
+-- SECTION 3 : Notifications abonnés (seller_follows.notify_new_products)
+-- Permet aux acheteurs de recevoir une notif quand un vendeur suivi publie.
+-- Note : la colonne notify_new_products peut déjà exister en prod.
+-- -----------------------------------------------------------------------------
+-- ALTER TABLE seller_follows ADD COLUMN IF NOT EXISTS notify_new_products BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- RPC pour notifier les abonnés d'un vendeur :
+-- CREATE OR REPLACE FUNCTION notify_seller_followers(
+--   p_seller_id UUID,
+--   p_product_id UUID,
+--   p_product_name TEXT
+-- ) RETURNS void LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- DECLARE
+--   follower_record RECORD;
+-- BEGIN
+--   FOR follower_record IN
+--     SELECT sf.follower_id
+--     FROM seller_follows sf
+--     WHERE sf.seller_id = p_seller_id
+--       AND sf.notify_new_products = TRUE
+--       AND sf.follower_id IS NOT NULL
+--   LOOP
+--     INSERT INTO notifications (user_id, type, title, body, reference_id, reference_type)
+--     VALUES (
+--       follower_record.follower_id,
+--       'new_product_from_followed',
+--       'Nouveau produit d''un vendeur suivi',
+--       p_product_name,
+--       p_product_id,
+--       'product'
+--     )
+--     ON CONFLICT (user_id, reference_id) DO NOTHING;
+--   END LOOP;
+-- END;
+-- $$;
+
+-- -----------------------------------------------------------------------------
+-- SECTION 4 : Index performance sur ratings (plateforme + vendeur)
+-- Améliore les performances des pages /avis-mayombe-market et /store/[id]
+-- -----------------------------------------------------------------------------
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ratings_platform_rating
+--   ON ratings(platform_rating)
+--   WHERE platform_rating IS NOT NULL;
+
+-- CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_ratings_seller_id_vendor_rating
+--   ON ratings(seller_id, vendor_rating)
+--   WHERE vendor_rating IS NOT NULL;
+
+-- -----------------------------------------------------------------------------
+-- SECTION 5 : confirmed_sales_count sur profiles
+-- Compteur de ventes confirmées pour le calcul des badges de réputation.
+-- Note : peut déjà exister — vérifier avant d'appliquer.
+-- -----------------------------------------------------------------------------
+-- ALTER TABLE profiles ADD COLUMN IF NOT EXISTS confirmed_sales_count INTEGER NOT NULL DEFAULT 0;
+
+-- Trigger pour incrémenter confirmed_sales_count quand un order passe à 'confirmed':
+-- CREATE OR REPLACE FUNCTION increment_vendor_confirmed_sales()
+-- RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
+-- BEGIN
+--   IF NEW.status = 'confirmed' AND OLD.status != 'confirmed' THEN
+--     UPDATE profiles
+--     SET confirmed_sales_count = COALESCE(confirmed_sales_count, 0) + 1
+--     WHERE id = NEW.seller_id;
+--   END IF;
+--   RETURN NEW;
+-- END;
+-- $$;
+
+-- DROP TRIGGER IF EXISTS trg_increment_vendor_confirmed_sales ON orders;
+-- CREATE TRIGGER trg_increment_vendor_confirmed_sales
+--   AFTER UPDATE OF status ON orders
+--   FOR EACH ROW
+--   EXECUTE FUNCTION increment_vendor_confirmed_sales();
+
+-- =============================================================================
+-- INSTRUCTIONS D'APPLICATION
+-- =============================================================================
+-- 1. Tester chaque section sur staging individuellement
+-- 2. Dé-commenter les blocs validés avant application en prod
+-- 3. Appliquer via Supabase Dashboard SQL Editor ou CLI
+-- 4. Documenter : date, qui, base cible (staging / prod)
+-- 5. Les index CONCURRENTLY peuvent être créés sans downtime
+-- =============================================================================

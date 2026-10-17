@@ -32,10 +32,6 @@ import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
-import LoyaltyPointsApplier from '@/app/components/loyalty/LoyaltyPointsApplier'
-import { getMyLoyaltyUiState } from '@/app/actions/loyalty'
-import { isLoyaltyEnabled, formatFcfa } from '@/lib/loyalty/rules'
-import type { LoyaltyUiState } from '@/lib/loyalty/types'
 import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { FEATURES } from '@/lib/featureFlags'
 import {
@@ -291,27 +287,7 @@ export default function CheckoutPage() {
               : selectedDelivery === 'vendor_delivery'
                 ? vendorDeliveryOptions.vendorDeliveryFee
                 : 0   // pickup = 0, fallback = 0
-    const totalBeforeLoyalty = total + deliveryFee
-
-    // ═══ PROGRAMME FIDÉLITÉ ═══
-    const [loyaltyState, setLoyaltyState] = useState<LoyaltyUiState | null>(null)
-    const [loyaltyPointsToUse, setLoyaltyPointsToUse] = useState(0)
-
-    useEffect(() => {
-        if (!isLoyaltyEnabled()) return
-        getMyLoyaltyUiState().then((s) => {
-            if (s) setLoyaltyState(s)
-        }).catch(() => {})
-    }, [])
-
-    // Clamp si le total change (ex: changement de mode livraison)
-    useEffect(() => {
-        if (loyaltyPointsToUse > totalBeforeLoyalty) {
-            setLoyaltyPointsToUse(totalBeforeLoyalty)
-        }
-    }, [totalBeforeLoyalty, loyaltyPointsToUse])
-
-    const grandTotal = Math.max(0, totalBeforeLoyalty - loyaltyPointsToUse)
+    const grandTotal = total + deliveryFee
 
     // AUTO-COMPLÉTION DU FORMULAIRE VIA PROFIL
     useEffect(() => {
@@ -468,9 +444,6 @@ export default function CheckoutPage() {
                 return
             }
 
-            // Points fidélité : clamp final au total (au cas où)
-            const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
-
             const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items,
@@ -483,7 +456,6 @@ export default function CheckoutPage() {
                 landmark: formData.landmark,
                 delivery_mode: formData.delivery_mode,
                 delivery_fee: currentDeliveryFee,
-                loyalty_points_to_use: pointsToUse,
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
                 idempotency_key: idempotencyKey,
@@ -575,7 +547,6 @@ export default function CheckoutPage() {
                             ? 0
                             : DELIVERY_FEES[savedFormData.delivery_mode as 'standard' | 'express'] ?? 0
             const totalWithDelivery = total + currentDeliveryFee
-            const pointsToUse = Math.max(0, Math.min(loyaltyPointsToUse, totalWithDelivery))
 
             const items = cart.map(item => ({
                 id: item.product_id || item.id,
@@ -666,7 +637,6 @@ export default function CheckoutPage() {
                 delivery_fee: currentDeliveryFee,
                 transaction_id: isMultiVendorTx ? undefined : singleDigits,
                 vendor_payment_info: Object.keys(vendorPaymentInfo).length > 0 ? vendorPaymentInfo : undefined,
-                loyalty_points_to_use: pointsToUse,
                 latitude: buyerGps?.lat,
                 longitude: buyerGps?.lng,
                 idempotency_key: idempotencyKey,
@@ -1665,16 +1635,6 @@ export default function CheckoutPage() {
                             ))}
                         </div>
 
-                        {/* Programme fidélité : appliquer la cagnotte */}
-                        {isLoyaltyEnabled() && loyaltyState && loyaltyState.balanceAvailable > 0 && (
-                            <div className="pt-6 border-t border-stone-100 dark:border-stone-800">
-                                <LoyaltyPointsApplier
-                                    balanceAvailable={loyaltyState.balanceAvailable}
-                                    orderTotal={totalBeforeLoyalty}
-                                    onChange={setLoyaltyPointsToUse}
-                                />
-                            </div>
-                        )}
 
                         <div className="space-y-3 pt-6 border-t border-stone-100 dark:border-stone-800">
                             <div className="flex justify-between text-[10px] font-bold uppercase text-slate-400">
@@ -1714,16 +1674,6 @@ export default function CheckoutPage() {
                                     }
                                 </span>
                             </div>
-                            {loyaltyPointsToUse > 0 && (
-                                <div className="flex justify-between text-[10px] font-bold uppercase">
-                                    <span className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
-                                        Cagnotte fidélité
-                                    </span>
-                                    <span className="text-orange-600 dark:text-orange-400 italic">
-                                        −{loyaltyPointsToUse.toLocaleString('fr-FR')} FCFA
-                                    </span>
-                                </div>
-                            )}
                             <div className="flex justify-between items-end pt-4">
                                 <span className="font-black uppercase italic text-lg">Total</span>
                                 <div className="text-right">

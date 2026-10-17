@@ -51,8 +51,7 @@ export default function TripleRatingModal({ order, onClose, onComplete }: Triple
     const [selectedTags, setSelectedTags] = useState<Record<string, string[]>>({ vendor: [], delivery: [], platform: [] })
     const [comment, setComment] = useState('')
     const [loading, setLoading] = useState(false)
-    const [pointsEarned, setPointsEarned] = useState(0)
-    const [totalPoints, setTotalPoints] = useState(0)
+
 
     const cat = CATEGORIES[currentCat]
 
@@ -85,8 +84,7 @@ export default function TripleRatingModal({ order, onClose, onComplete }: Triple
             setLoading(false)
             return
         }
-        setPointsEarned(result.pointsEarned || 500)
-        setTotalPoints(result.totalPoints || 0)
+
         setStep('thanks')
         setLoading(false)
     }
@@ -331,16 +329,6 @@ export default function TripleRatingModal({ order, onClose, onComplete }: Triple
                         </div>
                     </div>
 
-                    {/* Points fidélité */}
-                    <div className="p-4 rounded-2xl bg-gradient-to-br from-green-500/5 to-blue-500/5 border border-green-500/10 flex items-center gap-3 mb-5 text-left">
-                        <span className="text-2xl">🎁</span>
-                        <div>
-                            <p className="text-green-400 text-sm font-bold">+{pointsEarned} points de fidélité gagnés !</p>
-                            <p className="text-gray-500 text-[11px]">
-                                Total : {totalPoints} points · 1 000 points = 2 000 F de réduction
-                            </p>
-                        </div>
-                    </div>
 
                     <button onClick={() => { onComplete(); onClose() }}
                         className="w-full py-4 rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 text-white text-base font-bold shadow-lg shadow-amber-500/25">

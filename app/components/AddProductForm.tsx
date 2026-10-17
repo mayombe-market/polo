@@ -1198,7 +1198,47 @@ export default function AddProductForm({
                 const reader = new FileReader()
                 reader.readAsDataURL(file)
                 reader.onload = () => resolve(String(reader.result ?? '').trim())
-                reader.onerror = () => reject(new Error('Lecture du fichier image impossible.'))
+                reader.onerror = () => {
+                    // FileReader échoue pour HEIC/HEIF sur certains navigateurs (Chrome iOS) ou
+                    // pour des photos iCloud non téléchargées. Fallback : canvas via <img> + createObjectURL.
+                    // iOS Safari peut décoder HEIC dans <img> et canvas.toDataURL() produit un JPEG valide.
+                    const objectUrl = URL.createObjectURL(file)
+                    const img = document.createElement('img')
+                    img.onload = () => {
+                        try {
+                            const MAX = 1080
+                            let w = img.naturalWidth
+                            let h = img.naturalHeight
+                            if (w > MAX || h > MAX) {
+                                const r = Math.min(MAX / w, MAX / h)
+                                w = Math.round(w * r)
+                                h = Math.round(h * r)
+                            }
+                            const canvas = document.createElement('canvas')
+                            canvas.width = w
+                            canvas.height = h
+                            const ctx = canvas.getContext('2d')
+                            if (!ctx) throw new Error('no-ctx')
+                            ctx.drawImage(img, 0, 0, w, h)
+                            URL.revokeObjectURL(objectUrl)
+                            resolve(canvas.toDataURL('image/jpeg', 0.85))
+                        } catch {
+                            URL.revokeObjectURL(objectUrl)
+                            reject(new Error('Lecture du fichier image impossible.'))
+                        }
+                    }
+                    img.onerror = () => {
+                        URL.revokeObjectURL(objectUrl)
+                        // Format non lisible même par le navigateur (photo iCloud non téléchargée, HEIC sur Chrome iOS…)
+                        reject(new Error(
+                            'Impossible de lire cette image.\n\n' +
+                            '• Si c\'est une photo iPhone (HEIC) : ouvrez-la dans Photos, appuyez sur "Partager" → "Enregistrer l\'image" pour créer une copie JPEG, puis réessayez.\n' +
+                            '• Si vos photos sont dans iCloud : attendez qu\'elles soient téléchargées sur l\'appareil.\n' +
+                            '• Sinon : convertissez en JPEG ou PNG avant l\'envoi.'
+                        ))
+                    }
+                    img.src = objectUrl
+                }
             })
 
         const uploadFileOnce = async (file: File): Promise<string> => {

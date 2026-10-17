@@ -5,6 +5,7 @@ import Header from '../components/Header'
 import Footer from '../components/Footer'
 import BottomNav from '../components/BottomNav'
 import DeferredCookieConsent from '../components/DeferredCookieConsent'
+import PWAInstallPrompt from '../components/PWAInstallPrompt'
 import { Toaster } from 'sonner'
 
 function isCheckoutTunnelPath(pathname: string | null): boolean {
@@ -37,6 +38,7 @@ export default function PublicLayoutShell({ children }: { children: React.ReactN
             {!tunnel && !isLanding && <Footer />}
             <BottomNav />
             <DeferredCookieConsent />
+            <PWAInstallPrompt />
         </>
     )
 }

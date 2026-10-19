@@ -21,9 +21,9 @@ const NAV_ITEMS = [
     },
     {
         label: 'Guide',
-        href: '/guide-vendeur',
+        href: '/guide',
         icon: BookOpen,
-        match: (p: string) => p.startsWith('/guide-vendeur'),
+        match: (p: string) => p.startsWith('/guide'),
     },
 ]
 

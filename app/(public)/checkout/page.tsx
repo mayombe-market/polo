@@ -28,7 +28,9 @@ import { getVendorPaymentNumbers } from '@/app/actions/vendorPayment'
 import { sendOrderConfirmationEmail } from '@/app/actions/emails'
 import { createOrder as createOrderAction } from '@/app/actions/orders'
 import { useIdempotencyKey } from '@/lib/useIdempotencyKey'
+import dynamic from 'next/dynamic'
 import CompleteProfileGateModal from '@/app/components/CompleteProfileGateModal'
+const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: false })
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
@@ -91,6 +93,7 @@ export default function CheckoutPage() {
     const [senderPhone, setSenderPhone] = useState('')
     const [vendorSenderPhones, setVendorSenderPhones] = useState<Record<string, string>>({})
     const [confirmChecked, setConfirmChecked] = useState(false)
+    const [showAuthModal, setShowAuthModal] = useState(false)
     const { cart, total, clearCart } = useCart()
     const router = useRouter()
     const { getOrCreate: getIdempotencyKey, clear: clearIdempotencyKey } = useIdempotencyKey()
@@ -1035,6 +1038,7 @@ export default function CheckoutPage() {
 
     return (
         <div className="min-h-screen bg-stone-50 dark:bg-[#0c0a09] py-12 px-4">
+            <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} nextPath="/checkout" />
             <CitySelectModal
                 open={needsCity}
                 onSelected={(c) => {
@@ -1088,7 +1092,7 @@ export default function CheckoutPage() {
                             </button>
                             <button
                                 type="button"
-                                onClick={() => setIsGuestMode(false)}
+                                onClick={() => { setIsGuestMode(false); setShowAuthModal(true) }}
                                 className={`flex-1 py-3 rounded-xl font-bold text-xs uppercase tracking-wider transition-colors ${!isGuestMode ? 'bg-orange-500 text-white' : 'bg-stone-100 dark:bg-stone-800 text-stone-600 dark:text-stone-300 hover:bg-stone-200'}`}
                             >
                                 Se connecter
@@ -1107,7 +1111,7 @@ export default function CheckoutPage() {
                             </div>
 
                             <div className="space-y-1">
-                                <input {...register('full_name')} placeholder="Nom & Prénom" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                                <input {...register('full_name')} placeholder="Nom & Prénom" className="w-full bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-stone-100 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none placeholder:text-stone-400" />
                                 {errors.full_name && <p className="text-red-500 text-[9px] font-black uppercase ml-2">{errors.full_name.message}</p>}
                             </div>
 
@@ -1118,7 +1122,7 @@ export default function CheckoutPage() {
                                     <select
                                         {...register('city')}
                                         required
-                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer"
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-stone-100 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer"
                                     >
                                         <option value="">Choisir une ville…</option>
                                         {DELIVERY_CITY_LIST.map((c) => (
@@ -1137,7 +1141,7 @@ export default function CheckoutPage() {
                                     <select
                                         {...register('district')}
                                         disabled={!watchedCity}
-                                        className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
+                                        className="w-full bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-stone-100 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none appearance-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-opacity"
                                     >
                                         <option value="">{watchedCity ? 'Choisir un quartier…' : '— Sélectionnez d\'abord une ville —'}</option>
                                         {(DELIVERY_LOCATIONS[watchedCity] ?? []).map((q) => (
@@ -1166,7 +1170,7 @@ export default function CheckoutPage() {
                             {/* Point de repère */}
                             <div className="space-y-1">
                                 <label className="text-[9px] font-black uppercase text-slate-400 ml-2">Point de repère</label>
-                                <input {...register('landmark')} placeholder="Ex: Derrière l'école, face au marché…" className="w-full bg-stone-50 dark:bg-stone-800/80 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none" />
+                                <input {...register('landmark')} placeholder="Ex: Derrière l'école, face au marché…" className="w-full bg-stone-50 dark:bg-stone-800/80 text-stone-900 dark:text-stone-100 p-4 rounded-2xl border border-stone-200/60 dark:border-stone-700/40 font-bold focus:ring-2 focus:ring-orange-500 focus:border-transparent outline-none placeholder:text-stone-400" />
                             </div>
 
                             {/* Partager ma position */}

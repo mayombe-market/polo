@@ -38,6 +38,14 @@ type TileCampaign = {
     display_order?: number | null
 }
 
+interface PlatformReview {
+    id: string
+    platform_rating: number
+    comment: string
+    created_at: string
+    profiles?: { full_name?: string | null } | { full_name?: string | null }[] | null
+}
+
 interface ClientHomePageProps {
     heroSlides: UnifiedHeroSlide[]
     tileCampaigns: TileCampaign[]
@@ -48,6 +56,7 @@ interface ClientHomePageProps {
     promoProducts: any[]
     trendProducts: any[]
     homeReviews?: any[]
+    platformReviews?: PlatformReview[]
     totalProducts?: number
     totalVendors?: number
 }
@@ -73,6 +82,7 @@ export default function ClientHomePage({
     promoProducts,
     trendProducts,
     homeReviews = [],
+    platformReviews = [],
     totalProducts = 0,
     totalVendors = 0,
 }: ClientHomePageProps) {
@@ -760,6 +770,121 @@ export default function ClientHomePage({
                     </section>
                 )}
             </div>
+
+            {/* Section avis plateforme */}
+            <PlatformReviewsSection reviews={platformReviews} />
         </div>
+    )
+}
+
+function PlatformReviewsSection({ reviews }: { reviews: PlatformReview[] }) {
+    function initials(name?: string | null): string {
+        if (!name) return '?'
+        return name.trim().split(/\s+/).slice(0, 2).map(w => w[0].toUpperCase()).join('')
+    }
+
+    function formatDate(iso: string): string {
+        try {
+            return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' })
+        } catch {
+            return ''
+        }
+    }
+
+    return (
+        <section style={{ background: '#0C0A09', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+            <div className="max-w-4xl mx-auto px-4 py-16">
+                <p className="text-[10px] font-bold uppercase tracking-[0.45em] text-center mb-2" style={{ color: 'rgba(255,255,255,0.25)' }}>
+                    Avis vérifiés
+                </p>
+                <h2 className="text-2xl font-light text-center text-white mb-2 tracking-tight" style={{ fontFamily: "'Bodoni Moda', Georgia, serif" }}>
+                    Ce que nos clients pensent de Mayombe Market
+                </h2>
+                <p className="text-center text-xs mb-10" style={{ color: 'rgba(255,255,255,0.35)' }}>
+                    Avis laissés après un achat confirmé sur la plateforme
+                </p>
+
+                {reviews.length === 0 ? (
+                    <div className="text-center py-8">
+                        <p className="text-sm mb-4" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                            Soyez le premier à partager votre expérience !
+                        </p>
+                        <a
+                            href="/avis-mayombe-market"
+                            className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all hover:border-white/20"
+                            style={{ border: '1px solid rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)', background: 'rgba(255,255,255,0.05)' }}
+                        >
+                            Laisser un avis →
+                        </a>
+                    </div>
+                ) : (
+                    <>
+                        {/* Carousel mobile : scroll horizontal, snap */}
+                        <div
+                            className="flex gap-4 overflow-x-auto pb-3 snap-x snap-mandatory [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:grid sm:grid-cols-2 sm:overflow-visible sm:pb-0 lg:grid-cols-3"
+                        >
+                            {reviews.map((r) => {
+                                const profileData = Array.isArray(r.profiles) ? r.profiles[0] : r.profiles
+                                const name = profileData?.full_name || 'Client'
+                                const stars = Math.min(5, Math.max(1, Math.round(r.platform_rating)))
+                                const text = (r.comment || '').slice(0, 180)
+                                const hasMore = (r.comment || '').length > 180
+                                return (
+                                    <div
+                                        key={r.id}
+                                        className="rounded-2xl p-5 border flex flex-col gap-3 snap-start flex-shrink-0 w-[min(80vw,280px)] sm:w-auto"
+                                        style={{ background: 'rgba(255,255,255,0.03)', borderColor: 'rgba(255,255,255,0.07)' }}
+                                    >
+                                        {/* Étoiles + badge */}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-amber-400 text-sm tracking-tight">
+                                                {'★'.repeat(stars)}{'☆'.repeat(5 - stars)}
+                                            </span>
+                                            <span
+                                                className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                                                style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.25)' }}
+                                            >
+                                                Achat vérifié
+                                            </span>
+                                        </div>
+
+                                        {/* Commentaire */}
+                                        <p className="text-sm leading-relaxed flex-1" style={{ color: 'rgba(255,255,255,0.65)' }}>
+                                            &ldquo;{text}{hasMore ? '…' : ''}&rdquo;
+                                        </p>
+
+                                        {/* Avatar + nom + date */}
+                                        <div className="flex items-center gap-3 mt-auto pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                                            <div
+                                                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black flex-shrink-0"
+                                                style={{ background: 'rgba(249,115,22,0.2)', color: '#f97316' }}
+                                            >
+                                                {initials(name)}
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="text-xs font-bold text-white truncate">{name}</p>
+                                                <p className="text-[10px] truncate" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                                                    {formatDate(r.created_at)}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+
+                        <div className="text-center mt-10">
+                            <a
+                                href="/avis-mayombe-market"
+                                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl text-xs font-bold transition-all hover:border-white/20"
+                                style={{ border: '1px solid rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.5)', background: 'rgba(255,255,255,0.04)' }}
+                            >
+                                Voir tous les avis →
+                            </a>
+                        </div>
+                    </>
+                )}
+            </div>
+        </section>
     )
 }

@@ -13,6 +13,12 @@ export default async function MarketplacePage() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  const serviceSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+
   const [expiredIds, suspendedIds] = await Promise.all([
     getExpiredSellerIds(supabase),
     getSuspendedSellerIds(supabase),
@@ -36,6 +42,7 @@ export default async function MarketplacePage() {
     { data: homeReviews },
     productsCountRes,
     vendorsCountRes,
+    { data: platformReviews },
   ] = await Promise.all([
     supabase.from('ads').select('id, img, title, link_url, is_active, position').eq('is_active', true).order('position', { ascending: true }).limit(10),
     supabase.from('vendor_ad_campaigns').select('id, title, description, image_url, link_url, display_order').eq('placement', 'hero').order('display_order', { ascending: true }),
@@ -65,6 +72,8 @@ export default async function MarketplacePage() {
     // Compteurs estimatifs (pg_stats, ~1 ms vs ~80 ms COUNT exact) — suffisants pour affichage.
     supabase.from('products').select('*', { count: 'estimated', head: true }),
     supabase.from('profiles').select('*', { count: 'estimated', head: true }).eq('role', 'vendor'),
+    // Avis plateforme — service_role pour bypasser RLS (auth.uid() = user_id)
+    serviceSupabase.from('ratings').select('id, platform_rating, comment, created_at, profiles:user_id(full_name)').not('platform_rating', 'is', null).not('comment', 'is', null).gte('platform_rating', 1).order('created_at', { ascending: false }).limit(10),
   ])
 
   const totalProducts = productsCountRes.count ?? 0
@@ -101,6 +110,7 @@ export default async function MarketplacePage() {
           promoProducts={promoProducts || []}
           trendProducts={trendProducts || []}
           homeReviews={homeReviews || []}
+          platformReviews={platformReviews || []}
           totalProducts={totalProducts}
           totalVendors={totalVendors}
         />

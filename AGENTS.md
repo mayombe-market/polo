@@ -24,7 +24,10 @@ Il documente les règles architecturales et les pièges à éviter.
 ## Architecture des paiements
 
 ### Ce qui est ACTIF en production
-- **MTN MoMo manuel** : acheteur envoie → entre son ID de transaction → admin confirme via RPC `admin_confirm_order`
+- **MTN MoMo manuel** : acheteur paie le vendeur → entre son ID de transaction → **le vendeur** clique « Paiement reçu » ou « Paiement non reçu » (`vendorConfirmPayment` → `lib/orderNotifyServer.ts`)
+  - Reçu (tous les vendeurs du panier) → `confirmed` + numéro de suivi + `confirmed_at`
+  - Non reçu (un seul vendeur suffit) → `rejected` + stock restauré + `vendor_disputed_at`
+  - L'admin **observe** (chronologie dans /admin/orders) ; ses boutons confirmer/rejeter restent en secours, repliés
 - **Airtel Money manuel** : même flux que MTN manuel
 - **Paiement à la livraison (COD)** : flag `FEATURES.cashOnDelivery = true`
 - **MTN MoMo pour campagnes pub vendeurs** : `/api/mtn-momo/pay-ad` → `/api/mtn-momo/callback-ad` (API auto encore active pour ce cas)
@@ -59,6 +62,8 @@ Le checkout invité est actif. La migration `supabase-migration-guest-checkout.s
 | Zones de livraison | `lib/deliveryZones.ts` |
 | Tarifs plans abonnement | `lib/planPrices.ts` |
 | Config paiement admin | `lib/adminPaymentConfig.ts` |
+
+> ⚠️ `admin_confirm_order` exige un appelant admin (auth.uid()) : ne pas l'appeler côté vendeur, utiliser `applyVendorPaymentDecision`.
 
 > ⚠️ Ne jamais dupliquer ces constantes ou fonctions localement dans un fichier action ou composant.
 
@@ -112,8 +117,10 @@ Ne pas modifier ces modules sans activer le flag correspondant.
 | Checkout connecté COD | Commande créée, statut `pending_cod` |
 | Checkout invité MTN | `createGuestOrder` appelé, `is_guest=true`, `guest_token` généré |
 | Dashboard vendeur → Mes commandes | Items filtrés au seul vendeur connecté |
-| Admin → Confirmer paiement | RPC `admin_confirm_order` appelé, statut → `confirmed` |
-| Vendeur → Confirmer encaissement | RPC `confirm_vendor_payment` appelé, pas de confirmation automatique client |
+| Vendeur → Paiement reçu | `confirm_vendor_payment` puis statut → `confirmed` quand tous les vendeurs ont validé ; email + notif client |
+| Vendeur → Paiement non reçu | statut → `rejected`, stock restauré, email + notif client avec contact vendeur |
+| Admin → Chronologie | /admin/orders affiche commande, réponses vendeur et heures |
+| Admin → Confirmer paiement (secours) | RPC `admin_confirm_order` appelé, statut → `confirmed` |
 
 ---
 

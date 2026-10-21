@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -29,6 +29,10 @@ import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
 import { getAdminScopeFromProfileCity, type AdminZoneScope } from '@/lib/adminZone'
 import { normalizeToServiceCityCode, type ServiceCityCode } from '@/lib/deliveryLocation'
+import OrderTimeline from './OrderTimeline'
+
+const hasVendorPayments = (order: any) =>
+    !!order?.vendor_payments && typeof order.vendor_payments === 'object' && Object.keys(order.vendor_payments).length > 0
 
 export default function AdminOrders() {
     const [orders, setOrders] = useState<any[]>([])
@@ -45,6 +49,7 @@ export default function AdminOrders() {
     const [adminScope, setAdminScope] = useState<AdminZoneScope>('all')
     /** Ville du vendeur par user_id (abonnements) ou seller_id (commandes produit). */
     const [vendorCityMap, setVendorCityMap] = useState<Record<string, string | null>>({})
+    const [shopNameMap, setShopNameMap] = useState<Record<string, string>>({})
 
     // Onglet principal : commandes actives ou archives
     const [activeMainTab, setActiveMainTab] = useState<'orders' | 'archives'>('orders')
@@ -152,13 +157,16 @@ export default function AdminOrders() {
         }
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase.from('profiles').select('id, city').in('id', ids)
+            const { data } = await supabase.from('profiles').select('id, city, shop_name, full_name').in('id', ids)
             if (cancelled) return
             const map: Record<string, string | null> = {}
+            const names: Record<string, string> = {}
             for (const row of data || []) {
                 map[row.id] = row.city ?? null
+                names[row.id] = row.shop_name || row.full_name || 'Vendeur'
             }
             setVendorCityMap(map)
+            setShopNameMap(names)
         })()
         return () => {
             cancelled = true
@@ -716,7 +724,10 @@ export default function AdminOrders() {
                         <div className="space-y-4">
                             {filteredOrders.length > 0 ? (
                                 filteredOrders.map((order) => {
-                                    const statusInfo = getStatusDetails(order.status)
+                                    const vendorFlow = !isSubscriptionOrder(order) && hasVendorPayments(order)
+                                    const statusInfo = order.status === 'pending' && vendorFlow
+                                        ? { label: 'Attente vendeur', style: 'bg-amber-100 text-amber-700' }
+                                        : getStatusDetails(order.status)
                                     const payBadge = getPaymentBadge(order.payment_method)
                                     const commission = order.commission_amount || Math.round((order.total_amount || 0) * 0.10)
                                     const vendorPayout = order.vendor_payout || Math.round((order.total_amount || 0) * 0.90)
@@ -905,8 +916,10 @@ export default function AdminOrders() {
                                                 </div>
                                             </div>
 
-                                            {/* VÉRIFICATION PAIEMENT */}
-                                            {order.status === 'pending' && (
+                                            {!isSubscription && <OrderTimeline order={order} shopNames={shopNameMap} />}
+
+                                            {/* VÉRIFICATION PAIEMENT (anciennes commandes sans validation vendeur) */}
+                                            {order.status === 'pending' && !vendorFlow && (
                                                 order.mtn_reference_id ? (
                                                     /* MTN MoMo — paiement auto-vérifié via API */
                                                     <div className="mb-6 bg-green-50/60 dark:bg-green-500/5 p-5 rounded-[2rem] border border-green-200 dark:border-green-800/30">
@@ -1014,6 +1027,12 @@ export default function AdminOrders() {
 
                                             {/* ACTIONS ADMIN */}
                                             <div className="flex flex-col gap-4 pt-6 border-t border-slate-100 dark:border-slate-800">
+                                                {order.status === 'pending' && vendorFlow && (
+                                                    <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                                                        Le vendeur valide lui-même le paiement. Aucune action n&apos;est nécessaire de votre part.
+                                                    </p>
+                                                )}
+                                                <MaybeFallback enabled={order.status === 'pending' && vendorFlow}>
                                                 {/* VERROU 1 : Confirmer / rejeter */}
                                                 {order.status === 'pending' && (
                                                     <div className="flex flex-col sm:flex-row flex-wrap gap-3">
@@ -1083,6 +1102,7 @@ export default function AdminOrders() {
                                                         </div>
                                                     </div>
                                                 )}
+                                                </MaybeFallback>
 
                                                 <div className="flex flex-col sm:flex-row flex-wrap gap-3">
 
@@ -1328,5 +1348,22 @@ export default function AdminOrders() {
                 )}
             </div>
         </div>
+    )
+}
+
+function isSubscriptionOrder(order: any) {
+    return order?.order_type === 'subscription'
+}
+
+/** Actions admin conservées en secours, repliées par défaut quand le vendeur gère la validation. */
+function MaybeFallback({ enabled, children }: { enabled: boolean; children: ReactNode }) {
+    if (!enabled) return <>{children}</>
+    return (
+        <details className="rounded-2xl border border-slate-200 dark:border-slate-700 p-3">
+            <summary className="cursor-pointer text-[9px] font-black uppercase tracking-widest text-slate-400 select-none">
+                Actions de secours (si le vendeur ne répond pas)
+            </summary>
+            <div className="flex flex-col gap-4 mt-4">{children}</div>
+        </details>
     )
 }

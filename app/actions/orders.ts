@@ -1,7 +1,9 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { after } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { notifyVendorsNewOrder, syncBuyerTransactionToVendors } from '@/lib/orderNotifyServer'
 import { cookies } from 'next/headers'
 import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejectedVendorEmail } from '@/app/actions/emails'
 import { revalidateProductCatalog } from '@/app/actions/revalidate'
@@ -17,7 +19,7 @@ import {
     type BuyerPaymentNoticeType,
 } from '@/lib/buyerPaymentNotice'
 import { assertAdminCanActOnOrder, assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
-import { sendPushToUsers } from '@/app/actions/push'
+import { sendPushToUsers } from '@/lib/pushServer'
 import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
 
 async function getSupabase() {
@@ -635,6 +637,10 @@ export async function buyerUpdatePendingTransactionId(orderId: string, rawTransa
         return { error: payload.error || 'Erreur' }
     }
 
+    await syncBuyerTransactionToVendors(orderId, user.id, txDigits, task => {
+        after(() => task().catch(err => console.error('[buyerUpdatePendingTransactionId] notifications:', err)))
+    })
+
     revalidatePath('/account/dashboard')
     return { success: true }
 }
@@ -1180,42 +1186,9 @@ export async function createOrder(input: {
         })
         .eq('id', user.id)
 
-    // ── Notification + push aux vendeurs à la création de commande ──────────────
-    const orderSellerIds = [...new Set(input.items.map(i => i.seller_id).filter(Boolean))] as string[]
-    if (orderSellerIds.length > 0) {
-        const productNames = input.items.map(i => i.name).join(', ')
-        const methodLabel = input.payment_method === 'cash'
-            ? '💵 Paiement à la livraison'
-            : input.payment_method === 'airtel_money'
-                ? '📲 Airtel Money'
-                : '📱 MTN MoMo — paiement en attente'
-        const vendorOrderLink = `/vendor/dashboard?tab=orders`
-        // Push immédiat : cash + Airtel (commande ferme) + MTN avec paiement déclaré
-        const hasDeclaredPayment = input.vendor_payment_info && Object.keys(input.vendor_payment_info).length > 0
-        if (input.payment_method === 'cash' || input.payment_method === 'airtel_money' || hasDeclaredPayment) {
-            sendPushToUsers(orderSellerIds, '🛍️ Nouvelle commande !', `${productNames} · ${methodLabel}`, vendorOrderLink)
-                .catch(err => console.error('[push:new_order]', err))
-        }
-        // In-app notification idempotente par vendeur (ref = orderId:vendorId)
-        for (const sid of orderSellerIds) {
-            createNotification(
-                sid, 'new_order', '🛍️ Nouvelle commande', `${productNames} · ${methodLabel}`, vendorOrderLink,
-                `${order.id}:${sid}`
-            ).catch(err => console.error('[notif:new_order]', err))
-        }
-        // Notification spécifique "paiement déclaré" — idempotente par vendeur
-        if (hasDeclaredPayment) {
-            for (const sid of orderSellerIds) {
-                if (input.vendor_payment_info![sid]) {
-                    createNotification(
-                        sid, 'payment_declared', '💳 Paiement déclaré par le client',
-                        `${productNames} — vérifiez la réception et confirmez.`, vendorOrderLink,
-                        `${order.id}:${sid}:payment_declared`
-                    ).catch(err => console.error('[notif:payment_declared]', err))
-                }
-            }
-        }
-    }
+    // Notifications vendeurs (in-app + push + email) après la réponse au client
+    const createdOrderId = order.id as string
+    after(() => notifyVendorsNewOrder(createdOrderId).catch(err => console.error('[createOrder] notifications vendeurs:', err)))
 
     return { order: JSON.parse(JSON.stringify(order)) }
 }

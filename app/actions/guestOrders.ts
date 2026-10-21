@@ -6,6 +6,8 @@ import { digitsOnly } from '@/lib/phonePaymentValidation'
 import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { orderRequiresInterUrbanDelivery } from '@/lib/deliveryLocation'
 import { randomUUID } from 'crypto'
+import { after } from 'next/server'
+import { notifyVendorsNewOrder } from '@/lib/orderNotifyServer'
 
 function getServiceSupabase() {
     return createClient(
@@ -281,6 +283,9 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
             }
         }
     }
+
+    const createdOrderId = order.id as string
+    after(() => notifyVendorsNewOrder(createdOrderId).catch(err => console.error('[createGuestOrder] notifications vendeurs:', err)))
 
     return { order: { id: order.id, guest_token: order.guest_token!, status: order.status, total_amount: order.total_amount } }
 }

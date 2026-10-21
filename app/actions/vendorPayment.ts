@@ -3,7 +3,9 @@
 import { createClient } from '@supabase/supabase-js'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { createNotification } from './notifications'
+import { after } from 'next/server'
+import { revalidatePath } from 'next/cache'
+import { applyVendorPaymentDecision, type VendorDecisionResult } from '@/lib/orderNotifyServer'
 
 function svc() {
     return createClient(
@@ -181,6 +183,7 @@ export async function getVendorPaymentInfo(): Promise<{
 export async function getVendorPendingPayments(): Promise<{
     orders: Array<{
         order_id: string
+        order_number: number | null
         created_at: string
         customer_name: string
         items: string
@@ -200,7 +203,7 @@ export async function getVendorPendingPayments(): Promise<{
     // Commandes avec un vendor_payments non vide pour ce vendeur, statut pending
     const { data: orders, error } = await supabase
         .from('orders')
-        .select('id, created_at, customer_name, status, vendor_payments, items')
+        .select('id, order_number, created_at, customer_name, status, vendor_payments, items')
         .eq('status', 'pending')
         .not('vendor_payments', 'eq', '{}')
         .order('created_at', { ascending: false })
@@ -222,6 +225,7 @@ export async function getVendorPendingPayments(): Promise<{
 
         result.push({
             order_id: order.id,
+            order_number: order.order_number ?? null,
             created_at: order.created_at,
             customer_name: order.customer_name || 'Client',
             items: myItems,
@@ -238,11 +242,13 @@ export async function getVendorPendingPayments(): Promise<{
     return { orders: result }
 }
 
-// ─── Vendeur : confirmer la réception d'un paiement ──────────────────────────
+// ─── Vendeur : confirmer ou refuser la réception d'un paiement ───────────────
+// Reçu → la commande est confirmée (dès que tous les vendeurs du panier ont validé).
+// Non reçu → la commande est annulée et le stock restauré.
 export async function vendorConfirmPayment(
     orderId: string,
     confirmed: boolean
-): Promise<{ success: true } | { error: string }> {
+): Promise<VendorDecisionResult> {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return { error: 'Non connecté' }
@@ -254,56 +260,15 @@ export async function vendorConfirmPayment(
         .single()
     if (profile?.role !== 'vendor') return { error: 'Réservé aux vendeurs' }
 
-    // Vérifier que la commande existe et est en attente + que le vendeur y a bien une entrée
-    const { data: order } = await supabase
-        .from('orders')
-        .select('vendor_payments, status, user_id')
-        .eq('id', orderId)
-        .single()
-
-    if (!order) return { error: 'Commande introuvable' }
-    if (order.status !== 'pending') return { error: 'Cette commande n\'est plus en attente' }
-
-    const vp = (order.vendor_payments || {}) as Record<string, any>
-    if (!vp[user.id]) return { error: 'Aucun paiement associé à votre compte pour cette commande' }
-
-    // Mise à jour atomique via RPC pour éviter la race condition JSONB (panier multi-vendeurs)
-    const { data: ok, error } = await svc().rpc('confirm_vendor_payment', {
-        p_order_id: orderId,
-        p_vendor_id: user.id,
-        p_confirmed: confirmed,
+    const result = await applyVendorPaymentDecision(orderId, user.id, confirmed, task => {
+        after(() => task().catch(err => console.error('[vendorConfirmPayment] notifications:', err)))
     })
 
-    if (error) return { error: error.message }
-    if (!ok) return { error: 'Impossible de mettre à jour le paiement (commande peut-être déjà traitée).' }
-
-    // Notifier l'admin si le vendeur confirme ou conteste
-    // (on notifie via la notification système des admins s'il y en a)
-    if (confirmed) {
-        if (order.user_id) {
-            createNotification(
-                order.user_id,
-                'payment_confirmed_by_vendor',
-                'Vendeur a confirmé votre paiement',
-                'Votre paiement a été reçu. L\'admin va valider votre commande.',
-                `/account/dashboard?tab=orders`,
-                `${orderId}:vendor_confirmed`
-            ).catch(err => console.error('[vendorConfirmPayment] notification error:', err))
-        }
-    } else {
-        if (order.user_id) {
-            createNotification(
-                order.user_id,
-                'payment_disputed_by_vendor',
-                'Problème avec votre paiement',
-                'Le vendeur n\'a pas reçu votre paiement. Contactez le support.',
-                `/account/dashboard?tab=orders`,
-                `${orderId}:vendor_disputed`
-            ).catch(err => console.error('[vendorConfirmPayment] dispute notification error:', err))
-        }
+    if ('success' in result) {
+        revalidatePath('/vendor/dashboard')
+        revalidatePath('/admin/orders')
     }
-
-    return { success: true }
+    return result
 }
 
 // ─── Lecture publique des numéros vendeur + options livraison (pour le checkout) ─

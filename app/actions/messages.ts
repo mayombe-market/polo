@@ -3,6 +3,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { createNotification } from '@/app/actions/notifications'
+import { sendPushToUsers } from '@/lib/pushServer'
+import { after } from 'next/server'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 
 async function getSupabase() {
@@ -154,7 +156,14 @@ export async function sendMessage(conversationId: string, content: string) {
 
     // Notifier le destinataire
     const recipientId = conv.buyer_id === user.id ? conv.seller_id : conv.buyer_id
-    createNotification(recipientId, 'new_message', 'Nouveau message', trimmed.length > 80 ? trimmed.slice(0, 80) + '...' : trimmed, `/account/dashboard?tab=messages&conv=${conversationId}`).catch(() => {})
+    const preview = trimmed.length > 80 ? trimmed.slice(0, 80) + '...' : trimmed
+    const recipientLink = recipientId === conv.seller_id
+        ? '/vendor/dashboard?tab=messages'
+        : `/account/dashboard?tab=messages&conv=${conversationId}`
+    after(() => Promise.allSettled([
+        createNotification(recipientId, 'new_message', 'Nouveau message', preview, recipientLink),
+        sendPushToUsers([recipientId], '💬 Nouveau message', preview, recipientLink),
+    ]).then(() => {}))
 
     return { success: true, message }
 }

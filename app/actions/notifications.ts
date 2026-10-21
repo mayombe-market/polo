@@ -50,20 +50,27 @@ export async function createNotification(
         const adminSupabase = getServiceSupabase()
 
         if (referenceId) {
-            // Upsert idempotent : ignore le doublon sans lever d'erreur
-            const { error } = await adminSupabase.from('notifications').upsert(
-                {
-                    user_id: userId,
-                    type,
-                    title,
-                    body,
-                    link: link || null,
-                    reference_id: referenceId,
-                },
-                { onConflict: 'user_id,type,reference_id', ignoreDuplicates: true }
-            )
-            if (error) {
-                console.error('[createNotification] upsert error:', error.message, { userId, type, referenceId })
+            // Pas d'upsert ON CONFLICT : l'index idx_notifications_dedup n'existe pas en production (erreur 42P10).
+            const { data: existing } = await adminSupabase
+                .from('notifications')
+                .select('id')
+                .eq('user_id', userId)
+                .eq('type', type)
+                .eq('reference_id', referenceId)
+                .limit(1)
+            if (existing?.length) return
+
+            const { error } = await adminSupabase.from('notifications').insert({
+                user_id: userId,
+                type,
+                title,
+                body,
+                link: link || null,
+                reference_id: referenceId,
+            })
+            // 23505 : doublon bloqué par l'index s'il est créé un jour — comportement voulu
+            if (error && error.code !== '23505') {
+                console.error('[createNotification] insert error:', error.message, { userId, type, referenceId })
             }
         } else {
             const { error } = await adminSupabase.from('notifications').insert({

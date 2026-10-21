@@ -27,7 +27,7 @@ import {
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
     Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote,
-    MoreHorizontal, Building2, Award
+    MoreHorizontal, Building2, Award, Phone
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
@@ -2239,11 +2239,15 @@ function OrdersPage({
 
                                 {/* Client + Actions */}
                                 <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between pt-4 border-t border-slate-100 dark:border-slate-800">
-                                    <div>
+                                    <div className="min-w-0">
                                         <p className="text-xs font-black uppercase italic dark:text-white">{order.customer_name || 'Client'}</p>
                                         <p className="text-[10px] text-slate-400 font-bold flex items-center gap-1 mt-0.5">
                                             <MapPin size={10} /> {order.city}, {order.district}
                                         </p>
+                                        {order.landmark && (
+                                            <p className="text-[10px] text-slate-400 mt-0.5">Repère : {order.landmark}</p>
+                                        )}
+                                        <CustomerContact phone={order.phone} customerName={order.customer_name} orderLabel={formatOrderNumber(order)} />
                                     </div>
                                     <div className="flex items-center gap-2 flex-wrap">
                                         <span className="text-lg font-black text-green-600">
@@ -2289,7 +2293,7 @@ function OrdersPage({
                                                     placeholder="Code 6 car."
                                                     value={codCodeInput[order.id] || ''}
                                                     onChange={e => setCodCodeInput(prev => ({ ...prev, [order.id]: e.target.value.toUpperCase() }))}
-                                                    className="w-28 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 text-xs font-black uppercase tracking-widest text-center bg-amber-50 dark:bg-amber-900/20 focus:outline-none focus:ring-2 focus:ring-amber-400"
+                                                    className="w-28 px-3 py-2 rounded-xl border border-amber-300 dark:border-amber-700 text-xs font-black uppercase tracking-widest text-center bg-amber-50 dark:bg-amber-900/20 text-amber-900 dark:text-amber-100 placeholder:text-amber-400 dark:placeholder:text-amber-500/70 focus:outline-none focus:ring-2 focus:ring-amber-400"
                                                 />
                                                 <button
                                                     onClick={() => handleCollectCash(order.id)}
@@ -3972,6 +3976,44 @@ function VerificationInlinePage({ verificationStatus, rejectionReason, userId }:
                     </div>
                 </div>
             )}
+        </div>
+    )
+}
+
+
+/** Numéro du client sur la commande vendeur : appel direct + WhatsApp. */
+function CustomerContact({ phone, customerName, orderLabel }: { phone?: string | null; customerName?: string | null; orderLabel: string }) {
+    const digits = (phone || '').replace(/\D/g, '')
+    if (digits.length < 6) return null
+    const local = digits.startsWith('242') ? digits.slice(3) : digits
+    const valid = local.length === 9 && local.startsWith('0')
+    if (!valid) {
+        return (
+            <a href={`tel:${digits}`} className="inline-block mt-2 text-xs font-black text-slate-700 dark:text-slate-200 underline underline-offset-2">
+                {phone}
+            </a>
+        )
+    }
+    const display = `+242 ${local.slice(0, 2)} ${local.slice(2, 5)} ${local.slice(5, 7)} ${local.slice(7)}`
+    const intl = `242${local}`
+    const waText = `Bonjour ${customerName || ''}, je suis votre vendeur Mayombe Market pour la commande ${orderLabel}.`.replace(/\s+/g, ' ')
+    return (
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+            <span className="text-xs font-black text-slate-700 dark:text-slate-200 tracking-wide">{display}</span>
+            <a
+                href={`tel:+${intl}`}
+                className="inline-flex items-center gap-1 min-h-[32px] px-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-[10px] font-black uppercase text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+            >
+                <Phone size={11} /> Appeler
+            </a>
+            <a
+                href={`https://wa.me/${intl}?text=${encodeURIComponent(waText)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 min-h-[32px] px-3 rounded-xl bg-green-500 text-[10px] font-black uppercase text-white hover:bg-green-600 transition-colors"
+            >
+                <MessageCircle size={11} /> WhatsApp
+            </a>
         </div>
     )
 }

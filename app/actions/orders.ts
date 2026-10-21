@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { after } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { notifyVendorsNewOrder, syncBuyerTransactionToVendors } from '@/lib/orderNotifyServer'
 import { cookies } from 'next/headers'
 import { sendOrderStatusEmail, sendSubscriptionConfirmationEmail, sendOrderRejectedVendorEmail } from '@/app/actions/emails'
@@ -41,6 +42,14 @@ async function getSupabase() {
     )
 }
 
+function getServiceSupabase() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        { auth: { autoRefreshToken: false, persistSession: false } }
+    )
+}
+
 // Récupérer les commandes d'un vendeur (filtrées côté serveur)
 export async function getVendorOrders() {
     const supabase = await getSupabase()
@@ -73,9 +82,26 @@ export async function getVendorOrders() {
 
     const vendorOrders = allOrders || []
 
+    // Anciennes commandes sans numéro : repli sur le téléphone du profil acheteur (le vendeur doit pouvoir le joindre)
+    const buyerIdsWithoutPhone = [...new Set(
+        vendorOrders.filter(o => !String(o.phone || '').replace(/\D/g, '') && o.user_id).map(o => o.user_id as string)
+    )]
+    const profilePhones = new Map<string, string>()
+    if (buyerIdsWithoutPhone.length > 0) {
+        const { data: buyers } = await getServiceSupabase()
+            .from('profiles')
+            .select('id, phone, whatsapp_number')
+            .in('id', buyerIdsWithoutPhone)
+        for (const b of buyers || []) {
+            const p = b.phone || b.whatsapp_number
+            if (p) profilePhones.set(b.id, p)
+        }
+    }
+
     // Nettoyer les données sensibles : retirer les items des autres vendeurs
     const cleanOrders = vendorOrders.map(order => ({
         ...order,
+        phone: String(order.phone || '').replace(/\D/g, '') ? order.phone : (profilePhones.get(order.user_id) ?? order.phone),
         items: order.items?.filter((item: any) => item.seller_id === user.id) || [],
     }))
 

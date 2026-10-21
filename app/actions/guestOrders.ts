@@ -6,6 +6,7 @@ import { digitsOnly } from '@/lib/phonePaymentValidation'
 import { DELIVERY_FEE_INTER_URBAN } from '@/lib/checkoutSchema'
 import { orderRequiresInterUrbanDelivery } from '@/lib/deliveryLocation'
 import { randomUUID } from 'crypto'
+import { insertOrderRow } from '@/lib/orderInsert'
 import { after } from 'next/server'
 import { notifyVendorsNewOrder } from '@/lib/orderNotifyServer'
 
@@ -234,7 +235,7 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
     const guestToken = randomUUID()
 
     // ── Insertion ──────────────────────────────────────────────────────
-    const { data: order, error: insertError } = await supabase.from('orders').insert([{
+    const { data: order, error: insertError } = await insertOrderRow(row => supabase.from('orders').insert([row]).select('id, guest_token, status, total_amount').single(), {
         user_id: null,
         is_guest: true,
         guest_token: guestToken,
@@ -262,7 +263,7 @@ export async function createGuestOrder(input: GuestOrderInput): Promise<GuestOrd
         utm_medium: input.utm_medium ?? null,
         utm_campaign: input.utm_campaign ?? null,
         attribution_session_id: input.attribution_session_id ?? null,
-    }]).select('id, guest_token, status, total_amount').single()
+    })
 
     if (insertError || !order) {
         return { error: insertError?.message || 'Impossible de créer la commande. Réessayez.' }

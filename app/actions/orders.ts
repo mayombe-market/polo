@@ -21,6 +21,7 @@ import {
 import { assertAdminCanActOnOrder, assertAdminCanActOnVendorCity } from '@/lib/adminZoneServer'
 import { sendPushToUsers } from '@/lib/pushServer'
 import { generateTrackingNumber } from '@/lib/generateTrackingNumber'
+import { insertOrderRow } from '@/lib/orderInsert'
 
 async function getSupabase() {
     const cookieStore = await cookies()
@@ -1089,7 +1090,7 @@ export async function createOrder(input: {
     }
 
     // ═══ CRÉATION DE LA COMMANDE ═══
-    const { data: order, error } = await supabase.from('orders').insert([{
+    const { data: order, error } = await insertOrderRow(row => supabase.from('orders').insert([row]).select().single(), {
         user_id: user.id,
         customer_name: input.customer_name || user.email || 'Client',
         customer_email: user.email || null,
@@ -1121,7 +1122,7 @@ export async function createOrder(input: {
         utm_medium: input.utm_medium ?? null,
         utm_campaign: input.utm_campaign ?? null,
         attribution_session_id: input.attribution_session_id ?? null,
-    }]).select().single()
+    })
 
     if (error) return { error: error.message }
     if (!order) return { error: 'La commande n\'a pas pu être créée. Réessayez.' }

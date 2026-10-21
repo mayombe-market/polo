@@ -1699,12 +1699,12 @@ export default function CheckoutPage() {
                                         <CloudinaryImage src={item.img || '/placeholder-image.svg'} alt={item.name} fill className="object-cover" />
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                        <h4 className="font-black uppercase italic text-[10px] truncate">{item.name}</h4>
+                                        <h4 className="font-black uppercase italic text-[10px] truncate text-stone-900 dark:text-stone-100">{item.name}</h4>
                                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">
                                             {item.price.toLocaleString('fr-FR')} F x {item.quantity}
                                         </p>
                                     </div>
-                                    <p className="font-black italic text-xs">{(item.price * item.quantity).toLocaleString('fr-FR')} F</p>
+                                    <p className="font-black italic text-xs text-stone-900 dark:text-stone-100">{(item.price * item.quantity).toLocaleString('fr-FR')} F</p>
                                 </div>
                             ))}
                         </div>
@@ -1749,10 +1749,10 @@ export default function CheckoutPage() {
                                 </span>
                             </div>
                             <div className="flex justify-between items-end pt-4">
-                                <span className="font-black uppercase italic text-lg">Total</span>
+                                <span className="font-black uppercase italic text-lg text-stone-900 dark:text-stone-100">Total</span>
                                 <div className="text-right">
                                     <span className="text-4xl font-black italic tracking-tighter text-orange-500">{grandTotal.toLocaleString('fr-FR')}</span>
-                                    <span className="text-[10px] font-black uppercase ml-1">FCFA</span>
+                                    <span className="text-[10px] font-black uppercase ml-1 text-stone-900 dark:text-stone-100">FCFA</span>
                                 </div>
                             </div>
                         </div>

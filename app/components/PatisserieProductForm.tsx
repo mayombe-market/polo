@@ -8,30 +8,9 @@ import { useState, useRef } from 'react'
 import Image from 'next/image'
 import { toast } from 'sonner'
 import { createProduct, updateProduct } from '@/app/actions/orders'
+import { uploadImage } from '@/lib/uploadImage'
 
-async function uploadViaApi(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = async () => {
-            try {
-                const base64 = reader.result as string
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ image: base64 }),
-                })
-                const body = await res.json()
-                if (!res.ok) throw new Error(body.error || 'Erreur upload')
-                resolve(body.url ?? body.secure_url ?? '')
-            } catch (e: any) {
-                reject(e)
-            }
-        }
-        reader.onerror = () => reject(new Error('Lecture fichier échouée'))
-        reader.readAsDataURL(file)
-    })
-}
+const uploadViaApi = (file: File): Promise<string> => uploadImage(file)
 import {
     Camera, Plus, X, Loader2, Check, ChevronDown, ChevronUp,
     GripVertical, Cake, Trash2,

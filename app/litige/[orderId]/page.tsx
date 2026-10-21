@@ -1,5 +1,6 @@
 'use client'
 
+import { uploadImage } from '@/lib/uploadImage'
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -80,30 +81,13 @@ export default function LitigePage() {
         for (const file of Array.from(files)) {
             if (!file.type.startsWith('image/')) continue
             try {
-                const b64 = await fileToBase64(file)
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: b64 }),
-                })
-                const json = await res.json()
-                if (json.url) uploaded.push(json.url)
-                else throw new Error(json.error || 'Upload failed')
-            } catch {
-                toast.error(`Erreur upload : ${file.name}`)
+                uploaded.push(await uploadImage(file))
+            } catch (e: unknown) {
+                toast.error(`${file.name} : ${e instanceof Error ? e.message : 'envoi impossible'}`)
             }
         }
         setImages(prev => [...prev, ...uploaded])
         setUploading(false)
-    }
-
-    function fileToBase64(file: File): Promise<string> {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = () => resolve(reader.result as string)
-            reader.onerror = reject
-            reader.readAsDataURL(file)
-        })
     }
 
     // ── Submit ─────────────────────────────────────────────────────────────────

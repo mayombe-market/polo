@@ -1,5 +1,6 @@
 'use client'
 
+import { uploadImage } from '@/lib/uploadImage'
 import { useState, useEffect, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -113,26 +114,11 @@ export default function AdCampaignModal({ productId, productName, productImages,
         setCustomImgPreview(URL.createObjectURL(file))
         setUploadingCustom(true)
         try {
-            const reader = new FileReader()
-            const dataUri = await new Promise<string>((resolve, reject) => {
-                reader.onload = () => resolve(reader.result as string)
-                reader.onerror = reject
-                reader.readAsDataURL(file)
-            })
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ image: dataUri }),
-            })
-            const json = await res.json()
-            if (json.url) {
-                setUploadedCustomUrl(json.url)
-                setSelectedImg(json.url)
-            } else {
-                toast.error("Échec de l'upload. Réessayez.")
-            }
-        } catch {
-            toast.error("Erreur lors de l'upload.")
+            const url = await uploadImage(file)
+            setUploadedCustomUrl(url)
+            setSelectedImg(url)
+        } catch (e: unknown) {
+            toast.error(e instanceof Error ? e.message : "Erreur lors de l'envoi de l'image.")
         } finally {
             setUploadingCustom(false)
         }

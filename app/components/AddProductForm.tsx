@@ -7,7 +7,7 @@
  * - **Verrou d’envoi** (`publishingLockRef`) : empêche deux soumissions simultanées avant que React n’ait peint `loading`.
  * - **Identifiant de run** (`publishRunIdRef` + `ownsPublishUi`) : si des opérations async se chevauchaient, seul le run actif
  *   réinitialise la barre de progression / `loading` dans le `finally` (évite courses sur l’état UI).
- * - **Uploads images** : uniquement `fetch('/api/upload')` (JSON : `image` = data URL `data:image/...;base64,...`) — jamais de SDK Cloudinary ni de secrets côté client ; retries réseau, puis 2e vague si timeout ; compression **et** envoi en **parallèle** (`Promise.all`) pour minimiser le temps d'attente.
+ * - **Uploads images** : `uploadImages` (lib/uploadImage.ts) — compression puis envoi binaire direct navigateur → Cloudinary (signature via `/api/upload/sign`), 2 à la fois, progression réelle.
  * - **createProduct (Server Action)** : `callCreateProductWithRetries` relance uniquement sur **timeout**, pas sur erreur métier
  *   renvoyée dans `{ error: string }` (évite doublons involontaires).
  * - **Feedback** : libellés d’étape (`publishLabel`) + barre de progression ; entrées fichier désactivées pendant `loading`.
@@ -21,7 +21,7 @@ import type { StudioState } from '@/app/components/ProductPhotoStudio'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
-import { compressImageForUpload } from '@/lib/compressImageForUpload'
+import { uploadImages } from '@/lib/uploadImage'
 import {
     PRODUCT_VARIANT_COLORS,
     CLOTHING_SIZES,
@@ -341,17 +341,8 @@ function validateImageFile(file: File | null): string | null {
     return null
 }
 
-/** Délai max par fichier upload Storage + action serveur (aligné réseaux à forte latence). */
-const UPLOAD_TIMEOUT_MS = NETWORK_TIMEOUT_MS
-
-/** 1 tentative + minimum 3 relances sur erreurs réseau / Storage (hors timeout). */
-const UPLOAD_NETWORK_MAX_ATTEMPTS = 4
-
 /** 1 tentative + 3 relances si l’action serveur expire (timeout). */
 const CREATE_PRODUCT_MAX_ATTEMPTS = 4
-
-/** Compression JPEG/PNG */
-const COMPRESS_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
 /** Action serveur createProduct */
 const CREATE_PRODUCT_TIMEOUT_MS = NETWORK_TIMEOUT_MS
@@ -403,30 +394,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 
 function sleep(ms: number) {
     return new Promise<void>((r) => setTimeout(r, ms))
-}
-
-/**
- * Retries réseau pour Storage : au moins 3 relances après le 1er échec.
- * Les timeouts (`__UPLOAD_TIMEOUT__`) sont remontés tout de suite pour la logique « 2e vague » en amont.
- */
-async function runWithNetworkRetries<T>(fn: () => Promise<T>, logLabel: string): Promise<T> {
-    let last: unknown
-    for (let attempt = 1; attempt <= UPLOAD_NETWORK_MAX_ATTEMPTS; attempt++) {
-        try {
-            return await fn()
-        } catch (e) {
-            last = e
-            if (isTimeoutError(e)) throw e
-            if (attempt >= UPLOAD_NETWORK_MAX_ATTEMPTS) break
-            const wait = 380 * attempt
-            console.warn(
-                `[AddProductForm] ${logLabel} — échec ${attempt}/${UPLOAD_NETWORK_MAX_ATTEMPTS}, nouvel essai dans ${wait}ms`,
-                e,
-            )
-            await sleep(wait)
-        }
-    }
-    throw last instanceof Error ? last : new Error(String(last))
 }
 
 /**
@@ -1115,8 +1082,8 @@ export default function AddProductForm({
         if (isImageUploadPipeline) {
             const detail = msg.length > 520 ? `${msg.slice(0, 520)}…` : msg
             alert(
-                `Erreur lors du traitement ou de l’envoi d’une image.\n\n${detail}\n\n` +
-                    'Vérifiez : 1) variables serveur CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET (Vercel ou .env.local, voir .env.example) ; 2) connexion ; 3) taille/format des photos. Ce message n’est en général pas lié à une simple déconnexion vendeur.',
+                `L’envoi des photos n’a pas abouti.\n\n${detail}\n\n` +
+                    'Votre produit n’a pas été publié. Vérifiez votre connexion (Wi‑Fi si possible) puis appuyez à nouveau sur Publier.',
             )
             return
         }
@@ -1192,114 +1159,6 @@ export default function AddProductForm({
         /** Si `runId` ne correspond plus au ref, un autre envoi a pris le relais — ne pas toucher à l’UI globale. */
         const ownsPublishUi = () => publishRunIdRef.current === runId
 
-        /** Data URL complète (`data:image/...;base64,...`) — même format que Cloudinary attend côté serveur. */
-        const toBase64 = (file: File): Promise<string> =>
-            new Promise((resolve, reject) => {
-                const reader = new FileReader()
-                reader.readAsDataURL(file)
-                reader.onload = () => resolve(String(reader.result ?? '').trim())
-                reader.onerror = () => {
-                    // FileReader échoue pour HEIC/HEIF sur certains navigateurs (Chrome iOS) ou
-                    // pour des photos iCloud non téléchargées. Fallback : canvas via <img> + createObjectURL.
-                    // iOS Safari peut décoder HEIC dans <img> et canvas.toDataURL() produit un JPEG valide.
-                    const objectUrl = URL.createObjectURL(file)
-                    const img = document.createElement('img')
-                    img.onload = () => {
-                        try {
-                            const MAX = 1080
-                            let w = img.naturalWidth
-                            let h = img.naturalHeight
-                            if (w > MAX || h > MAX) {
-                                const r = Math.min(MAX / w, MAX / h)
-                                w = Math.round(w * r)
-                                h = Math.round(h * r)
-                            }
-                            const canvas = document.createElement('canvas')
-                            canvas.width = w
-                            canvas.height = h
-                            const ctx = canvas.getContext('2d')
-                            if (!ctx) throw new Error('no-ctx')
-                            ctx.drawImage(img, 0, 0, w, h)
-                            URL.revokeObjectURL(objectUrl)
-                            resolve(canvas.toDataURL('image/jpeg', 0.85))
-                        } catch {
-                            URL.revokeObjectURL(objectUrl)
-                            reject(new Error('Lecture du fichier image impossible.'))
-                        }
-                    }
-                    img.onerror = () => {
-                        URL.revokeObjectURL(objectUrl)
-                        // Format non lisible même par le navigateur (photo iCloud non téléchargée, HEIC sur Chrome iOS…)
-                        reject(new Error(
-                            'Impossible de lire cette image.\n\n' +
-                            '• Si c\'est une photo iPhone (HEIC) : ouvrez-la dans Photos, appuyez sur "Partager" → "Enregistrer l\'image" pour créer une copie JPEG, puis réessayez.\n' +
-                            '• Si vos photos sont dans iCloud : attendez qu\'elles soient téléchargées sur l\'appareil.\n' +
-                            '• Sinon : convertissez en JPEG ou PNG avant l\'envoi.'
-                        ))
-                    }
-                    img.src = objectUrl
-                }
-            })
-
-        const uploadFileOnce = async (file: File): Promise<string> => {
-            const base64 = await toBase64(file)
-            if (!base64.startsWith('data:image')) {
-                throw new Error('Format image invalide — attendu data:image/...')
-            }
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'same-origin',
-                body: JSON.stringify({ image: base64 }),
-            })
-            let body: { url?: string; secure_url?: string; error?: string }
-            try {
-                body = await res.json()
-            } catch {
-                body = {}
-            }
-            if (!res.ok) {
-                throw new Error(body.error || `Échec envoi image (${res.status})`)
-            }
-            const imageUrl = body.url ?? body.secure_url
-            if (!imageUrl) {
-                throw new Error('Réponse serveur sans URL d’image.')
-            }
-            return imageUrl
-        }
-
-        /**
-         * POST `/api/upload` (session requise) : jusqu’à 4 essais sur erreurs réseau, puis une 2e « vague » complète si timeout.
-         * Les fichiers sont envoyés en parallèle via `Promise.all` — pas de races car l’endpoint est stateless.
-         */
-        const uploadFileTimedWithRetry = async (file: File, label: string): Promise<string> => {
-            const oneWave = () =>
-                runWithNetworkRetries(
-                    () => withTimeout(uploadFileOnce(file), UPLOAD_TIMEOUT_MS),
-                    `api.upload ${label}`,
-                )
-            try {
-                return await oneWave()
-            } catch (e: unknown) {
-                if (!isTimeoutError(e)) throw e
-                await sleep(2000)
-                return await oneWave()
-            }
-        }
-
-        const safeCompress = async (file: File): Promise<File> => {
-            try {
-                return await withTimeout(compressImageForUpload(file), COMPRESS_TIMEOUT_MS)
-            } catch (e: unknown) {
-                if (isTimeoutError(e)) {
-                    console.warn('[AddProductForm] compression timeout, fichier original:', file.name)
-                } else {
-                    console.warn('[AddProductForm] compression échouée, fichier original:', file.name, e)
-                }
-                return file
-            }
-        }
-
         setLoading(true)
         setPublishProgress(5)
 
@@ -1314,60 +1173,23 @@ export default function AddProductForm({
 
             setPublishLabel('Préparation…')
 
-            // ── Compression parallèle ────────────────────────────────────────
-            setPublishProgress(8)
-            setPublishLabel('Optimisation des photos…')
-            let fileMain: File
-            const galleryPrepared: { slotIndex: number; file: File }[] = []
-            try {
-                const galleryIndexed = gallery
-                    .map((f, i) => ({ file: f, index: i }))
-                    .filter((g): g is { file: File; index: number } => g.file !== null)
-
-                const allCompressed = await Promise.all([
-                    safeCompress(mainImage!),
-                    ...galleryIndexed.map(({ file }) => safeCompress(file)),
-                ])
-                if (!ownsPublishUi()) return
-
-                fileMain = allCompressed[0]
-                for (let j = 0; j < galleryIndexed.length; j++) {
-                    galleryPrepared.push({ slotIndex: galleryIndexed[j].index, file: allCompressed[j + 1] })
-                }
-            } catch (e: unknown) {
-                await reportTechnicalFailure('compression_images', e)
-                return
-            }
-
-            // ── Upload parallèle ─────────────────────────────────────────────
-            const totalUploads = 1 + galleryPrepared.length
-            let completed = 0
-            const bumpUploadProgress = () => {
-                completed++
-                const pct = 15 + Math.round((completed / totalUploads) * 65)
-                setPublishProgress(Math.min(80, pct))
-                setPublishLabel(`Envoi des images… ${completed}/${totalUploads}`)
-            }
-
-            setPublishProgress(15)
-            setPublishLabel(`Envoi des images (0/${totalUploads})…`)
+            // ── Photos : compression + envoi direct à Cloudinary, 2 à la fois ─────
+            const galleryIndexed = gallery.filter((f): f is File => f !== null)
+            const filesToSend = [mainImage!, ...galleryIndexed]
+            setPublishProgress(10)
+            setPublishLabel(`Envoi des photos… 0/${filesToSend.length}`)
 
             let mainUrl: string
             const galleryUrls: string[] = []
             try {
-                const uploadWithProgress = (file: File, label: string) =>
-                    uploadFileTimedWithRetry(file, label).then(url => { bumpUploadProgress(); return url })
-
-                const results = await Promise.all([
-                    uploadWithProgress(fileMain, 'principale'),
-                    ...galleryPrepared.map(({ slotIndex, file }) =>
-                        uploadWithProgress(file, `galerie-${slotIndex}`)
-                    ),
-                ])
+                const urls = await uploadImages(filesToSend, (fraction, done, total) => {
+                    if (!ownsPublishUi()) return
+                    setPublishProgress(10 + Math.round(fraction * 70))
+                    setPublishLabel(`Envoi des photos… ${done}/${total} · ${Math.round(fraction * 100)} %`)
+                })
                 if (!ownsPublishUi()) return
-
-                mainUrl = results[0]
-                results.slice(1).forEach(url => galleryUrls.push(url))
+                mainUrl = urls[0]
+                galleryUrls.push(...urls.slice(1))
             } catch (e: unknown) {
                 await reportTechnicalFailure('upload_galerie', e)
                 return

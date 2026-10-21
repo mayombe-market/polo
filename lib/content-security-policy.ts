@@ -27,6 +27,7 @@ export function getContentSecurityPolicy(): string {
             https://challenges.cloudflare.com;
         font-src 'self' data: blob:;
         connect-src 'self'
+            https://api.cloudinary.com
             https://*.supabase.co wss://*.supabase.co
             https://www.google-analytics.com https://*.google-analytics.com
             https://*.analytics.google.com https://*.googletagmanager.com

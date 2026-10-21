@@ -1,7 +1,6 @@
 import 'server-only'
 
 import crypto from 'crypto'
-import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
 /** Même normalisation que l’ancien module — uniquement `process.env`. */
 function stripEnv(value: string | undefined): string {
@@ -33,13 +32,6 @@ function readCredentials(): { cloud_name: string; api_key: string; api_secret: s
         || stripEnv((process.env as Record<string, string | undefined>)['CLOUDINARY_API_KEY'])
     const api_secret = stripEnv(process.env.CLOUDINARY_API_SECRET)
         || stripEnv((process.env as Record<string, string | undefined>)['CLOUDINARY_API_SECRET'])
-
-    console.error('[Cloudinary readCredentials]', {
-        cloud_name: cloud_name ? '✓' : '✗',
-        api_key: api_key ? '✓' : '✗',
-        api_secret: api_secret ? '✓' : '✗',
-        url: url ? '✓' : '✗',
-    })
 
     if (cloud_name && api_key && api_secret) {
         return { cloud_name, api_key, api_secret }
@@ -87,52 +79,21 @@ function apiSignRequest(params: Record<string, string | number>, apiSecret: stri
     return crypto.createHash('sha1').update(apiStringToSign(params) + apiSecret).digest('hex')
 }
 
+export type CloudinaryUploadSignature = {
+    cloudName: string
+    apiKey: string
+    timestamp: number
+    signature: string
+    folder: string
+}
+
 /**
- * Upload via API REST officielle — pas de singleton SDK, pas de `cloudinary.config()`.
- * Les variables sont lues au moment de l’appel (Vercel injecte `process.env` à l’exécution).
+ * Signature d'upload direct navigateur → Cloudinary (le secret reste côté serveur).
+ * Valable 1 h côté Cloudinary ; réutilisable pour plusieurs fichiers.
  */
-export async function uploadDataUriToCloudinary(dataUri: string): Promise<{ secure_url: string }> {
+export function signCloudinaryUpload(folder = 'products'): CloudinaryUploadSignature {
     const { cloud_name, api_key, api_secret } = readCredentials()
-
     const timestamp = Math.floor(Date.now() / 1000)
-    const paramsToSign: Record<string, string | number> = {
-        timestamp,
-        folder: 'products',
-    }
-    const signature = apiSignRequest(paramsToSign, api_secret)
-
-    const form = new FormData()
-    form.append('file', dataUri)
-    form.append('api_key', api_key)
-    form.append('timestamp', String(timestamp))
-    form.append('signature', signature)
-    form.append('folder', 'products')
-
-    const endpoint = `https://api.cloudinary.com/v1_1/${encodeURIComponent(cloud_name)}/auto/upload`
-
-    const res = await fetch(endpoint, {
-        method: 'POST',
-        body: form,
-        signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
-    })
-
-    const text = await res.text()
-    let json: { secure_url?: string; error?: { message?: string } }
-    try {
-        json = JSON.parse(text) as { secure_url?: string; error?: { message?: string } }
-    } catch {
-        throw new Error(`Cloudinary : réponse non JSON (HTTP ${res.status})`)
-    }
-
-    if (!res.ok) {
-        const msg = json?.error?.message ?? text.slice(0, 500)
-        throw new Error(`Cloudinary HTTP ${res.status}: ${msg}`)
-    }
-
-    const secure_url = json.secure_url
-    if (!secure_url) {
-        throw new Error('Cloudinary : réponse sans secure_url')
-    }
-
-    return { secure_url }
+    const signature = apiSignRequest({ folder, timestamp }, api_secret)
+    return { cloudName: cloud_name, apiKey: api_key, timestamp, signature, folder }
 }

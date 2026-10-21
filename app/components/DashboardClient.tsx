@@ -2123,6 +2123,8 @@ function OrdersPage({
                 <p className="text-sm text-slate-400 font-bold mt-1">{orders.length} commande{orders.length !== 1 ? 's' : ''} au total</p>
             </div>
 
+            <VendorPaymentConfirmations hideWhenEmpty onDecision={onRetryOrders} />
+
             {/* Filters — masqués tant que les données commandes ne sont pas exploitables (UX plus claire). */}
             {ordersBlockState === 'ready' && (
                 <div className="flex items-center gap-2 overflow-x-auto pb-4 no-scrollbar mb-6">
@@ -3309,17 +3311,6 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
                         <VendorPaymentSettings profile={profile} />
                     </div>
 
-                    <div className="bg-white dark:bg-slate-900 rounded-3xl p-6 border border-slate-100 dark:border-slate-800">
-                        <div className="mb-4">
-                            <h3 className="text-sm font-black dark:text-white uppercase tracking-wide">
-                                Paiements à confirmer
-                            </h3>
-                            <p className="text-xs text-slate-400 mt-1">
-                                Confirmez les paiements reçus de vos clients.
-                            </p>
-                        </div>
-                        <VendorPaymentConfirmations />
-                    </div>
                 </>
             )}
 

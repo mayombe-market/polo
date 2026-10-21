@@ -74,7 +74,7 @@ const SECTIONS = [
     subtitle: "De la préparation du colis à la livraison",
     steps: [
       { icon: PackagePlus, text: "Préparez le colis soigneusement — emballez bien pour éviter les dommages" },
-      { icon: MapPin, text: "L'admin confirme le paiement puis un livreur est assigné à votre commande" },
+      { icon: MapPin, text: "Dès que vous confirmez avoir reçu le paiement, la commande est validée et vous organisez la livraison" },
       { icon: Truck, text: "Le livreur vient chercher le colis chez vous à l'adresse de votre boutique" },
       { icon: CheckCircle, text: "Une fois livré, vous pouvez marquer la commande comme « Expédiée » dans le dashboard" },
     ],
@@ -90,9 +90,9 @@ const SECTIONS = [
     title: "Recevoir votre argent",
     subtitle: "Vos fonds sont sécurisés et transférés rapidement",
     steps: [
-      { icon: ShieldCheck, text: "L'acheteur envoie le paiement à Mayombe Market (MTN MoMo ou Airtel)" },
-      { icon: CheckCircle, text: "Notre équipe vérifie le paiement et confirme la commande" },
-      { icon: Wallet, text: "Après livraison confirmée, vos fonds sont libérés sur votre compte MTN ou Airtel" },
+      { icon: ShieldCheck, text: "L'acheteur vous paie directement sur votre numéro MTN MoMo ou Airtel Money" },
+      { icon: CheckCircle, text: "Vous vérifiez la réception et cliquez « Paiement reçu » : la commande est confirmée" },
+      { icon: Wallet, text: "L'argent arrive directement sur votre compte MTN ou Airtel : aucun reversement à attendre" },
       { icon: Star, text: "Le client laisse un avis — plus vous avez d'étoiles, plus vous vendez !" },
     ],
     illustration: <PaymentIllustration />,

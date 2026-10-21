@@ -2,6 +2,44 @@
 
 import { resend, FROM_EMAIL } from '@/lib/resend'
 import { escapeHtml } from '@/lib/escapeHtml'
+import {
+    buildBuyerDecisionEmail,
+    buildVendorNewOrderEmail,
+    buildVendorCancelledEmail,
+    type BuyerDecisionEmailInput,
+    type VendorNewOrderEmailInput,
+    type VendorCancelledEmailInput,
+} from '@/lib/orderDecisionEmails'
+
+async function sendBuilt(to: string, built: { subject: string; html: string }, tag: string) {
+    try {
+        const { error } = await resend.emails.send({ from: FROM_EMAIL, to, subject: built.subject, html: built.html })
+        if (error) {
+            console.error(`[${tag}] Resend:`, error, { to })
+            return { error: String((error as { message?: string }).message || error) }
+        }
+        return { success: true }
+    } catch (e: unknown) {
+        const detail = e instanceof Error ? e.message : String(e)
+        console.error(`[${tag}] exception:`, detail, { to })
+        return { error: detail }
+    }
+}
+
+/** Acheteur : le vendeur a confirmé ou refusé son paiement */
+export async function sendBuyerVendorDecisionEmail(to: string, data: BuyerDecisionEmailInput) {
+    return sendBuilt(to, buildBuyerDecisionEmail(data), 'sendBuyerVendorDecisionEmail')
+}
+
+/** Vendeur : nouvelle commande reçue */
+export async function sendVendorNewOrderEmail(to: string, data: VendorNewOrderEmailInput) {
+    return sendBuilt(to, buildVendorNewOrderEmail(data), 'sendVendorNewOrderEmail')
+}
+
+/** Vendeur : commande multi-vendeurs annulée suite au refus d'un autre vendeur */
+export async function sendVendorOrderCancelledEmail(to: string, data: VendorCancelledEmailInput) {
+    return sendBuilt(to, buildVendorCancelledEmail(data), 'sendVendorOrderCancelledEmail')
+}
 
 interface OrderItem {
     name: string

@@ -61,7 +61,7 @@ export function OrderCard({ order }: { order: any }) {
             return
         }
         setTxSaved(true)
-        toast.success('Code enregistré — notre équipe va vérifier.')
+        toast.success('Code enregistré — le vendeur a été prévenu et va vérifier.')
     }
 
     const getWaLink = (issue: string) => {
@@ -313,7 +313,7 @@ export function OrderCard({ order }: { order: any }) {
             {txSaved && isPendingMoMo && (
                 <div className="mb-6 px-4 py-4 rounded-2xl bg-green-50 dark:bg-green-500/5 border border-green-200 dark:border-green-500/20 text-center">
                     <p className="text-[10px] font-black uppercase text-green-600 dark:text-green-400 tracking-widest">
-                        ✓ Code enregistré — notre équipe va vérifier sous peu
+                        ✓ Code enregistré — le vendeur va vérifier la réception
                     </p>
                 </div>
             )}

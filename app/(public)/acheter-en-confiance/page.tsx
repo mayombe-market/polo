@@ -26,8 +26,8 @@ const GUARANTEES = [
         points: [
             'Paiement via MTN MoMo ou Airtel Money — sans carte bancaire.',
             'Vous entrez votre numéro de transaction après le paiement.',
-            'Notre équipe vérifie chaque paiement avant confirmation.',
-            'Votre commande n\'est confirmée qu\'après vérification manuelle.',
+            'Le vendeur vérifie la réception de votre paiement sur son compte.',
+            'Votre commande n\'est confirmée qu\'après sa vérification — vous êtes prévenu à chaque étape.',
         ],
     },
     {

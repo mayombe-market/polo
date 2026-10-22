@@ -6,9 +6,11 @@ import {
     buildBuyerDecisionEmail,
     buildVendorNewOrderEmail,
     buildVendorCancelledEmail,
+    buildVendorReminderEmail,
     type BuyerDecisionEmailInput,
     type VendorNewOrderEmailInput,
     type VendorCancelledEmailInput,
+    type VendorReminderEmailInput,
 } from '@/lib/orderDecisionEmails'
 
 async function sendBuilt(to: string, built: { subject: string; html: string }, tag: string) {
@@ -34,6 +36,11 @@ export async function sendBuyerVendorDecisionEmail(to: string, data: BuyerDecisi
 /** Vendeur : nouvelle commande reçue */
 export async function sendVendorNewOrderEmail(to: string, data: VendorNewOrderEmailInput) {
     return sendBuilt(to, buildVendorNewOrderEmail(data), 'sendVendorNewOrderEmail')
+}
+
+/** Vendeur : relance admin, commande en attente de réponse */
+export async function sendVendorReminderEmail(to: string, data: VendorReminderEmailInput) {
+    return sendBuilt(to, buildVendorReminderEmail(data), 'sendVendorReminderEmail')
 }
 
 /** Vendeur : commande multi-vendeurs annulée suite au refus d'un autre vendeur */

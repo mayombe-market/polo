@@ -240,11 +240,16 @@ export async function collectCodCash(
     if (rpcErr) return { error: rpcErr.message }
     if (!codeOk) return { error: 'Code de livraison incorrect ou déjà utilisé.' }
 
-    // Mettre à jour le statut à "delivered"
-    await svc()
+    // Livrée : heure de livraison + code utilisé (le RPC efface delivery_code ; traçabilité admin)
+    const deliveredUpdate = { status: 'delivered', delivered_at: new Date().toISOString() }
+    const { error: traceError } = await svc()
         .from('orders')
-        .update({ status: 'delivered' })
+        .update({ ...deliveredUpdate, delivery_code_used: deliveryCode.trim().toUpperCase() })
         .eq('id', orderId)
+    if (traceError) {
+        // Colonne delivery_code_used absente tant que supabase-migration-delivery-code-trace.sql n'est pas appliqué
+        await svc().from('orders').update(deliveredUpdate).eq('id', orderId)
+    }
 
     // Notifier l'acheteur
     if (order.user_id) {

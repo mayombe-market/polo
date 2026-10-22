@@ -3,6 +3,8 @@
 import { useEffect, useState } from 'react'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { computeVendorBadges, BADGE_DEFINITIONS, type VendorBadge } from '@/lib/vendorBadges'
+import { getVendorResponsiveness } from '@/app/actions/vendorResponsiveness'
+import type { ResponsivenessSummary } from '@/lib/vendorResponsiveness'
 import { Star, TrendingUp, Users, ShoppingBag, Award, ChevronRight, Lightbulb } from 'lucide-react'
 
 interface ReputationStats {
@@ -52,6 +54,7 @@ export default function VendorReputationDashboard({ profile, followerCount }: { 
     })
     const [recentReviews, setRecentReviews] = useState<any[]>([])
     const [loading, setLoading] = useState(true)
+    const [responsiveness, setResponsiveness] = useState<ResponsivenessSummary | null>(null)
 
     useEffect(() => {
         if (!profile?.id) { setLoading(false); return }
@@ -61,6 +64,7 @@ export default function VendorReputationDashboard({ profile, followerCount }: { 
             try {
                 const { data: reviewsData } = await supabase.rpc('get_seller_reviews', { p_seller_id: profile.id })
                 const reviews: any[] = reviewsData || []
+                getVendorResponsiveness(profile.id).then(setResponsiveness).catch(() => {})
 
                 const ratings = reviews.map((r: any) => r.vendor_rating).filter((r: any) => typeof r === 'number' && r > 0)
                 const avg = ratings.length > 0 ? parseFloat((ratings.reduce((s: number, r: number) => s + r, 0) / ratings.length).toFixed(1)) : 0
@@ -86,6 +90,7 @@ export default function VendorReputationDashboard({ profile, followerCount }: { 
         averageRating: stats.averageRating,
         reviewCount: stats.reviewCount,
         created_at: profile?.created_at,
+        responsiveness,
     })
 
     const tips = buildTips(stats, badges)

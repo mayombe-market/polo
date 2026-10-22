@@ -49,6 +49,8 @@ import ProductCard from '@/app/components/ProductCard'
 import SellerProfileHeader from '@/app/components/SellerProfileHeader'
 import SellerTabs from '@/app/components/SellerTabs'
 import SellerReviewsList from '@/app/components/SellerReviewsList'
+import { getVendorResponsiveness } from '@/app/actions/vendorResponsiveness'
+import type { ResponsivenessSummary } from '@/lib/vendorResponsiveness'
 import { Loader2 } from 'lucide-react'
 
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
@@ -93,6 +95,16 @@ export default function StorePublicPage() {
     const [countsDegraded, setCountsDegraded] = useState(false)
     /** True si l’RPC avis vendeur a échoué après tous les retries. */
     const [reviewsDegraded, setReviewsDegraded] = useState(false)
+    const [responsiveness, setResponsiveness] = useState<ResponsivenessSummary | null>(null)
+
+    useEffect(() => {
+        if (!sellerIdParam) return
+        let cancelled = false
+        getVendorResponsiveness(sellerIdParam)
+            .then(r => { if (!cancelled) setResponsiveness(r) })
+            .catch(() => {})
+        return () => { cancelled = true }
+    }, [sellerIdParam])
 
     useEffect(() => {
         let cancelled = false
@@ -385,6 +397,7 @@ export default function StorePublicPage() {
 
             <SellerProfileHeader
                 profile={profile}
+                responsiveness={responsiveness}
                 followerCount={followerCount}
                 followingCount={followingCount}
                 averageRating={averageRating}

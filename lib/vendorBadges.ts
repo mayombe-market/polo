@@ -1,4 +1,6 @@
-export type VendorBadgeId = 'trusted' | 'well_rated' | 'verified' | 'new'
+import { isFastResponder, type ResponsivenessSummary } from '@/lib/vendorResponsiveness'
+
+export type VendorBadgeId = 'trusted' | 'well_rated' | 'verified' | 'fast' | 'new'
 
 export type VendorBadge = {
     id: VendorBadgeId
@@ -16,6 +18,7 @@ export type VendorBadgeInput = {
     averageRating?: number
     reviewCount?: number
     created_at?: string | null
+    responsiveness?: ResponsivenessSummary | null
 }
 
 const DEFINITIONS: VendorBadge[] = [
@@ -47,6 +50,15 @@ const DEFINITIONS: VendorBadge[] = [
         darkBg: 'rgba(5,150,105,0.15)',
     },
     {
+        id: 'fast',
+        label: 'Répond rapidement',
+        emoji: '⚡',
+        description: 'Confirme ses commandes en moins d’une heure (médiane sur au moins 3 commandes).',
+        color: '#EA580C',
+        bg: '#FFF7ED',
+        darkBg: 'rgba(234,88,12,0.15)',
+    },
+    {
         id: 'new',
         label: 'Nouveau vendeur',
         emoji: '🆕',
@@ -64,6 +76,7 @@ export function computeVendorBadges(input: VendorBadgeInput): VendorBadge[] {
         averageRating = 0,
         reviewCount = 0,
         created_at,
+        responsiveness,
     } = input
 
     const sales = confirmed_sales_count ?? 0
@@ -83,6 +96,10 @@ export function computeVendorBadges(input: VendorBadgeInput): VendorBadge[] {
 
     if (verification_status === 'verified') {
         badges.push(DEFINITIONS.find(b => b.id === 'verified')!)
+    }
+
+    if (isFastResponder(responsiveness)) {
+        badges.push(DEFINITIONS.find(b => b.id === 'fast')!)
     }
 
     if (badges.length === 0) {

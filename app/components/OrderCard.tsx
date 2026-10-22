@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Clock, CheckCircle2, Truck, Package, Download, AlertTriangle, Phone, ChevronDown, Loader2 } from 'lucide-react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import DeliveryCodeBadge from '@/app/components/DeliveryCodeBadge'
 import { getAdminPaymentNumber } from '@/lib/adminPaymentConfig'
 import { buyerUpdatePendingTransactionId } from '@/app/actions/orders'
 import { toast } from 'sonner'
@@ -124,6 +125,8 @@ export function OrderCard({ order }: { order: any }) {
                     )}
                 </div>
             </div>
+
+            <DeliveryCodeBadge order={order} />
 
             {/* BARRE DE PROGRESSION (TIMELINE) */}
             <div className="relative flex justify-between items-center mb-10 px-2">

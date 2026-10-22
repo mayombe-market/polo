@@ -105,7 +105,9 @@ export async function getVendorOrders() {
         items: order.items?.filter((item: any) => item.seller_id === user.id) || [],
     }))
 
-    return { orders: JSON.parse(JSON.stringify(cleanOrders)), vendorId: user.id }
+    // Le code de livraison est la preuve de remise du colis : il ne doit jamais être envoyé au vendeur
+    const withoutDeliveryCode = cleanOrders.map(({ delivery_code: _code, ...rest }) => rest)
+    return { orders: JSON.parse(JSON.stringify(withoutDeliveryCode)), vendorId: user.id }
 }
 
 // Sauvegarder la position de livraison après commande (appelé côté client)

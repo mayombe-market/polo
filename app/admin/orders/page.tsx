@@ -113,13 +113,17 @@ export default function AdminOrders() {
                     .maybeSingle()
                 setAdminScope(getAdminScopeFromProfileCity(adminProfile?.city))
 
-                // Commandes actives uniquement (is_archived = false ou colonne absente)
-                const { data, error } = await withTimeout(supabase
+                // Commandes actives uniquement (is_archived = false ou NULL)
+                const activeQuery = () => supabase
                     .from('orders')
                     .select('*')
-                    .or('is_archived.eq.false,is_archived.is.null')
                     .order('created_at', { ascending: false })
-                    .limit(500))
+                    .limit(500)
+                let { data, error } = await withTimeout(activeQuery().or('is_archived.eq.false,is_archived.is.null'))
+                // 42703 : colonnes d'archivage absentes (supabase-hotfix-orders-archive-columns.sql non appliqué) → aucune commande archivée
+                if (error?.code === '42703') {
+                    ;({ data, error } = await withTimeout(activeQuery()))
+                }
 
                 if (error) console.error('Erreur chargement:', error)
 
@@ -207,8 +211,8 @@ export default function AdminOrders() {
                 .eq('is_archived', true)
                 .order('archived_at', { ascending: false })
                 .limit(1000))
-            if (error) console.error('Erreur chargement archives:', error)
-            setArchivedOrders(data || [])
+            if (error && error.code !== '42703') console.error('Erreur chargement archives:', error)
+            setArchivedOrders(error ? [] : data || [])
             setArchivesLoaded(true)
         } catch (err) {
             console.error('Erreur archives:', err)

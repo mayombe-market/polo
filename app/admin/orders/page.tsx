@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, useRef, type ReactNode } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo, type ReactNode } from 'react'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { safeGetUser, withTimeout } from '@/lib/supabase-utils'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
@@ -29,7 +29,9 @@ import { playNewOrderSound } from '@/lib/notificationSound'
 import { useRealtime } from '@/hooks/useRealtime'
 import { getAdminScopeFromProfileCity, type AdminZoneScope } from '@/lib/adminZone'
 import { normalizeToServiceCityCode, type ServiceCityCode } from '@/lib/deliveryLocation'
-import OrderTimeline from './OrderTimeline'
+import OrderFollowUp, { ContactLinks } from './OrderFollowUp'
+import { adminGetOrdersContext, type OrdersContext } from '@/app/actions/adminOrderFollowUp'
+import { summarizeResponsiveness, type ResponsivenessSummary } from '@/lib/vendorResponsiveness'
 
 const hasVendorPayments = (order: any) =>
     !!order?.vendor_payments && typeof order.vendor_payments === 'object' && Object.keys(order.vendor_payments).length > 0
@@ -49,7 +51,7 @@ export default function AdminOrders() {
     const [adminScope, setAdminScope] = useState<AdminZoneScope>('all')
     /** Ville du vendeur par user_id (abonnements) ou seller_id (commandes produit). */
     const [vendorCityMap, setVendorCityMap] = useState<Record<string, string | null>>({})
-    const [shopNameMap, setShopNameMap] = useState<Record<string, string>>({})
+    const [followCtx, setFollowCtx] = useState<OrdersContext | null>(null)
 
     // Onglet principal : commandes actives ou archives
     const [activeMainTab, setActiveMainTab] = useState<'orders' | 'archives'>('orders')
@@ -157,21 +159,43 @@ export default function AdminOrders() {
         }
         let cancelled = false
         ;(async () => {
-            const { data } = await supabase.from('profiles').select('id, city, shop_name, full_name').in('id', ids)
+            const { data } = await supabase.from('profiles').select('id, city').in('id', ids)
             if (cancelled) return
             const map: Record<string, string | null> = {}
-            const names: Record<string, string> = {}
             for (const row of data || []) {
                 map[row.id] = row.city ?? null
-                names[row.id] = row.shop_name || row.full_name || 'Vendeur'
             }
             setVendorCityMap(map)
-            setShopNameMap(names)
         })()
         return () => {
             cancelled = true
         }
     }, [orders, supabase])
+
+    const productOrderIdsKey = useMemo(
+        () => orders.filter(o => o.order_type !== 'subscription').map(o => o.id).join(','),
+        [orders]
+    )
+
+    useEffect(() => {
+        const product = orders.filter(o => o.order_type !== 'subscription')
+        if (product.length === 0) return
+        const vendorIds = [...new Set(product.flatMap(o => ((o.items || []) as Array<{ seller_id?: string }>).map(i => i.seller_id)).filter(Boolean))] as string[]
+        const buyerIds = [...new Set(product.map(o => o.user_id).filter(Boolean))] as string[]
+        let cancelled = false
+        adminGetOrdersContext({ vendorIds, buyerIds, orderIds: product.map(o => o.id) })
+            .then(r => { if (!cancelled && !('error' in r)) setFollowCtx(r) })
+            .catch(err => console.error('[admin/orders] contexte de suivi:', err))
+        return () => { cancelled = true }
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- rechargé uniquement si la liste des commandes change
+    }, [productOrderIdsKey])
+
+    const handleReminded = useCallback((orderId: string, vendorId: string, at: string) => {
+        setFollowCtx(prev => prev && {
+            ...prev,
+            reminders: { ...prev.reminders, [orderId]: [...(prev.reminders[orderId] || []), { at, vendorId }] },
+        })
+    }, [])
 
     /** Charge les commandes archivées (lazy — appelé lors du clic sur l'onglet Archives). */
     const fetchArchivedOrders = useCallback(async () => {
@@ -473,6 +497,14 @@ export default function AdminOrders() {
 
     // Séparer commandes produit et abonnements (toutes actives — archived exclues par la requête)
     const productOrders = orders.filter(o => o.order_type !== 'subscription')
+
+    const responsivenessByVendor = useMemo(() => {
+        const ids = new Set<string>()
+        for (const o of orders) for (const i of (o.items || []) as Array<{ seller_id?: string }>) if (i.seller_id) ids.add(i.seller_id)
+        const map: Record<string, ResponsivenessSummary> = {}
+        for (const id of ids) map[id] = summarizeResponsiveness(orders, id)
+        return map
+    }, [orders])
     const subscriptionOrders = orders.filter(o => o.order_type === 'subscription')
 
     // Statistiques sur les commandes actives uniquement
@@ -828,11 +860,14 @@ export default function AdminOrders() {
                                                         <p className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
                                                             <MapPin size={12} className="text-orange-500" /> {order.city}, {order.district}
                                                         </p>
-                                                        {order.phone && (
-                                                            <p className="text-[10px] font-bold text-slate-500 flex items-center gap-2 mt-1">
-                                                                <Phone size={12} className="text-orange-500" /> {order.phone}
-                                                            </p>
-                                                        )}
+                                                        <p className="text-[9px] font-bold text-slate-400 mt-1">
+                                                            {order.is_guest ? 'Commande sans compte' : 'Client avec compte'} · passée le {formatAdminDateTime(order.created_at)}
+                                                        </p>
+                                                        <ContactLinks
+                                                            phone={order.phone || (order.user_id ? followCtx?.buyers[order.user_id]?.phone || followCtx?.buyers[order.user_id]?.whatsapp : null)}
+                                                            email={order.customer_email || (order.user_id ? followCtx?.buyers[order.user_id]?.email : null)}
+                                                            waText={`Bonjour ${order.customer_name || ''}, c'est Mayombe Market au sujet de votre commande ${formatOrderNumber(order)}.`}
+                                                        />
                                                         {/* Localisation de livraison */}
                                                         {order.delivery_location_type === 'manual' && (order.delivery_sector || order.delivery_bus_stop || order.delivery_landmark) && (
                                                             <div className="mt-3 pt-3 border-t border-dashed border-slate-200 dark:border-slate-700 space-y-1">
@@ -916,7 +951,7 @@ export default function AdminOrders() {
                                                 </div>
                                             </div>
 
-                                            {!isSubscription && <OrderTimeline order={order} shopNames={shopNameMap} />}
+                                            {!isSubscription && <OrderFollowUp order={order} ctx={followCtx} responsiveness={responsivenessByVendor} canAct={canAct} onReminded={handleReminded} />}
 
                                             {/* VÉRIFICATION PAIEMENT (anciennes commandes sans validation vendeur) */}
                                             {order.status === 'pending' && !vendorFlow && (

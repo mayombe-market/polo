@@ -7,6 +7,7 @@ import StarRating from './StarRating'
 import { Store, MapPin, Calendar, ArrowLeft } from 'lucide-react'
 import VerifiedBadge from './VerifiedBadge'
 import { computeVendorBadges, type VendorBadgeInput } from '@/lib/vendorBadges'
+import type { ResponsivenessSummary } from '@/lib/vendorResponsiveness'
 
 interface SellerProfileHeaderProps {
     profile: any
@@ -15,6 +16,7 @@ interface SellerProfileHeaderProps {
     averageRating: number
     reviewCount: number
     productCount: number
+    responsiveness?: ResponsivenessSummary | null
 }
 
 export default function SellerProfileHeader({
@@ -24,6 +26,7 @@ export default function SellerProfileHeader({
     averageRating,
     reviewCount,
     productCount,
+    responsiveness,
 }: SellerProfileHeaderProps) {
 
     const storeName = profile?.store_name || profile?.shop_name || profile?.full_name || 'Boutique'
@@ -34,6 +37,7 @@ export default function SellerProfileHeader({
         averageRating,
         reviewCount,
         created_at: profile?.created_at,
+        responsiveness,
     }
     const vendorBadges = computeVendorBadges(badgeInput)
 

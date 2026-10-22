@@ -228,3 +228,39 @@ export function buildVendorCancelledEmail(d: VendorCancelledEmailInput): { subje
         ),
     }
 }
+
+export type VendorReminderEmailInput = {
+    vendorName: string
+    shopName: string
+    orderNumber: string
+    customerName: string
+    productNames: string
+    amount: number
+    method: string
+    delayLabel: string
+    transactionId?: string | null
+}
+
+export function buildVendorReminderEmail(d: VendorReminderEmailInput): { subject: string; html: string } {
+    const isMomo = d.method === 'mobile_money' || d.method === 'airtel_money'
+    return {
+        subject: `⏰ Commande ${d.orderNumber} en attente depuis ${d.delayLabel}`,
+        html: layout(
+            'Une commande attend votre réponse',
+            `Bonjour ${escapeHtml(d.vendorName)}, la commande de <strong style="color:#fafaf9;">${escapeHtml(d.customerName)}</strong> attend votre réponse depuis <strong style="color:#fbbf24;">${escapeHtml(d.delayLabel)}</strong>.`,
+            '#fbbf24',
+            `${box(`<table width="100%" style="border-collapse:collapse;">
+              ${row('Boutique', escapeHtml(d.shopName))}
+              ${row('Commande', escapeHtml(d.orderNumber))}
+              ${row('Produit(s)', escapeHtml(d.productNames))}
+              ${row('Montant', `<span style="color:#ca8a04;font-size:16px;">${fcfa(d.amount)}</span>`)}
+              ${row('Paiement', METHOD[d.method] || escapeHtml(d.method))}
+              ${d.transactionId ? row('Code saisi par le client', `<span style="font-family:monospace;letter-spacing:2px;">${escapeHtml(d.transactionId)}</span>`) : ''}
+            </table>`)}
+            ${box(`<p style="margin:0;font-size:13px;color:#78350f;line-height:1.6;">${isMomo
+                ? `Vérifiez sur votre téléphone si vous avez reçu <strong>${fcfa(d.amount)}</strong>, puis cliquez sur <strong>« Paiement reçu »</strong> ou <strong>« Paiement non reçu »</strong>.`
+                : 'Acceptez ou refusez la commande pour que le client sache à quoi s’attendre.'} Un client sans réponse risque d’annuler et de commander ailleurs.</p>`, '#fffbeb', '#fde68a')}
+            <div style="text-align:center;margin:6px 0 22px;">${button(`${SITE}/vendor/dashboard?tab=orders`, 'Répondre maintenant', '#ea580c')}</div>`
+        ),
+    }
+}

@@ -1,5 +1,6 @@
 'use client'
 
+import { uploadImage } from '@/lib/uploadImage'
 import { useState, useRef, useEffect } from 'react'
 import Link from 'next/link'
 import Header from '@/app/components/Header'
@@ -136,21 +137,9 @@ export default function RetoursLitigesPage() {
         for (const file of Array.from(files)) {
             if (!file.type.startsWith('image/')) continue
             try {
-                const b64 = await new Promise<string>((res, rej) => {
-                    const r = new FileReader()
-                    r.onload = () => res(r.result as string)
-                    r.onerror = rej
-                    r.readAsDataURL(file)
-                })
-                const resp = await fetch('/api/upload', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: b64 }),
-                })
-                const json = await resp.json()
-                if (json.url) setImages(prev => [...prev, json.url])
-                else throw new Error(json.error)
-            } catch { toast.error(`Erreur upload : ${file.name}`) }
+                const url = await uploadImage(file)
+                setImages(prev => [...prev, url])
+            } catch (e: unknown) { toast.error(`${file.name} : ${e instanceof Error ? e.message : 'envoi impossible'}`) }
         }
         setUploading(false)
     }

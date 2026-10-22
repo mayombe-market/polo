@@ -57,6 +57,7 @@ import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 import { FEATURES } from '@/lib/featureFlags'
 import VendorPaymentSettings from '@/app/components/VendorPaymentSettings'
 import VendorPaymentConfirmations from '@/app/components/VendorPaymentConfirmations'
+import { uploadImage } from '@/lib/uploadImage'
 import VendorAnalyticsDashboard from '@/app/components/VendorAnalyticsDashboard'
 import VendorReputationDashboard from '@/app/components/VendorReputationDashboard'
 
@@ -2754,27 +2755,7 @@ function SettingsPage({ profile, user, supabase, currentPlan }: { profile: any; 
         setAvatarPreview(URL.createObjectURL(file))
     }
 
-    const uploadAvatarViaApi = async (file: File): Promise<string> => {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader()
-            reader.onload = async () => {
-                try {
-                    const base64 = reader.result as string
-                    const res = await fetch('/api/upload', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        credentials: 'same-origin',
-                        body: JSON.stringify({ image: base64 }),
-                    })
-                    const body = await res.json()
-                    if (!res.ok) throw new Error(body.error || 'Erreur upload')
-                    resolve(body.url ?? body.secure_url ?? '')
-                } catch (e: any) { reject(e) }
-            }
-            reader.onerror = () => reject(new Error('Lecture fichier échouée'))
-            reader.readAsDataURL(file)
-        })
-    }
+    const uploadAvatarViaApi = (file: File): Promise<string> => uploadImage(file)
 
     const handleSave = async () => {
         if (!formData.city?.trim()) {

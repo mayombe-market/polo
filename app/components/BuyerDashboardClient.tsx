@@ -28,6 +28,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import DeliveryCodeBadge from '@/app/components/DeliveryCodeBadge'
 import { cancelBuyerOrder } from '@/app/actions/orders'
 import { getBuyerNegotiations } from '@/app/actions/negotiations'
 import { getUnreadCount } from '@/app/actions/messages'
@@ -981,6 +982,8 @@ function BuyerOrders({
                                     </div>
                                     <span className={`px-3 py-1.5 rounded-full text-[9px] font-black uppercase ${st.style}`}>{st.label}</span>
                                 </div>
+
+                                <DeliveryCodeBadge order={order} />
 
                                 {/* Progress timeline */}
                                 {order.status !== 'rejected' && (

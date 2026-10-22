@@ -34,7 +34,6 @@ const AuthModal = dynamic(() => import('@/app/components/AuthModal'), { ssr: fal
 import CitySelectModal from '@/app/components/checkout/CitySelectModal'
 import InterUrbanPrePaymentModal from '@/app/components/checkout/InterUrbanPrePaymentModal'
 import InterUrbanWarningModal from '@/app/components/checkout/InterUrbanWarningModal'
-import { isBuyerProfileCompleteForOrder } from '@/lib/buyerProfileGate'
 import { FEATURES } from '@/lib/featureFlags'
 import {
     MtnMomoLogo,
@@ -479,19 +478,7 @@ export default function CheckoutPage() {
             }
 
             // ── Mode connecté ────────────────────────────────────────────────
-            const { user } = await safeGetUser(supabase)
-            if (!user) {
-                alert('Connectez-vous pour finaliser la commande.')
-                return
-            }
-            const { data: prof } = await withTimeout(
-                supabase.from('profiles').select('city, phone, whatsapp_number').eq('id', user.id).maybeSingle()
-            )
-            if (!isBuyerProfileCompleteForOrder(prof)) {
-                setProfileGateOpen(true)
-                return
-            }
-
+            // Connexion et profil vérifiés par createOrder côté serveur : getSession() peut se figer sur iPhone.
             const idempotencyKey = getIdempotencyKey()
             const result = await createOrderAction({
                 items,
@@ -516,8 +503,11 @@ export default function CheckoutPage() {
             if (result.error) {
                 const ctx3 = getAnalyticsCtx()
                 if (ctx3) void trackBehaviorEvent({ session_id: ctx3.session_id, event_type: 'order_creation_failed', user_type: 'connected', source: ctx3.source, metadata: { error: result.error, payment_method: formData.payment_method } })
-                if ((result as { code?: string }).code === 'profile_incomplete') {
+                const code = (result as { code?: string }).code
+                if (code === 'profile_incomplete') {
                     setProfileGateOpen(true)
+                } else if (code === 'not_authenticated') {
+                    setShowAuthModal(true)
                 } else {
                     alert(result.error)
                 }
@@ -590,11 +580,6 @@ export default function CheckoutPage() {
             void trackBehaviorEvent({ session_id: ctxTx.session_id, event_type: 'payment_declaration_submitted', user_type: isGuestMode ? 'guest' : isLoggedIn ? 'connected' : 'anonymous', source: ctxTx.source, metadata: { payment_method: savedFormData.payment_method } })
         }
         try {
-            if (!isGuestMode) {
-                const { user } = await safeGetUser(supabase)
-                if (!user) { alert('Connectez-vous pour finaliser.'); return }
-            }
-
             const currentDeliveryFee = isPatisserieOrder && patisserieDeliveryFee !== null
                 ? patisserieDeliveryFee
                 : savedFormData.delivery_mode === 'inter_urban'
@@ -711,9 +696,13 @@ export default function CheckoutPage() {
             if (result.error) {
                 const ctxTx3 = getAnalyticsCtx()
                 if (ctxTx3) void trackBehaviorEvent({ session_id: ctxTx3.session_id, event_type: 'order_creation_failed', user_type: 'connected', source: ctxTx3.source, metadata: { error: result.error, payment_method: paymentMethod } })
-                if ((result as { code?: string }).code === 'profile_incomplete') {
+                const code = (result as { code?: string }).code
+                if (code === 'profile_incomplete') {
                     setProfileGateOpen(true)
                     setManualPayStep(false)
+                } else if (code === 'not_authenticated') {
+                    setTxError(result.error)
+                    setShowAuthModal(true)
                 } else {
                     setTxError(result.error)
                 }

@@ -846,7 +846,7 @@ export async function createOrder(input: {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
 
-    if (!user) return { error: 'Non connecté. Veuillez vous reconnecter.' }
+    if (!user) return { error: 'Session expirée : reconnectez-vous pour finaliser la commande.', code: 'not_authenticated' }
 
     // ═══ IDEMPOTENCY : renvoyer la commande existante si même clé ═══
     if (input.idempotency_key) {

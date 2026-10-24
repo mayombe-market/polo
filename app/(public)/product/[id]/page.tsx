@@ -40,6 +40,7 @@ import {
 import RealEstateListingDetails from '@/app/components/RealEstateListingDetails'
 import ProductDetailSkeleton from '@/app/components/skeletons/ProductDetailSkeleton'
 import ReviewForm from '@/app/components/ReviewForm'
+import { isHiddenCategory } from '@/lib/hiddenCategories'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
 
@@ -126,6 +127,10 @@ export default function ProductDetailPage() {
                         }
                         if (!r.data || typeof r.data !== 'object' || !(r.data as { id?: string }).id) {
                             throw new Error('Réponse produit vide ou invalide.')
+                        }
+                        // Module désactivé (ex. pâtisserie) : produit conservé en base mais non affiché
+                        if (isHiddenCategory((r.data as { category?: string }).category)) {
+                            return { kind: 'not_found' as const }
                         }
                         return { kind: 'ok' as const, row: r.data }
                     },

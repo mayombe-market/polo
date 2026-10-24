@@ -5,6 +5,7 @@ import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 import { mergeHeroSlides } from '@/lib/mergeHeroSlides'
 import { heroImageUrl, heroImageSrcSet } from '@/lib/heroImageUrl'
 import { pickSideHighlightPair } from '@/lib/homeHighlights'
+import { isHiddenCategory } from '@/lib/hiddenCategories'
 
 /** Produits affichés au départ (le reste se charge à la demande) */
 const TREND_LIMIT = 16
@@ -114,7 +115,7 @@ export default async function MarketplacePage() {
         <ClientHomePage
           heroSlides={heroSlides}
           tileCampaigns={tileCampaignRows}
-          categories={categories || []}
+          categories={(categories || []).filter(c => !isHiddenCategory(c.name))}
           newProducts={newProducts || []}
           newProductsPageSize={NEW_PRODUCTS_LIMIT}
           sideHighlightPair={sideHighlightPair}

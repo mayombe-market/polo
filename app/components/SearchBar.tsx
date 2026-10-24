@@ -5,6 +5,7 @@ import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { Search, X, Clock, TrendingUp, ArrowUpRight } from 'lucide-react'
 import { sanitizeSearchQueryForDisplay } from '@/lib/sanitizeUserDisplay'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { excludeHiddenCategories } from '@/lib/hiddenCategories'
 
 const RECENT_KEY = 'mayombe_recent_searches'
 const MAX_RECENT = 6
@@ -100,9 +101,9 @@ export default function SearchBar({ compact = false }: { compact?: boolean }) {
         setLoading(true)
         try {
             const supabase = getSupabaseBrowserClient()
-            const { data } = await supabase
+            const { data } = await excludeHiddenCategories(supabase
                 .from('products')
-                .select('id, name, category, price, img')
+                .select('id, name, category, price, img'))
                 .ilike('name', `%${text}%`)
                 .order('views_count', { ascending: false, nullsFirst: false })
                 .limit(6)

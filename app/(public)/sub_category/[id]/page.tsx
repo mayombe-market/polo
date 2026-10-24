@@ -3,6 +3,7 @@ import Link from 'next/link'
 import CloudinaryImage from '@/app/components/CloudinaryImage'
 import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
+import { excludeHiddenCategories } from '@/lib/hiddenCategories'
 
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
 export const dynamic = 'force-dynamic'
@@ -24,7 +25,7 @@ export default async function SubCategoryPage({ params }: { params: { id: string
     const [expiredIds, suspendedIds] = await Promise.all([getExpiredSellerIds(supabase), getSuspendedSellerIds(supabase)])
     const excludedIds = [...new Set([...expiredIds, ...suspendedIds])]
     const { data: products, error } = await excludeExpiredSellers(
-        supabase.from('products').select('*').eq('sub_category_uuid', id).order('created_at', { ascending: false }).limit(100),
+        excludeHiddenCategories(supabase.from('products').select('*')).eq('sub_category_uuid', id).order('created_at', { ascending: false }).limit(100),
         excludedIds
     )
 

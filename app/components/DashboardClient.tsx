@@ -31,6 +31,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
+import { getMyProductViews } from '@/app/actions/analytics'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan, updateProduct } from '@/app/actions/orders'
 import { acceptCodOrder, rejectCodOrder, collectCodCash } from '@/app/actions/cod'
 import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
@@ -1805,6 +1806,18 @@ function ProductsList({ products, onAdd, onEdit, onDelete, deleting, isAtLimit, 
     const [promoDays, setPromoDays] = useState(3)
     const [activatingPromo, setActivatingPromo] = useState(false)
     const [deactivatingPromo, setDeactivatingPromo] = useState<string | null>(null)
+    const [productViews, setProductViews] = useState<Record<string, number>>({})
+    const [sortByViews, setSortByViews] = useState(false)
+
+    useEffect(() => {
+        getMyProductViews().then(setProductViews).catch(() => {})
+    }, [])
+
+    const viewsOf = (p: any) => Math.max(productViews[p.id] || 0, p.views_count || 0)
+    const totalProductViews = (products || []).reduce((sum: number, p: any) => sum + viewsOf(p), 0)
+    const displayedProducts = sortByViews
+        ? [...(products || [])].sort((a: any, b: any) => viewsOf(b) - viewsOf(a))
+        : products
 
     const handleActivatePromo = async () => {
         if (!promoProduct) return
@@ -1856,7 +1869,26 @@ function ProductsList({ products, onAdd, onEdit, onDelete, deleting, isAtLimit, 
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 gap-4">
                 <div>
                     <h2 className="text-2xl font-black uppercase italic tracking-tighter dark:text-white">Mes Produits</h2>
-                    <p className="text-sm text-slate-400 font-bold mt-1">{products?.length || 0} article{(products?.length || 0) !== 1 ? 's' : ''} en vente</p>
+                    <p className="text-sm text-slate-400 font-bold mt-1">
+                        {products?.length || 0} article{(products?.length || 0) !== 1 ? 's' : ''} en vente · {totalProductViews} vue{totalProductViews !== 1 ? 's' : ''} au total
+                    </p>
+                    {products?.length > 1 && (
+                        <div className="flex gap-1.5 mt-3">
+                            {[{ v: false, label: 'Plus récents' }, { v: true, label: 'Plus vus' }].map(opt => (
+                                <button
+                                    key={opt.label}
+                                    onClick={() => setSortByViews(opt.v)}
+                                    className={`px-3 py-1.5 rounded-xl text-[10px] font-black uppercase transition-colors cursor-pointer ${
+                                        sortByViews === opt.v
+                                            ? 'bg-orange-500 text-white'
+                                            : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                                    }`}
+                                >
+                                    {opt.v && <Eye size={10} className="inline mr-1 -mt-0.5" />}{opt.label}
+                                </button>
+                            ))}
+                        </div>
+                    )}
                 </div>
                 <button
                     onClick={onAdd}
@@ -1898,7 +1930,7 @@ function ProductsList({ products, onAdd, onEdit, onDelete, deleting, isAtLimit, 
 
             {products && products.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {products.map((p: any) => {
+                    {displayedProducts.map((p: any, rank: number) => {
                         const hasPromo = isPromoActive(p)
                         return (
                         <div key={p.id} className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-100 dark:border-slate-800 overflow-hidden group hover:shadow-lg transition-all">
@@ -1911,9 +1943,14 @@ function ProductsList({ products, onAdd, onEdit, onDelete, deleting, isAtLimit, 
                                     className="object-cover group-hover:scale-105 transition-transform duration-500"
                                 />
                                 <div className="absolute top-3 left-3 flex gap-2">
-                                    <span className="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black flex items-center gap-1">
-                                        <Eye size={10} /> {p.views_count || 0}
+                                    <span className="bg-white/90 backdrop-blur px-3 py-1 rounded-full text-[10px] font-black text-slate-800 flex items-center gap-1" title="Nombre de vues de la page produit">
+                                        <Eye size={10} /> {viewsOf(p)} vue{viewsOf(p) !== 1 ? 's' : ''}
                                     </span>
+                                    {sortByViews && rank < 3 && viewsOf(p) > 0 && (
+                                        <span className="bg-orange-500 text-white px-3 py-1 rounded-full text-[10px] font-black">
+                                            Top {rank + 1}
+                                        </span>
+                                    )}
                                     {hasPromo && (
                                         <span className="bg-red-500 text-white px-3 py-1 rounded-full text-[10px] font-black animate-pulse">
                                             -{p.promo_percentage}%

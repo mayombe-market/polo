@@ -84,15 +84,58 @@ export async function trackEvent(params: {
             utm_campaign: params.utm_campaign ?? null,
         })
 
-        // Incrémenter views_count sur products en parallèle
+        // Compteur affiché sur le marketplace (tri « populaires ») ; la source de vérité reste analytics_events
         if (params.event_type === 'product_view' && params.product_id) {
-            void supabase.rpc('increment_product_views', { p_product_id: params.product_id })
+            const { data: product } = await supabase
+                .from('products')
+                .select('views_count')
+                .eq('id', params.product_id)
+                .maybeSingle()
+            if (product) {
+                await supabase
+                    .from('products')
+                    .update({ views_count: (product.views_count || 0) + 1 })
+                    .eq('id', params.product_id)
+            }
         }
 
         return { ok: true }
     } catch {
         return { ok: false }
     }
+}
+
+/** Nombre de vues par produit (événements product_view) pour un vendeur. */
+async function countProductViews(
+    db: ReturnType<typeof getServiceSupabase>,
+    shopId: string,
+    from?: string,
+    to?: string,
+): Promise<Record<string, number>> {
+    const counts: Record<string, number> = {}
+    const PAGE = 1000
+    for (let offset = 0; ; offset += PAGE) {
+        let q = db
+            .from('analytics_events')
+            .select('product_id')
+            .eq('shop_id', shopId)
+            .eq('event_type', 'product_view')
+            .not('product_id', 'is', null)
+        if (from) q = q.gte('created_at', from)
+        if (to) q = q.lte('created_at', to)
+        const { data } = await q.range(offset, offset + PAGE - 1)
+        for (const r of data || []) counts[r.product_id] = (counts[r.product_id] || 0) + 1
+        if (!data || data.length < PAGE) break
+    }
+    return counts
+}
+
+/** Vendeur connecté : vues totales de chacun de ses produits. */
+export async function getMyProductViews(): Promise<Record<string, number>> {
+    const supabase = await getAnonSupabase()
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return {}
+    return countProductViews(getServiceSupabase(), user.id)
 }
 
 export interface VendorAnalyticsResult {
@@ -211,9 +254,8 @@ export async function getVendorAnalytics(params: {
     // ── Favoris sur les produits du vendeur ───────────────────────────────
     const { data: vendorProducts } = await adminSb
         .from('products')
-        .select('id, name, img, image_url, views_count, confirmed_sales_count')
+        .select('id, name, img, image_url, views_count')
         .eq('seller_id', params.shop_id)
-        .eq('status', 'active')
 
     const productIds = vendorProducts?.map(p => p.id) ?? []
 
@@ -228,16 +270,19 @@ export async function getVendorAnalytics(params: {
         favoritesAdded = count ?? 0
     }
 
-    // ── Top produits par vues ──────────────────────────────────────────────
+    // ── Top produits par vues (vues réelles sur la période) ───────────────
+    const viewsInPeriod = await countProductViews(adminSb, params.shop_id, params.from, params.to)
     const topProducts = [...(vendorProducts ?? [])]
-        .sort((a, b) => (b.views_count || 0) - (a.views_count || 0))
+        .map(p => ({ ...p, periodViews: viewsInPeriod[p.id] || 0 }))
+        .filter(p => p.periodViews > 0)
+        .sort((a, b) => b.periodViews - a.periodViews)
         .slice(0, 5)
         .map(p => ({
             id: p.id,
             name: p.name,
             img: p.img || p.image_url || null,
-            views_count: p.views_count || 0,
-            confirmed_sales_count: p.confirmed_sales_count || 0,
+            views_count: p.periodViews,
+            confirmed_sales_count: 0,
         }))
 
     // ── Top produits par ventes (items dans commandes confirmées) ──────────

@@ -2,7 +2,7 @@ import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
 import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
-import { excludeHiddenCategories } from '@/lib/hiddenCategories'
+import { HIDDEN_CATEGORIES } from '@/lib/hiddenCategories'
 
 export const searchProducts = async (query: string, filters: any, page: number = 1) => {
     const supabase = getSupabaseBrowserClient()
@@ -13,7 +13,9 @@ export const searchProducts = async (query: string, filters: any, page: number =
     const to = from + itemsPerPage - 1
 
     // On sélectionne les colonnes et on demande le compte total (count)
-    let request = excludeHiddenCategories(supabase.from('products').select('*', { count: 'exact' }))
+    let request = supabase.from('products').select('*', { count: 'exact' })
+    // Modules désactivés (ex. pâtisserie) : produits non affichés
+    for (const category of HIDDEN_CATEGORIES) request = request.neq('category', category)
 
     // 1. RECHERCHE TEXTUELLE (Nom + Description) — input sanitisé
     if (query) {

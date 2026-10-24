@@ -27,11 +27,12 @@ import {
     DollarSign, Calendar, Download, AlertTriangle, Shield,
     Bell, Upload, X as XIcon, MessageSquare, MessageCircle, Tag,
     Crown, Sparkles, Megaphone, Star, Send, Camera, Navigation, Pencil, Banknote,
-    MoreHorizontal, Building2, Award, Phone
+    MoreHorizontal, Building2, Award, Phone, Printer
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { formatOrderNumber } from '@/lib/formatOrderNumber'
 import { getMyProductViews } from '@/app/actions/analytics'
+import { getMyOrderLabels } from '@/app/actions/orderLabels'
 import { getVendorOrders, updateOrderStatus as serverUpdateStatus, deleteProduct as serverDeleteProduct, activatePromo, deactivatePromo, applyPendingPlan, updateProduct } from '@/app/actions/orders'
 import { acceptCodOrder, rejectCodOrder, collectCodCash } from '@/app/actions/cod'
 import { DAY_KEYS, DAY_LABELS, DEFAULT_SCHEDULE, computeIsOpen, type DayKey, type DaySchedule, type ShopSchedule } from '@/lib/shopSchedule'
@@ -2150,6 +2151,27 @@ function OrdersPage({
     onRetryOrders,
 }: any) {
     const [codAction, setCodAction] = useState<string | null>(null)
+    const [printingLabels, setPrintingLabels] = useState<string | null>(null)
+    const LABEL_STATUSES = ['confirmed', 'shipped', 'picked_up', 'delivered']
+    const toPrepare = (orders || []).filter((o: any) => o.status === 'confirmed')
+
+    const printLabels = async (ids: string[], key: string) => {
+        if (ids.length === 0) return
+        setPrintingLabels(key)
+        try {
+            const res = await getMyOrderLabels(ids)
+            if ('error' in res) { toast.error(res.error); return }
+            if (res.labels.length === 0) { toast.error('Aucune commande confirmée à étiqueter.'); return }
+            const { downloadOrderLabels } = await import('@/lib/orderLabelPdf')
+            const day = new Date().toISOString().slice(0, 10)
+            await downloadOrderLabels(res.labels, res.labels.length === 1 ? `etiquette-${res.labels[0].orderNumber}.pdf` : `etiquettes-colis-${day}.pdf`)
+            toast.success(res.labels.length === 1 ? 'Étiquette téléchargée' : `${res.labels.length} étiquettes téléchargées`)
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Impossible de créer les étiquettes.')
+        } finally {
+            setPrintingLabels(null)
+        }
+    }
     const [codCodeInput, setCodCodeInput] = useState<Record<string, string>>({})
 
     const handleAcceptCod = async (orderId: string) => {
@@ -2186,6 +2208,25 @@ function OrdersPage({
             </div>
 
             <VendorPaymentConfirmations hideWhenEmpty onDecision={onRetryOrders} />
+
+            {toPrepare.length > 0 && (
+                <div className="mb-6 rounded-3xl border border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/60 dark:bg-emerald-900/10 p-4 flex flex-col sm:flex-row sm:items-center gap-3">
+                    <div className="flex-1">
+                        <p className="text-sm font-black text-emerald-900 dark:text-emerald-200">Étiquettes colis</p>
+                        <p className="text-xs text-emerald-800/80 dark:text-emerald-300/80">
+                            {toPrepare.length} commande{toPrepare.length > 1 ? 's' : ''} à préparer · feuille A4, 8 étiquettes à coller sur l’emballage. Le client scanne le QR code pour noter sa commande.
+                        </p>
+                    </div>
+                    <button
+                        onClick={() => printLabels(toPrepare.map((o: any) => o.id), 'all')}
+                        disabled={printingLabels !== null}
+                        className="min-h-[44px] px-5 rounded-2xl bg-emerald-700 text-white text-xs font-black uppercase flex items-center justify-center gap-2 hover:bg-emerald-800 disabled:opacity-50 cursor-pointer"
+                    >
+                        {printingLabels === 'all' ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />}
+                        Imprimer les étiquettes ({toPrepare.length})
+                    </button>
+                </div>
+            )}
 
             {/* Filters — masqués tant que les données commandes ne sont pas exploitables (UX plus claire). */}
             {ordersBlockState === 'ready' && (
@@ -2366,6 +2407,16 @@ function OrdersPage({
                                                     Cash reçu
                                                 </button>
                                             </div>
+                                        )}
+                                        {LABEL_STATUSES.includes(order.status) && (
+                                            <button
+                                                onClick={() => printLabels([order.id], order.id)}
+                                                disabled={printingLabels !== null}
+                                                className="h-10 px-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1.5 hover:bg-emerald-100 dark:hover:bg-emerald-900/40 disabled:opacity-50 cursor-pointer"
+                                                title="Étiquette à coller sur le colis"
+                                            >
+                                                {printingLabels === order.id ? <Loader2 size={14} className="animate-spin" /> : <Printer size={14} />} Étiquette
+                                            </button>
                                         )}
                                         <button
                                             onClick={async () => { const { generateInvoice } = await import('@/lib/generateInvoice'); generateInvoice(order) }}

@@ -147,7 +147,7 @@ export default function AdminProducts() {
     }
 
     const handleDelete = async (id: string) => {
-        if (confirm("Supprimer ce produit ?")) {
+        if (confirm("Supprimer définitivement ce produit ?\n\nLes conversations, avis et statistiques qui le concernent sont conservés.")) {
             const result = await deleteProduct(id)
             if (result.error) {
                 alert('Erreur: ' + result.error)
@@ -253,6 +253,7 @@ export default function AdminProducts() {
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400">Produit</th>
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 hidden md:table-cell">Catégorie</th>
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400 hidden md:table-cell">Vendeur</th>
+                                    <th className="p-4 text-[10px] font-black uppercase text-slate-400 hidden sm:table-cell">Publié le</th>
                                     <th className="p-4 text-[10px] font-black uppercase text-slate-400">Stock</th>
                                     <th className="p-4 text-right text-[10px] font-black uppercase text-slate-400">Actions</th>
                                 </tr>
@@ -272,6 +273,9 @@ export default function AdminProducts() {
                                         </td>
                                         <td className="p-4 hidden md:table-cell">
                                             <span className="text-xs text-slate-500 truncate max-w-[150px] block">{sellers[p.seller_id] || '—'}</span>
+                                        </td>
+                                        <td className="p-4 hidden sm:table-cell">
+                                            <span className="text-xs text-slate-500 whitespace-nowrap">{p.created_at ? formatAdminDateTime(p.created_at) : '—'}</span>
                                         </td>
                                         <td className="p-4">
                                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-black ${(p.stock_quantity || 0) > 0 ? 'bg-green-100 text-green-600 dark:bg-green-900/20 dark:text-green-400' : 'bg-red-100 text-red-600 dark:bg-red-900/20 dark:text-red-400'}`}>

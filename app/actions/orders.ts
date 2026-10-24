@@ -1223,6 +1223,9 @@ export async function createOrder(input: {
 }
 
 // Supprimer un produit (vérifie que l'utilisateur est propriétaire ou admin)
+/** Tables dont la colonne `product_id` (nullable) pointe vers `products.id`. */
+const PRODUCT_REFERENCING_TABLES = ['conversations', 'negotiations', 'reviews', 'favorites', 'analytics_events', 'behavior_events'] as const
+
 export async function deleteProduct(productId: string) {
     const supabase = await getSupabase()
     const { data: { user } } = await supabase.auth.getUser()
@@ -1253,12 +1256,27 @@ export async function deleteProduct(productId: string) {
         if (z.error) return { error: z.error }
     }
 
+    // Les conversations, négociations, avis, favoris et statistiques qui citent ce produit
+    // sont conservés : on retire seulement le lien (sinon la base refuse la suppression).
+    // Client service : l'appelant vient d'être vérifié (propriétaire ou admin de la zone).
+    const svc = getServiceSupabase()
+    for (const table of PRODUCT_REFERENCING_TABLES) {
+        const { error: detachError } = await svc.from(table).update({ product_id: null }).eq('product_id', productId)
+        if (detachError && detachError.code !== '42P01' && detachError.code !== 'PGRST205') {
+            console.error(`[deleteProduct] détachement ${table}:`, detachError.message)
+            return { error: 'Impossible de supprimer ce produit pour le moment. Réessayez.' }
+        }
+    }
+
     const { error } = await supabase
         .from('products')
         .delete()
         .eq('id', productId)
 
-    if (error) return { error: error.message }
+    if (error) {
+        console.error('[deleteProduct]', error.message)
+        return { error: 'Impossible de supprimer ce produit : il est encore lié à d’autres données.' }
+    }
 
     try {
         await revalidateProductCatalog(productId, product.seller_id)

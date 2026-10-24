@@ -8,6 +8,7 @@ import { sanitizePostgrestValue } from '@/lib/sanitize'
 import { sanitizePageTitleSegment } from '@/lib/sanitizeUserDisplay'
 import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { isPromoActive, getPromoPrice } from '@/lib/promo'
+import { excludeHiddenCategories } from '@/lib/hiddenCategories'
 
 /** Voir `app/(public)/page.tsx` — pas d’ISR sur le catalogue pour éviter images incohérentes. */
 export const dynamic = 'force-dynamic'
@@ -127,7 +128,7 @@ export default async function CategoryPage(props: any) {
                 ? immoSubs.filter((s) => !s.id.startsWith('canonical:')).map((s) => s.id)
                 : []
 
-            let productQuery = excludeExpiredSellers(supabase.from('products').select('*'), expiredIds_merged);
+            let productQuery = excludeHiddenCategories(excludeExpiredSellers(supabase.from('products').select('*'), expiredIds_merged));
 
             if (isImmobilier) {
                 // IMMOBILIER : PostgREST ne gère pas bien une clause OR qui

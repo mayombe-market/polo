@@ -1,6 +1,7 @@
 'use client'
 
 import { useSearchParams, useRouter } from 'next/navigation'
+import { isHiddenCategory } from '@/lib/hiddenCategories'
 
 const categories = [
     'Tout',
@@ -27,6 +28,8 @@ const categories = [
     'Matériaux & BTP',
 ]
 
+const visibleCategories = categories.filter(c => !isHiddenCategory(c))
+
 export default function CategoryBar() {
     const searchParams = useSearchParams()
     const router = useRouter()
@@ -42,7 +45,7 @@ export default function CategoryBar() {
 
     return (
         <div className="flex gap-2 overflow-x-auto px-4 py-3 bg-white dark:bg-slate-950 border-b border-slate-100 dark:border-slate-800 scrollbar-hide">
-            {categories.map((cat) => (
+            {visibleCategories.map((cat) => (
                 <button
                     key={cat}
                     onClick={() => handleClick(cat)}

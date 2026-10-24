@@ -17,6 +17,7 @@ import { getUnreadNotifCount } from '@/app/actions/notifications'
 import { useAuth } from '@/hooks/useAuth'
 import BecomeVendorCta from '@/app/components/BecomeVendorCta'
 import { useRealtime } from '@/hooks/useRealtime'
+import { isHiddenCategory } from '@/lib/hiddenCategories'
 
 export default function Header() {
     const { user, profile, supabase } = useAuth()
@@ -128,7 +129,7 @@ export default function Header() {
             .then((res: { data: { id: string; name: string }[] | null; error: { message: string } | null }) => {
                 const { data, error } = res
                 if (!error && Array.isArray(data)) {
-                    setBurgerCategories(data)
+                    setBurgerCategories(data.filter(c => !isHiddenCategory(c.name)))
                 } else {
                     setBurgerCategories([])
                 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from 'react'
 import ProductCard from './ProductCard'
 import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } from '@/lib/filterActiveProducts'
 import { getSupabaseBrowserClient } from '@/lib/supabase-browser'
+import { excludeHiddenCategories } from '@/lib/hiddenCategories'
 
 const SimilarProducts = ({ productId, subcategory, category }: {
     productId: string
@@ -32,7 +33,7 @@ const SimilarProducts = ({ productId, subcategory, category }: {
                         .order('views_count', { ascending: false })
                         .limit(12)
 
-                    query = excludeExpiredSellers(query, expiredIds)
+                    query = excludeHiddenCategories(excludeExpiredSellers(query, expiredIds))
                     const { data } = await query
 
                     if (data && data.length >= 2) {
@@ -51,7 +52,7 @@ const SimilarProducts = ({ productId, subcategory, category }: {
                         .order('views_count', { ascending: false })
                         .limit(12)
 
-                    query = excludeExpiredSellers(query, expiredIds)
+                    query = excludeHiddenCategories(excludeExpiredSellers(query, expiredIds))
                     const { data } = await query
 
                     if (data && data.length > 0) {
@@ -68,7 +69,7 @@ const SimilarProducts = ({ productId, subcategory, category }: {
                     .order('views_count', { ascending: false })
                     .limit(12)
 
-                query = excludeExpiredSellers(query, expiredIds)
+                query = excludeHiddenCategories(excludeExpiredSellers(query, expiredIds))
                 const { data } = await query
                 setProducts(data || [])
             } catch (err) {

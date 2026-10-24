@@ -54,6 +54,7 @@ import type { ResponsivenessSummary } from '@/lib/vendorResponsiveness'
 import { Loader2 } from 'lucide-react'
 
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
+import { excludeHiddenCategories } from '@/lib/hiddenCategories'
 
 const QUERY_TIMEOUT_MS = NETWORK_TIMEOUT_MS
 
@@ -175,10 +176,10 @@ export default function StorePublicPage() {
                     : await withRetry(
                           async () => {
                               const r = await withTimeout(
-                                  supabase
+                                  excludeHiddenCategories(supabase
                                       .from('products')
                                       .select('*')
-                                      .eq('seller_id', sellerId)
+                                      .eq('seller_id', sellerId))
                                       .order('created_at', { ascending: false }),
                                   QUERY_TIMEOUT_MS,
                               )

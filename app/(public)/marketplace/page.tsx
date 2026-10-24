@@ -4,6 +4,11 @@ import { getExpiredSellerIds, getSuspendedSellerIds, excludeExpiredSellers } fro
 import { IMMOBILIER_CATEGORY } from '@/lib/realEstateListing'
 import { mergeHeroSlides } from '@/lib/mergeHeroSlides'
 import { heroImageUrl, heroImageSrcSet } from '@/lib/heroImageUrl'
+import { pickSideHighlightPair } from '@/lib/homeHighlights'
+
+/** Produits affichés au départ (le reste se charge à la demande) */
+const TREND_LIMIT = 16
+const NEW_PRODUCTS_LIMIT = 12
 
 export const revalidate = 30
 
@@ -51,9 +56,9 @@ export default async function MarketplacePage() {
       supabase.from('products').select('id, name, price, shop, loc, views_count, img, images_gallery, sub_id, sub_category_uuid, created_at, seller_id, promo_percentage, promo_start_date, promo_end_date').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').gte('created_at', sevenDaysAgo).order('views_count', { ascending: false }).limit(5),
       excludedIds
     ),
-    supabase.from('category').select('id, name, img, sub_category (id, name)'),
+    supabase.from('category').select('id, name, img'),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('created_at', { ascending: false }).limit(20),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('created_at', { ascending: false }).limit(NEW_PRODUCTS_LIMIT),
       excludedIds
     ),
     excludeExpiredSellers(
@@ -65,7 +70,7 @@ export default async function MarketplacePage() {
       excludedIds
     ),
     excludeExpiredSellers(
-      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('views_count', { ascending: false }).limit(30),
+      supabase.from('products').select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, views_count, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at').neq('category', IMMOBILIER_CATEGORY).neq('category', 'Pâtisserie & Traiteur').neq('category', 'Alimentation & Boissons').order('views_count', { ascending: false }).limit(TREND_LIMIT),
       excludedIds
     ),
     supabase.from('reviews').select('id, rating, content, user_name, created_at, products:product_id(name, img, category)').gte('rating', 4).not('content', 'is', null).order('created_at', { ascending: false }).limit(8),
@@ -81,6 +86,12 @@ export default async function MarketplacePage() {
 
   const heroCampaignRows = heroCampRes.error ? [] : heroCampRes.data ?? []
   const tileCampaignRows = tileCampRes.error ? [] : tileCampRes.data ?? []
+
+  // Seuls 2 produits de ces listes sont affichés : on ne les envoie pas en entier au navigateur
+  const sideHighlightPair = pickSideHighlightPair(
+    [...(popularProducts || []), ...(newProducts || []), ...(promoProducts || []), ...(topProducts || [])],
+    trendProducts || []
+  )
 
   const heroSlides = mergeHeroSlides(ads || [], heroCampaignRows)
   const firstHeroImg = heroSlides[0]?.img
@@ -103,11 +114,12 @@ export default async function MarketplacePage() {
         <ClientHomePage
           heroSlides={heroSlides}
           tileCampaigns={tileCampaignRows}
-          topProducts={topProducts || []}
           categories={categories || []}
           newProducts={newProducts || []}
-          popularProducts={popularProducts || []}
-          promoProducts={promoProducts || []}
+          newProductsPageSize={NEW_PRODUCTS_LIMIT}
+          sideHighlightPair={sideHighlightPair}
+          spotlightPair={topProducts && topProducts.length >= 2 ? [topProducts[0], topProducts[1]] : null}
+          hasActivePromo={(promoProducts || []).length > 0}
           trendProducts={trendProducts || []}
           homeReviews={homeReviews || []}
           platformReviews={platformReviews || []}

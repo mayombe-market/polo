@@ -5,38 +5,9 @@ import { X, Loader2 } from 'lucide-react'
 import StarRating from '@/app/components/StarRating'
 import { confirmReception, submitRating } from '@/app/actions/ratings'
 import { toast } from 'sonner'
+import { RATING_CATEGORIES as CATEGORIES } from '@/lib/ratingCategories'
 
 const fmt = (n: number) => new Intl.NumberFormat('fr-FR').format(n)
-
-const CATEGORIES = [
-    {
-        id: 'vendor' as const,
-        icon: '🏪',
-        title: 'Le vendeur',
-        question: 'Comment évaluez-vous le produit et le vendeur ?',
-        labels: ['Horrible', 'Mauvais', 'Correct', 'Bien', 'Excellent'],
-        tags: ['Produit conforme ✅', 'Bonne qualité', 'Bien emballé', 'Rapide à expédier', 'Produit non conforme ❌', 'Mauvais emballage'],
-        color: 'amber',
-    },
-    {
-        id: 'delivery' as const,
-        icon: '🏍️',
-        title: 'La livraison',
-        question: 'Comment s\'est passée la livraison ?',
-        labels: ['Horrible', 'Mauvaise', 'Correcte', 'Bonne', 'Excellente'],
-        tags: ['Rapide ⚡', 'Livreur poli', 'Colis en bon état', 'A appelé avant', 'En retard', 'Colis abîmé'],
-        color: 'blue',
-    },
-    {
-        id: 'platform' as const,
-        icon: '📱',
-        title: 'L\'application',
-        question: 'Comment trouvez-vous notre plateforme ?',
-        labels: ['Horrible', 'Mauvaise', 'Correcte', 'Bonne', 'Excellente'],
-        tags: ['Facile à utiliser', 'Beau design', 'Paiement simple', 'Bon suivi commande', 'Trop compliqué', 'Bugs'],
-        color: 'violet',
-    },
-]
 
 interface TripleRatingModalProps {
     order: any

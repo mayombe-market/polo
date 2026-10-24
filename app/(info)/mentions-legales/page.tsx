@@ -12,7 +12,7 @@ const articles = [
       { label: "Raison sociale", value: "MAYOMBE MARKET SARL" },
       { label: "Siège social", value: "Avenue de la Paix, Brazzaville, République du Congo" },
       { label: "Téléphone", value: "+242 06 895 43 21" },
-      { label: "E-mail", value: "contact@mayombemarket.com" },
+      { label: "E-mail", value: "mayombemarket@gmail.com" },
       { label: "RCCM", value: "CG-BZV-01-2026-B14-00247" },
       { label: "NIF", value: "2026-031-0058" },
     ],

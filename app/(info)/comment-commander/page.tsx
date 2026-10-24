@@ -1078,7 +1078,7 @@ export default function CommentCommanderPage() {
         <p style={{ color: "#444", fontSize: 13, marginTop: 24 }}>
           Une question ? WhatsApp{" "}
           <strong style={{ color: "#25D366" }}>+242 06 895 43 21</strong>
-          {" "}· contact@mayombemarket.com
+          {" "}· mayombemarket@gmail.com
         </p>
       </div>
     </div>

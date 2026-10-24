@@ -111,11 +111,14 @@ export default function Footer() {
                         </p>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                             <a
-                                href="mailto:contact@mayombemarket.com"
+                                href="mailto:mayombemarket@gmail.com"
                                 style={{ color: '#666', fontSize: 12, textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 6 }}
                             >
-                                <Mail size={12} color="#666" /> contact@mayombemarket.com
+                                <Mail size={12} color="#666" /> mayombemarket@gmail.com
                             </a>
+                            <span style={{ color: '#555', fontSize: 11, marginTop: -4, paddingLeft: 18 }}>
+                                Réponse sous 48 h
+                            </span>
                             <a
                                 href={WA_HREF}
                                 target="_blank"

@@ -34,6 +34,8 @@ export interface ProductCardProduct {
     images_gallery?: string[] | null
     category?: string
     stock_quantity?: number
+    /** false = vendu sans limite de quantité (stock_quantity vaut alors 0 et ne veut rien dire) */
+    has_stock?: boolean | null
     promo_percentage?: number | null
     promo_start_date?: string | null
     promo_end_date?: string | null
@@ -144,7 +146,7 @@ function ProductCardInner({
     product: ProductCardProduct
     aboveFold?: boolean
 }) {
-    const isOutOfStock = product.stock_quantity != null && product.stock_quantity <= 0
+    const isOutOfStock = product.has_stock === true && product.stock_quantity != null && product.stock_quantity <= 0
     const isNew = product.created_at
         ? Date.now() - new Date(product.created_at).getTime() < 7 * 24 * 60 * 60 * 1000
         : false
@@ -305,6 +307,7 @@ const propsAreEqual = (prev: ProductCardProps, next: ProductCardProps) => {
         JSON.stringify(a.images_gallery ?? null) === JSON.stringify(b.images_gallery ?? null) &&
         a.category === b.category &&
         a.stock_quantity === b.stock_quantity &&
+        a.has_stock === b.has_stock &&
         a.promo_percentage === b.promo_percentage &&
         a.promo_start_date === b.promo_start_date &&
         a.promo_end_date === b.promo_end_date &&

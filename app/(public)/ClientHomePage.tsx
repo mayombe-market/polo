@@ -101,7 +101,7 @@ export default function ClientHomePage({
             const supabase = getSupabaseBrowserClient()
             const { data, error } = await supabase
                 .from('products')
-                .select('id, name, price, img, images_gallery, category, stock_quantity, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at')
+                .select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at')
                 .neq('category', 'Immobilier')
                 .order('created_at', { ascending: false })
                 .range(newProductsOffset, newProductsOffset + 19)

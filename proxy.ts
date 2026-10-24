@@ -100,6 +100,17 @@ export async function proxy(request: NextRequest) {
         }
     }
 
+    // Visiteur sans session Supabase : rien à rafraîchir, pas d'aller-retour vers l'API d'auth
+    const hasSessionCookie = request.cookies.getAll().some(c => c.name.startsWith('sb-') && c.name.includes('-auth-token'))
+    if (!hasSessionCookie) {
+        const isProtected = ['/vendor', '/logistician', '/admin', '/comptable', '/account'].some(p => pathname.startsWith(p))
+        const res = isProtected
+            ? NextResponse.redirect(new URL('/', request.url))
+            : NextResponse.next({ request })
+        applySecurityHeaders(pathname, res)
+        return res
+    }
+
     let supabaseResponse = NextResponse.next({
         request,
     })

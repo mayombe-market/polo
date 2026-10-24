@@ -49,11 +49,14 @@ interface PlatformReview {
 interface ClientHomePageProps {
     heroSlides: UnifiedHeroSlide[]
     tileCampaigns: TileCampaign[]
-    topProducts: any[]
     categories: any[]
     newProducts: any[]
-    popularProducts: any[]
-    promoProducts: any[]
+    /** Nombre de nouveautés chargées au départ (et à chaque « Voir plus ») */
+    newProductsPageSize?: number
+    sideHighlightPair: [any, any] | null
+    /** Rubrique « En lumière » : les 2 produits les plus vus de la semaine */
+    spotlightPair: [any, any] | null
+    hasActivePromo: boolean
     trendProducts: any[]
     homeReviews?: any[]
     platformReviews?: PlatformReview[]
@@ -75,11 +78,12 @@ function SophieSectionTitle({ label, title }: { label: string; title: string }) 
 export default function ClientHomePage({
     heroSlides,
     tileCampaigns,
-    topProducts,
     categories,
     newProducts,
-    popularProducts,
-    promoProducts,
+    newProductsPageSize = 20,
+    sideHighlightPair,
+    spotlightPair,
+    hasActivePromo,
     trendProducts,
     homeReviews = [],
     platformReviews = [],
@@ -90,10 +94,10 @@ export default function ClientHomePage({
     const [vendorDrawerOpen, setVendorDrawerOpen] = useState(false)
 
     // Load-more nouveautés
-    const [displayedNewProducts, setDisplayedNewProducts] = useState<any[]>(() => newProducts.slice(0, 20))
+    const [displayedNewProducts, setDisplayedNewProducts] = useState<any[]>(() => newProducts.slice(0, newProductsPageSize))
     const [newProductsOffset, setNewProductsOffset] = useState(newProducts.length)
     const [loadingMore, setLoadingMore] = useState(false)
-    const [hasMoreNewProducts, setHasMoreNewProducts] = useState(newProducts.length >= 20)
+    const [hasMoreNewProducts, setHasMoreNewProducts] = useState(newProducts.length >= newProductsPageSize)
 
     const loadMoreNewProducts = useCallback(async () => {
         setLoadingMore(true)
@@ -104,7 +108,7 @@ export default function ClientHomePage({
                 .select('id, name, price, img, images_gallery, category, stock_quantity, has_stock, seller_id, promo_percentage, promo_start_date, promo_end_date, created_at')
                 .neq('category', 'Immobilier')
                 .order('created_at', { ascending: false })
-                .range(newProductsOffset, newProductsOffset + 19)
+                .range(newProductsOffset, newProductsOffset + newProductsPageSize - 1)
 
             if (error) {
                 console.error('[loadMore] Erreur:', error.message)
@@ -116,7 +120,7 @@ export default function ClientHomePage({
                 setDisplayedNewProducts(prev => [...prev, ...moreProducts])
                 setNewProductsOffset(prev => prev + moreProducts.length)
             }
-            if (moreProducts.length < 20) {
+            if (moreProducts.length < newProductsPageSize) {
                 setHasMoreNewProducts(false)
             }
         } catch (err) {
@@ -124,7 +128,7 @@ export default function ClientHomePage({
         } finally {
             setLoadingMore(false)
         }
-    }, [newProductsOffset])
+    }, [newProductsOffset, newProductsPageSize])
 
     const safeHeroSlides = useMemo(() => (Array.isArray(heroSlides) ? heroSlides : []), [heroSlides])
     const safeTileCampaigns = useMemo(
@@ -133,41 +137,8 @@ export default function ClientHomePage({
     )
     const safeCategories = useMemo(() => (Array.isArray(categories) ? categories : []), [categories])
 
-    const trendsList = Array.isArray(trendProducts) ? trendProducts.slice(0, 30) : []
+    const trendsList = Array.isArray(trendProducts) ? trendProducts : []
 
-    /** Deux produits (hors tendances si possible) pour le triptyque — IDs normalisés en string (UUID Supabase). */
-    const sideHighlightPair = useMemo(() => {
-        const trendIds = new Set(
-            trendsList
-                .map((p: { id?: unknown }) => (p?.id != null && p.id !== '' ? String(p.id) : null))
-                .filter((x): x is string => x != null),
-        )
-        const pool: any[] = [
-            ...(Array.isArray(popularProducts) ? popularProducts : []),
-            ...(Array.isArray(newProducts) ? newProducts : []),
-            ...(Array.isArray(promoProducts) ? promoProducts : []),
-            ...(Array.isArray(topProducts) ? topProducts : []),
-        ]
-        const out: any[] = []
-        const seen = new Set<string>()
-        for (const p of pool) {
-            const id = p?.id != null && p.id !== '' ? String(p.id) : ''
-            if (!id || seen.has(id) || trendIds.has(id)) continue
-            seen.add(id)
-            out.push(p)
-            if (out.length >= 2) break
-        }
-        if (out.length < 2) {
-            for (const p of pool) {
-                const id = p?.id != null && p.id !== '' ? String(p.id) : ''
-                if (!id || seen.has(id)) continue
-                seen.add(id)
-                out.push(p)
-                if (out.length >= 2) break
-            }
-        }
-        return out.length >= 2 ? ([out[0], out[1]] as const) : null
-    }, [trendsList, popularProducts, newProducts, promoProducts, topProducts])
 
     /** Deux emplacements tuiles (même gabarit que les catégories) : campagnes puis repli catégories. */
     let categoryCursor = 0
@@ -181,8 +152,7 @@ export default function ClientHomePage({
     const scrollTileCampaigns = safeTileCampaigns.slice(2)
     const categoryRest = safeCategories.slice(categoryCursor)
 
-    const asymmetricPair =
-        Array.isArray(topProducts) && topProducts.length >= 2 ? [topProducts[0], topProducts[1]] : null
+    const asymmetricPair = spotlightPair
 
     useEffect(() => {
         if (safeHeroSlides.length <= 1) return
@@ -406,7 +376,7 @@ export default function ClientHomePage({
                     <section>
                         <SophieSectionTitle
                             label="Tendances"
-                            title={promoProducts.length > 0 ? 'Sélection du moment' : 'Coup de cœur'}
+                            title={hasActivePromo ? 'Sélection du moment' : 'Coup de cœur'}
                         />
                         {safeTileCampaigns.length > 0 ? (
                             <PubProductMixSlider products={trendsList} tileCampaigns={safeTileCampaigns} />
@@ -434,7 +404,7 @@ export default function ClientHomePage({
                                                 className="group relative aspect-[4/3] overflow-hidden bg-neutral-200 md:aspect-[16/10]"
                                             >
                                                 <img
-                                                    src={c.image_url || '/placeholder-image.svg'}
+                                                    src={heroImageUrl(c.image_url, 700) || '/placeholder-image.svg'}
                                                     alt={c.title || 'Sponsorisé'}
                                                     className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
                                                     loading="lazy"
@@ -468,10 +438,11 @@ export default function ClientHomePage({
                                             className="group relative aspect-[4/3] overflow-hidden bg-neutral-200 md:aspect-[16/10]"
                                         >
                                             <img
-                                                src={
+                                                src={heroImageUrl(
                                                     cat.img ||
-                                                    'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=1200'
-                                                }
+                                                    'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=1200',
+                                                    700,
+                                                )}
                                                 alt={cat.name}
                                                 className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
                                                 loading="lazy"
@@ -498,7 +469,7 @@ export default function ClientHomePage({
                                         className="group relative aspect-[4/3] w-[min(85vw,320px)] shrink-0 snap-start overflow-hidden rounded-2xl bg-neutral-200 md:aspect-[16/10] md:w-[min(42vw,400px)]"
                                     >
                                         <img
-                                            src={c.image_url || '/placeholder-image.svg'}
+                                            src={heroImageUrl(c.image_url, 700) || '/placeholder-image.svg'}
                                             alt={c.title || 'Sponsorisé'}
                                             className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
                                             loading="lazy"
@@ -522,7 +493,7 @@ export default function ClientHomePage({
 
                 {/* Avis clients */}
                 {homeReviews.length > 0 && (
-                    <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800">
+                    <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800 [content-visibility:auto] [contain-intrinsic-size:auto_600px]">
                         <SophieSectionTitle label="Témoignages" title="Ce que disent nos clients" />
                         {/* Scroll horizontal sur mobile, grille 3 colonnes sur desktop */}
                         <div className="flex gap-5 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden md:grid md:grid-cols-3 md:overflow-visible md:pb-0">
@@ -580,7 +551,7 @@ export default function ClientHomePage({
 
                 {/* Nouveautés — grille 5 */}
                 {displayedNewProducts.length > 0 && (
-                    <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800">
+                    <section className="border-t border-neutral-200/70 pt-20 dark:border-neutral-800 [content-visibility:auto] [contain-intrinsic-size:auto_900px]">
                         <SophieSectionTitle label="Nouveautés" title="Dernières arrivées" />
                         <div className="grid grid-flow-dense grid-cols-2 gap-x-3 gap-y-10 sm:grid-cols-3 md:grid-cols-5 md:gap-x-4 md:gap-y-12">
                             {displayedNewProducts.map((product) => (
@@ -672,7 +643,7 @@ export default function ClientHomePage({
 
                             <div className="relative min-h-[280px] overflow-hidden rounded-2xl bg-neutral-200 md:col-span-6 md:min-h-[min(420px,52vh)]">
                                 <img
-                                    src={REASSURANCE_HERO_IMAGE}
+                                    src={heroImageUrl(REASSURANCE_HERO_IMAGE, 1000)}
                                     alt=""
                                     className="absolute inset-0 h-full w-full object-cover"
                                     loading="lazy"
@@ -734,7 +705,7 @@ export default function ClientHomePage({
 
                 {/* Autres catégories */}
                 {categoryRest.length > 0 && (
-                    <section>
+                    <section className="[content-visibility:auto] [contain-intrinsic-size:auto_1400px]">
                         <SophieSectionTitle label="Explorer" title="Autres univers" />
                         <div className="grid gap-6 md:grid-cols-3 md:gap-8">
                             {categoryRest.map((cat, catIndex) => (
@@ -744,10 +715,11 @@ export default function ClientHomePage({
                                 >
                                     <Link href={`/category/${encodeURIComponent(cat.name)}`} className="absolute inset-0 z-0">
                                         <img
-                                            src={
+                                            src={heroImageUrl(
                                                 cat.img ||
-                                                'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=800'
-                                            }
+                                                'https://images.unsplash.com/photo-1506484334402-40f215037b27?q=80&w=800',
+                                                600,
+                                            )}
                                             alt={cat.name}
                                             className="absolute inset-0 h-full w-full object-cover transition duration-700 group-hover:scale-105"
                                             loading={catIndex === 0 ? 'eager' : 'lazy'}

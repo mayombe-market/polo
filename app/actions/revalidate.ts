@@ -28,6 +28,7 @@ async function requireAuth() {
 export async function revalidateProducts() {
     await requireAuth()
     revalidatePath('/')
+    revalidatePath('/marketplace')
     revalidatePath('/category/[id]', 'page')
     revalidatePath('/sub_category/[id]', 'page')
     revalidatePath('/search')
@@ -36,6 +37,7 @@ export async function revalidateProducts() {
 export async function revalidateHome() {
     await requireAuth()
     revalidatePath('/')
+    revalidatePath('/marketplace')
 }
 
 /**
@@ -45,6 +47,7 @@ export async function revalidateHome() {
  */
 export async function revalidateProductCatalog(productId: string, sellerId: string | null | undefined) {
     revalidatePath('/')
+    revalidatePath('/marketplace')
     revalidatePath('/category/[id]', 'page')
     revalidatePath('/sub_category/[id]', 'page')
     revalidatePath(`/product/${productId}`)

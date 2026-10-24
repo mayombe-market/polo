@@ -17,6 +17,8 @@ import type { Session } from '@supabase/supabase-js'
 import { useState, useMemo, useEffect, useRef, lazy, Suspense } from 'react'
 const AdCampaignModal = lazy(() => import('@/app/components/AdCampaignModal'))
 const ProductPhotoStudio = lazy(() => import('@/app/components/ProductPhotoStudio'))
+const ImageCropModal = lazy(() => import('@/app/components/ImageCropModal'))
+import FilePreview from '@/app/components/FilePreview'
 import type { StudioState } from '@/app/components/ProductPhotoStudio'
 import { revalidateProducts } from '../actions/revalidate'
 import { createProduct as serverCreateProduct } from '../actions/orders'
@@ -38,7 +40,7 @@ import {
 import {
     ChevronRight, ChevronLeft, Upload, X, Check, Plus,
     Loader2, Package, Tag, Palette, FileText, Image as ImageIcon,
-    Camera, Ruler
+    Camera, Ruler, Crop
 } from 'lucide-react'
 import { NETWORK_TIMEOUT_MS } from '@/lib/networkTimeouts'
 
@@ -854,6 +856,7 @@ export default function AddProductForm({
     // Step 5: Images
     const [mainImage, setMainImage] = useState<File | null>(null)
     const [gallery, setGallery] = useState<(File | null)[]>([null, null, null, null, null])
+    const [cropTarget, setCropTarget] = useState<{ slot: 'main' | number; file: File } | null>(null)
     // Studio photo
     const [studioOpen, setStudioOpen] = useState(false)
     const [studioFile, setStudioFile] = useState<File | null>(null)
@@ -2055,17 +2058,17 @@ export default function AddProductForm({
                             <Camera size={22} className="text-orange-400 shrink-0" />
                             <div className="flex-1 min-w-0">
                                 <p className="text-sm font-black text-orange-300 uppercase tracking-wide">Studio Photo</p>
-                                <p className="text-[11px] text-orange-400/70">Ajoutez des flèches de dimensions, du texte et recadrez après sélection d'une image.</p>
+                                <p className="text-[11px] text-orange-400/70">Bouton « Recadrer » sur chaque photo pour la cadrer comme sur le site (4:5). « Studio » pour ajouter des flèches de dimensions ou du texte.</p>
                             </div>
                         </div>
 
                         {/* Main image */}
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Image principale</label>
-                            <div className="aspect-square max-w-xs rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800 relative">
+                            <div className="aspect-[4/5] max-w-xs rounded-3xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden bg-slate-50 dark:bg-slate-800 relative">
                                 {mainImage ? (
                                     <>
-                                        <img src={URL.createObjectURL(mainImage)} className="w-full h-full object-cover" alt="principale" />
+                                        <FilePreview file={mainImage} className="w-full h-full object-cover" alt="principale" />
                                         <button
                                             type="button"
                                             onClick={() => setMainImage(null)}
@@ -2073,13 +2076,22 @@ export default function AddProductForm({
                                         >
                                             <X size={14} />
                                         </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => { setStudioFile(mainImage); setStudioSlot('main'); setStudioOpen(true) }}
-                                            className="absolute bottom-3 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-orange-500/80 transition-colors"
-                                        >
-                                            <Camera size={12} /> Studio
-                                        </button>
+                                        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => setCropTarget({ slot: 'main', file: mainImage })}
+                                                className="min-h-[32px] px-3 py-1.5 bg-orange-500 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-orange-600 transition-colors cursor-pointer"
+                                            >
+                                                <Crop size={12} /> Recadrer
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setStudioFile(mainImage); setStudioSlot('main'); setStudioOpen(true) }}
+                                                className="min-h-[32px] px-3 py-1.5 bg-black/70 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-1 hover:bg-black/90 transition-colors cursor-pointer"
+                                            >
+                                                <Camera size={12} /> Studio
+                                            </button>
+                                        </div>
                                     </>
                                 ) : (
                                     <label className="flex flex-col items-center gap-2 cursor-pointer">
@@ -2098,6 +2110,8 @@ export default function AddProductForm({
                                                     return
                                                 }
                                                 setMainImage(f)
+                                                if (f) setCropTarget({ slot: 'main', file: f })
+                                                e.target.value = ''
                                             }}
                                             className="hidden"
                                         />
@@ -2109,12 +2123,12 @@ export default function AddProductForm({
                         {/* Gallery */}
                         <div>
                             <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-2 block">Galerie ({gallery.filter(Boolean).length}/5 images)</label>
-                            <div className="grid grid-cols-5 gap-3">
+                            <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
                                 {gallery.map((file, i) => (
-                                    <div key={i} className="aspect-square rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center relative bg-slate-50 dark:bg-slate-800 overflow-hidden">
+                                    <div key={i} className="aspect-[4/5] rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-700 flex items-center justify-center relative bg-slate-50 dark:bg-slate-800 overflow-hidden">
                                         {file ? (
                                             <>
-                                                <img src={URL.createObjectURL(file)} className="w-full h-full object-cover" alt={`gallery-${i}`} />
+                                                <FilePreview file={file} className="w-full h-full object-cover" alt={`gallery-${i}`} />
                                                 <button
                                                     type="button"
                                                     onClick={() => { const n = [...gallery]; n[i] = null; setGallery(n) }}
@@ -2122,13 +2136,26 @@ export default function AddProductForm({
                                                 >
                                                     <X size={10} />
                                                 </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setStudioFile(file); setStudioSlot(i); setStudioOpen(true) }}
-                                                    className="absolute bottom-1 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-black/70 text-white rounded text-[9px] font-black uppercase flex items-center gap-0.5 hover:bg-orange-500/80"
-                                                >
-                                                    <Camera size={9} />
-                                                </button>
+                                                <div className="absolute bottom-1 inset-x-1 flex justify-center gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCropTarget({ slot: i, file })}
+                                                        className="w-7 h-7 bg-orange-500 text-white rounded-lg flex items-center justify-center hover:bg-orange-600 cursor-pointer"
+                                                        aria-label="Recadrer"
+                                                        title="Recadrer"
+                                                    >
+                                                        <Crop size={12} />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => { setStudioFile(file); setStudioSlot(i); setStudioOpen(true) }}
+                                                        className="w-7 h-7 bg-black/70 text-white rounded-lg flex items-center justify-center hover:bg-black/90 cursor-pointer"
+                                                        aria-label="Studio photo"
+                                                        title="Studio photo"
+                                                    >
+                                                        <Camera size={12} />
+                                                    </button>
+                                                </div>
                                             </>
                                         ) : (
                                             <label className="flex flex-col items-center gap-1 cursor-pointer">
@@ -2222,6 +2249,27 @@ export default function AddProductForm({
                     productImages={adModal.images}
                     onClose={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
                     onSuccess={() => { setAdModal(null); window.location.href = '/vendor/dashboard?tab=products' }}
+                />
+            </Suspense>
+        )}
+
+        {/* ── Recadrage ── */}
+        {cropTarget && (
+            <Suspense fallback={<div className="fixed inset-0 z-[60] bg-slate-950 flex items-center justify-center text-white font-black animate-pulse">Chargement…</div>}>
+                <ImageCropModal
+                    source={cropTarget.file}
+                    title={cropTarget.slot === 'main' ? 'Cadrer la photo principale' : 'Recadrer la photo'}
+                    onCancel={() => setCropTarget(null)}
+                    onDone={(cropped) => {
+                        if (cropTarget.slot === 'main') {
+                            setMainImage(cropped)
+                        } else {
+                            const n = [...gallery]
+                            n[cropTarget.slot] = cropped
+                            setGallery(n)
+                        }
+                        setCropTarget(null)
+                    }}
                 />
             </Suspense>
         )}

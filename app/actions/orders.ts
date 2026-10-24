@@ -1277,6 +1277,8 @@ export async function updateProduct(productId: string, input: {
     description?: string
     subcategory?: string
     img?: string
+    /** Photos supplémentaires (sans la photo principale) */
+    images_gallery?: string[]
     stock_quantity?: number
     has_stock?: boolean
     options?: any[] | null
@@ -1298,21 +1300,28 @@ export async function updateProduct(productId: string, input: {
         const priceNum = Number(input.price)
         if (!Number.isFinite(priceNum) || priceNum <= 0) return { error: 'Prix invalide.' }
 
+        // Seuls les champs envoyés sont modifiés : un champ absent ne doit jamais effacer le stock ou les options
         const updates: Record<string, unknown> = {
             name: input.name.trim(),
             price: Math.round(priceNum),
-            description: input.description?.trim() ?? '',
-            subcategory: input.subcategory ?? '',
-            has_stock: Boolean(input.has_stock),
-            stock_quantity: Number.isFinite(input.stock_quantity) ? input.stock_quantity : 0,
-            options: Array.isArray(input.options) ? input.options : [],
         }
+        if (input.description !== undefined) updates.description = input.description.trim()
+        if (input.subcategory !== undefined) updates.subcategory = input.subcategory
+        if (input.has_stock !== undefined) updates.has_stock = Boolean(input.has_stock)
+        if (input.stock_quantity !== undefined) {
+            const qty = Number(input.stock_quantity)
+            if (!Number.isInteger(qty) || qty < 0) return { error: 'Quantité en stock invalide.' }
+            updates.stock_quantity = qty
+        }
+        if (input.options !== undefined) updates.options = Array.isArray(input.options) ? input.options : []
 
-        // Mettre à jour l'image seulement si une nouvelle URL est fournie
+        const isHttpUrl = (u: unknown): u is string => typeof u === 'string' && /^https?:\/\//i.test(u.trim())
         const imgTrim = String(input.img ?? '').trim()
-        if (imgTrim && /^https?:\/\//i.test(imgTrim)) {
-            updates.img = imgTrim
-            updates.images_gallery = [imgTrim]
+        if (isHttpUrl(imgTrim)) updates.img = imgTrim
+        if (input.images_gallery !== undefined) {
+            const gallery = input.images_gallery.filter(isHttpUrl).map(u => u.trim())
+            if (gallery.length > 5) return { error: 'Maximum 5 photos dans la galerie.' }
+            updates.images_gallery = gallery.filter(u => u !== imgTrim)
         }
 
         const { data: product, error } = await supabase

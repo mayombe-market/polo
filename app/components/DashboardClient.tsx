@@ -58,7 +58,8 @@ import { startAdminAlarm, stopAdminAlarm } from '@/lib/notificationSound'
 import { FEATURES } from '@/lib/featureFlags'
 import VendorPaymentSettings from '@/app/components/VendorPaymentSettings'
 import VendorPaymentConfirmations from '@/app/components/VendorPaymentConfirmations'
-import { uploadImage } from '@/lib/uploadImage'
+import { uploadImage, uploadImages } from '@/lib/uploadImage'
+import ProductPhotosEditor, { newPhotoKey, type EditablePhoto } from '@/app/components/ProductPhotosEditor'
 import VendorAnalyticsDashboard from '@/app/components/VendorAnalyticsDashboard'
 import VendorReputationDashboard from '@/app/components/VendorReputationDashboard'
 
@@ -87,24 +88,46 @@ function MarketplaceEditForm({
     const [price, setPrice] = useState(String(product.price ?? ''))
     const [description, setDescription] = useState(product.description ?? '')
     const [subcategory, setSubcategory] = useState(product.subcategory ?? '')
+    const [photos, setPhotos] = useState<EditablePhoto[]>(() =>
+        [...new Set([product.img || product.image_url, ...(product.images_gallery || [])].filter(Boolean) as string[])]
+            .slice(0, 6)
+            .map(url => ({ key: newPhotoKey(), url }))
+    )
     const [saving, setSaving] = useState(false)
+    const [progress, setProgress] = useState<string | null>(null)
     const [error, setError] = useState<string | null>(null)
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault()
+        if (photos.length === 0) { setError('Ajoutez au moins une photo.'); return }
         setSaving(true)
         setError(null)
-        const result = await updateProduct(product.id, {
-            name,
-            price: Number(price),
-            description,
-            subcategory,
-        })
-        setSaving(false)
-        if ('error' in result) {
-            setError(result.error)
-        } else {
-            onSuccess(result.product)
+        try {
+            // Seules les photos nouvelles ou recadrées sont envoyées
+            const toUpload = photos.filter(p => p.file)
+            let uploaded: string[] = []
+            if (toUpload.length > 0) {
+                uploaded = await uploadImages(toUpload.map(p => p.file!), (fraction, done, total) =>
+                    setProgress(`Envoi des photos… ${done}/${total} · ${Math.round(fraction * 100)} %`))
+            }
+            const urlByKey = new Map(toUpload.map((p, i) => [p.key, uploaded[i]]))
+            const urls = photos.map(p => p.url && !p.file ? p.url : urlByKey.get(p.key)!)
+            setProgress('Enregistrement…')
+            const result = await updateProduct(product.id, {
+                name,
+                price: Number(price),
+                description,
+                subcategory,
+                img: urls[0],
+                images_gallery: urls.slice(1),
+            })
+            if ('error' in result) setError(result.error)
+            else onSuccess(result.product)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Échec de l’enregistrement.')
+        } finally {
+            setSaving(false)
+            setProgress(null)
         }
     }
 
@@ -115,6 +138,7 @@ function MarketplaceEditForm({
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-[0.2em] mt-1 truncate">{product.name}</p>
             </div>
             <form onSubmit={handleSubmit} className="space-y-5">
+                <ProductPhotosEditor photos={photos} onChange={setPhotos} disabled={saving} />
                 <div>
                     <label className="block text-xs font-bold uppercase tracking-wide text-slate-500 dark:text-slate-400 mb-1.5">Nom du produit</label>
                     <input
@@ -168,7 +192,7 @@ function MarketplaceEditForm({
                         disabled={saving}
                         className="flex-1 rounded-xl bg-orange-500 py-3 text-sm font-black text-white hover:bg-orange-600 transition-colors disabled:opacity-60"
                     >
-                        {saving ? 'Enregistrement…' : 'Enregistrer'}
+                        {saving ? (progress || 'Enregistrement…') : 'Enregistrer'}
                     </button>
                 </div>
             </form>

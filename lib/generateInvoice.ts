@@ -59,7 +59,7 @@ export const generateInvoice = (order: any) => {
         doc.setTextColor(180, 180, 180)
         doc.setFontSize(7)
         doc.text('Avenue de la Paix, Brazzaville, Congo', 14, 38)
-        doc.text('contact@mayombemarket.com  |  +242 06 895 43 21', 14, 43)
+        doc.text('mayombemarket@gmail.com  |  +242 06 895 43 21', 14, 43)
 
         // Invoice title right-aligned
         doc.setTextColor(255, 255, 255)
